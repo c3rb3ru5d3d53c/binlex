@@ -21,7 +21,6 @@
 // SOFTWARE.
 
 pub mod llvm;
-pub mod llvm_abi;
 #[cfg(not(target_os = "windows"))]
 pub mod vex;
 

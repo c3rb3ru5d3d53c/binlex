@@ -2,7 +2,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use binlex::controlflow::{Block, Function, Graph, Instruction};
 use binlex::lifters::llvm::Lifter;
-use binlex::semantics::{SemanticDiagnosticKind, SemanticStatus};
+use binlex::semantics::{
+    Semantic, SemanticAbi, SemanticAbiKind, SemanticCpu, SemanticCpuKind,
+    SemanticDiagnosticKind, SemanticEffect, SemanticExpression, SemanticLocation,
+    SemanticOperationBinary, SemanticStatus, SemanticTerminator,
+};
 use binlex::{Architecture, Configuration};
 
 fn disassemble_graph(architecture: Architecture, bytes: &[u8]) -> Graph {
@@ -52,6 +56,48 @@ fn build_noncontiguous_function_graph() -> Graph {
     graph
 }
 
+fn build_fastcall_semantic_function_graph() -> Graph {
+    let config = Configuration::default();
+    let mut graph = Graph::new(Architecture::I386, config.clone());
+
+    let mut instruction = Instruction::create(0x1000, Architecture::I386, config.clone());
+    instruction.bytes = vec![0x8d, 0x41, 0x01, 0xc3];
+    instruction.pattern = "8d4101c3".to_string();
+    instruction.is_return = true;
+    instruction.semantics = Some(Semantic {
+        version: 1,
+        status: SemanticStatus::Complete,
+        abi: None,
+        encoding: None,
+        temporaries: Vec::new(),
+        effects: vec![SemanticEffect::Set {
+            dst: SemanticLocation::Register {
+                name: "eax".to_string(),
+                bits: 32,
+            },
+            expression: SemanticExpression::Binary {
+                op: SemanticOperationBinary::Add,
+                left: Box::new(SemanticExpression::Read(Box::new(
+                    SemanticLocation::Register {
+                        name: "ecx".to_string(),
+                        bits: 32,
+                    },
+                ))),
+                right: Box::new(SemanticExpression::Const { value: 1, bits: 32 }),
+                bits: 32,
+            },
+        }],
+        terminator: SemanticTerminator::Return { expression: None },
+        diagnostics: Vec::new(),
+    });
+    graph.insert_instruction(instruction);
+
+    assert!(graph.set_block(0x1000));
+    assert!(graph.set_function(0x1000));
+
+    graph
+}
+
 fn verify_all_entity_lifts(graph: &Graph) {
     let functions = graph.functions();
     assert!(
@@ -60,22 +106,28 @@ fn verify_all_entity_lifts(graph: &Graph) {
     );
 
     for function in functions {
-        let mut function_lifter = Lifter::new(function.architecture(), Configuration::default());
+        let mut function_lifter =
+            Lifter::from_architecture(function.architecture(), Configuration::default());
         function_lifter
-            .lift_function(&function)
+            .lift_function(&function, None)
             .expect("function should lift");
         function_lifter
             .verify()
             .expect("function module should verify");
 
         for block in function.blocks() {
-            let mut block_lifter = Lifter::new(block.architecture(), Configuration::default());
-            block_lifter.lift_block(&block).expect("block should lift");
+            let mut block_lifter =
+                Lifter::from_architecture(block.architecture(), Configuration::default());
+            block_lifter
+                .lift_block(&block, None)
+                .expect("block should lift");
             block_lifter.verify().expect("block module should verify");
 
             for instruction in block.instructions() {
-                let mut instruction_lifter =
-                    Lifter::new(instruction.architecture, Configuration::default());
+                let mut instruction_lifter = Lifter::from_architecture(
+                    instruction.architecture,
+                    Configuration::default(),
+                );
                 instruction_lifter
                     .lift_instruction(&instruction)
                     .expect("instruction should lift");
@@ -96,7 +148,7 @@ fn verify_instruction_and_block_lifts(graph: &Graph) {
 
     for instruction in instructions {
         let mut instruction_lifter =
-            Lifter::new(instruction.architecture, Configuration::default());
+            Lifter::from_architecture(instruction.architecture, Configuration::default());
         instruction_lifter
             .lift_instruction(&instruction)
             .expect("instruction should lift");
@@ -107,8 +159,11 @@ fn verify_instruction_and_block_lifts(graph: &Graph) {
 
     let blocks = graph.blocks();
     for block in blocks {
-        let mut block_lifter = Lifter::new(block.architecture(), Configuration::default());
-        block_lifter.lift_block(&block).expect("block should lift");
+        let mut block_lifter =
+            Lifter::from_architecture(block.architecture(), Configuration::default());
+        block_lifter
+            .lift_block(&block, None)
+            .expect("block should lift");
         block_lifter.verify().expect("block module should verify");
     }
 }
@@ -140,32 +195,37 @@ fn llvm_lifter_renders_instruction_block_and_function_ir() {
     let block = Block::new(0, &graph).expect("block");
     let function = Function::new(0, &graph).expect("function");
 
-    let mut instruction_lifter = Lifter::new(instruction.architecture, Configuration::default());
+    let mut instruction_lifter =
+        Lifter::from_architecture(instruction.architecture, Configuration::default());
     instruction_lifter
         .lift_instruction(&instruction)
         .expect("instruction should lift");
     instruction_lifter
         .verify()
         .expect("instruction module should verify");
-    let instruction_ir = instruction_lifter.text();
+    let instruction_ir = instruction_lifter.ir();
     let instruction_bc = instruction_lifter.bitcode();
     assert!(instruction_ir.contains("define void @instruction_0()"));
     assert!(instruction_ir.contains("ret void"));
     assert_eq!(&instruction_bc[..4], b"BC\xc0\xde");
-    let mut block_lifter = Lifter::new(block.architecture(), Configuration::default());
-    block_lifter.lift_block(&block).expect("block should lift");
+    let mut block_lifter =
+        Lifter::from_architecture(block.architecture(), Configuration::default());
+    block_lifter
+        .lift_block(&block, None)
+        .expect("block should lift");
     block_lifter.verify().expect("block module should verify");
-    let block_ir = block_lifter.text();
+    let block_ir = block_lifter.ir();
     assert!(block_ir.contains("define void @block_0()"));
 
-    let mut function_lifter = Lifter::new(function.architecture(), Configuration::default());
+    let mut function_lifter =
+        Lifter::from_architecture(function.architecture(), Configuration::default());
     function_lifter
-        .lift_function(&function)
+        .lift_function(&function, None)
         .expect("function should lift");
     function_lifter
         .verify()
         .expect("function module should verify");
-    let function_ir = function_lifter.text();
+    let function_ir = function_lifter.ir();
     let function_bc = function_lifter.bitcode();
     assert!(function_ir.contains("define void @function_0()"));
     assert!(function_ir.contains("entry:"));
@@ -181,15 +241,16 @@ fn llvm_lifter_handles_noncontiguous_functions() {
 
     assert_eq!(function.block_addresses(), vec![0x1000, 0x2000]);
 
-    let mut lifter = Lifter::new(function.architecture(), Configuration::default());
+    let mut lifter =
+        Lifter::from_architecture(function.architecture(), Configuration::default());
     lifter
-        .lift_function(&function)
+        .lift_function(&function, None)
         .expect("non-contiguous function should lift");
     lifter
         .verify()
         .expect("non-contiguous function module should verify");
 
-    let ir = lifter.text();
+    let ir = lifter.ir();
     assert!(ir.contains("define void @function_1000()"));
     assert!(ir.contains("entry:"));
     assert!(ir.contains("block_1000:"));
@@ -199,35 +260,72 @@ fn llvm_lifter_handles_noncontiguous_functions() {
 }
 
 #[test]
+fn llvm_lift_function_explicit_abi_controls_return_shape_without_embedded_semantics() {
+    let graph = build_noncontiguous_function_graph();
+    let function = Function::new(0x1000, &graph).expect("function");
+    let cpu = binlex::semantics::SemanticCpu::from_kind(binlex::semantics::SemanticCpuKind::I386)
+        .expect("cpu");
+    let abi = binlex::semantics::SemanticAbi::from_kind(
+        binlex::semantics::SemanticAbiKind::Stdcall,
+        &cpu,
+    )
+    .expect("abi");
+
+    let mut lifter =
+        Lifter::from_architecture(function.architecture(), Configuration::default());
+    lifter
+        .lift_function(&function, Some(&abi))
+        .expect("function should lift");
+    lifter.verify().expect("function module should verify");
+
+    let ir = lifter.ir();
+    assert!(ir.contains("define i32 @function_1000("));
+    assert!(ir.contains("ret i32"));
+    assert!(!ir.contains("ret void"));
+}
+
+#[test]
+fn llvm_lift_function_uses_builtin_abi_arguments_for_signature() {
+    let graph = build_fastcall_semantic_function_graph();
+    let function = Function::new(0x1000, &graph).expect("function");
+    let cpu = SemanticCpu::from_kind(SemanticCpuKind::I386).expect("cpu");
+    let abi = SemanticAbi::from_kind(SemanticAbiKind::Fastcall, &cpu).expect("abi");
+
+    let mut lifter =
+        Lifter::from_architecture(function.architecture(), Configuration::default());
+    lifter
+        .lift_function(&function, Some(&abi))
+        .expect("function should lift");
+    lifter.verify().expect("function module should verify");
+
+    let ir = lifter.ir();
+    assert!(ir.contains("define i32 @function_1000(i32 %0)"));
+    assert!(!ir.contains("movl %ecx, $0"));
+    assert!(ir.contains("ret i32 %abi_ret"));
+}
+
+#[test]
 fn llvm_lifter_optimizers_chain_and_preserve_outputs() {
     let graph = disassemble_graph(Architecture::I386, &[0x31, 0xc0, 0x40, 0xc3]);
     let function = Function::new(0, &graph).expect("function");
 
-    let mut lifter = Lifter::new(function.architecture(), Configuration::default());
+    let mut lifter =
+        Lifter::from_architecture(function.architecture(), Configuration::default());
     lifter
-        .lift_function(&function)
+        .lift_function(&function, None)
         .expect("function should lift before optimization");
 
-    let populated = lifter
-        .optimizers()
-        .expect("optimizer namespace")
-        .mem2reg()
-        .expect("mem2reg")
-        .instcombine()
-        .expect("instcombine")
-        .cfg()
-        .expect("cfg")
-        .gvn()
-        .expect("gvn")
-        .sroa()
-        .expect("sroa")
-        .dce()
-        .expect("dce")
-        .into_lifter();
+    lifter.optimize_mem2reg().expect("mem2reg");
+    lifter.optimize_instcombine().expect("instcombine");
+    lifter.optimize_cfg().expect("cfg");
+    lifter.optimize_gvn().expect("gvn");
+    lifter.optimize_sroa().expect("sroa");
+    lifter.optimize_dce().expect("dce");
+    let populated = lifter;
 
     populated.verify().expect("optimized module should verify");
 
-    let text = populated.text();
+    let text = populated.ir();
     assert!(text.contains("define void @function_0()"));
     assert_eq!(&populated.bitcode()[..4], b"BC\xc0\xde");
 }
@@ -1231,7 +1329,8 @@ fn llvm_lifter_preserves_unsupported_instruction_fallback() {
             .any(|diagnostic| diagnostic.kind == SemanticDiagnosticKind::UnsupportedInstruction)
     );
 
-    let mut instruction_lifter = Lifter::new(instruction.architecture, Configuration::default());
+    let mut instruction_lifter =
+        Lifter::from_architecture(instruction.architecture, Configuration::default());
     instruction_lifter
         .lift_instruction(&instruction)
         .expect("unsupported instruction should still lift");

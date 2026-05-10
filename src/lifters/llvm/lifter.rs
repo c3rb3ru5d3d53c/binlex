@@ -1,5 +1,4 @@
-use self::helpers::push_unique_location;
-use crate::Abi;
+use self::helpers::{push_unique_location, render_location, sanitize_symbol};
 use crate::Architecture;
 use crate::Configuration;
 use crate::controlflow::{Block, Function, Instruction};
@@ -8,7 +7,8 @@ use crate::lifters::llvm::optimizers::Optimizers;
 use crate::lifters::llvm::prepare::prepare_instruction_semantics;
 use crate::lifters::llvm::verify::verify_module;
 use crate::semantics::{
-    Semantic, SemanticEffect, SemanticExpression, SemanticLocation, SemanticTerminator,
+    Semantic, SemanticAbi, SemanticCpu, SemanticCpuKind, SemanticEffect, SemanticExpression, SemanticLocation,
+    SemanticTerminator,
 };
 use inkwell::OptimizationLevel;
 use inkwell::attributes::AttributeLoc;
@@ -29,6 +29,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::ffi::CStr;
 use std::ffi::c_void;
 use std::io::Error;
+use std::num::NonZeroU32;
 
 mod effects;
 mod encoding;
@@ -46,7 +47,10 @@ pub struct Lifter {
     context: &'static Context,
     module: Module<'static>,
     emitted: BTreeSet<String>,
+    function_abis: HashMap<String, SemanticAbi>,
+    cpu: SemanticCpu,
     architecture: Architecture,
+    triple: String,
 }
 
 #[derive(Default)]
@@ -84,13 +88,16 @@ struct LoweringContext<'ctx, 'm> {
     lowering_summary: BTreeMap<(String, String), LoweringSummaryEntry>,
     slots: HashMap<String, PointerValue<'ctx>>,
     slot_locations: HashMap<String, SemanticLocation>,
+    stack_regions: HashMap<String, PointerValue<'ctx>>,
     written_locations: BTreeSet<String>,
     native_return_adjust: Option<u16>,
-    body_begin_emitted: bool,
     cached_flags_register: RefCell<Option<IntValue<'ctx>>>,
     emit_terminator_helpers: bool,
-    abi: Option<Abi>,
-    current_semantics_abi: Option<Abi>,
+    abi: Option<SemanticAbi>,
+    current_semantics_abi: Option<SemanticAbi>,
+    function_arguments: Vec<SemanticLocation>,
+    known_function_abis: HashMap<String, SemanticAbi>,
+    stack_layouts: HashMap<String, u32>,
 }
 
 #[derive(Default)]
@@ -100,18 +107,43 @@ struct LoweringSummaryEntry {
 }
 
 impl Lifter {
-    pub fn new(architecture: Architecture, config: Configuration) -> Self {
+    pub fn new(
+        cpu: SemanticCpu,
+        config: Configuration,
+        triple: Option<String>,
+    ) -> Result<Self, Error> {
+        let architecture = match cpu.kind() {
+            Some(SemanticCpuKind::I386) => Architecture::I386,
+            Some(SemanticCpuKind::Amd64) => Architecture::AMD64,
+            Some(SemanticCpuKind::Arm64) => Architecture::ARM64,
+            Some(SemanticCpuKind::Cil) => Architecture::CIL,
+            None => {
+                return Err(Error::other(
+                    "llvm lifter requires a built-in semantic CPU kind",
+                ))
+            }
+        };
         let context: &'static Context = Box::leak(Box::new(Context::create()));
         let module = context.create_module(&config.lifters.llvm.module_name);
+        let triple =
+            triple.unwrap_or_else(|| Self::default_triple_for_architecture(architecture).to_string());
         let lifter = Self {
             config,
             context,
             module,
             emitted: BTreeSet::new(),
+            function_abis: HashMap::new(),
+            cpu,
             architecture,
+            triple,
         };
         let _ = lifter.bind_architecture();
-        lifter
+        Ok(lifter)
+    }
+
+    pub fn from_architecture(architecture: Architecture, config: Configuration) -> Self {
+        let cpu = SemanticCpu::from_architecture(architecture).expect("builtin cpu");
+        Self::new(cpu, config, None).expect("llvm lifter")
     }
 
     pub fn lift_instruction(&mut self, instruction: &Instruction) -> Result<(), Error> {
@@ -128,14 +160,14 @@ impl Lifter {
             return Ok(());
         }
         let function = self.add_void_function(&name);
-        let mut lowering = self.lowering_context(function, None);
+        let mut lowering = self.lowering_context(function, None, Vec::new(), HashMap::new())?;
         lowering.lower_instruction(instruction)?;
         lowering.finish()?;
         self.verify_if_enabled()?;
         Ok(())
     }
 
-    pub fn lift_block(&mut self, block: &Block<'_>) -> Result<(), Error> {
+    pub fn lift_block(&mut self, block: &Block<'_>, abi: Option<&SemanticAbi>) -> Result<(), Error> {
         if self.architecture != block.architecture() {
             return Err(Error::other(format!(
                 "llvm lift block architecture mismatch: lifter={} block={}",
@@ -148,8 +180,12 @@ impl Lifter {
         if !self.emitted.insert(name.clone()) {
             return Ok(());
         }
-        let function = self.add_void_function(&name);
-        let mut lowering = self.lowering_context(function, None);
+        let abi = self.resolve_override_abi(abi)?.or_else(|| self.resolve_block_abi(block));
+        let function_arguments = self.active_function_arguments_for_block(block, abi.as_ref());
+        let function = self.add_function_for_lift(&name, abi.clone(), &function_arguments);
+        let stack_layouts = self.collect_stack_layouts_for_block(block, abi.as_ref());
+        let mut lowering =
+            self.lowering_context(function, abi, function_arguments, stack_layouts)?;
         for instruction in block.instructions() {
             lowering.lower_instruction(&instruction)?;
         }
@@ -158,7 +194,22 @@ impl Lifter {
         Ok(())
     }
 
-    pub fn lift_function(&mut self, function: &Function<'_>) -> Result<(), Error> {
+    pub fn lift_function(
+        &mut self,
+        function: &Function<'_>,
+        abi: Option<&SemanticAbi>,
+    ) -> Result<(), Error> {
+        let name = format!("function_{:x}", function.address());
+        self.lift_function_named(function, abi, &name, None)
+    }
+
+    pub fn lift_function_named(
+        &mut self,
+        function: &Function<'_>,
+        abi: Option<&SemanticAbi>,
+        name: &str,
+        block_names: Option<&BTreeMap<u64, String>>,
+    ) -> Result<(), Error> {
         if self.architecture != function.architecture() {
             return Err(Error::other(format!(
                 "llvm lift function architecture mismatch: lifter={} function={}",
@@ -167,38 +218,153 @@ impl Lifter {
             )));
         }
         self.bind_architecture()?;
-        let name = format!("function_{:x}", function.address());
-        if !self.emitted.insert(name.clone()) {
+        if !self.emitted.insert(name.to_string()) {
             return Ok(());
         }
-        let abi = self.resolve_function_abi(function);
-        let llvm_function = self.add_function_for_lift(&name, abi);
-        let mut lowering = self.lowering_context(llvm_function, abi);
+        let abi = self
+            .resolve_override_abi(abi)?
+            .or_else(|| self.resolve_function_abi(function));
+        let function_arguments = self.active_function_arguments_for_function(function, abi.as_ref());
+        let llvm_function = self.add_function_for_lift(name, abi.clone(), &function_arguments);
+        let stack_layouts = self.collect_stack_layouts_for_function(function, abi.as_ref());
+        let mut lowering =
+            self.lowering_context(llvm_function, abi, function_arguments, stack_layouts)?;
         lowering.emit_terminator_helpers = false;
-        lowering.lower_function(function)?;
+        lowering.lower_function(function, block_names)?;
         lowering.finish()?;
         self.verify_if_enabled()?;
         Ok(())
     }
 
-    pub fn lift_semantics(&mut self, semantics: &[Semantic]) -> Result<(), Error> {
+    pub fn lift_block_semantics(
+        &mut self,
+        semantics: &[Semantic],
+        abi: Option<&SemanticAbi>,
+    ) -> Result<(), Error> {
         self.bind_architecture()?;
+        let abi = self
+            .resolve_override_abi(abi)?
+            .or_else(|| self.resolve_semantics_abi(semantics));
+        let name = self.next_emitted_name("semantic_block");
+        let function_arguments =
+            self.active_function_arguments_for_semantics(semantics, abi.as_ref());
+        let function = self.add_function_for_lift(&name, abi.clone(), &function_arguments);
+        let stack_layouts = self.collect_stack_layouts_for_semantics(semantics, abi.as_ref());
+        let mut lowering =
+            self.lowering_context(function, abi, function_arguments, stack_layouts)?;
         for semantics in semantics {
-            let name = format!("semantics_{}", self.emitted.len());
-            if !self.emitted.insert(name.clone()) {
-                continue;
-            }
-            let function = self.add_function_for_lift(&name, semantics.abi);
-            let mut lowering = self.lowering_context(function, semantics.abi);
             lowering.lower_instruction_semantics(semantics)?;
-            lowering.finish()?;
         }
+        lowering.finish()?;
         self.verify_if_enabled()?;
         Ok(())
     }
 
-    pub fn text(&self) -> String {
+    pub fn lift_function_semantics(
+        &mut self,
+        semantics: &[Semantic],
+        abi: Option<&SemanticAbi>,
+    ) -> Result<(), Error> {
+        let name = self.next_emitted_name("semantic_function");
+        self.lift_function_semantics_named(semantics, abi, &name)
+    }
+
+    pub fn lift_function_semantics_named(
+        &mut self,
+        semantics: &[Semantic],
+        abi: Option<&SemanticAbi>,
+        name: &str,
+    ) -> Result<(), Error> {
+        self.bind_architecture()?;
+        let abi = self
+            .resolve_override_abi(abi)?
+            .or_else(|| self.resolve_semantics_abi(semantics));
+        if !self.emitted.insert(name.to_string()) {
+            return Ok(());
+        }
+        let function_arguments =
+            self.active_function_arguments_for_semantics(semantics, abi.as_ref());
+        let function = self.add_function_for_lift(name, abi.clone(), &function_arguments);
+        let stack_layouts = self.collect_stack_layouts_for_semantics(semantics, abi.as_ref());
+        let mut lowering =
+            self.lowering_context(function, abi, function_arguments, stack_layouts)?;
+        for semantics in semantics {
+            lowering.lower_instruction_semantics(semantics)?;
+        }
+        lowering.finish()?;
+        self.verify_if_enabled()?;
+        Ok(())
+    }
+
+    pub fn clear(&mut self) -> Result<(), Error> {
+        self.module = self.context.create_module(&self.config.lifters.llvm.module_name);
+        self.emitted.clear();
+        self.function_abis.clear();
+        self.bind_architecture()
+    }
+
+    pub fn ir(&self) -> String {
         self.module.print_to_string().to_string()
+    }
+
+    pub fn set_ir(&mut self, ir: &str) -> Result<(), Error> {
+        let buffer = MemoryBuffer::create_from_memory_range_copy(ir.as_bytes(), "binlex.ll");
+        let module = self
+            .context
+            .create_module_from_ir(buffer)
+            .map_err(|err| Error::other(err.to_string()))?;
+        self.module = module;
+        self.function_abis.clear();
+        self.refresh_emitted_from_module();
+        Ok(())
+    }
+
+    pub fn set_bitcode(&mut self, bitcode: &[u8]) -> Result<(), Error> {
+        let buffer = MemoryBuffer::create_from_memory_range_copy(bitcode, "binlex.bc");
+        let module = Module::parse_bitcode_from_buffer(&buffer, self.context)
+            .map_err(|err| Error::other(err.to_string()))?;
+        self.module = module;
+        self.function_abis.clear();
+        self.refresh_emitted_from_module();
+        Ok(())
+    }
+
+    pub fn link_ir_module(
+        &mut self,
+        ir: &str,
+        required_function: Option<&str>,
+    ) -> Result<(), Error> {
+        let buffer = MemoryBuffer::create_from_memory_range_copy(ir.as_bytes(), "binlex.ll");
+        let module = self
+            .context
+            .create_module_from_ir(buffer)
+            .map_err(|err| Error::other(err.to_string()))?;
+        self.validate_imported_module(&module, required_function)?;
+        self.module
+            .link_in_module(module)
+            .map_err(|err| Error::other(err.to_string()))?;
+        self.refresh_emitted_from_module();
+        Ok(())
+    }
+
+    pub fn link_bitcode_module(
+        &mut self,
+        bitcode: &[u8],
+        required_function: Option<&str>,
+    ) -> Result<(), Error> {
+        let buffer = MemoryBuffer::create_from_memory_range_copy(bitcode, "binlex.bc");
+        let module = Module::parse_bitcode_from_buffer(&buffer, self.context)
+            .map_err(|err| Error::other(err.to_string()))?;
+        self.validate_imported_module(&module, required_function)?;
+        self.module
+            .link_in_module(module)
+            .map_err(|err| Error::other(err.to_string()))?;
+        self.refresh_emitted_from_module();
+        Ok(())
+    }
+
+    pub fn text(&self) -> String {
+        self.ir()
     }
 
     pub fn print(&self) {
@@ -249,11 +415,86 @@ impl Lifter {
         self.run_function_pass("dce")
     }
 
+    pub fn optimize_mem2reg(&mut self) -> Result<(), Error> {
+        *self = self.mem2reg()?;
+        Ok(())
+    }
+
+    pub fn optimize_instcombine(&mut self) -> Result<(), Error> {
+        *self = self.instcombine()?;
+        Ok(())
+    }
+
+    pub fn optimize_cfg(&mut self) -> Result<(), Error> {
+        *self = self.cfg()?;
+        Ok(())
+    }
+
+    pub fn optimize_gvn(&mut self) -> Result<(), Error> {
+        *self = self.gvn()?;
+        Ok(())
+    }
+
+    pub fn optimize_sroa(&mut self) -> Result<(), Error> {
+        *self = self.sroa()?;
+        Ok(())
+    }
+
+    pub fn optimize_dce(&mut self) -> Result<(), Error> {
+        *self = self.dce()?;
+        Ok(())
+    }
+
+    pub fn mem2reg_function(&self, function_name: &str) -> Result<Self, Error> {
+        self.run_named_function_pass("mem2reg", function_name)
+    }
+
+    pub fn instcombine_function(&self, function_name: &str) -> Result<Self, Error> {
+        self.run_named_function_pass("instcombine<no-verify-fixpoint>", function_name)
+    }
+
+    pub fn cfg_function(&self, function_name: &str) -> Result<Self, Error> {
+        self.run_named_function_pass("simplifycfg", function_name)
+    }
+
+    pub fn gvn_function(&self, function_name: &str) -> Result<Self, Error> {
+        self.run_named_function_pass("gvn", function_name)
+    }
+
+    pub fn sroa_function(&self, function_name: &str) -> Result<Self, Error> {
+        self.run_named_function_pass("sroa", function_name)
+    }
+
+    pub fn dce_function(&self, function_name: &str) -> Result<Self, Error> {
+        self.run_named_function_pass("dce", function_name)
+    }
+
     pub fn verify(&self) -> Result<(), Error> {
         verify_module(&self.module)
     }
 
-    fn resolve_function_abi(&self, function: &Function<'_>) -> Option<Abi> {
+    fn resolve_override_abi(&self, abi: Option<&SemanticAbi>) -> Result<Option<SemanticAbi>, Error> {
+        let Some(abi) = abi else {
+            return Ok(None);
+        };
+        if abi.supports_architecture(self.architecture) {
+            Ok(Some(abi.clone()))
+        } else {
+            Err(Error::other(format!(
+                "semantics abi={} unsupported for architecture={}",
+                abi, self.architecture
+            )))
+        }
+    }
+
+    fn resolve_block_abi(&self, block: &Block<'_>) -> Option<SemanticAbi> {
+        block.instructions()
+            .into_iter()
+            .find_map(|instruction| instruction.semantics.as_ref()?.abi.clone())
+            .and_then(|abi| self.resolve_embedded_abi(abi))
+    }
+
+    fn resolve_function_abi(&self, function: &Function<'_>) -> Option<SemanticAbi> {
         let abi = function
             .reconstruction_instructions()
             .into_iter()
@@ -261,8 +502,20 @@ impl Lifter {
             .or_else(|| function.reconstruction_instructions().into_iter().next())?
             .semantics
             .as_ref()?
-            .abi?;
-        if abi.supports(self.architecture) {
+            .abi
+            .clone()?;
+        self.resolve_embedded_abi(abi)
+    }
+
+    fn resolve_semantics_abi(&self, semantics: &[Semantic]) -> Option<SemanticAbi> {
+        semantics
+            .iter()
+            .find_map(|semantics| semantics.abi.clone())
+            .and_then(|abi| self.resolve_embedded_abi(abi))
+    }
+
+    fn resolve_embedded_abi(&self, abi: SemanticAbi) -> Option<SemanticAbi> {
+        if abi.supports_architecture(self.architecture) {
             Some(abi)
         } else {
             Stderr::print_debug(
@@ -273,6 +526,17 @@ impl Lifter {
                 ),
             );
             None
+        }
+    }
+
+    fn next_emitted_name(&mut self, prefix: &str) -> String {
+        let mut index = self.emitted.len();
+        loop {
+            let name = format!("{prefix}_{index}");
+            if !self.emitted.contains(&name) {
+                return name;
+            }
+            index += 1;
         }
     }
 
@@ -290,16 +554,25 @@ impl Lifter {
         function
     }
 
-    fn add_function_for_lift(&self, name: &str, abi: Option<Abi>) -> FunctionValue<'static> {
+    fn add_function_for_lift(
+        &mut self,
+        name: &str,
+        abi: Option<SemanticAbi>,
+        function_arguments: &[SemanticLocation],
+    ) -> FunctionValue<'static> {
         if let Some(function) = self.module.get_function(name) {
+            if let Some(abi) = abi {
+                self.function_abis.insert(name.to_string(), abi);
+            }
             return function;
         }
-        let fn_type = match (self.architecture, abi) {
-            (Architecture::ARM64, Some(Abi::SysV)) => self.context.i64_type().fn_type(&[], false),
-            (Architecture::AMD64, Some(Abi::Windows64)) => {
-                self.context.i64_type().fn_type(&[], false)
-            }
-            _ => self.context.void_type().fn_type(&[], false),
+        let args = function_arguments
+            .iter()
+            .map(|location| self.int_type(location.bits()).into())
+            .collect::<Vec<_>>();
+        let fn_type = match abi.as_ref().and_then(|abi| abi.function_return_bits) {
+            Some(bits) if bits > 0 => self.int_type(bits).fn_type(&args, false),
+            _ => self.context.void_type().fn_type(&args, false),
         };
         let function = self.module.add_function(name, fn_type, None);
         function.add_attribute(
@@ -307,18 +580,38 @@ impl Lifter {
             self.context
                 .create_string_attribute("frame-pointer", "none"),
         );
+        if let Some(abi) = abi {
+            self.function_abis.insert(name.to_string(), abi);
+        }
         function
+    }
+
+    fn int_type(&self, bits: u16) -> inkwell::types::IntType<'static> {
+        match bits {
+            1 => self.context.bool_type(),
+            8 => self.context.i8_type(),
+            16 => self.context.i16_type(),
+            32 => self.context.i32_type(),
+            64 => self.context.i64_type(),
+            128 => self.context.i128_type(),
+            width => self
+                .context
+                .custom_width_int_type(NonZeroU32::new(width as u32).expect("non-zero int width"))
+                .expect("custom width int type"),
+        }
     }
 
     fn lowering_context(
         &self,
         function: FunctionValue<'static>,
-        abi: Option<Abi>,
-    ) -> LoweringContext<'static, '_> {
+        abi: Option<SemanticAbi>,
+        function_arguments: Vec<SemanticLocation>,
+        stack_layouts: HashMap<String, u32>,
+    ) -> Result<LoweringContext<'static, '_>, Error> {
         let builder = self.context.create_builder();
         let entry = self.context.append_basic_block(function, "entry");
         builder.position_at_end(entry);
-        LoweringContext {
+        let mut lowering = LoweringContext {
             context: self.context,
             module: &self.module,
             architecture: self.architecture,
@@ -330,14 +623,19 @@ impl Lifter {
             lowering_summary: BTreeMap::new(),
             slots: HashMap::new(),
             slot_locations: HashMap::new(),
+            stack_regions: HashMap::new(),
             written_locations: BTreeSet::new(),
             native_return_adjust: None,
-            body_begin_emitted: false,
             cached_flags_register: RefCell::new(None),
             emit_terminator_helpers: true,
             abi,
             current_semantics_abi: None,
-        }
+            function_arguments,
+            known_function_abis: self.function_abis.clone(),
+            stack_layouts,
+        };
+        lowering.bind_function_arguments()?;
+        Ok(lowering)
     }
 
     fn verify_if_enabled(&self) -> Result<(), Error> {
@@ -345,6 +643,36 @@ impl Lifter {
             self.verify()
         } else {
             Ok(())
+        }
+    }
+
+    fn refresh_emitted_from_module(&mut self) {
+        self.emitted.clear();
+        for function in self.module.get_functions() {
+            self.emitted
+                .insert(function.get_name().to_string_lossy().into_owned());
+        }
+        self.function_abis.retain(|name, _| self.emitted.contains(name));
+    }
+
+    fn validate_imported_module(
+        &self,
+        module: &Module<'static>,
+        required_function: Option<&str>,
+    ) -> Result<(), Error> {
+        let Some(required_function) = required_function else {
+            return Ok(());
+        };
+        if module
+            .get_functions()
+            .any(|function| function.get_name().to_string_lossy() == required_function)
+        {
+            Ok(())
+        } else {
+            Err(Error::other(format!(
+                "imported llvm module is missing function {}",
+                required_function
+            )))
         }
     }
 
@@ -358,8 +686,162 @@ impl Lifter {
             context,
             module,
             emitted: self.emitted.clone(),
+            function_abis: self.function_abis.clone(),
+            cpu: self.cpu.clone(),
             architecture: self.architecture,
+            triple: self.triple.clone(),
         })
+    }
+
+    pub fn duplicate_function_view(&self, function_name: &str) -> Result<Self, Error> {
+        let mut duplicate = self.duplicate()?;
+        let target_exists = duplicate
+            .module
+            .get_function(function_name)
+            .filter(|function| function.get_first_basic_block().is_some())
+            .is_some();
+        if !target_exists {
+            return Err(Error::other(format!(
+                "llvm function {function_name} does not exist"
+            )));
+        }
+
+        let functions = duplicate.module.get_functions().collect::<Vec<_>>();
+        for function in functions {
+            let name = function.get_name().to_string_lossy().into_owned();
+            if name == function_name || function.get_first_basic_block().is_none() {
+                continue;
+            }
+            unsafe {
+                function.delete();
+            }
+        }
+        duplicate.refresh_emitted_from_module();
+        duplicate.verify_if_enabled()?;
+        Ok(duplicate)
+    }
+
+    fn default_triple_for_architecture(architecture: Architecture) -> &'static str {
+        match architecture {
+            Architecture::I386 => "i386-unknown-unknown",
+            Architecture::AMD64 => "x86_64-unknown-unknown",
+            Architecture::ARM64 => "aarch64-unknown-unknown",
+            _ => "x86_64-unknown-unknown",
+        }
+    }
+
+    fn active_function_arguments_for_semantics(
+        &self,
+        semantics: &[Semantic],
+        abi: Option<&SemanticAbi>,
+    ) -> Vec<SemanticLocation> {
+        let Some(abi) = abi else {
+            return Vec::new();
+        };
+        let mut read_locations = std::collections::HashSet::new();
+        for semantic in semantics {
+            collect_semantic_read_locations(semantic, &mut read_locations);
+        }
+        active_function_arguments(&read_locations, abi)
+    }
+
+    fn collect_stack_layouts_for_semantics(
+        &self,
+        semantics: &[Semantic],
+        abi: Option<&SemanticAbi>,
+    ) -> HashMap<String, u32> {
+        let mut layouts = HashMap::new();
+        for semantic in semantics {
+            collect_semantic_stack_layouts(semantic, &mut layouts);
+        }
+        if let Some(abi) = abi {
+            collect_abi_stack_layouts(abi, &mut layouts);
+        }
+        layouts
+    }
+
+    fn active_function_arguments_for_block(
+        &self,
+        block: &Block<'_>,
+        abi: Option<&SemanticAbi>,
+    ) -> Vec<SemanticLocation> {
+        let Some(abi) = abi else {
+            return Vec::new();
+        };
+        let mut read_locations = std::collections::HashSet::new();
+        for instruction in block.instructions() {
+            if let Some(semantics) = instruction.semantics.as_ref() {
+                collect_semantic_read_locations(semantics, &mut read_locations);
+            }
+        }
+        if let Some(semantics) = block.terminator.semantics.as_ref() {
+            collect_semantic_read_locations(semantics, &mut read_locations);
+        }
+        active_function_arguments(&read_locations, abi)
+    }
+
+    fn collect_stack_layouts_for_block(
+        &self,
+        block: &Block<'_>,
+        abi: Option<&SemanticAbi>,
+    ) -> HashMap<String, u32> {
+        let mut layouts = HashMap::new();
+        for instruction in block.instructions() {
+            if let Some(semantics) = instruction.semantics.as_ref() {
+                collect_semantic_stack_layouts(semantics, &mut layouts);
+            }
+        }
+        if let Some(semantics) = block.terminator.semantics.as_ref() {
+            collect_semantic_stack_layouts(semantics, &mut layouts);
+        }
+        if let Some(abi) = abi {
+            collect_abi_stack_layouts(abi, &mut layouts);
+        }
+        layouts
+    }
+
+    fn active_function_arguments_for_function(
+        &self,
+        function: &Function<'_>,
+        abi: Option<&SemanticAbi>,
+    ) -> Vec<SemanticLocation> {
+        let Some(abi) = abi else {
+            return Vec::new();
+        };
+        let mut read_locations = std::collections::HashSet::new();
+        for block in function.blocks() {
+            for instruction in block.instructions() {
+                if let Some(semantics) = instruction.semantics.as_ref() {
+                    collect_semantic_read_locations(semantics, &mut read_locations);
+                }
+            }
+            if let Some(semantics) = block.terminator.semantics.as_ref() {
+                collect_semantic_read_locations(semantics, &mut read_locations);
+            }
+        }
+        active_function_arguments(&read_locations, abi)
+    }
+
+    fn collect_stack_layouts_for_function(
+        &self,
+        function: &Function<'_>,
+        abi: Option<&SemanticAbi>,
+    ) -> HashMap<String, u32> {
+        let mut layouts = HashMap::new();
+        for block in function.blocks() {
+            for instruction in block.instructions() {
+                if let Some(semantics) = instruction.semantics.as_ref() {
+                    collect_semantic_stack_layouts(semantics, &mut layouts);
+                }
+            }
+            if let Some(semantics) = block.terminator.semantics.as_ref() {
+                collect_semantic_stack_layouts(semantics, &mut layouts);
+            }
+        }
+        if let Some(abi) = abi {
+            collect_abi_stack_layouts(abi, &mut layouts);
+        }
+        layouts
     }
 
     fn run_function_pass(&self, pass_pipeline: &str) -> Result<Self, Error> {
@@ -423,6 +905,54 @@ impl Lifter {
         Ok(optimized)
     }
 
+    fn run_named_function_pass(&self, pass_pipeline: &str, function_name: &str) -> Result<Self, Error> {
+        let optimized = self.duplicate()?;
+        let machine = optimized.target_machine()?;
+        let context = optimized.module.get_context();
+        let mut diagnostics = DiagnosticCapture::default();
+        unsafe {
+            LLVMContextSetDiagnosticHandler(
+                context.raw(),
+                Some(capture_diagnostic),
+                (&mut diagnostics as *mut DiagnosticCapture).cast(),
+            );
+        }
+        let function = optimized
+            .module
+            .get_function(function_name)
+            .ok_or_else(|| Error::other(format!("llvm function {function_name} does not exist")))?;
+        if function.get_first_basic_block().is_some() {
+            let options = PassBuilderOptions::create();
+            options.set_verify_each(optimized.config.lifters.llvm.verify);
+            if let Err(error) = function.run_passes(pass_pipeline, &machine, options) {
+                let diagnostic = diagnostics
+                    .messages
+                    .last()
+                    .cloned()
+                    .unwrap_or_else(|| error.to_string());
+                Stderr::print_debug(
+                    &optimized.config,
+                    format!(
+                        "llvm pass pipeline={} function={} failed: {}",
+                        pass_pipeline, function_name, diagnostic
+                    ),
+                );
+                unsafe {
+                    LLVMContextSetDiagnosticHandler(context.raw(), None, std::ptr::null_mut());
+                }
+                return Err(Error::other(format!(
+                    "llvm pass {} failed for {}: {}",
+                    pass_pipeline, function_name, diagnostic
+                )));
+            }
+        }
+        unsafe {
+            LLVMContextSetDiagnosticHandler(context.raw(), None, std::ptr::null_mut());
+        }
+        optimized.verify_if_enabled()?;
+        Ok(optimized)
+    }
+
     fn target_machine(&self) -> Result<TargetMachine, Error> {
         let config = InitializationConfig::default();
         match self.architecture {
@@ -430,13 +960,7 @@ impl Lifter {
             Architecture::ARM64 => Target::initialize_aarch64(&config),
             _ => Target::initialize_x86(&config),
         }
-        let triple_string = match self.architecture {
-            Architecture::I386 => "i386-unknown-unknown",
-            Architecture::AMD64 => "x86_64-unknown-unknown",
-            Architecture::ARM64 => "aarch64-unknown-unknown",
-            _ => "x86_64-unknown-unknown",
-        };
-        let triple = inkwell::targets::TargetTriple::create(triple_string);
+        let triple = inkwell::targets::TargetTriple::create(&self.triple);
         let target = Target::from_triple(&triple).map_err(|err| Error::other(err.to_string()))?;
         target
             .create_target_machine(
@@ -451,14 +975,8 @@ impl Lifter {
     }
 
     fn bind_architecture(&self) -> Result<(), Error> {
-        let triple_string = match self.architecture {
-            Architecture::I386 => "i386-unknown-unknown",
-            Architecture::AMD64 => "x86_64-unknown-unknown",
-            Architecture::ARM64 => "aarch64-unknown-unknown",
-            _ => "x86_64-unknown-unknown",
-        };
         self.module
-            .set_triple(&inkwell::targets::TargetTriple::create(triple_string));
+            .set_triple(&inkwell::targets::TargetTriple::create(&self.triple));
         if let Ok(machine) = self.target_machine() {
             let data_layout = machine.get_target_data().get_data_layout();
             self.module.set_data_layout(&data_layout);
@@ -467,11 +985,493 @@ impl Lifter {
     }
 }
 
+fn active_function_arguments(
+    read_locations: &std::collections::HashSet<SemanticLocation>,
+    abi: &SemanticAbi,
+) -> Vec<SemanticLocation> {
+    let mut highest_used = None;
+    for (index, location) in abi.function_arguments.iter().enumerate() {
+        if read_locations
+            .iter()
+            .any(|read| location_matches_abi_argument(read, location))
+        {
+            highest_used = Some(index);
+        }
+    }
+    highest_used
+        .map(|index| abi.function_arguments[..=index].to_vec())
+        .unwrap_or_default()
+}
+
+fn location_matches_abi_argument(read: &SemanticLocation, argument: &SemanticLocation) -> bool {
+    if read == argument {
+        return true;
+    }
+    match (x86_argument_register_alias(read), x86_argument_register_alias(argument)) {
+        (Some(read), Some(argument)) => read == argument,
+        _ => false,
+    }
+}
+
+fn x86_argument_register_alias(location: &SemanticLocation) -> Option<(String, u16)> {
+    let SemanticLocation::Register { name, bits } = location else {
+        return None;
+    };
+    match (*bits, name.as_str()) {
+        (8, "al") | (8, "ah") | (16, "ax") => Some(("eax".to_string(), 32)),
+        (8, "bl") | (8, "bh") | (16, "bx") => Some(("ebx".to_string(), 32)),
+        (8, "cl") | (8, "ch") | (16, "cx") => Some(("ecx".to_string(), 32)),
+        (8, "dl") | (8, "dh") | (16, "dx") => Some(("edx".to_string(), 32)),
+        _ => Some((name.clone(), *bits)),
+    }
+}
+
+fn collect_abi_stack_layouts(abi: &SemanticAbi, layouts: &mut HashMap<String, u32>) {
+    for location in &abi.function_arguments {
+        collect_stack_layout_for_location(location, layouts);
+    }
+    for location in &abi.return_locations {
+        collect_stack_layout_for_location(location, layouts);
+    }
+    for trap in &abi.traps {
+        if let Some(location) = &trap.number_register {
+            collect_stack_layout_for_location(location, layouts);
+        }
+        for location in &trap.argument_registers {
+            collect_stack_layout_for_location(location, layouts);
+        }
+        for location in &trap.result_registers {
+            collect_stack_layout_for_location(location, layouts);
+        }
+        for location in &trap.shadow_registers {
+            collect_stack_layout_for_location(location, layouts);
+        }
+    }
+}
+
+fn collect_semantic_read_locations(
+    semantics: &Semantic,
+    reads: &mut std::collections::HashSet<SemanticLocation>,
+) {
+    for effect in &semantics.effects {
+        collect_effect_read_locations(effect, reads);
+    }
+    collect_terminator_read_locations(&semantics.terminator, reads);
+}
+
+fn collect_semantic_stack_layouts(semantics: &Semantic, layouts: &mut HashMap<String, u32>) {
+    for temporary in &semantics.temporaries {
+        let _ = temporary;
+    }
+    for effect in &semantics.effects {
+        collect_effect_stack_layouts(effect, layouts);
+    }
+    collect_terminator_stack_layouts(&semantics.terminator, layouts);
+}
+
+fn collect_effect_read_locations(
+    effect: &SemanticEffect,
+    reads: &mut std::collections::HashSet<SemanticLocation>,
+) {
+    match effect {
+        SemanticEffect::Set { expression, .. } => collect_expression_read_locations(expression, reads),
+        SemanticEffect::Store { addr, expression, .. } => {
+            collect_expression_read_locations(addr, reads);
+            collect_expression_read_locations(expression, reads);
+        }
+        SemanticEffect::MemorySet {
+            addr,
+            value,
+            count,
+            decrement,
+            ..
+        } => {
+            collect_expression_read_locations(addr, reads);
+            collect_expression_read_locations(value, reads);
+            collect_expression_read_locations(count, reads);
+            collect_expression_read_locations(decrement, reads);
+        }
+        SemanticEffect::MemoryCopy {
+            src_addr,
+            dst_addr,
+            count,
+            decrement,
+            ..
+        } => {
+            collect_expression_read_locations(src_addr, reads);
+            collect_expression_read_locations(dst_addr, reads);
+            collect_expression_read_locations(count, reads);
+            collect_expression_read_locations(decrement, reads);
+        }
+        SemanticEffect::AtomicCmpXchg {
+            addr,
+            expected,
+            desired,
+            ..
+        } => {
+            collect_expression_read_locations(addr, reads);
+            collect_expression_read_locations(expected, reads);
+            collect_expression_read_locations(desired, reads);
+        }
+        SemanticEffect::WriteProperty {
+            reference,
+            expression,
+            ..
+        } => {
+            collect_expression_read_locations(reference, reads);
+            collect_expression_read_locations(expression, reads);
+        }
+        SemanticEffect::WriteElement {
+            reference,
+            index,
+            expression,
+            ..
+        } => {
+            collect_expression_read_locations(reference, reads);
+            collect_expression_read_locations(index, reads);
+            collect_expression_read_locations(expression, reads);
+        }
+        SemanticEffect::Push { expression, .. } => collect_expression_read_locations(expression, reads),
+        SemanticEffect::Intrinsic { args, .. } => {
+            for arg in args {
+                collect_expression_read_locations(arg, reads);
+            }
+        }
+        SemanticEffect::Pop { .. }
+        | SemanticEffect::Fence { .. }
+        | SemanticEffect::Trap { .. }
+        | SemanticEffect::Nop => {}
+    }
+}
+
+fn collect_effect_stack_layouts(effect: &SemanticEffect, layouts: &mut HashMap<String, u32>) {
+    match effect {
+        SemanticEffect::Set { dst, expression } => {
+            collect_stack_layout_for_location(dst, layouts);
+            collect_expression_stack_layouts(expression, layouts);
+        }
+        SemanticEffect::Store { addr, expression, .. } => {
+            collect_expression_stack_layouts(addr, layouts);
+            collect_expression_stack_layouts(expression, layouts);
+        }
+        SemanticEffect::MemorySet {
+            addr,
+            value,
+            count,
+            decrement,
+            ..
+        } => {
+            collect_expression_stack_layouts(addr, layouts);
+            collect_expression_stack_layouts(value, layouts);
+            collect_expression_stack_layouts(count, layouts);
+            collect_expression_stack_layouts(decrement, layouts);
+        }
+        SemanticEffect::MemoryCopy {
+            src_addr,
+            dst_addr,
+            count,
+            decrement,
+            ..
+        } => {
+            collect_expression_stack_layouts(src_addr, layouts);
+            collect_expression_stack_layouts(dst_addr, layouts);
+            collect_expression_stack_layouts(count, layouts);
+            collect_expression_stack_layouts(decrement, layouts);
+        }
+        SemanticEffect::AtomicCmpXchg {
+            addr,
+            expected,
+            desired,
+            observed,
+            ..
+        } => {
+            collect_expression_stack_layouts(addr, layouts);
+            collect_expression_stack_layouts(expected, layouts);
+            collect_expression_stack_layouts(desired, layouts);
+            collect_stack_layout_for_location(observed, layouts);
+        }
+        SemanticEffect::WriteProperty {
+            reference,
+            expression,
+            ..
+        } => {
+            collect_expression_stack_layouts(reference, layouts);
+            collect_expression_stack_layouts(expression, layouts);
+        }
+        SemanticEffect::WriteElement {
+            reference,
+            index,
+            expression,
+            ..
+        } => {
+            collect_expression_stack_layouts(reference, layouts);
+            collect_expression_stack_layouts(index, layouts);
+            collect_expression_stack_layouts(expression, layouts);
+        }
+        SemanticEffect::Push { expression, .. } => collect_expression_stack_layouts(expression, layouts),
+        SemanticEffect::Pop { dst, .. } => collect_stack_layout_for_location(dst, layouts),
+        SemanticEffect::Intrinsic { args, outputs, .. } => {
+            for arg in args {
+                collect_expression_stack_layouts(arg, layouts);
+            }
+            for output in outputs {
+                collect_stack_layout_for_location(output, layouts);
+            }
+        }
+        SemanticEffect::Fence { .. } | SemanticEffect::Trap { .. } | SemanticEffect::Nop => {}
+    }
+}
+
+fn collect_terminator_read_locations(
+    terminator: &SemanticTerminator,
+    reads: &mut std::collections::HashSet<SemanticLocation>,
+) {
+    match terminator {
+        SemanticTerminator::Jump { target } => collect_expression_read_locations(target, reads),
+        SemanticTerminator::Branch {
+            condition,
+            true_target,
+            false_target,
+        } => {
+            collect_expression_read_locations(condition, reads);
+            collect_expression_read_locations(true_target, reads);
+            collect_expression_read_locations(false_target, reads);
+        }
+        SemanticTerminator::Call {
+            target,
+            return_target,
+            ..
+        } => {
+            collect_expression_read_locations(target, reads);
+            if let Some(return_target) = return_target {
+                collect_expression_read_locations(return_target, reads);
+            }
+        }
+        SemanticTerminator::Return { expression } => {
+            if let Some(expression) = expression {
+                collect_expression_read_locations(expression, reads);
+            }
+        }
+        SemanticTerminator::FallThrough
+        | SemanticTerminator::Trap
+        | SemanticTerminator::Unreachable => {}
+    }
+}
+
+fn collect_terminator_stack_layouts(
+    terminator: &SemanticTerminator,
+    layouts: &mut HashMap<String, u32>,
+) {
+    match terminator {
+        SemanticTerminator::Jump { target } => collect_expression_stack_layouts(target, layouts),
+        SemanticTerminator::Branch {
+            condition,
+            true_target,
+            false_target,
+        } => {
+            collect_expression_stack_layouts(condition, layouts);
+            collect_expression_stack_layouts(true_target, layouts);
+            collect_expression_stack_layouts(false_target, layouts);
+        }
+        SemanticTerminator::Call {
+            target,
+            return_target,
+            ..
+        } => {
+            collect_expression_stack_layouts(target, layouts);
+            if let Some(return_target) = return_target {
+                collect_expression_stack_layouts(return_target, layouts);
+            }
+        }
+        SemanticTerminator::Return { expression } => {
+            if let Some(expression) = expression {
+                collect_expression_stack_layouts(expression, layouts);
+            }
+        }
+        SemanticTerminator::FallThrough
+        | SemanticTerminator::Trap
+        | SemanticTerminator::Unreachable => {}
+    }
+}
+
+fn collect_expression_read_locations(
+    expression: &SemanticExpression,
+    reads: &mut std::collections::HashSet<SemanticLocation>,
+) {
+    match expression {
+        SemanticExpression::AddressOf { .. } => {}
+        SemanticExpression::Read(location) => {
+            reads.insert(location.as_ref().clone());
+            match location.as_ref() {
+                SemanticLocation::Memory { addr, .. } => collect_expression_read_locations(addr, reads),
+                SemanticLocation::IndexedMemory { index, .. } => {
+                    collect_expression_read_locations(index, reads)
+                }
+                SemanticLocation::Register { .. }
+                | SemanticLocation::Flag { .. }
+                | SemanticLocation::ProgramCounter { .. }
+                | SemanticLocation::Temporary { .. }
+                | SemanticLocation::StackMemory { .. } => {}
+            }
+        }
+        SemanticExpression::Load { addr, .. } => collect_expression_read_locations(addr, reads),
+        SemanticExpression::ReadProperty { reference, .. } => {
+            collect_expression_read_locations(reference, reads)
+        }
+        SemanticExpression::ReadElement {
+            reference, index, ..
+        } => {
+            collect_expression_read_locations(reference, reads);
+            collect_expression_read_locations(index, reads);
+        }
+        SemanticExpression::Unary { arg, .. }
+        | SemanticExpression::Cast { arg, .. }
+        | SemanticExpression::Extract { arg, .. } => collect_expression_read_locations(arg, reads),
+        SemanticExpression::Binary { left, right, .. }
+        | SemanticExpression::Compare { left, right, .. } => {
+            collect_expression_read_locations(left, reads);
+            collect_expression_read_locations(right, reads);
+        }
+        SemanticExpression::Select {
+            condition,
+            when_true,
+            when_false,
+            ..
+        } => {
+            collect_expression_read_locations(condition, reads);
+            collect_expression_read_locations(when_true, reads);
+            collect_expression_read_locations(when_false, reads);
+        }
+        SemanticExpression::Concat { parts, .. } | SemanticExpression::Intrinsic { args: parts, .. } => {
+            for part in parts {
+                collect_expression_read_locations(part, reads);
+            }
+        }
+        SemanticExpression::Const { .. }
+        | SemanticExpression::Function { .. }
+        | SemanticExpression::Undefined { .. }
+        | SemanticExpression::Poison { .. }
+        | SemanticExpression::Null { .. }
+        | SemanticExpression::Allocate { .. } => {}
+    }
+}
+
+fn collect_expression_stack_layouts(
+    expression: &SemanticExpression,
+    layouts: &mut HashMap<String, u32>,
+) {
+    match expression {
+        SemanticExpression::AddressOf { location, .. } => {
+            collect_stack_layout_for_location(location, layouts);
+        }
+        SemanticExpression::Read(location) => collect_stack_layout_for_location(location, layouts),
+        SemanticExpression::Load { addr, .. } => collect_expression_stack_layouts(addr, layouts),
+        SemanticExpression::ReadProperty { reference, .. } => {
+            collect_expression_stack_layouts(reference, layouts)
+        }
+        SemanticExpression::ReadElement {
+            reference, index, ..
+        } => {
+            collect_expression_stack_layouts(reference, layouts);
+            collect_expression_stack_layouts(index, layouts);
+        }
+        SemanticExpression::Unary { arg, .. }
+        | SemanticExpression::Cast { arg, .. }
+        | SemanticExpression::Extract { arg, .. } => collect_expression_stack_layouts(arg, layouts),
+        SemanticExpression::Binary { left, right, .. }
+        | SemanticExpression::Compare { left, right, .. } => {
+            collect_expression_stack_layouts(left, layouts);
+            collect_expression_stack_layouts(right, layouts);
+        }
+        SemanticExpression::Select {
+            condition,
+            when_true,
+            when_false,
+            ..
+        } => {
+            collect_expression_stack_layouts(condition, layouts);
+            collect_expression_stack_layouts(when_true, layouts);
+            collect_expression_stack_layouts(when_false, layouts);
+        }
+        SemanticExpression::Concat { parts, .. } | SemanticExpression::Intrinsic { args: parts, .. } => {
+            for part in parts {
+                collect_expression_stack_layouts(part, layouts);
+            }
+        }
+        SemanticExpression::Const { .. }
+        | SemanticExpression::Function { .. }
+        | SemanticExpression::Undefined { .. }
+        | SemanticExpression::Poison { .. }
+        | SemanticExpression::Null { .. }
+        | SemanticExpression::Allocate { .. } => {}
+    }
+}
+
+fn collect_stack_layout_for_location(location: &SemanticLocation, layouts: &mut HashMap<String, u32>) {
+    match location {
+        SemanticLocation::StackMemory { name, offset, bits } => {
+            let bytes = u32::from((*bits).div_ceil(8));
+            let end = offset.saturating_add(bytes.max(1));
+            layouts
+                .entry(name.clone())
+                .and_modify(|current| *current = (*current).max(end))
+                .or_insert(end);
+        }
+        SemanticLocation::Memory { addr, .. } => collect_expression_stack_layouts(addr, layouts),
+        SemanticLocation::IndexedMemory { index, .. } => {
+            collect_expression_stack_layouts(index, layouts)
+        }
+        SemanticLocation::Register { .. }
+        | SemanticLocation::Flag { .. }
+        | SemanticLocation::ProgramCounter { .. }
+        | SemanticLocation::Temporary { .. } => {}
+    }
+}
+
 fn should_emit_instruction_encoding(semantics: &Semantic) -> bool {
     matches!(semantics.status, crate::semantics::SemanticStatus::Partial)
 }
 
 impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
+    fn uses_pure_callable_abi(&self) -> bool {
+        self.abi.is_some()
+            && (self.function.get_first_param().is_some()
+                || self
+                    .abi
+                    .as_ref()
+                    .and_then(|abi| abi.function_return_bits)
+                    .is_some())
+    }
+
+    fn is_callable_abi_boundary_location(&self, location: &SemanticLocation) -> bool {
+        let Some(abi) = &self.abi else {
+            return false;
+        };
+        abi.function_arguments.iter().any(|arg| arg == location)
+            || abi.return_locations.iter().any(|ret| ret == location)
+    }
+
+    fn bind_function_arguments(&mut self) -> Result<(), Error> {
+        for (index, (param, location)) in self
+            .function
+            .get_param_iter()
+            .zip(self.function_arguments.iter())
+            .enumerate()
+        {
+            let key = render_location(location);
+            let slot = self.build_entry_alloca(
+                self.location_type(location),
+                &sanitize_symbol(&format!("abi_arg_{}_{}", index, key)),
+            )?;
+            self.builder
+                .build_store(slot, param.into_int_value())
+                .map_err(|err| Error::other(err.to_string()))?;
+            self.slots.insert(key.clone(), slot);
+            self.slot_locations.insert(key, location.clone());
+        }
+        Ok(())
+    }
+
     fn record_semantic_lowering(&mut self, kind: &str, detail: impl Into<String>) {
         if !self.debug {
             return;
@@ -518,12 +1518,20 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         }
     }
 
-    fn lower_function(&mut self, function: &Function<'_>) -> Result<(), Error> {
+    fn lower_function(
+        &mut self,
+        function: &Function<'_>,
+        block_names: Option<&BTreeMap<u64, String>>,
+    ) -> Result<(), Error> {
         let mut block_map = HashMap::<u64, BasicBlock<'ctx>>::new();
         for block in function.blocks() {
+            let block_name = block_names
+                .and_then(|names| names.get(&block.address()).map(|name| name.as_str()))
+                .map(str::to_string)
+                .unwrap_or_else(|| format!("block_{:x}", block.address()));
             let llvm_block = self
                 .context
-                .append_basic_block(self.function, &format!("block_{:x}", block.address()));
+                .append_basic_block(self.function, &block_name);
             block_map.insert(block.address(), llvm_block);
         }
 
@@ -579,7 +1587,6 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .is_none();
         if needs_return {
             self.sync_slots_to_architecture()?;
-            self.emit_body_marker("body_end")?;
             if self.emit_abi_return()? {
             } else if let Some(adjust) = self.native_return_adjust {
                 self.emit_native_return(adjust)?;
@@ -599,8 +1606,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     ) -> Result<(), Error> {
         let Some(semantics) = block.terminator.semantics.as_ref() else {
             if block.terminator.is_return {
+                let target = self.ensure_exit_block(exit_block);
                 self.builder
-                    .build_return(None)
+                    .build_unconditional_branch(target)
                     .map_err(|err| Error::other(err.to_string()))?;
             } else if block.terminator.is_conditional {
                 return Err(Error::other(
@@ -743,7 +1751,6 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             *self.cached_flags_register.borrow_mut() = None;
             let prepared = prepare_instruction_semantics(semantics)?;
             let emit_encoding = should_emit_instruction_encoding(&prepared);
-            self.emit_body_marker_if_needed(!emit_encoding)?;
             if emit_encoding {
                 let Some(encoding) = prepared.encoding.as_ref() else {
                     return Err(Error::other(
@@ -752,8 +1759,8 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 };
                 self.emit_instruction_encoding(encoding)?;
             }
-            let previous_semantics_abi = self.current_semantics_abi;
-            self.current_semantics_abi = prepared.abi;
+            let previous_semantics_abi = self.current_semantics_abi.clone();
+            self.current_semantics_abi = prepared.abi.clone();
             let result = (|| -> Result<(), Error> {
                 self.seed_instruction_inputs(&prepared)?;
                 self.lower_semantics(&prepared)
@@ -788,7 +1795,6 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         *self.cached_flags_register.borrow_mut() = None;
         let prepared = prepare_instruction_semantics(semantics)?;
         let emit_encoding = should_emit_instruction_encoding(&prepared);
-        self.emit_body_marker_if_needed(!emit_encoding)?;
         if emit_encoding {
             let Some(encoding) = prepared.encoding.as_ref() else {
                 return Err(Error::other(
@@ -797,8 +1803,8 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             };
             self.emit_instruction_encoding(encoding)?;
         }
-        let previous_semantics_abi = self.current_semantics_abi;
-        self.current_semantics_abi = prepared.abi;
+        let previous_semantics_abi = self.current_semantics_abi.clone();
+        self.current_semantics_abi = prepared.abi.clone();
         let result = (|| -> Result<(), Error> {
             self.seed_instruction_inputs(&prepared)?;
             self.lower_semantics(&prepared)
@@ -980,6 +1986,8 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         flags: &mut Vec<SemanticLocation>,
     ) {
         match expression {
+            SemanticExpression::Function { .. } => {}
+            SemanticExpression::AddressOf { .. } => {}
             SemanticExpression::Read(location) => match location.as_ref() {
                 SemanticLocation::Register { .. } => {
                     push_unique_location(registers, location.as_ref().clone());

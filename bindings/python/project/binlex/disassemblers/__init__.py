@@ -24,7 +24,7 @@
 from enum import Enum
 
 from binlex.config import Configuration
-from binlex.controlflow import Graph
+from binlex.controlflow import Block, Function, Graph, Instruction
 from binlex.core import Architecture
 from binlex.core.architecture import _coerce_architecture
 from binlex.formats import Image
@@ -85,7 +85,7 @@ class Disassembler:
                 configuration,
             )
 
-    def disassemble_instruction(self, address: int, graph: Graph) -> int:
+    def disassemble_instruction(self, address: int, graph: Graph) -> Instruction:
         if self.architecture == Architecture.CIL:
             return self._inner.disassemble_instruction(
                 address,
@@ -93,7 +93,7 @@ class Disassembler:
             )
         return self._inner.disassemble_instruction(address, graph)
 
-    def disassemble_function(self, address: int, graph: Graph) -> int:
+    def disassemble_function(self, address: int, graph: Graph) -> Function:
         if self.architecture == Architecture.CIL:
             return self._inner.disassemble_function(
                 address,
@@ -101,7 +101,7 @@ class Disassembler:
             )
         return self._inner.disassemble_function(address, graph)
 
-    def disassemble_block(self, address: int, graph: Graph) -> int:
+    def disassemble_block(self, address: int, graph: Graph) -> Block:
         if self.architecture == Architecture.CIL:
             return self._inner.disassemble_block(
                 address,

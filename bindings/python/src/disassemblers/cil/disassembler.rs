@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 use crate::controlflow::Graph;
+use crate::controlflow::{Block, Function, Instruction};
 use crate::formats::Image;
 use crate::Architecture;
 use crate::Configuration;
@@ -166,19 +167,19 @@ impl Disassembler {
         py: Python,
         address: u64,
         graph: Py<Graph>,
-    ) -> Result<u64, Error> {
+    ) -> Result<Instruction, Error> {
         let graph_ref = &mut graph.borrow_mut(py);
         let metadata_token_addresses = BTreeMap::new();
         let result = self
             .with_inner_disassembler(py, |disassembler| {
-                disassembler.disassemble_instruction(
+                disassembler.disassemble_instruction_address(
                     address,
                     &metadata_token_addresses,
                     &mut graph_ref.inner.lock().unwrap(),
                 )
             })
             .map_err(|error| Error::other(error.to_string()))?;
-        Ok(result)
+        Instruction::new(result, graph.clone_ref(py)).map_err(|error| Error::other(error.to_string()))
     }
 
     #[pyo3(text_signature = "($self, address, graph)")]
@@ -187,19 +188,19 @@ impl Disassembler {
         py: Python,
         address: u64,
         graph: Py<Graph>,
-    ) -> Result<u64, Error> {
+    ) -> Result<Function, Error> {
         let graph_ref = &mut graph.borrow_mut(py);
         let metadata_token_addresses = BTreeMap::new();
         let result = self
             .with_inner_disassembler(py, |disassembler| {
-                disassembler.disassemble_function(
+                disassembler.disassemble_function_address(
                     address,
                     &metadata_token_addresses,
                     &mut graph_ref.inner.lock().unwrap(),
                 )
             })
             .map_err(|error| Error::other(error.to_string()))?;
-        Ok(result)
+        Function::new(result, graph.clone_ref(py)).map_err(|error| Error::other(error.to_string()))
     }
 
     #[pyo3(text_signature = "($self, address, graph)")]
@@ -208,19 +209,19 @@ impl Disassembler {
         py: Python,
         address: u64,
         graph: Py<Graph>,
-    ) -> Result<u64, Error> {
+    ) -> Result<Block, Error> {
         let graph_ref = &mut graph.borrow_mut(py);
         let metadata_token_addresses = BTreeMap::new();
-        let result = self
+        self
             .with_inner_disassembler(py, |disassembler| {
-                disassembler.disassemble_block(
+                disassembler.disassemble_block_address(
                     address,
                     &metadata_token_addresses,
                     &mut graph_ref.inner.lock().unwrap(),
                 )
             })
             .map_err(|error| Error::other(error.to_string()))?;
-        Ok(result)
+        Block::new(address, graph.clone_ref(py)).map_err(|error| Error::other(error.to_string()))
     }
 
     #[pyo3(text_signature = "($self, addresses, graph)")]

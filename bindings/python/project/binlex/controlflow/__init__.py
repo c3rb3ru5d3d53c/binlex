@@ -36,6 +36,11 @@ from binlex_bindings.binlex.controlflow.instruction import OperandKind as Operan
 
 from binlex.core.architecture import _coerce_architecture
 from binlex.hashing import MinHash32, SHA256, SSDeep, TLSH
+from binlex.semantics import SemanticCpu, _cpu_kind_from_architecture
+
+
+def _cpu_for_architecture(architecture):
+    return SemanticCpu.from_kind(_cpu_kind_from_architecture(architecture))
 
 
 class Instruction:
@@ -91,8 +96,8 @@ class Instruction:
         return self._inner.is_conditional()
 
     def callees(self):
-        """Return the direct callee addresses."""
-        return self._inner.callees()
+        """Return the directly called functions."""
+        return [Function._from_binding(item, self._config) for item in self._inner.callees()]
 
     def callee_references(self):
         """Return the direct outgoing call references."""
@@ -141,14 +146,19 @@ class Instruction:
             dimensions=dimensions,
         ).embed_instruction(self)
 
-    def lift(self, backend=None):
+    def lift(self, backend=None, abi=None, triple=None):
         """Return a lifter artifact for this instruction, if available."""
         from binlex.lifters import Lifter, LifterBackend
 
         if self._config is None:
             return None
         backend = LifterBackend.DEFAULT if backend is None else backend
-        return Lifter(self.architecture(), self._config, backend=backend).lift_instruction(self)
+        return Lifter(
+            _cpu_for_architecture(self.architecture()),
+            self._config,
+            backend=backend,
+            triple=triple,
+        ).lift_instruction(self)
 
     def semantic(self):
         """Return canonical semantics for this instruction, if present."""
@@ -183,12 +193,14 @@ class InstructionJsonDeserializer:
     def __init__(self, string, config):
         """Create an instruction deserializer from a serialized JSON string."""
         self._inner = _InstructionJsonDeserializerBinding(string, config)
+        self._config = config
 
     @classmethod
-    def _from_binding(cls, binding):
+    def _from_binding(cls, binding, config=None):
         """Wrap an existing native instruction JSON deserializer binding."""
         result = cls.__new__(cls)
         result._inner = binding
+        result._config = config
         return result
 
     def architecture(self):
@@ -391,14 +403,19 @@ class Block:
             dimensions=dimensions,
         ).embed_block(self)
 
-    def lift(self, backend=None):
+    def lift(self, backend=None, abi=None, triple=None):
         """Return a lifter artifact for this block, if available."""
         from binlex.lifters import Lifter, LifterBackend
 
         if self._config is None:
             return None
         backend = LifterBackend.DEFAULT if backend is None else backend
-        return Lifter(self.architecture(), self._config, backend=backend).lift_block(self)
+        return Lifter(
+            _cpu_for_architecture(self.architecture()),
+            self._config,
+            backend=backend,
+            triple=triple,
+        ).lift_block(self, abi=abi)
 
     def tlsh(self):
         """Return the TLSH object for this block, if available."""
@@ -544,14 +561,19 @@ class Function:
             dimensions=dimensions,
         ).embed_function(self)
 
-    def lift(self, backend=None):
+    def lift(self, backend=None, abi=None, triple=None):
         """Return a lifter artifact for this function, if available."""
         from binlex.lifters import Lifter, LifterBackend
 
         if self._config is None:
             return None
         backend = LifterBackend.DEFAULT if backend is None else backend
-        return Lifter(self.architecture(), self._config, backend=backend).lift_function(self)
+        return Lifter(
+            _cpu_for_architecture(self.architecture()),
+            self._config,
+            backend=backend,
+            triple=triple,
+        ).lift_function(self, abi=abi)
 
     def tlsh(self):
         """Return the TLSH object for this function, if available."""
@@ -618,9 +640,9 @@ class _LLVM:
     def semantic(self):
         return self.__class__(self._owner, mode="semantic")
 
-    def text(self):
+    def ir(self):
         lifter = self._lift()
-        return lifter.text()
+        return lifter.ir()
 
     def print(self):
         lifter = self._lift()
@@ -634,9 +656,29 @@ class _LLVM:
         lifter = self._lift()
         return lifter.object()
 
-    def optimizers(self):
+    def optimize_mem2reg(self):
         lifter = self._lift()
-        return lifter.optimizers()
+        return lifter.optimize_mem2reg()
+
+    def optimize_instcombine(self):
+        lifter = self._lift()
+        return lifter.optimize_instcombine()
+
+    def optimize_cfg(self):
+        lifter = self._lift()
+        return lifter.optimize_cfg()
+
+    def optimize_gvn(self):
+        lifter = self._lift()
+        return lifter.optimize_gvn()
+
+    def optimize_sroa(self):
+        lifter = self._lift()
+        return lifter.optimize_sroa()
+
+    def optimize_dce(self):
+        lifter = self._lift()
+        return lifter.optimize_dce()
 
     def verify(self):
         lifter = self._lift()
@@ -651,7 +693,7 @@ class _LLVM:
         if self._mode is not None:
             config = config.clone()
             config.lifters.llvm.mode = self._mode
-        lifter = Lifter(self._owner.architecture(), config, backend=LifterBackend.LLVM)
+        lifter = Lifter(_cpu_for_architecture(self._owner.architecture()), config, backend=LifterBackend.LLVM)
         if isinstance(self._owner, Instruction):
             lifter = lifter.lift_instruction(self._owner)
         elif isinstance(self._owner, Block):

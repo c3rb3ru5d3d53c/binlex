@@ -1,47 +1,65 @@
 use super::LoweringContext;
-use super::helpers::{render_location, render_trap_kind};
-use crate::lifters::llvm::abi::coerce_int_value_width;
-use crate::semantics::{SemanticExpression, SemanticLocation, SemanticTrapKind};
-use crate::{Abi, Architecture};
+use super::helpers::{coerce_int_value_width, render_location, render_trap_kind};
+use crate::semantics::{
+    SemanticAbiTrap, SemanticCpuKind, SemanticExpression, SemanticLocation, SemanticTrapKind,
+};
+use crate::Architecture;
 use inkwell::values::IntValue;
 use std::io::Error;
 
 impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     pub(super) fn lower_native_trap(&mut self, kind: &SemanticTrapKind) -> Result<(), Error> {
-        match (kind, self.current_semantics_abi, self.architecture) {
-            (SemanticTrapKind::Syscall, Some(Abi::LinuxSyscall), Architecture::ARM64) => {
+        match (
+            kind,
+            self.current_semantics_abi.as_ref(),
+            self.architecture,
+        ) {
+            (SemanticTrapKind::Syscall, Some(abi), Architecture::ARM64)
+                if abi.is_linux_syscall() =>
+            {
                 self.emit_arm64_linux_syscall_native()
             }
-            (SemanticTrapKind::Syscall, Some(Abi::WindowsSyscall), Architecture::ARM64) => {
+            (SemanticTrapKind::Syscall, Some(abi), Architecture::ARM64)
+                if abi.is_windows_syscall() =>
+            {
                 self.emit_arm64_windows_syscall_native()
             }
-            (SemanticTrapKind::Syscall, Some(Abi::LinuxSyscall), Architecture::AMD64) => {
+            (SemanticTrapKind::Syscall, Some(abi), Architecture::AMD64)
+                if abi.is_linux_syscall() =>
+            {
                 self.emit_amd64_linux_syscall_native()
             }
-            (SemanticTrapKind::Syscall, Some(Abi::WindowsSyscall), Architecture::AMD64) => {
+            (SemanticTrapKind::Syscall, Some(abi), Architecture::AMD64)
+                if abi.is_windows_syscall() =>
+            {
                 self.emit_amd64_windows_syscall_native()
             }
-            (SemanticTrapKind::Interrupt, Some(Abi::LinuxSyscall), Architecture::I386) => {
+            (SemanticTrapKind::Interrupt, Some(abi), Architecture::I386)
+                if abi.is_linux_syscall() =>
+            {
                 self.emit_i386_linux_syscall_native()
             }
-            (SemanticTrapKind::Interrupt, Some(Abi::WindowsSyscall), Architecture::I386) => {
+            (SemanticTrapKind::Interrupt, Some(abi), Architecture::I386)
+                if abi.is_windows_syscall() =>
+            {
                 self.emit_i386_windows_syscall_native()
             }
-            (
-                SemanticTrapKind::ArchSpecific { name },
-                Some(Abi::LinuxSyscall),
-                Architecture::I386,
-            ) if name == "x86.sysenter" => self.emit_i386_linux_sysenter_native(),
-            (
-                SemanticTrapKind::ArchSpecific { name },
-                Some(Abi::WindowsSyscall),
-                Architecture::I386,
-            ) if name == "x86.sysenter" => self.emit_i386_windows_sysenter_native(),
+            (SemanticTrapKind::Named { name }, Some(abi), Architecture::I386)
+                if name == "x86.sysenter" && abi.is_linux_syscall() =>
+            {
+                self.emit_i386_linux_sysenter_native()
+            }
+            (SemanticTrapKind::Named { name }, Some(abi), Architecture::I386)
+                if name == "x86.sysenter" && abi.is_windows_syscall() =>
+            {
+                self.emit_i386_windows_sysenter_native()
+            }
             _ => Err(Error::other(format!(
                 "unsupported native trap lowering: kind={} abi={} architecture={}",
                 render_trap_kind(kind),
                 self.current_semantics_abi
-                    .map(|abi| abi.to_string())
+                    .as_ref()
+                    .map(|abi| abi.name.clone())
                     .unwrap_or_else(|| "none".to_string()),
                 self.architecture
             ))),
@@ -76,41 +94,21 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             None,
             false,
         );
-        let x0 = self
-            .load_native_syscall_register(
-                crate::lifters::llvm::abi::arm64::linux_syscall::X0_SEMANTIC_NAME,
-            )?
-            .into();
-        let x1 = self
-            .load_native_syscall_register(
-                crate::lifters::llvm::abi::arm64::linux_syscall::X1_SEMANTIC_NAME,
-            )?
-            .into();
-        let x2 = self
-            .load_native_syscall_register(
-                crate::lifters::llvm::abi::arm64::linux_syscall::X2_SEMANTIC_NAME,
-            )?
-            .into();
-        let x3 = self
-            .load_native_syscall_register(
-                crate::lifters::llvm::abi::arm64::linux_syscall::X3_SEMANTIC_NAME,
-            )?
-            .into();
-        let x4 = self
-            .load_native_syscall_register(
-                crate::lifters::llvm::abi::arm64::linux_syscall::X4_SEMANTIC_NAME,
-            )?
-            .into();
-        let x5 = self
-            .load_native_syscall_register(
-                crate::lifters::llvm::abi::arm64::linux_syscall::X5_SEMANTIC_NAME,
-            )?
-            .into();
-        let x8 = self
-            .load_native_syscall_register(
-                crate::lifters::llvm::abi::arm64::linux_syscall::X8_SEMANTIC_NAME,
-            )?
-            .into();
+        let syscall_kind = SemanticTrapKind::Syscall;
+        let (x0_name, _) = self.trap_argument_name(&syscall_kind, 0)?;
+        let (x1_name, _) = self.trap_argument_name(&syscall_kind, 1)?;
+        let (x2_name, _) = self.trap_argument_name(&syscall_kind, 2)?;
+        let (x3_name, _) = self.trap_argument_name(&syscall_kind, 3)?;
+        let (x4_name, _) = self.trap_argument_name(&syscall_kind, 4)?;
+        let (x5_name, _) = self.trap_argument_name(&syscall_kind, 5)?;
+        let (x8_name, _) = self.trap_number_name(&syscall_kind)?;
+        let x0 = self.load_native_syscall_register(&x0_name)?.into();
+        let x1 = self.load_native_syscall_register(&x1_name)?.into();
+        let x2 = self.load_native_syscall_register(&x2_name)?.into();
+        let x3 = self.load_native_syscall_register(&x3_name)?.into();
+        let x4 = self.load_native_syscall_register(&x4_name)?.into();
+        let x5 = self.load_native_syscall_register(&x5_name)?.into();
+        let x8 = self.load_native_syscall_register(&x8_name)?.into();
         let result = self
             .builder
             .build_indirect_call(fn_type, asm, &[x0, x1, x2, x3, x4, x5, x8], "linux_syscall")
@@ -119,11 +117,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .basic()
             .ok_or_else(|| Error::other("expected arm64 linux syscall return value"))?
             .into_int_value();
-        self.store_arm64_syscall_result(
-            crate::lifters::llvm::abi::arm64::linux_syscall::X0_SEMANTIC_NAME,
-            crate::lifters::llvm::abi::arm64::linux_syscall::W0_SEMANTIC_NAME,
-            result,
-        )
+        let (result_x0, _) = self.trap_result_name(&syscall_kind, 0)?;
+        let (result_w0, _) = self.trap_result_name(&syscall_kind, 1)?;
+        self.store_arm64_syscall_result(&result_x0, &result_w0, result)
     }
 
     fn emit_arm64_windows_syscall_native(&mut self) -> Result<(), Error> {
@@ -156,51 +152,25 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             None,
             false,
         );
-        let x0 = self
-            .load_native_syscall_register(
-                crate::lifters::llvm::abi::arm64::windows_syscall::X0_SEMANTIC_NAME,
-            )?
-            .into();
-        let x1 = self
-            .load_native_syscall_register(
-                crate::lifters::llvm::abi::arm64::windows_syscall::X1_SEMANTIC_NAME,
-            )?
-            .into();
-        let x2 = self
-            .load_native_syscall_register(
-                crate::lifters::llvm::abi::arm64::windows_syscall::X2_SEMANTIC_NAME,
-            )?
-            .into();
-        let x3 = self
-            .load_native_syscall_register(
-                crate::lifters::llvm::abi::arm64::windows_syscall::X3_SEMANTIC_NAME,
-            )?
-            .into();
-        let x4 = self
-            .load_native_syscall_register(
-                crate::lifters::llvm::abi::arm64::windows_syscall::X4_SEMANTIC_NAME,
-            )?
-            .into();
-        let x5 = self
-            .load_native_syscall_register(
-                crate::lifters::llvm::abi::arm64::windows_syscall::X5_SEMANTIC_NAME,
-            )?
-            .into();
-        let x6 = self
-            .load_native_syscall_register(
-                crate::lifters::llvm::abi::arm64::windows_syscall::X6_SEMANTIC_NAME,
-            )?
-            .into();
-        let x7 = self
-            .load_native_syscall_register(
-                crate::lifters::llvm::abi::arm64::windows_syscall::X7_SEMANTIC_NAME,
-            )?
-            .into();
-        let x8 = self
-            .load_native_syscall_register(
-                crate::lifters::llvm::abi::arm64::windows_syscall::X8_SEMANTIC_NAME,
-            )?
-            .into();
+        let syscall_kind = SemanticTrapKind::Syscall;
+        let (x0_name, _) = self.trap_argument_name(&syscall_kind, 0)?;
+        let (x1_name, _) = self.trap_argument_name(&syscall_kind, 1)?;
+        let (x2_name, _) = self.trap_argument_name(&syscall_kind, 2)?;
+        let (x3_name, _) = self.trap_argument_name(&syscall_kind, 3)?;
+        let (x4_name, _) = self.trap_argument_name(&syscall_kind, 4)?;
+        let (x5_name, _) = self.trap_argument_name(&syscall_kind, 5)?;
+        let (x6_name, _) = self.trap_argument_name(&syscall_kind, 6)?;
+        let (x7_name, _) = self.trap_argument_name(&syscall_kind, 7)?;
+        let (x8_name, _) = self.trap_number_name(&syscall_kind)?;
+        let x0 = self.load_native_syscall_register(&x0_name)?.into();
+        let x1 = self.load_native_syscall_register(&x1_name)?.into();
+        let x2 = self.load_native_syscall_register(&x2_name)?.into();
+        let x3 = self.load_native_syscall_register(&x3_name)?.into();
+        let x4 = self.load_native_syscall_register(&x4_name)?.into();
+        let x5 = self.load_native_syscall_register(&x5_name)?.into();
+        let x6 = self.load_native_syscall_register(&x6_name)?.into();
+        let x7 = self.load_native_syscall_register(&x7_name)?.into();
+        let x8 = self.load_native_syscall_register(&x8_name)?.into();
         let result = self
             .builder
             .build_indirect_call(
@@ -214,11 +184,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .basic()
             .ok_or_else(|| Error::other("expected arm64 windows syscall return value"))?
             .into_int_value();
-        self.store_arm64_syscall_result(
-            crate::lifters::llvm::abi::arm64::windows_syscall::X0_SEMANTIC_NAME,
-            crate::lifters::llvm::abi::arm64::windows_syscall::W0_SEMANTIC_NAME,
-            result,
-        )
+        let (result_x0, _) = self.trap_result_name(&syscall_kind, 0)?;
+        let (result_w0, _) = self.trap_result_name(&syscall_kind, 1)?;
+        self.store_arm64_syscall_result(&result_x0, &result_w0, result)
     }
 
     fn emit_amd64_linux_syscall_native(&mut self) -> Result<(), Error> {
@@ -249,48 +217,21 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             None,
             false,
         );
-        let rax = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::linux_syscall::amd64::RAX_SEMANTIC_NAME,
-                64,
-            )?
-            .into();
-        let rdi = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::linux_syscall::amd64::RDI_SEMANTIC_NAME,
-                64,
-            )?
-            .into();
-        let rsi = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::linux_syscall::amd64::RSI_SEMANTIC_NAME,
-                64,
-            )?
-            .into();
-        let rdx = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::linux_syscall::amd64::RDX_SEMANTIC_NAME,
-                64,
-            )?
-            .into();
-        let r10 = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::linux_syscall::amd64::R10_SEMANTIC_NAME,
-                64,
-            )?
-            .into();
-        let r8 = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::linux_syscall::amd64::R8_SEMANTIC_NAME,
-                64,
-            )?
-            .into();
-        let r9 = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::linux_syscall::amd64::R9_SEMANTIC_NAME,
-                64,
-            )?
-            .into();
+        let syscall_kind = SemanticTrapKind::Syscall;
+        let (rax_name, rax_bits) = self.trap_number_name(&syscall_kind)?;
+        let (rdi_name, rdi_bits) = self.trap_argument_name(&syscall_kind, 0)?;
+        let (rsi_name, rsi_bits) = self.trap_argument_name(&syscall_kind, 1)?;
+        let (rdx_name, rdx_bits) = self.trap_argument_name(&syscall_kind, 2)?;
+        let (r10_name, r10_bits) = self.trap_argument_name(&syscall_kind, 3)?;
+        let (r8_name, r8_bits) = self.trap_argument_name(&syscall_kind, 4)?;
+        let (r9_name, r9_bits) = self.trap_argument_name(&syscall_kind, 5)?;
+        let rax = self.load_native_syscall_register_bits(&rax_name, rax_bits)?.into();
+        let rdi = self.load_native_syscall_register_bits(&rdi_name, rdi_bits)?.into();
+        let rsi = self.load_native_syscall_register_bits(&rsi_name, rsi_bits)?.into();
+        let rdx = self.load_native_syscall_register_bits(&rdx_name, rdx_bits)?.into();
+        let r10 = self.load_native_syscall_register_bits(&r10_name, r10_bits)?.into();
+        let r8 = self.load_native_syscall_register_bits(&r8_name, r8_bits)?.into();
+        let r9 = self.load_native_syscall_register_bits(&r9_name, r9_bits)?.into();
         let result = self
             .builder
             .build_indirect_call(
@@ -304,11 +245,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .basic()
             .ok_or_else(|| Error::other("expected amd64 linux syscall return value"))?
             .into_int_value();
-        self.store_native_syscall_result(
-            crate::lifters::llvm::abi::x86::linux_syscall::amd64::RAX_SEMANTIC_NAME,
-            64,
-            result,
-        )
+        self.store_native_syscall_result(&rax_name, rax_bits, result)
     }
 
     fn emit_amd64_windows_syscall_native(&mut self) -> Result<(), Error> {
@@ -337,30 +274,23 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             None,
             false,
         );
+        let syscall_kind = SemanticTrapKind::Syscall;
+        let (rax_name, rax_bits) = self.trap_number_name(&syscall_kind)?;
+        let (_, rdx_bits) = self.trap_argument_name(&syscall_kind, 0)?;
+        let (_, r8_bits) = self.trap_argument_name(&syscall_kind, 1)?;
+        let (_, r9_bits) = self.trap_argument_name(&syscall_kind, 2)?;
         let rax = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::windows_syscall::amd64::RAX_SEMANTIC_NAME,
-                64,
-            )?
+            .load_native_syscall_register_bits(&rax_name, rax_bits)?
             .into();
         let r10 = self.load_amd64_windows_syscall_r10()?.into();
         let rdx = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::windows_syscall::amd64::RDX_SEMANTIC_NAME,
-                64,
-            )?
+            .load_native_syscall_register_bits("rdx", rdx_bits)?
             .into();
         let r8 = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::windows_syscall::amd64::R8_SEMANTIC_NAME,
-                64,
-            )?
+            .load_native_syscall_register_bits("r8", r8_bits)?
             .into();
         let r9 = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::windows_syscall::amd64::R9_SEMANTIC_NAME,
-                64,
-            )?
+            .load_native_syscall_register_bits("r9", r9_bits)?
             .into();
         let result = self
             .builder
@@ -370,30 +300,23 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .basic()
             .ok_or_else(|| Error::other("expected amd64 windows syscall return value"))?
             .into_int_value();
-        self.store_native_syscall_result(
-            crate::lifters::llvm::abi::x86::windows_syscall::amd64::RAX_SEMANTIC_NAME,
-            64,
-            result,
-        )
+        self.store_native_syscall_result(&rax_name, rax_bits, result)
     }
 
     fn load_amd64_windows_syscall_r10(&mut self) -> Result<IntValue<'ctx>, Error> {
+        let r10_name = self.semantic_register_name("r10")?;
         let r10_location = SemanticLocation::Register {
-            name: crate::lifters::llvm::abi::x86::windows_syscall::amd64::R10_SEMANTIC_NAME
-                .to_string(),
+            name: r10_name.clone(),
             bits: 64,
         };
         let r10_key = render_location(&r10_location);
         if self.written_locations.contains(&r10_key) {
-            return self.load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::windows_syscall::amd64::R10_SEMANTIC_NAME,
-                64,
-            );
+            return self.load_native_syscall_register_bits(&r10_name, 64);
         }
 
+        let rcx_name = self.semantic_register_name("rcx")?;
         let rcx_location = SemanticLocation::Register {
-            name: crate::lifters::llvm::abi::x86::windows_syscall::amd64::RCX_SEMANTIC_NAME
-                .to_string(),
+            name: rcx_name,
             bits: 64,
         };
         let rcx_key = render_location(&rcx_location);
@@ -436,48 +359,21 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             None,
             false,
         );
-        let eax = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::linux_syscall::i386::EAX_SEMANTIC_NAME,
-                32,
-            )?
-            .into();
-        let ebx = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::linux_syscall::i386::EBX_SEMANTIC_NAME,
-                32,
-            )?
-            .into();
-        let ecx = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::linux_syscall::i386::ECX_SEMANTIC_NAME,
-                32,
-            )?
-            .into();
-        let edx = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::linux_syscall::i386::EDX_SEMANTIC_NAME,
-                32,
-            )?
-            .into();
-        let esi = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::linux_syscall::i386::ESI_SEMANTIC_NAME,
-                32,
-            )?
-            .into();
-        let edi = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::linux_syscall::i386::EDI_SEMANTIC_NAME,
-                32,
-            )?
-            .into();
-        let ebp = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::linux_syscall::i386::EBP_SEMANTIC_NAME,
-                32,
-            )?
-            .into();
+        let interrupt_kind = SemanticTrapKind::Interrupt;
+        let (eax_name, eax_bits) = self.trap_number_name(&interrupt_kind)?;
+        let (ebx_name, ebx_bits) = self.trap_argument_name(&interrupt_kind, 0)?;
+        let (ecx_name, ecx_bits) = self.trap_argument_name(&interrupt_kind, 1)?;
+        let (edx_name, edx_bits) = self.trap_argument_name(&interrupt_kind, 2)?;
+        let (esi_name, esi_bits) = self.trap_argument_name(&interrupt_kind, 3)?;
+        let (edi_name, edi_bits) = self.trap_argument_name(&interrupt_kind, 4)?;
+        let (ebp_name, ebp_bits) = self.trap_argument_name(&interrupt_kind, 5)?;
+        let eax = self.load_native_syscall_register_bits(&eax_name, eax_bits)?.into();
+        let ebx = self.load_native_syscall_register_bits(&ebx_name, ebx_bits)?.into();
+        let ecx = self.load_native_syscall_register_bits(&ecx_name, ecx_bits)?.into();
+        let edx = self.load_native_syscall_register_bits(&edx_name, edx_bits)?.into();
+        let esi = self.load_native_syscall_register_bits(&esi_name, esi_bits)?.into();
+        let edi = self.load_native_syscall_register_bits(&edi_name, edi_bits)?.into();
+        let ebp = self.load_native_syscall_register_bits(&ebp_name, ebp_bits)?.into();
         let result = self
             .builder
             .build_indirect_call(
@@ -491,11 +387,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .basic()
             .ok_or_else(|| Error::other("expected i386 linux syscall return value"))?
             .into_int_value();
-        self.store_native_syscall_result(
-            crate::lifters::llvm::abi::x86::linux_syscall::i386::EAX_SEMANTIC_NAME,
-            32,
-            result,
-        )
+        self.store_native_syscall_result(&eax_name, eax_bits, result)
     }
 
     fn emit_i386_windows_syscall_native(&mut self) -> Result<(), Error> {
@@ -514,18 +406,11 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             None,
             false,
         );
-        let eax = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::windows_syscall::i386::EAX_SEMANTIC_NAME,
-                32,
-            )?
-            .into();
-        let edx = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::windows_syscall::i386::EDX_SEMANTIC_NAME,
-                32,
-            )?
-            .into();
+        let interrupt_kind = SemanticTrapKind::Interrupt;
+        let (eax_name, eax_bits) = self.trap_number_name(&interrupt_kind)?;
+        let (edx_name, edx_bits) = self.trap_argument_name(&interrupt_kind, 0)?;
+        let eax = self.load_native_syscall_register_bits(&eax_name, eax_bits)?.into();
+        let edx = self.load_native_syscall_register_bits(&edx_name, edx_bits)?.into();
         let result = self
             .builder
             .build_indirect_call(fn_type, asm, &[eax, edx], "windows_syscall")
@@ -534,11 +419,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .basic()
             .ok_or_else(|| Error::other("expected i386 windows syscall return value"))?
             .into_int_value();
-        self.store_native_syscall_result(
-            crate::lifters::llvm::abi::x86::windows_syscall::i386::EAX_SEMANTIC_NAME,
-            32,
-            result,
-        )
+        self.store_native_syscall_result(&eax_name, eax_bits, result)
     }
 
     fn emit_i386_linux_sysenter_native(&mut self) -> Result<(), Error> {
@@ -569,48 +450,23 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             None,
             false,
         );
-        let eax = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::linux_syscall::i386::EAX_SEMANTIC_NAME,
-                32,
-            )?
-            .into();
-        let ebx = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::linux_syscall::i386::EBX_SEMANTIC_NAME,
-                32,
-            )?
-            .into();
-        let ecx = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::linux_syscall::i386::ECX_SEMANTIC_NAME,
-                32,
-            )?
-            .into();
-        let edx = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::linux_syscall::i386::EDX_SEMANTIC_NAME,
-                32,
-            )?
-            .into();
-        let esi = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::linux_syscall::i386::ESI_SEMANTIC_NAME,
-                32,
-            )?
-            .into();
-        let edi = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::linux_syscall::i386::EDI_SEMANTIC_NAME,
-                32,
-            )?
-            .into();
-        let ebp = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::linux_syscall::i386::EBP_SEMANTIC_NAME,
-                32,
-            )?
-            .into();
+        let sysenter_kind = SemanticTrapKind::Named {
+            name: "x86.sysenter".to_string(),
+        };
+        let (eax_name, eax_bits) = self.trap_number_name(&sysenter_kind)?;
+        let (ebx_name, ebx_bits) = self.trap_argument_name(&sysenter_kind, 0)?;
+        let (ecx_name, ecx_bits) = self.trap_argument_name(&sysenter_kind, 1)?;
+        let (edx_name, edx_bits) = self.trap_argument_name(&sysenter_kind, 2)?;
+        let (esi_name, esi_bits) = self.trap_argument_name(&sysenter_kind, 3)?;
+        let (edi_name, edi_bits) = self.trap_argument_name(&sysenter_kind, 4)?;
+        let (ebp_name, ebp_bits) = self.trap_argument_name(&sysenter_kind, 5)?;
+        let eax = self.load_native_syscall_register_bits(&eax_name, eax_bits)?.into();
+        let ebx = self.load_native_syscall_register_bits(&ebx_name, ebx_bits)?.into();
+        let ecx = self.load_native_syscall_register_bits(&ecx_name, ecx_bits)?.into();
+        let edx = self.load_native_syscall_register_bits(&edx_name, edx_bits)?.into();
+        let esi = self.load_native_syscall_register_bits(&esi_name, esi_bits)?.into();
+        let edi = self.load_native_syscall_register_bits(&edi_name, edi_bits)?.into();
+        let ebp = self.load_native_syscall_register_bits(&ebp_name, ebp_bits)?.into();
         let result = self
             .builder
             .build_indirect_call(
@@ -624,11 +480,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .basic()
             .ok_or_else(|| Error::other("expected i386 linux sysenter return value"))?
             .into_int_value();
-        self.store_native_syscall_result(
-            crate::lifters::llvm::abi::x86::linux_syscall::i386::EAX_SEMANTIC_NAME,
-            32,
-            result,
-        )
+        self.store_native_syscall_result(&eax_name, eax_bits, result)
     }
 
     fn emit_i386_windows_sysenter_native(&mut self) -> Result<(), Error> {
@@ -647,24 +499,15 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             None,
             false,
         );
-        let eax = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::windows_syscall::i386::EAX_SEMANTIC_NAME,
-                32,
-            )?
-            .into();
-        let ecx = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::windows_syscall::i386::ECX_SEMANTIC_NAME,
-                32,
-            )?
-            .into();
-        let edx = self
-            .load_native_syscall_register_bits(
-                crate::lifters::llvm::abi::x86::windows_syscall::i386::EDX_SEMANTIC_NAME,
-                32,
-            )?
-            .into();
+        let sysenter_kind = SemanticTrapKind::Named {
+            name: "x86.sysenter".to_string(),
+        };
+        let (eax_name, eax_bits) = self.trap_number_name(&sysenter_kind)?;
+        let (ecx_name, ecx_bits) = self.trap_argument_name(&sysenter_kind, 0)?;
+        let (edx_name, edx_bits) = self.trap_argument_name(&sysenter_kind, 1)?;
+        let eax = self.load_native_syscall_register_bits(&eax_name, eax_bits)?.into();
+        let ecx = self.load_native_syscall_register_bits(&ecx_name, ecx_bits)?.into();
+        let edx = self.load_native_syscall_register_bits(&edx_name, edx_bits)?.into();
         let result = self
             .builder
             .build_indirect_call(fn_type, asm, &[eax, ecx, edx], "windows_sysenter")
@@ -673,11 +516,73 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .basic()
             .ok_or_else(|| Error::other("expected i386 windows sysenter return value"))?
             .into_int_value();
-        self.store_native_syscall_result(
-            crate::lifters::llvm::abi::x86::windows_syscall::i386::EAX_SEMANTIC_NAME,
-            32,
-            result,
-        )
+        self.store_native_syscall_result(&eax_name, eax_bits, result)
+    }
+
+    fn native_trap_abi(&self, kind: &SemanticTrapKind) -> Result<&SemanticAbiTrap, Error> {
+        self.current_semantics_abi
+            .as_ref()
+            .and_then(|abi| abi.trap(kind))
+            .ok_or_else(|| Error::other(format!("missing trap abi for {}", render_trap_kind(kind))))
+    }
+
+    fn semantic_register_name(&self, register_name: &str) -> Result<String, Error> {
+        let cpu_kind = match self.architecture {
+            Architecture::I386 => SemanticCpuKind::I386,
+            Architecture::AMD64 => SemanticCpuKind::Amd64,
+            Architecture::ARM64 => SemanticCpuKind::Arm64,
+            Architecture::CIL => SemanticCpuKind::Cil,
+            Architecture::UNKNOWN => {
+                return Err(Error::other(
+                    "cannot resolve semantic register names for unknown architecture",
+                ))
+            }
+        };
+        crate::semantics::cpus::semantic_register_name(cpu_kind, register_name)
+            .ok_or_else(|| Error::other(format!("unknown semantic cpu register {register_name}")))
+    }
+
+    fn trap_argument_name(
+        &self,
+        kind: &SemanticTrapKind,
+        index: usize,
+    ) -> Result<(String, u16), Error> {
+        let trap = self.native_trap_abi(kind)?;
+        let Some(SemanticLocation::Register { name, bits }) = trap.argument_registers.get(index) else {
+            return Err(Error::other(format!(
+                "missing trap argument register {} for {}",
+                index,
+                render_trap_kind(kind)
+            )));
+        };
+        Ok((self.semantic_register_name(name)?, *bits))
+    }
+
+    fn trap_number_name(&self, kind: &SemanticTrapKind) -> Result<(String, u16), Error> {
+        let trap = self.native_trap_abi(kind)?;
+        let Some(SemanticLocation::Register { name, bits }) = trap.number_register.as_ref() else {
+            return Err(Error::other(format!(
+                "missing trap number register for {}",
+                render_trap_kind(kind)
+            )));
+        };
+        Ok((self.semantic_register_name(name)?, *bits))
+    }
+
+    fn trap_result_name(
+        &self,
+        kind: &SemanticTrapKind,
+        index: usize,
+    ) -> Result<(String, u16), Error> {
+        let trap = self.native_trap_abi(kind)?;
+        let Some(SemanticLocation::Register { name, bits }) = trap.result_registers.get(index) else {
+            return Err(Error::other(format!(
+                "missing trap result register {} for {}",
+                index,
+                render_trap_kind(kind)
+            )));
+        };
+        Ok((self.semantic_register_name(name)?, *bits))
     }
 
     fn load_native_syscall_register(&mut self, name: &str) -> Result<IntValue<'ctx>, Error> {
@@ -771,59 +676,70 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
 #[cfg(test)]
 mod tests {
-    use crate::lifters::llvm::Abi;
     use crate::lifters::llvm::Lifter;
     use crate::semantics::{
-        Semantic, SemanticEffect, SemanticExpression, SemanticLocation, SemanticStatus,
-        SemanticTerminator, SemanticTrapKind,
+        Semantic, SemanticAbi, SemanticAbiKind, SemanticCpu, SemanticCpuKind, SemanticEffect,
+        SemanticExpression, SemanticLocation, SemanticStatus, SemanticTerminator,
+        SemanticTrapKind,
     };
     use crate::{Architecture, Configuration};
+
+    fn cpu_kind(architecture: Architecture) -> SemanticCpuKind {
+        match architecture {
+            Architecture::I386 => SemanticCpuKind::I386,
+            Architecture::AMD64 => SemanticCpuKind::Amd64,
+            Architecture::ARM64 => SemanticCpuKind::Arm64,
+            Architecture::CIL => SemanticCpuKind::Cil,
+            Architecture::UNKNOWN => panic!("unsupported test architecture"),
+        }
+    }
+
+    fn builtin_abi(architecture: Architecture, kind: SemanticAbiKind) -> SemanticAbi {
+        let cpu = SemanticCpu::from_kind(cpu_kind(architecture)).expect("cpu");
+        SemanticAbi::from_kind(kind, &cpu).expect("abi")
+    }
+
+    fn semantic_register_location(
+        architecture: Architecture,
+        register_name: &str,
+        bits: u16,
+    ) -> SemanticLocation {
+        let cpu = SemanticCpu::from_kind(cpu_kind(architecture)).expect("cpu");
+        let name = cpu
+            .semantic_register_name(register_name)
+            .expect("semantic register name");
+        SemanticLocation::Register { name, bits }
+    }
 
     #[test]
     fn arm64_linux_syscall_native_lowering_emits_svc_inline_asm() {
         let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(Abi::LinuxSyscall),
+            abi: Some(builtin_abi(Architecture::ARM64, SemanticAbiKind::LinuxSyscall)),
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
                 SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
-                        name: crate::lifters::llvm::abi::arm64::linux_syscall::X0_SEMANTIC_NAME
-                            .to_string(),
-                        bits: 64,
-                    },
+                    dst: semantic_register_location(Architecture::ARM64, "x0", 64),
                     expression: SemanticExpression::Const { value: 1, bits: 64 },
                 },
                 SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
-                        name: crate::lifters::llvm::abi::arm64::linux_syscall::X1_SEMANTIC_NAME
-                            .to_string(),
-                        bits: 64,
-                    },
+                    dst: semantic_register_location(Architecture::ARM64, "x1", 64),
                     expression: SemanticExpression::Const {
                         value: 0x620000,
                         bits: 64,
                     },
                 },
                 SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
-                        name: crate::lifters::llvm::abi::arm64::linux_syscall::X2_SEMANTIC_NAME
-                            .to_string(),
-                        bits: 64,
-                    },
+                    dst: semantic_register_location(Architecture::ARM64, "x2", 64),
                     expression: SemanticExpression::Const {
                         value: 14,
                         bits: 64,
                     },
                 },
                 SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
-                        name: crate::lifters::llvm::abi::arm64::linux_syscall::X8_SEMANTIC_NAME
-                            .to_string(),
-                        bits: 64,
-                    },
+                    dst: semantic_register_location(Architecture::ARM64, "x8", 64),
                     expression: SemanticExpression::Const {
                         value: 64,
                         bits: 64,
@@ -836,11 +752,11 @@ mod tests {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(Abi::LinuxSyscall));
+        semantics.set_abi(Some(builtin_abi(Architecture::ARM64, SemanticAbiKind::LinuxSyscall)));
 
-        let mut lifter = Lifter::new(Architecture::ARM64, Configuration::default());
+        let mut lifter = Lifter::from_architecture(Architecture::ARM64, Configuration::default());
         lifter
-            .lift_semantics(std::slice::from_ref(&semantics))
+            .lift_function_semantics(std::slice::from_ref(&semantics), None)
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -855,17 +771,12 @@ mod tests {
         let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(Abi::LinuxSyscall),
+            abi: Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::LinuxSyscall)),
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
                 SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
-                        name:
-                            crate::lifters::llvm::abi::x86::linux_syscall::amd64::RAX_SEMANTIC_NAME
-                                .to_string(),
-                        bits: 64,
-                    },
+                    dst: semantic_register_location(Architecture::AMD64, "rax", 64),
                     expression: SemanticExpression::Const { value: 1, bits: 64 },
                 },
                 SemanticEffect::Trap {
@@ -875,11 +786,11 @@ mod tests {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(Abi::LinuxSyscall));
+        semantics.set_abi(Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::LinuxSyscall)));
 
-        let mut lifter = Lifter::new(Architecture::AMD64, Configuration::default());
+        let mut lifter = Lifter::from_architecture(Architecture::AMD64, Configuration::default());
         lifter
-            .lift_semantics(std::slice::from_ref(&semantics))
+            .lift_function_semantics(std::slice::from_ref(&semantics), None)
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -890,20 +801,56 @@ mod tests {
     }
 
     #[test]
-    fn amd64_windows_syscall_native_lowering_emits_syscall_inline_asm() {
+    fn explicit_function_abi_does_not_override_embedded_syscall_semantics() {
         let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(Abi::WindowsSyscall),
+            abi: Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::LinuxSyscall)),
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
                 SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
-                        name: crate::lifters::llvm::abi::x86::windows_syscall::amd64::RAX_SEMANTIC_NAME
-                            .to_string(),
-                        bits: 64,
-                    },
+                    dst: semantic_register_location(Architecture::AMD64, "rax", 64),
+                    expression: SemanticExpression::Const { value: 60, bits: 64 },
+                },
+                SemanticEffect::Set {
+                    dst: semantic_register_location(Architecture::AMD64, "rdi", 64),
+                    expression: SemanticExpression::Const { value: 0, bits: 64 },
+                },
+                SemanticEffect::Trap {
+                    kind: SemanticTrapKind::Syscall,
+                },
+            ],
+            terminator: SemanticTerminator::Trap,
+            diagnostics: Vec::new(),
+        };
+        semantics.set_abi(Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::LinuxSyscall)));
+        let function_abi = builtin_abi(Architecture::AMD64, SemanticAbiKind::SysV);
+
+        let mut lifter = Lifter::from_architecture(Architecture::AMD64, Configuration::default());
+        lifter
+            .lift_function_semantics(std::slice::from_ref(&semantics), Some(&function_abi))
+            .expect("lift semantics");
+        lifter.verify().expect("verify");
+        let text = lifter.text();
+
+        assert!(text.contains("define i64 @semantic_function_0("));
+        assert!(text.contains("asm sideeffect \"syscall\""));
+        assert!(!text.contains("@binlex_trap_syscall"));
+        assert!(!text.contains("@binlex_term_trap"));
+    }
+
+    #[test]
+    fn amd64_windows_syscall_native_lowering_emits_syscall_inline_asm() {
+        let mut semantics = Semantic {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::WindowsSyscall)),
+            encoding: None,
+            temporaries: Vec::new(),
+            effects: vec![
+                SemanticEffect::Set {
+                    dst: semantic_register_location(Architecture::AMD64, "rax", 64),
                     expression: SemanticExpression::Const { value: 0x55, bits: 64 },
                 },
                 SemanticEffect::Trap {
@@ -913,11 +860,11 @@ mod tests {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(Abi::WindowsSyscall));
+        semantics.set_abi(Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::WindowsSyscall)));
 
-        let mut lifter = Lifter::new(Architecture::AMD64, Configuration::default());
+        let mut lifter = Lifter::from_architecture(Architecture::AMD64, Configuration::default());
         lifter
-            .lift_semantics(std::slice::from_ref(&semantics))
+            .lift_function_semantics(std::slice::from_ref(&semantics), None)
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -932,7 +879,7 @@ mod tests {
         let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(Abi::WindowsSyscall),
+            abi: Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::WindowsSyscall)),
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
@@ -947,11 +894,7 @@ mod tests {
                     },
                 },
                 SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
-                        name: crate::lifters::llvm::abi::x86::windows_syscall::amd64::R10_SEMANTIC_NAME
-                            .to_string(),
-                        bits: 64,
-                    },
+                    dst: semantic_register_location(Architecture::AMD64, "r10", 64),
                     expression: SemanticExpression::Read(Box::new(
                         SemanticLocation::Register {
                             name: "rcx".to_string(),
@@ -960,11 +903,7 @@ mod tests {
                     )),
                 },
                 SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
-                        name: crate::lifters::llvm::abi::x86::windows_syscall::amd64::RAX_SEMANTIC_NAME
-                            .to_string(),
-                        bits: 64,
-                    },
+                    dst: semantic_register_location(Architecture::AMD64, "rax", 64),
                     expression: SemanticExpression::Const { value: 0x55, bits: 64 },
                 },
                 SemanticEffect::Trap {
@@ -974,11 +913,11 @@ mod tests {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(Abi::WindowsSyscall));
+        semantics.set_abi(Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::WindowsSyscall)));
 
-        let mut lifter = Lifter::new(Architecture::AMD64, Configuration::default());
+        let mut lifter = Lifter::from_architecture(Architecture::AMD64, Configuration::default());
         lifter
-            .lift_semantics(std::slice::from_ref(&semantics))
+            .lift_function_semantics(std::slice::from_ref(&semantics), None)
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -995,27 +934,19 @@ mod tests {
         let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(Abi::WindowsSyscall),
+            abi: Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::WindowsSyscall)),
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
                 SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
-                        name: crate::lifters::llvm::abi::x86::windows_syscall::amd64::RCX_SEMANTIC_NAME
-                            .to_string(),
-                        bits: 64,
-                    },
+                    dst: semantic_register_location(Architecture::AMD64, "rcx", 64),
                     expression: SemanticExpression::Const {
                         value: 0x1122_3344_5566_7788,
                         bits: 64,
                     },
                 },
                 SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
-                        name: crate::lifters::llvm::abi::x86::windows_syscall::amd64::RAX_SEMANTIC_NAME
-                            .to_string(),
-                        bits: 64,
-                    },
+                    dst: semantic_register_location(Architecture::AMD64, "rax", 64),
                     expression: SemanticExpression::Const { value: 0x55, bits: 64 },
                 },
                 SemanticEffect::Trap {
@@ -1025,11 +956,11 @@ mod tests {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(Abi::WindowsSyscall));
+        semantics.set_abi(Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::WindowsSyscall)));
 
-        let mut lifter = Lifter::new(Architecture::AMD64, Configuration::default());
+        let mut lifter = Lifter::from_architecture(Architecture::AMD64, Configuration::default());
         lifter
-            .lift_semantics(std::slice::from_ref(&semantics))
+            .lift_function_semantics(std::slice::from_ref(&semantics), None)
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -1044,17 +975,12 @@ mod tests {
         let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(Abi::LinuxSyscall),
+            abi: Some(builtin_abi(Architecture::I386, SemanticAbiKind::LinuxSyscall)),
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
                 SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
-                        name:
-                            crate::lifters::llvm::abi::x86::linux_syscall::i386::EAX_SEMANTIC_NAME
-                                .to_string(),
-                        bits: 32,
-                    },
+                    dst: semantic_register_location(Architecture::I386, "eax", 32),
                     expression: SemanticExpression::Const { value: 4, bits: 32 },
                 },
                 SemanticEffect::Trap {
@@ -1064,11 +990,11 @@ mod tests {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(Abi::LinuxSyscall));
+        semantics.set_abi(Some(builtin_abi(Architecture::I386, SemanticAbiKind::LinuxSyscall)));
 
-        let mut lifter = Lifter::new(Architecture::I386, Configuration::default());
+        let mut lifter = Lifter::from_architecture(Architecture::I386, Configuration::default());
         lifter
-            .lift_semantics(std::slice::from_ref(&semantics))
+            .lift_function_semantics(std::slice::from_ref(&semantics), None)
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -1083,17 +1009,12 @@ mod tests {
         let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(Abi::WindowsSyscall),
+            abi: Some(builtin_abi(Architecture::I386, SemanticAbiKind::WindowsSyscall)),
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
                 SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
-                        name:
-                            crate::lifters::llvm::abi::x86::windows_syscall::i386::EAX_SEMANTIC_NAME
-                                .to_string(),
-                        bits: 32,
-                    },
+                    dst: semantic_register_location(Architecture::I386, "eax", 32),
                     expression: SemanticExpression::Const {
                         value: 0x55,
                         bits: 32,
@@ -1106,11 +1027,11 @@ mod tests {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(Abi::WindowsSyscall));
+        semantics.set_abi(Some(builtin_abi(Architecture::I386, SemanticAbiKind::WindowsSyscall)));
 
-        let mut lifter = Lifter::new(Architecture::I386, Configuration::default());
+        let mut lifter = Lifter::from_architecture(Architecture::I386, Configuration::default());
         lifter
-            .lift_semantics(std::slice::from_ref(&semantics))
+            .lift_function_semantics(std::slice::from_ref(&semantics), None)
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -1125,21 +1046,16 @@ mod tests {
         let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(Abi::LinuxSyscall),
+            abi: Some(builtin_abi(Architecture::I386, SemanticAbiKind::LinuxSyscall)),
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
                 SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
-                        name:
-                            crate::lifters::llvm::abi::x86::linux_syscall::i386::EAX_SEMANTIC_NAME
-                                .to_string(),
-                        bits: 32,
-                    },
+                    dst: semantic_register_location(Architecture::I386, "eax", 32),
                     expression: SemanticExpression::Const { value: 4, bits: 32 },
                 },
                 SemanticEffect::Trap {
-                    kind: SemanticTrapKind::ArchSpecific {
+                    kind: SemanticTrapKind::Named {
                         name: "x86.sysenter".to_string(),
                     },
                 },
@@ -1147,11 +1063,11 @@ mod tests {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(Abi::LinuxSyscall));
+        semantics.set_abi(Some(builtin_abi(Architecture::I386, SemanticAbiKind::LinuxSyscall)));
 
-        let mut lifter = Lifter::new(Architecture::I386, Configuration::default());
+        let mut lifter = Lifter::from_architecture(Architecture::I386, Configuration::default());
         lifter
-            .lift_semantics(std::slice::from_ref(&semantics))
+            .lift_function_semantics(std::slice::from_ref(&semantics), None)
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -1166,24 +1082,19 @@ mod tests {
         let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(Abi::WindowsSyscall),
+            abi: Some(builtin_abi(Architecture::I386, SemanticAbiKind::WindowsSyscall)),
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
                 SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
-                        name:
-                            crate::lifters::llvm::abi::x86::windows_syscall::i386::EAX_SEMANTIC_NAME
-                                .to_string(),
-                        bits: 32,
-                    },
+                    dst: semantic_register_location(Architecture::I386, "eax", 32),
                     expression: SemanticExpression::Const {
                         value: 0x55,
                         bits: 32,
                     },
                 },
                 SemanticEffect::Trap {
-                    kind: SemanticTrapKind::ArchSpecific {
+                    kind: SemanticTrapKind::Named {
                         name: "x86.sysenter".to_string(),
                     },
                 },
@@ -1191,11 +1102,11 @@ mod tests {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(Abi::WindowsSyscall));
+        semantics.set_abi(Some(builtin_abi(Architecture::I386, SemanticAbiKind::WindowsSyscall)));
 
-        let mut lifter = Lifter::new(Architecture::I386, Configuration::default());
+        let mut lifter = Lifter::from_architecture(Architecture::I386, Configuration::default());
         lifter
-            .lift_semantics(std::slice::from_ref(&semantics))
+            .lift_function_semantics(std::slice::from_ref(&semantics), None)
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -1210,24 +1121,16 @@ mod tests {
         let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(Abi::WindowsSyscall),
+            abi: Some(builtin_abi(Architecture::ARM64, SemanticAbiKind::WindowsSyscall)),
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
                 SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
-                        name: crate::lifters::llvm::abi::arm64::windows_syscall::X0_SEMANTIC_NAME
-                            .to_string(),
-                        bits: 64,
-                    },
+                    dst: semantic_register_location(Architecture::ARM64, "x0", 64),
                     expression: SemanticExpression::Const { value: 1, bits: 64 },
                 },
                 SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
-                        name: crate::lifters::llvm::abi::arm64::windows_syscall::X8_SEMANTIC_NAME
-                            .to_string(),
-                        bits: 64,
-                    },
+                    dst: semantic_register_location(Architecture::ARM64, "x8", 64),
                     expression: SemanticExpression::Const {
                         value: 0x55,
                         bits: 64,
@@ -1240,11 +1143,11 @@ mod tests {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(Abi::WindowsSyscall));
+        semantics.set_abi(Some(builtin_abi(Architecture::ARM64, SemanticAbiKind::WindowsSyscall)));
 
-        let mut lifter = Lifter::new(Architecture::ARM64, Configuration::default());
+        let mut lifter = Lifter::from_architecture(Architecture::ARM64, Configuration::default());
         lifter
-            .lift_semantics(std::slice::from_ref(&semantics))
+            .lift_function_semantics(std::slice::from_ref(&semantics), None)
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();

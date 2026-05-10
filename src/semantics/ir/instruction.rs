@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::abi::Abi;
+use crate::semantics::SemanticAbi;
 use serde::{Deserialize, Serialize};
 
 mod semantic_const_value_serde {
@@ -58,7 +58,7 @@ pub struct Semantic {
     pub version: u32,
     pub status: SemanticStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub abi: Option<Abi>,
+    pub abi: Option<SemanticAbi>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub encoding: Option<SemanticEncoding>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -75,7 +75,7 @@ pub struct SemanticJson {
     pub version: u32,
     pub status: SemanticStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub abi: Option<Abi>,
+    pub abi: Option<SemanticAbi>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub encoding: Option<SemanticEncoding>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -164,7 +164,7 @@ pub enum SemanticAddressSpace {
     Io,
     CpuMemory { name: String },
     Segment { name: String },
-    ArchSpecific { name: String },
+    Named { name: String },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -261,7 +261,7 @@ pub enum SemanticFenceKind {
     Release,
     AcquireRelease,
     SequentiallyConsistent,
-    ArchSpecific { name: String },
+    Named { name: String },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -275,7 +275,7 @@ pub enum SemanticTrapKind {
     AlignmentFault,
     Syscall,
     Interrupt,
-    ArchSpecific { name: String },
+    Named { name: String },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -320,6 +320,14 @@ pub enum SemanticExpression {
     Const {
         #[serde(with = "semantic_const_value_serde")]
         value: u128,
+        bits: u16,
+    },
+    Function {
+        name: String,
+        bits: u16,
+    },
+    AddressOf {
+        location: Box<SemanticLocation>,
         bits: u16,
     },
     Read(Box<SemanticLocation>),
@@ -398,6 +406,8 @@ pub enum SemanticExpression {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum SemanticExpressionKind {
     Const,
+    Function,
+    AddressOf,
     Read,
     Load,
     Unary,
@@ -527,7 +537,7 @@ pub enum SemanticDiagnosticKind {
     PartialFlags,
     PartialMemoryModel,
     PartialExceptionModel,
-    ArchSpecific { name: String },
+    Named { name: String },
 }
 
 impl Semantic {
@@ -535,7 +545,7 @@ impl Semantic {
         SemanticJson {
             version: self.version,
             status: self.status,
-            abi: self.abi,
+            abi: self.abi.clone(),
             encoding: self.encoding.clone(),
             temporaries: self.temporaries.clone(),
             effects: self.effects.clone(),
@@ -556,7 +566,7 @@ impl Semantic {
         self.encoding = encoding;
     }
 
-    pub fn set_abi(&mut self, abi: Option<Abi>) {
+    pub fn set_abi(&mut self, abi: Option<SemanticAbi>) {
         self.abi = abi;
     }
 
@@ -907,6 +917,8 @@ impl SemanticExpression {
     pub fn kind(&self) -> SemanticExpressionKind {
         match self {
             Self::Const { .. } => SemanticExpressionKind::Const,
+            Self::Function { .. } => SemanticExpressionKind::Function,
+            Self::AddressOf { .. } => SemanticExpressionKind::AddressOf,
             Self::Read(_) => SemanticExpressionKind::Read,
             Self::Load { .. } => SemanticExpressionKind::Load,
             Self::Unary { .. } => SemanticExpressionKind::Unary,
@@ -939,6 +951,8 @@ impl SemanticExpression {
     pub fn bits(&self) -> u16 {
         match self {
             Self::Const { bits, .. } => *bits,
+            Self::Function { bits, .. } => *bits,
+            Self::AddressOf { bits, .. } => *bits,
             Self::Read(location) => location.bits(),
             Self::Load { bits, .. } => *bits,
             Self::Unary { bits, .. } => *bits,
@@ -1019,7 +1033,7 @@ impl SemanticExpression {
 
     pub fn location(&self) -> Option<&SemanticLocation> {
         match self {
-            Self::Read(location) => Some(location),
+            Self::Read(location) | Self::AddressOf { location, .. } => Some(location),
             _ => None,
         }
     }
@@ -1040,7 +1054,8 @@ impl SemanticExpression {
 
     pub fn name(&self) -> Option<&str> {
         match self {
-            Self::Intrinsic { name, .. }
+            Self::Function { name, .. }
+            | Self::Intrinsic { name, .. }
             | Self::Allocate { kind: name, .. }
             | Self::ReadProperty { name, .. } => Some(name.as_str()),
             _ => None,
@@ -1079,6 +1094,8 @@ impl SemanticExpression {
     pub fn set_bits(&mut self, bits: u16) {
         match self {
             Self::Const { bits: current, .. }
+            | Self::Function { bits: current, .. }
+            | Self::AddressOf { bits: current, .. }
             | Self::Load { bits: current, .. }
             | Self::Unary { bits: current, .. }
             | Self::Binary { bits: current, .. }
@@ -1190,11 +1207,11 @@ impl SemanticExpression {
 
     pub fn set_location(&mut self, location: SemanticLocation) -> Result<(), &'static str> {
         match self {
-            Self::Read(current) => {
+            Self::Read(current) | Self::AddressOf { location: current, .. } => {
                 *current = Box::new(location);
                 Ok(())
             }
-            _ => Err("expression location is only valid for read expressions"),
+            _ => Err("expression location is only valid for read and address_of expressions"),
         }
     }
 
@@ -1220,11 +1237,11 @@ impl SemanticExpression {
 
     pub fn set_name(&mut self, name: impl Into<String>) -> Result<(), &'static str> {
         match self {
-            Self::Intrinsic { name: current, .. } => {
+            Self::Function { name: current, .. } | Self::Intrinsic { name: current, .. } => {
                 *current = name.into();
                 Ok(())
             }
-            _ => Err("expression name is only valid for intrinsic expressions"),
+            _ => Err("expression name is only valid for function and intrinsic expressions"),
         }
     }
 
@@ -1303,6 +1320,17 @@ fn default_location_for_kind(kind: SemanticLocationKind, bits: u16) -> SemanticL
 fn default_expression_for_kind(kind: SemanticExpressionKind, bits: u16) -> SemanticExpression {
     match kind {
         SemanticExpressionKind::Const => SemanticExpression::Const { value: 0, bits },
+        SemanticExpressionKind::Function => SemanticExpression::Function {
+            name: String::new(),
+            bits,
+        },
+        SemanticExpressionKind::AddressOf => SemanticExpression::AddressOf {
+            location: Box::new(default_location_for_kind(
+                SemanticLocationKind::Memory,
+                8,
+            )),
+            bits,
+        },
         SemanticExpressionKind::Read => SemanticExpression::Read(Box::new(
             default_location_for_kind(SemanticLocationKind::Temporary, bits),
         )),
@@ -1487,14 +1515,20 @@ mod tests {
     use super::{
         Semantic, SemanticEncoding, SemanticExpression, SemanticStatus, SemanticTerminator,
     };
-    use crate::Abi;
+    use crate::semantics::{SemanticAbi, SemanticAbiKind, SemanticCpu, SemanticCpuKind};
 
     #[test]
     fn semantic_const_json_serializes_u128_as_string() {
         let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(Abi::SysV),
+            abi: Some(
+                SemanticAbi::from_kind(
+                    SemanticAbiKind::SysV,
+                    &SemanticCpu::from_kind(SemanticCpuKind::Arm64).expect("cpu"),
+                )
+                .expect("abi"),
+            ),
             encoding: Some(SemanticEncoding {
                 architecture: "arm64".to_string(),
                 mnemonic: "ld4".to_string(),

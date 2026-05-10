@@ -6,7 +6,7 @@ pub fn normalize_instruction_semantics(semantics: &Semantic) -> Semantic {
     Semantic {
         version: semantics.version,
         status: semantics.status,
-        abi: semantics.abi,
+        abi: semantics.abi.clone(),
         encoding: semantics.encoding.clone(),
         temporaries: semantics.temporaries.clone(),
         effects: semantics.effects.iter().map(normalize_effect).collect(),
@@ -195,6 +195,14 @@ fn normalize_expression(expression: &SemanticExpression) -> SemanticExpression {
     match expression {
         SemanticExpression::Const { value, bits } => SemanticExpression::Const {
             value: *value,
+            bits: *bits,
+        },
+        SemanticExpression::Function { name, bits } => SemanticExpression::Function {
+            name: name.clone(),
+            bits: *bits,
+        },
+        SemanticExpression::AddressOf { location, bits } => SemanticExpression::AddressOf {
+            location: Box::new(normalize_location(location)),
             bits: *bits,
         },
         SemanticExpression::Read(location) => {

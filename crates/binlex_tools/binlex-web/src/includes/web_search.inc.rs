@@ -380,7 +380,7 @@ fn render_entity_llvm_ir(
         Collection::Function => config.functions.lifters.llvm.enabled = true,
     }
 
-    let mut lifter = binlex::lifters::llvm::Lifter::new(graph.architecture, config);
+    let mut lifter = binlex::lifters::llvm::Lifter::from_architecture(graph.architecture, config);
     match collection {
         Collection::Instruction => {
             let instruction = graph
@@ -394,14 +394,14 @@ fn render_entity_llvm_ir(
             let block = binlex::controlflow::Block::new(address, &graph)
                 .map_err(|error| AppError::new(error.to_string()))?;
             lifter
-                .lift_block(&block)
+                .lift_block(&block, None)
                 .map_err(|error| AppError::new(error.to_string()))?;
         }
         Collection::Function => {
             let function = binlex::controlflow::Function::new(address, &graph)
                 .map_err(|error| AppError::new(error.to_string()))?;
             lifter
-                .lift_function(&function)
+                .lift_function(&function, None)
                 .map_err(|error| AppError::new(error.to_string()))?;
         }
     }

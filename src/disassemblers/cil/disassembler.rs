@@ -22,14 +22,14 @@
 
 use crate::Architecture;
 use crate::Configuration;
-use crate::controlflow::Graph;
+use crate::controlflow::{Block, Function, Graph, Instruction as ControlFlowInstruction};
 use crate::controlflow::Instruction as CFGInstruction;
 use crate::controlflow::InstructionDetail;
 use crate::disassemblers::cil::Instruction;
 use crate::disassemblers::cil::backends::native;
 use crate::genetics::Chromosome;
 use crate::io::Stderr;
-use crate::semantics::architectures::cil::InstructionDetailCil;
+use crate::semantics::cil::InstructionDetailCil;
 use rayon::ThreadPoolBuilder;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::{BTreeMap, BTreeSet};
@@ -124,7 +124,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         result
     }
 
-    pub fn disassemble_instruction(
+    pub fn disassemble_instruction_address(
         &self,
         address: u64,
         metadata_token_addresses: &BTreeMap<u64, u64>,
@@ -214,7 +214,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         Ok(address)
     }
 
-    pub fn disassemble_block(
+    pub fn disassemble_block_address(
         &self,
         address: u64,
         metadata_token_addresses: &BTreeMap<u64, u64>,
@@ -232,7 +232,9 @@ impl<'disassembler> Disassembler<'disassembler> {
         let mut pc = address;
 
         loop {
-            if let Err(error) = self.disassemble_instruction(pc, metadata_token_addresses, cfg) {
+            if let Err(error) =
+                self.disassemble_instruction_address(pc, metadata_token_addresses, cfg)
+            {
                 cfg.blocks.insert_invalid(address);
                 return Err(error);
             }
@@ -268,7 +270,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         Ok(pc)
     }
 
-    pub fn disassemble_function(
+    pub fn disassemble_function_address(
         &self,
         address: u64,
         metadata_token_addresses: &BTreeMap<u64, u64>,
@@ -291,7 +293,7 @@ impl<'disassembler> Disassembler<'disassembler> {
             }
 
             let block_end_address = self
-                .disassemble_block(block_start_address, metadata_token_addresses, cfg)
+                .disassemble_block_address(block_start_address, metadata_token_addresses, cfg)
                 .inspect_err(|_| {
                     cfg.functions.insert_invalid(address);
                 })?;
@@ -311,6 +313,39 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfg.functions.insert_valid(address);
 
         Ok(address)
+    }
+
+    pub fn disassemble_instruction<'a>(
+        &self,
+        address: u64,
+        metadata_token_addresses: &BTreeMap<u64, u64>,
+        cfg: &'a mut Graph,
+    ) -> Result<ControlFlowInstruction<'a>, Error> {
+        let entry = self.disassemble_instruction_address(address, metadata_token_addresses, cfg)?;
+        cfg.get_instruction(entry)
+            .ok_or_else(|| Error::other(format!("0x{entry:x}: instruction missing after disassembly")))
+    }
+
+    pub fn disassemble_block<'a>(
+        &self,
+        address: u64,
+        metadata_token_addresses: &BTreeMap<u64, u64>,
+        cfg: &'a mut Graph,
+    ) -> Result<Block<'a>, Error> {
+        self.disassemble_block_address(address, metadata_token_addresses, cfg)?;
+        cfg.get_block(address)
+            .ok_or_else(|| Error::other(format!("0x{address:x}: block missing after disassembly")))
+    }
+
+    pub fn disassemble_function<'a>(
+        &self,
+        address: u64,
+        metadata_token_addresses: &BTreeMap<u64, u64>,
+        cfg: &'a mut Graph,
+    ) -> Result<Function<'a>, Error> {
+        self.disassemble_function_address(address, metadata_token_addresses, cfg)?;
+        cfg.get_function(address)
+            .ok_or_else(|| Error::other(format!("0x{address:x}: function missing after disassembly")))
     }
 
     pub fn disassemble<'a>(

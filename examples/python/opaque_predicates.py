@@ -27,7 +27,7 @@ function = graph.get_function(0x00)
 
 assert function, 'failed to disassemble function'
 
-cpu = SemanticCpu(architecture)
+cpu = SemanticCpu.i386()
 executor = SymbolicExecutor()
 state = SymbolicCpuState(cpu)
 

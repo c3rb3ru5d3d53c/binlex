@@ -1,6 +1,6 @@
 use super::LoweringContext;
 use super::helpers::{render_location, sanitize_symbol};
-use crate::lifters::llvm::abi::coerce_int_value_width;
+use super::helpers::coerce_int_value_width;
 use crate::semantics::SemanticLocation;
 use inkwell::attributes::Attribute;
 use inkwell::types::{AnyType, IntType};
@@ -15,6 +15,12 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         let key = render_location(location);
         if let Some(slot) = self.slots.get(&key) {
             return Ok(*slot);
+        }
+        if let SemanticLocation::StackMemory { .. } = location {
+            let slot = self.stack_memory_slot(location)?;
+            self.slots.insert(key.clone(), slot);
+            self.slot_locations.insert(key, location.clone());
+            return Ok(slot);
         }
         if let Some((parent_name, parent_bits, _)) = self.x86_parent_register_alias(location) {
             let parent = SemanticLocation::Register {
@@ -36,6 +42,16 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         self.slot_locations
             .insert(render_location(location), location.clone());
         Ok(slot)
+    }
+
+    pub(super) fn pointer_for_location(
+        &mut self,
+        location: &SemanticLocation,
+    ) -> Result<PointerValue<'ctx>, Error> {
+        match location {
+            SemanticLocation::StackMemory { .. } => self.stack_memory_slot(location),
+            _ => self.slot_for_location(location),
+        }
     }
 
     pub(super) fn merge_partial_register_write(
@@ -107,6 +123,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     }
 
     fn initial_location_value(&self, location: &SemanticLocation) -> Result<IntValue<'ctx>, Error> {
+        if self.uses_pure_callable_abi() && self.is_callable_abi_boundary_location(location) {
+            return Ok(self.location_type(location).const_zero());
+        }
         match location {
             SemanticLocation::Register { name, bits } => self
                 .read_native_register(name, *bits)
@@ -135,6 +154,69 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         }
         builder
             .build_alloca(ty, name)
+            .map_err(|err| Error::other(err.to_string()))
+    }
+
+    fn build_entry_array_alloca(
+        &self,
+        ty: IntType<'ctx>,
+        count: u32,
+        name: &str,
+    ) -> Result<PointerValue<'ctx>, Error> {
+        let entry = self
+            .function
+            .get_first_basic_block()
+            .expect("function should have entry block");
+        let builder = self.context.create_builder();
+        if let Some(first) = entry.get_first_instruction() {
+            builder.position_before(&first);
+        } else {
+            builder.position_at_end(entry);
+        }
+        builder
+            .build_array_alloca(ty, ty.const_int(count as u64, false), name)
+            .map_err(|err| Error::other(err.to_string()))
+    }
+
+    fn stack_memory_slot(
+        &mut self,
+        location: &SemanticLocation,
+    ) -> Result<PointerValue<'ctx>, Error> {
+        let SemanticLocation::StackMemory { name, offset, bits } = location else {
+            unreachable!();
+        };
+        let base = if let Some(base) = self.stack_regions.get(name) {
+            *base
+        } else {
+            let size = self
+                .stack_layouts
+                .get(name)
+                .copied()
+                .unwrap_or_else(|| u32::from((*bits).div_ceil(8)).max(*offset + 1));
+            let base = self.build_entry_array_alloca(
+                self.context.i8_type(),
+                size.max(1),
+                &sanitize_symbol(&format!("stack_region_{name}")),
+            )?;
+            self.stack_regions.insert(name.clone(), base);
+            base
+        };
+        let byte_ptr = unsafe {
+            self.builder
+                .build_in_bounds_gep(
+                    self.context.i8_type(),
+                    base,
+                    &[self.context.i32_type().const_int(u64::from(*offset), false)],
+                    &sanitize_symbol(&format!("stackmem_{}_{}_ptr", name, offset)),
+                )
+                .map_err(|err| Error::other(err.to_string()))?
+        };
+        self.builder
+            .build_pointer_cast(
+                byte_ptr,
+                self.context.ptr_type(inkwell::AddressSpace::default()),
+                &sanitize_symbol(&format!("stackmem_{}_{}_cast", name, offset)),
+            )
             .map_err(|err| Error::other(err.to_string()))
     }
 

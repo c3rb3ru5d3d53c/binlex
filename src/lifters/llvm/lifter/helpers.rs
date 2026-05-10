@@ -1,12 +1,36 @@
 use crate::semantics::{
     SemanticAddressSpace, SemanticFenceKind, SemanticLocation, SemanticTrapKind,
 };
+use inkwell::builder::Builder;
 use inkwell::types::IntType;
 use inkwell::values::IntValue;
+use std::io::Error;
 
 pub(super) fn const_int(ty: IntType<'_>, value: u128) -> IntValue<'_> {
     let words = [value as u64, (value >> 64) as u64];
     ty.const_int_arbitrary_precision(&words)
+}
+
+pub(super) fn coerce_int_value_width<'ctx>(
+    builder: &Builder<'ctx>,
+    value: IntValue<'ctx>,
+    target: IntType<'ctx>,
+    zext_name: &str,
+    trunc_name: &str,
+) -> Result<IntValue<'ctx>, Error> {
+    let current = value.get_type().get_bit_width();
+    let wanted = target.get_bit_width();
+    if current == wanted {
+        Ok(value)
+    } else if current < wanted {
+        builder
+            .build_int_z_extend(value, target, zext_name)
+            .map_err(|err| Error::other(err.to_string()))
+    } else {
+        builder
+            .build_int_truncate(value, target, trunc_name)
+            .map_err(|err| Error::other(err.to_string()))
+    }
 }
 
 pub(super) fn sanitize_symbol(name: &str) -> String {
@@ -55,8 +79,8 @@ pub(super) fn render_address_space(space: &SemanticAddressSpace) -> String {
         SemanticAddressSpace::Io => "io".to_string(),
         SemanticAddressSpace::CpuMemory { name } => format!("cpu_{}", sanitize_symbol(name)),
         SemanticAddressSpace::Segment { name } => format!("segment_{}", sanitize_symbol(name)),
-        SemanticAddressSpace::ArchSpecific { name } => {
-            format!("arch_{}", sanitize_symbol(name))
+        SemanticAddressSpace::Named { name } => {
+            format!("named_{}", sanitize_symbol(name))
         }
     }
 }
@@ -67,7 +91,7 @@ pub(super) fn render_fence_kind(kind: &SemanticFenceKind) -> String {
         SemanticFenceKind::Release => "release".to_string(),
         SemanticFenceKind::AcquireRelease => "acquire_release".to_string(),
         SemanticFenceKind::SequentiallyConsistent => "seq_cst".to_string(),
-        SemanticFenceKind::ArchSpecific { name } => format!("arch_{}", sanitize_symbol(name)),
+        SemanticFenceKind::Named { name } => format!("named_{}", sanitize_symbol(name)),
     }
 }
 
@@ -82,6 +106,6 @@ pub(super) fn render_trap_kind(kind: &SemanticTrapKind) -> String {
         SemanticTrapKind::AlignmentFault => "alignment_fault".to_string(),
         SemanticTrapKind::Syscall => "syscall".to_string(),
         SemanticTrapKind::Interrupt => "interrupt".to_string(),
-        SemanticTrapKind::ArchSpecific { name } => format!("arch_{}", sanitize_symbol(name)),
+        SemanticTrapKind::Named { name } => format!("named_{}", sanitize_symbol(name)),
     }
 }

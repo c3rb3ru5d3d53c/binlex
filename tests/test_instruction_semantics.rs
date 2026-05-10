@@ -71,7 +71,7 @@ fn partial_semantics(message: &str) -> Semantic {
         effects: Vec::new(),
         terminator: SemanticTerminator::FallThrough,
         diagnostics: vec![SemanticDiagnostic {
-            kind: SemanticDiagnosticKind::ArchSpecific {
+            kind: SemanticDiagnosticKind::Named {
                 name: "test.partial".to_string(),
             },
             message: message.to_string(),

@@ -125,7 +125,7 @@ fn lift_instruction_renders_vex_text() {
     lifter
         .lift_instruction(&instruction)
         .expect("instruction lift should succeed");
-    let text = lifter.text();
+    let text = lifter.ir();
     assert!(text.contains("instruction_1000"));
     assert!(text.contains("IRSB"));
 }
@@ -143,9 +143,9 @@ fn lift_block_renders_vex_text() {
     };
     let mut lifter = Lifter::new(test_config());
     lifter
-        .lift_block(&block)
+        .lift_block(&block, None)
         .expect("block lift should succeed");
-    let text = lifter.text();
+    let text = lifter.ir();
     assert!(text.contains("block_2000"));
     assert!(text.contains("IRSB"));
 }
@@ -169,10 +169,10 @@ fn lift_function_renders_vex_text() {
 
     let mut lifter = Lifter::new(test_config());
     lifter
-        .lift_function(&function)
+        .lift_function(&function, None)
         .expect("function lift should succeed");
 
-    let text = lifter.text();
+    let text = lifter.ir();
     assert!(text.contains("function_3000"));
     assert!(text.contains("IRSB"));
 }
@@ -207,9 +207,9 @@ fn non_contiguous_function_is_supported() {
 
     let mut lifter = Lifter::new(test_config());
     lifter
-        .lift_function(&function)
+        .lift_function(&function, None)
         .expect("non-contiguous function should lift");
-    let text = lifter.text();
+    let text = lifter.ir();
     assert!(text.contains("; block 0x4000"));
     assert!(text.contains("; block 0x5000"));
 }
@@ -234,9 +234,9 @@ fn cil_function_renders_vex_text() {
 
     let mut lifter = Lifter::new(test_config());
     lifter
-        .lift_function(&function)
+        .lift_function(&function, None)
         .expect("cil function should lift to vex text");
-    let text = lifter.text();
+    let text = lifter.ir();
     assert!(text.contains("; function function_7000 cil 0x7000"));
     assert!(text.contains("IRSB {"));
 }

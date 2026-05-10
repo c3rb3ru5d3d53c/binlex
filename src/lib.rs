@@ -20,7 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod abi;
 pub mod assemblers;
 pub mod clients;
 pub mod compression;
@@ -50,7 +49,6 @@ pub mod storage;
 pub mod symbolic;
 pub mod util;
 
-pub use abi::Abi;
 pub use assemblers::Assembler;
 pub use assemblers::AssemblerBackend;
 pub use assemblers::AssemblerError;
@@ -65,4 +63,5 @@ pub use embeddings::Embedding;
 pub use embeddings::EmbeddingBackend;
 pub use math::entropy;
 pub use query::Query;
+pub use semantics::{SemanticAbi, SemanticAbiKind, SemanticAbiTrap, SemanticCpuKind};
 pub use util::hexdump;

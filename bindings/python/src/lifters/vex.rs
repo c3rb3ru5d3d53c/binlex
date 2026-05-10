@@ -3,6 +3,7 @@ use crate::Configuration;
 use binlex::io::Stderr;
 use binlex::lifters::vex::Lifter as InnerLifter;
 use pyo3::prelude::*;
+use pyo3::types::PyAny;
 use std::sync::{Arc, Mutex};
 
 #[pyclass(unsendable)]
@@ -14,8 +15,9 @@ pub struct Lifter {
 #[pymethods]
 impl Lifter {
     #[new]
-    #[pyo3(text_signature = "(config)")]
-    pub fn new(py: Python<'_>, config: Py<Configuration>) -> Self {
+    #[pyo3(signature = (config, triple=None), text_signature = "(config, triple=None)")]
+    pub fn new(py: Python<'_>, config: Py<Configuration>, triple: Option<String>) -> Self {
+        let _ = triple;
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
         let inner = InnerLifter::new(inner_config.clone());
         Self {
@@ -47,9 +49,12 @@ impl Lifter {
         }
     }
 
-    #[pyo3(text_signature = "($self, block)")]
-    pub fn lift_block(&self, py: Python<'_>, block: &Block) -> bool {
-        match block.with_inner_block(py, |inner| Ok(self.inner.lock().unwrap().lift_block(inner))) {
+    #[pyo3(signature = (block, abi=None), text_signature = "($self, block, abi=None)")]
+    pub fn lift_block(&self, py: Python<'_>, block: &Block, abi: Option<Py<PyAny>>) -> bool {
+        let _ = abi;
+        match block.with_inner_block(py, |inner| {
+            Ok(self.inner.lock().unwrap().lift_block(inner, None))
+        }) {
             Ok(Ok(())) => true,
             Ok(Err(err)) => {
                 Stderr::print_debug(&self.config, format!("vex lift block failed: {}", err));
@@ -62,10 +67,16 @@ impl Lifter {
         }
     }
 
-    #[pyo3(text_signature = "($self, function)")]
-    pub fn lift_function(&self, py: Python<'_>, function: &Function) -> bool {
+    #[pyo3(signature = (function, abi=None), text_signature = "($self, function, abi=None)")]
+    pub fn lift_function(
+        &self,
+        py: Python<'_>,
+        function: &Function,
+        abi: Option<Py<PyAny>>,
+    ) -> bool {
+        let _ = abi;
         match function.with_inner_function(py, |inner| {
-            Ok(self.inner.lock().unwrap().lift_function(inner))
+            Ok(self.inner.lock().unwrap().lift_function(inner, None))
         }) {
             Ok(Ok(())) => true,
             Ok(Err(err)) => {
@@ -80,8 +91,8 @@ impl Lifter {
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn text(&self) -> String {
-        self.inner.lock().unwrap().text()
+    pub fn ir(&self) -> String {
+        self.inner.lock().unwrap().ir()
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -89,8 +100,19 @@ impl Lifter {
         self.inner.lock().unwrap().print();
     }
 
+    #[pyo3(text_signature = "($self)")]
+    pub fn clear(&self) -> bool {
+        match self.inner.lock().unwrap().clear() {
+            Ok(()) => true,
+            Err(err) => {
+                Stderr::print_debug(&self.config, format!("vex clear failed: {}", err));
+                false
+            }
+        }
+    }
+
     pub fn __str__(&self) -> String {
-        self.text()
+        self.ir()
     }
 }
 

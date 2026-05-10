@@ -20,13 +20,17 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod architectures;
-pub mod cpu;
-pub mod disassemblers;
+pub mod abis;
+pub mod arm64;
+pub mod cil;
+pub mod cpus;
 pub mod ir;
+pub mod x86;
 
-pub use cpu::{
+pub use abis::{SemanticAbi, SemanticAbiKind, SemanticAbiTrap};
+pub use cpus::{
     SemanticCpu, SemanticCpuAlias, SemanticCpuAliasWritePolicy, SemanticCpuEndian,
+    SemanticCpuKind,
     SemanticCpuProgramCounter, SemanticCpuRegister, SemanticMemory, SemanticMemoryAddressed,
     SemanticMemoryIndexed, SemanticMemoryStack,
 };

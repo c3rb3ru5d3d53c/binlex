@@ -1,6 +1,5 @@
 use super::LoweringContext;
-use super::helpers::{const_int, render_address_space, sanitize_symbol};
-use crate::lifters::llvm::abi::coerce_int_value_width;
+use super::helpers::{coerce_int_value_width, const_int, render_address_space, sanitize_symbol};
 use crate::semantics::{
     SemanticExpression, SemanticLocation, SemanticOperationBinary, SemanticOperationCast,
     SemanticOperationCompare, SemanticOperationUnary,
@@ -18,6 +17,27 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         match expression {
             SemanticExpression::Const { value, bits } => {
                 Ok(const_int(self.int_type(*bits), *value))
+            }
+            SemanticExpression::Function { name, bits } => {
+                let function = self
+                    .module
+                    .get_function(name)
+                    .ok_or_else(|| Error::other(format!("unknown semantic function target {name}")))?;
+                self.builder
+                    .build_ptr_to_int(
+                        function.as_global_value().as_pointer_value(),
+                        self.int_type(*bits),
+                        "functmp",
+                    )
+                    .map_err(|err| Error::other(err.to_string()))
+            }
+            SemanticExpression::AddressOf { location, bits } => {
+                let pointer = self.pointer_for_location(location)?;
+                let pointer = self
+                    .builder
+                    .build_ptr_to_int(pointer, self.int_type(*bits), "addroftmp")
+                    .map_err(|err| Error::other(err.to_string()))?;
+                Ok(pointer)
             }
             SemanticExpression::Read(location) => self.read_location(location),
             SemanticExpression::Load { space, addr, bits } => {
@@ -320,7 +340,10 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         ))
     }
 
-    fn read_location(&mut self, location: &SemanticLocation) -> Result<IntValue<'ctx>, Error> {
+    pub(super) fn read_location(
+        &mut self,
+        location: &SemanticLocation,
+    ) -> Result<IntValue<'ctx>, Error> {
         match location {
             SemanticLocation::Memory { space, addr, bits } => {
                 if let Some(value) = self.try_direct_load(space, addr, *bits)? {

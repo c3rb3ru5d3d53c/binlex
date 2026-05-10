@@ -28,7 +28,7 @@ use std::str::FromStr;
 
 /// Represents the different architectures of a binary.
 #[repr(u16)]
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Architecture {
     /// 64-bit AMD architecture.
     AMD64 = 0x00,

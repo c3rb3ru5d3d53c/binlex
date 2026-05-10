@@ -1,10 +1,106 @@
-use crate::lifters::llvm::abi::{coerce_expression_width, normalize_binary, normalize_compare};
 use crate::semantics::{
     Semantic, SemanticEffect, SemanticExpression, SemanticLocation, SemanticTemporary,
     SemanticTerminator, normalize_instruction_semantics, validate_instruction_semantics,
 };
 use std::collections::{HashMap, HashSet};
 use std::io::Error;
+
+fn expression_bits(expression: &SemanticExpression) -> u16 {
+    match expression {
+        SemanticExpression::Const { bits, .. }
+        | SemanticExpression::Function { bits, .. }
+        | SemanticExpression::AddressOf { bits, .. }
+        | SemanticExpression::Load { bits, .. }
+        | SemanticExpression::Unary { bits, .. }
+        | SemanticExpression::Binary { bits, .. }
+        | SemanticExpression::Cast { bits, .. }
+        | SemanticExpression::Compare { bits, .. }
+        | SemanticExpression::Select { bits, .. }
+        | SemanticExpression::Extract { bits, .. }
+        | SemanticExpression::Concat { bits, .. }
+        | SemanticExpression::Undefined { bits }
+        | SemanticExpression::Poison { bits }
+        | SemanticExpression::Intrinsic { bits, .. }
+        | SemanticExpression::Null { bits }
+        | SemanticExpression::Allocate { bits, .. }
+        | SemanticExpression::ReadProperty { bits, .. }
+        | SemanticExpression::ReadElement { bits, .. } => *bits,
+        SemanticExpression::Read(location) => match location.as_ref() {
+            crate::semantics::SemanticLocation::Register { bits, .. }
+            | crate::semantics::SemanticLocation::Flag { bits, .. }
+            | crate::semantics::SemanticLocation::ProgramCounter { bits }
+            | crate::semantics::SemanticLocation::Temporary { bits, .. }
+            | crate::semantics::SemanticLocation::Memory { bits, .. }
+            | crate::semantics::SemanticLocation::IndexedMemory { bits, .. }
+            | crate::semantics::SemanticLocation::StackMemory { bits, .. } => *bits,
+        },
+    }
+}
+
+fn coerce_expression_width(expression: SemanticExpression, bits: u16) -> SemanticExpression {
+    let current_bits = expression_bits(&expression);
+    if current_bits == bits {
+        return expression;
+    }
+
+    if current_bits < bits {
+        SemanticExpression::Cast {
+            op: crate::semantics::SemanticOperationCast::ZeroExtend,
+            arg: Box::new(expression),
+            bits,
+        }
+    } else {
+        SemanticExpression::Cast {
+            op: crate::semantics::SemanticOperationCast::Truncate,
+            arg: Box::new(expression),
+            bits,
+        }
+    }
+}
+
+fn normalize_shift_binary(
+    op: crate::semantics::SemanticOperationBinary,
+    left: SemanticExpression,
+    right: SemanticExpression,
+    bits: u16,
+) -> (SemanticExpression, SemanticExpression) {
+    match op {
+        crate::semantics::SemanticOperationBinary::Shl
+        | crate::semantics::SemanticOperationBinary::LShr
+        | crate::semantics::SemanticOperationBinary::AShr => {
+            (left, coerce_expression_width(right, bits))
+        }
+        _ => (left, right),
+    }
+}
+
+fn normalize_binary(
+    op: crate::semantics::SemanticOperationBinary,
+    left: SemanticExpression,
+    right: SemanticExpression,
+    bits: u16,
+) -> (SemanticExpression, SemanticExpression) {
+    let left = coerce_expression_width(left, bits);
+    let right = coerce_expression_width(right, bits);
+    normalize_shift_binary(op, left, right, bits)
+}
+
+fn normalize_compare(
+    left: SemanticExpression,
+    right: SemanticExpression,
+) -> (SemanticExpression, SemanticExpression) {
+    let left_bits = expression_bits(&left);
+    let right_bits = expression_bits(&right);
+    if left_bits == right_bits {
+        return (left, right);
+    }
+
+    match (&left, &right) {
+        (SemanticExpression::Const { .. }, _) => (coerce_expression_width(left, right_bits), right),
+        (_, SemanticExpression::Const { .. }) => (left, coerce_expression_width(right, left_bits)),
+        _ => (left, coerce_expression_width(right, left_bits)),
+    }
+}
 
 pub fn prepare_instruction_semantics(semantics: &Semantic) -> Result<Semantic, Error> {
     validate_instruction_semantics(semantics)?;
@@ -393,6 +489,8 @@ fn collect_expression_reads(
     reads: &mut HashSet<SemanticLocation>,
 ) {
     match expression {
+        SemanticExpression::Function { .. } => {}
+        SemanticExpression::AddressOf { .. } => {}
         SemanticExpression::Read(location) => {
             reads.insert(location.as_ref().clone());
         }
@@ -452,6 +550,8 @@ fn collect_expression_loads(
 ) {
     match expression {
         SemanticExpression::Read(_) => {}
+        SemanticExpression::Function { .. } => {}
+        SemanticExpression::AddressOf { .. } => {}
         SemanticExpression::Load { space, addr, bits } => {
             reads.insert(SemanticExpression::Load {
                 space: space.clone(),
@@ -695,6 +795,33 @@ fn prepare_terminator(
     }
 }
 
+fn prepare_location(
+    location: &SemanticLocation,
+    snapshots: &HashMap<SemanticLocation, SemanticLocation>,
+    load_snapshots: &HashMap<SemanticExpression, SemanticLocation>,
+) -> SemanticLocation {
+    if let Some(snapshot) = snapshots.get(location) {
+        return snapshot.clone();
+    }
+    match location {
+        SemanticLocation::Memory { space, addr, bits } => SemanticLocation::Memory {
+            space: space.clone(),
+            addr: Box::new(prepare_expression(addr, snapshots, load_snapshots)),
+            bits: *bits,
+        },
+        SemanticLocation::IndexedMemory { name, index, bits } => SemanticLocation::IndexedMemory {
+            name: name.clone(),
+            index: Box::new(prepare_expression(index, snapshots, load_snapshots)),
+            bits: *bits,
+        },
+        SemanticLocation::Register { .. }
+        | SemanticLocation::Flag { .. }
+        | SemanticLocation::ProgramCounter { .. }
+        | SemanticLocation::Temporary { .. }
+        | SemanticLocation::StackMemory { .. } => location.clone(),
+    }
+}
+
 fn prepare_expression(
     expression: &SemanticExpression,
     snapshots: &HashMap<SemanticLocation, SemanticLocation>,
@@ -703,6 +830,14 @@ fn prepare_expression(
     match expression {
         SemanticExpression::Const { value, bits } => SemanticExpression::Const {
             value: *value,
+            bits: *bits,
+        },
+        SemanticExpression::Function { name, bits } => SemanticExpression::Function {
+            name: name.clone(),
+            bits: *bits,
+        },
+        SemanticExpression::AddressOf { location, bits } => SemanticExpression::AddressOf {
+            location: Box::new(prepare_location(location, snapshots, load_snapshots)),
             bits: *bits,
         },
         SemanticExpression::Read(location) => SemanticExpression::Read(Box::new(

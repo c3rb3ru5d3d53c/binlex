@@ -34,7 +34,7 @@ use crate::{
         targets as x86_targets,
     },
     genetics::Chromosome,
-    semantics::architectures::x86::{
+    semantics::x86::{
         InstructionDetailX86, X86MemoryOperandView, X86OperandKind, X86OperandView,
     },
 };

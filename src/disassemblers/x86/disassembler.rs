@@ -22,7 +22,7 @@
 
 use crate::Architecture;
 use crate::Configuration;
-use crate::controlflow::Graph;
+use crate::controlflow::{Block, Function, Graph, Instruction};
 use crate::controlflow::InstructionRecord;
 use crate::disassemblers::x86::classify as x86_classify;
 use crate::disassemblers::x86::pattern::{
@@ -93,7 +93,11 @@ impl<'a> Disassembler<'a> {
         })
     }
 
-    pub fn disassemble_instruction(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
+    pub fn disassemble_instruction_address(
+        &self,
+        address: u64,
+        cfg: &mut Graph,
+    ) -> Result<u64, Error> {
         cfg.instructions.insert_processed(address);
 
         if let Some(instruction) = cfg.get_instruction(address) {
@@ -155,7 +159,7 @@ impl<'a> Disassembler<'a> {
         })
     }
 
-    pub fn disassemble_block(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
+    pub fn disassemble_block_address(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
         cfg.blocks.insert_processed(address);
 
         if !self.is_executable_address(address) {
@@ -171,7 +175,7 @@ impl<'a> Disassembler<'a> {
         let mut terminator = address;
         let mut split_successor: Option<u64> = None;
 
-        while self.disassemble_instruction(pc, cfg).is_ok() {
+        while self.disassemble_instruction_address(pc, cfg).is_ok() {
             let mut instruction = match cfg.get_instruction_record(pc) {
                 Some(instr) => instr,
                 None => {
@@ -227,7 +231,11 @@ impl<'a> Disassembler<'a> {
         Ok(terminator)
     }
 
-    pub fn disassemble_function(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
+    pub fn disassemble_function_address(
+        &self,
+        address: u64,
+        cfg: &mut Graph,
+    ) -> Result<u64, Error> {
         if !self.is_executable_address(address) {
             cfg.functions.insert_invalid(address);
             return Err(Error::new(
@@ -248,7 +256,7 @@ impl<'a> Disassembler<'a> {
             }
 
             let block_end_address = self
-                .disassemble_block(block_start_address, cfg)
+                .disassemble_block_address(block_start_address, cfg)
                 .inspect_err(|_| {
                     cfg.functions.insert_invalid(address);
                 })?;
@@ -268,6 +276,36 @@ impl<'a> Disassembler<'a> {
         cfg.functions.insert_valid(address);
 
         Ok(address)
+    }
+
+    pub fn disassemble_instruction<'g>(
+        &self,
+        address: u64,
+        cfg: &'g mut Graph,
+    ) -> Result<Instruction<'g>, Error> {
+        let entry = self.disassemble_instruction_address(address, cfg)?;
+        cfg.get_instruction(entry)
+            .ok_or_else(|| Error::other(format!("0x{entry:x}: instruction missing after disassembly")))
+    }
+
+    pub fn disassemble_block<'g>(
+        &self,
+        address: u64,
+        cfg: &'g mut Graph,
+    ) -> Result<Block<'g>, Error> {
+        self.disassemble_block_address(address, cfg)?;
+        cfg.get_block(address)
+            .ok_or_else(|| Error::other(format!("0x{address:x}: block missing after disassembly")))
+    }
+
+    pub fn disassemble_function<'g>(
+        &self,
+        address: u64,
+        cfg: &'g mut Graph,
+    ) -> Result<Function<'g>, Error> {
+        self.disassemble_function_address(address, cfg)?;
+        cfg.get_function(address)
+            .ok_or_else(|| Error::other(format!("0x{address:x}: function missing after disassembly")))
     }
 
     pub fn disassemble(&self, addresses: BTreeSet<u64>, cfg: &mut Graph) -> Result<(), Error> {

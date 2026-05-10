@@ -79,21 +79,19 @@ fn extend_weighted(features: &mut Vec<f32>, values: impl IntoIterator<Item = f32
 }
 
 fn optimize_lifter(lifter: LlvmLifter) -> Result<LlvmLifter, Error> {
-    Ok(lifter
-        .optimizers()?
-        .mem2reg()?
-        .sroa()?
-        .gvn()?
-        .cfg()?
-        .dce()?
-        .into_lifter())
+    let lifter = lifter.mem2reg()?;
+    let lifter = lifter.sroa()?;
+    let lifter = lifter.gvn()?;
+    let lifter = lifter.cfg()?;
+    let lifter = lifter.dce()?;
+    Ok(lifter)
 }
 
 pub(crate) fn canonical_instruction_bitcode(
     instruction: &Instruction,
     config: &Configuration,
 ) -> Result<Vec<u8>, Error> {
-    let mut lifter = LlvmLifter::new(instruction.architecture, config.clone());
+    let mut lifter = LlvmLifter::from_architecture(instruction.architecture, config.clone());
     lifter.lift_instruction(instruction)?;
     let optimized = optimize_lifter(lifter)?;
     Ok(optimized.bitcode())
@@ -103,8 +101,8 @@ pub(crate) fn canonical_block_bitcode(
     block: &Block<'_>,
     config: &Configuration,
 ) -> Result<Vec<u8>, Error> {
-    let mut lifter = LlvmLifter::new(block.architecture(), config.clone());
-    lifter.lift_block(block)?;
+    let mut lifter = LlvmLifter::from_architecture(block.architecture(), config.clone());
+    lifter.lift_block(block, None)?;
     let optimized = optimize_lifter(lifter)?;
     Ok(optimized.bitcode())
 }
@@ -113,8 +111,8 @@ pub(crate) fn canonical_function_bitcode(
     function: &Function<'_>,
     config: &Configuration,
 ) -> Result<Vec<u8>, Error> {
-    let mut lifter = LlvmLifter::new(function.architecture(), config.clone());
-    lifter.lift_function(function)?;
+    let mut lifter = LlvmLifter::from_architecture(function.architecture(), config.clone());
+    lifter.lift_function(function, None)?;
     let optimized = optimize_lifter(lifter)?;
     Ok(optimized.bitcode())
 }

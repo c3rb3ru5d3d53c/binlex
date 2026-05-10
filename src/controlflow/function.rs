@@ -39,6 +39,7 @@ use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
 use crate::lifters::{Lifter, LifterBackend, LifterError};
+use crate::semantics::{SemanticAbi, SemanticCpu};
 use crate::metadata::Attributes;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -523,26 +524,29 @@ impl<'function> Function<'function> {
 
     /// Return a lifter artifact for this function using the default backend.
     pub fn lift(&self) -> Result<Lifter, LifterError> {
-        self.lift_with_options(None)
+        self.lift_with(LifterBackend::Default, None, None)
     }
 
-    /// Return a lifter artifact for this function using an optional backend override.
-    pub fn lift_with_options(&self, backend: Option<LifterBackend>) -> Result<Lifter, LifterError> {
-        let mut lifter = Lifter::new(
-            self.architecture(),
-            self.cfg.config.clone(),
-            backend.unwrap_or_default(),
-        )?;
-        lifter.lift_function(self)?;
+    /// Return a lifter artifact for this function using the provided backend, ABI, and optional triple.
+    pub fn lift_with(
+        &self,
+        backend: LifterBackend,
+        abi: Option<&SemanticAbi>,
+        triple: Option<String>,
+    ) -> Result<Lifter, LifterError> {
+        let cpu = SemanticCpu::from_architecture(self.architecture())
+            .map_err(|error| LifterError::Io(Error::other(error.to_string())))?;
+        let lifter = Lifter::new(cpu, self.cfg.config.clone(), backend, triple)?;
+        lifter.lift_function(self, abi)?;
         Ok(lifter)
     }
 
     fn lifters_json(&self) -> Option<LiftersJson> {
         let llvm = if self.cfg.config.functions.lifters.llvm.enabled {
-            let mut lifter = LlvmLifter::new(self.architecture(), self.cfg.config.clone());
-            lifter.lift_function(self).ok()?;
+            let mut lifter = LlvmLifter::from_architecture(self.architecture(), self.cfg.config.clone());
+            lifter.lift_function(self, None).ok()?;
             Some(LlvmJson {
-                text: lifter.text(),
+                text: lifter.ir(),
             })
         } else {
             None
@@ -553,9 +557,9 @@ impl<'function> Function<'function> {
             && self.cfg.config.functions.lifters.vex.enabled
         {
             let mut lifter = VexLifter::new(self.cfg.config.clone());
-            lifter.lift_function(self).ok()?;
+            lifter.lift_function(self, None).ok()?;
             Some(VexJson {
-                text: lifter.text(),
+                text: lifter.ir(),
             })
         } else {
             None

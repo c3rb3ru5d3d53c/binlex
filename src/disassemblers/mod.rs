@@ -23,6 +23,7 @@
 use crate::Architecture;
 use crate::Configuration;
 use crate::controlflow::Graph;
+use crate::controlflow::{Block, Function, Instruction};
 use crate::formats::Image;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Error, ErrorKind};
@@ -145,31 +146,27 @@ impl<'a> Disassembler<'a> {
         Ok(Self { inner })
     }
 
-    pub fn disassemble_instruction(
+    pub fn disassemble_instruction<'g>(
         &self,
         address: u64,
         metadata_token_addresses: &BTreeMap<u64, u64>,
-        cfg: &mut Graph,
-    ) -> Result<u64, Error> {
+        cfg: &'g mut Graph,
+    ) -> Result<Instruction<'g>, Error> {
         match &self.inner {
-            DisassemblerImpl::X86(disassembler) => {
-                disassembler.disassemble_instruction(address, cfg)
-            }
-            DisassemblerImpl::Arm64(disassembler) => {
-                disassembler.disassemble_instruction(address, cfg)
-            }
+            DisassemblerImpl::X86(disassembler) => disassembler.disassemble_instruction(address, cfg),
+            DisassemblerImpl::Arm64(disassembler) => disassembler.disassemble_instruction(address, cfg),
             DisassemblerImpl::Cil(disassembler) => {
                 disassembler.disassemble_instruction(address, metadata_token_addresses, cfg)
             }
         }
     }
 
-    pub fn disassemble_block(
+    pub fn disassemble_block<'g>(
         &self,
         address: u64,
         metadata_token_addresses: &BTreeMap<u64, u64>,
-        cfg: &mut Graph,
-    ) -> Result<u64, Error> {
+        cfg: &'g mut Graph,
+    ) -> Result<Block<'g>, Error> {
         match &self.inner {
             DisassemblerImpl::X86(disassembler) => disassembler.disassemble_block(address, cfg),
             DisassemblerImpl::Arm64(disassembler) => disassembler.disassemble_block(address, cfg),
@@ -179,12 +176,12 @@ impl<'a> Disassembler<'a> {
         }
     }
 
-    pub fn disassemble_function(
+    pub fn disassemble_function<'g>(
         &self,
         address: u64,
         metadata_token_addresses: &BTreeMap<u64, u64>,
-        cfg: &mut Graph,
-    ) -> Result<u64, Error> {
+        cfg: &'g mut Graph,
+    ) -> Result<Function<'g>, Error> {
         match &self.inner {
             DisassemblerImpl::X86(disassembler) => disassembler.disassemble_function(address, cfg),
             DisassemblerImpl::Arm64(disassembler) => {

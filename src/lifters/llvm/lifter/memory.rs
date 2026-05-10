@@ -1,5 +1,5 @@
 use super::LoweringContext;
-use crate::lifters::llvm::abi::coerce_int_value_width;
+use super::helpers::coerce_int_value_width;
 use crate::semantics::{SemanticAddressSpace, SemanticExpression};
 use inkwell::IntPredicate;
 use inkwell::values::{IntValue, PointerValue};

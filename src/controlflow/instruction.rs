@@ -36,12 +36,10 @@ use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
 use crate::lifters::{Lifter, LifterBackend, LifterError};
 use crate::metadata::Attributes;
-use crate::semantics::Semantic;
-use crate::semantics::SemanticJson;
-use crate::semantics::architectures;
-use crate::semantics::architectures::arm64::InstructionDetailArm64;
-use crate::semantics::architectures::cil::InstructionDetailCil;
-use crate::semantics::architectures::x86::InstructionDetailX86;
+use crate::semantics::{Semantic, SemanticAbi, SemanticCpu, SemanticJson};
+use crate::semantics::arm64::InstructionDetailArm64;
+use crate::semantics::cil::InstructionDetailCil;
+use crate::semantics::x86::InstructionDetailX86;
 use crate::semantics::{
     SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect, SemanticEncoding, SemanticStatus,
     SemanticTerminator,
@@ -131,7 +129,7 @@ impl InstructionDetail {
     pub fn build_semantic(self) -> Semantic {
         match self.kind {
             InstructionDetailKind::X86(view) => {
-                let mut semantics = architectures::x86::build(view.clone()).unwrap_or_else(|| {
+                let mut semantics = crate::semantics::x86::build(view.clone()).unwrap_or_else(|| {
                     unsupported_fallthrough(
                         view.machine.to_string(),
                         view.address,
@@ -158,8 +156,7 @@ impl InstructionDetail {
                 semantics
             }
             InstructionDetailKind::Arm64(view) => {
-                let mut semantics =
-                    architectures::arm64::build(view.clone()).unwrap_or_else(|| {
+                let mut semantics = crate::semantics::arm64::build(view.clone()).unwrap_or_else(|| {
                         unsupported_fallthrough(
                             view.machine.to_string(),
                             view.address,
@@ -186,7 +183,7 @@ impl InstructionDetail {
                 semantics
             }
             InstructionDetailKind::Cil(view) => {
-                let mut semantics = architectures::cil::build(view.clone());
+                let mut semantics = crate::semantics::cil::build(view.clone());
                 if semantics.encoding.is_none() {
                     semantics.encoding = Some(SemanticEncoding {
                         architecture: "cil".to_string(),
@@ -688,26 +685,38 @@ impl<'instruction> Instruction<'instruction> {
 
     /// Return a lifter artifact for this instruction using the default backend.
     pub fn lift(&self) -> Result<Lifter, LifterError> {
-        self.lift_with_options(None)
+        self.lift_with(LifterBackend::Default, None, None)
     }
 
-    /// Return a lifter artifact for this instruction using an optional backend override.
-    pub fn lift_with_options(&self, backend: Option<LifterBackend>) -> Result<Lifter, LifterError> {
-        let mut lifter = Lifter::new(
+    /// Return a lifter artifact for this instruction using the provided backend and optional triple.
+    pub fn lift_with(
+        &self,
+        backend: LifterBackend,
+        _abi: Option<&SemanticAbi>,
+        triple: Option<String>,
+    ) -> Result<Lifter, LifterError> {
+        let lifter = Lifter::from_architecture(
             self.architecture,
             self.config.clone(),
-            backend.unwrap_or_default(),
+            backend,
         )?;
+        if let Some(triple) = triple {
+            let cpu = SemanticCpu::from_architecture(self.architecture)
+                .map_err(|error| LifterError::Io(Error::other(error.to_string())))?;
+            let lifter = Lifter::new(cpu, self.config.clone(), backend, Some(triple))?;
+            lifter.lift_instruction(self)?;
+            return Ok(lifter);
+        }
         lifter.lift_instruction(self)?;
         Ok(lifter)
     }
 
     fn lifters_json(&self) -> Option<LiftersJson> {
         let llvm = if self.config.instructions.lifters.llvm.enabled {
-            let mut lifter = LlvmLifter::new(self.architecture, self.config.clone());
+            let mut lifter = LlvmLifter::from_architecture(self.architecture, self.config.clone());
             lifter.lift_instruction(self).ok()?;
             Some(LlvmJson {
-                text: lifter.text(),
+                text: lifter.ir(),
             })
         } else {
             None
@@ -719,7 +728,7 @@ impl<'instruction> Instruction<'instruction> {
             let mut lifter = VexLifter::new(self.config.clone());
             lifter.lift_instruction(self).ok()?;
             Some(VexJson {
-                text: lifter.text(),
+                text: lifter.ir(),
             })
         } else {
             None

@@ -182,17 +182,18 @@ mod tests {
     use crate::Configuration;
     use crate::controlflow::{Function, Graph};
     use crate::disassemblers::capstone::Disassembler;
-    use crate::lifters::llvm::Abi;
+    use crate::semantics::{SemanticAbi, SemanticAbiKind, SemanticCpu, SemanticCpuKind};
     use crate::lifters::llvm::Lifter;
     use crate::semantics::{
-        Semantic, SemanticDiagnostic, SemanticDiagnosticKind, SemanticEncoding, SemanticStatus,
+        Semantic, SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect,
+        SemanticEncoding, SemanticExpression, SemanticLocation, SemanticStatus,
         SemanticTerminator,
     };
     use std::collections::BTreeMap;
 
     #[test]
     fn lowers_instruction_encoding_payload_into_llvm_ir() {
-        let mut lifter = Lifter::new(Architecture::ARM64, Configuration::default());
+        let mut lifter = Lifter::from_architecture(Architecture::ARM64, Configuration::default());
         let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Partial,
@@ -214,7 +215,7 @@ mod tests {
         };
 
         lifter
-            .lift_semantics(std::slice::from_ref(&semantics))
+            .lift_function_semantics(std::slice::from_ref(&semantics), None)
             .expect("lift semantics");
         let text = lifter.text();
 
@@ -228,7 +229,7 @@ mod tests {
 
     #[test]
     fn omits_instruction_encoding_for_complete_semantics() {
-        let mut lifter = Lifter::new(Architecture::AMD64, Configuration::default());
+        let mut lifter = Lifter::from_architecture(Architecture::AMD64, Configuration::default());
         let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
@@ -247,13 +248,55 @@ mod tests {
         };
 
         lifter
-            .lift_semantics(std::slice::from_ref(&semantics))
+            .lift_function_semantics(std::slice::from_ref(&semantics), None)
             .expect("lift semantics");
         let text = lifter.text();
 
         assert!(!text.contains("@binlex_encoding_xor("));
         assert!(!text.contains("@binlex_encoding_xor_4010"));
-        assert!(text.contains("call void asm sideeffect \"nop\""));
+        assert!(text.contains("define void @semantic_function_0()"));
+    }
+
+    #[test]
+    fn builtin_fastcall_function_arguments_become_llvm_parameters() {
+        let cpu = SemanticCpu::from_kind(SemanticCpuKind::I386).expect("cpu");
+        let abi = SemanticAbi::from_kind(SemanticAbiKind::Fastcall, &cpu).expect("abi");
+        let semantics = Semantic {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "eax".to_string(),
+                    bits: 32,
+                },
+                expression: SemanticExpression::Binary {
+                    op: crate::semantics::SemanticOperationBinary::Add,
+                    left: Box::new(SemanticExpression::Read(Box::new(
+                        SemanticLocation::Register {
+                            name: "ecx".to_string(),
+                            bits: 32,
+                        },
+                    ))),
+                    right: Box::new(SemanticExpression::Const { value: 1, bits: 32 }),
+                    bits: 32,
+                },
+            }],
+            terminator: SemanticTerminator::Return { expression: None },
+            diagnostics: Vec::new(),
+        };
+
+        let mut lifter = Lifter::new(cpu, Configuration::default(), None).expect("lifter");
+        lifter
+            .lift_function_semantics(std::slice::from_ref(&semantics), Some(&abi))
+            .expect("lift semantics");
+        let text = lifter.ir();
+
+        assert!(text.contains("define i32 @semantic_function_0(i32 %0)"));
+        assert!(!text.contains("movl %ecx, $0"));
+        assert!(text.contains("ret i32 %abi_ret"));
     }
 
     #[test]
@@ -277,8 +320,8 @@ mod tests {
         assert!(graph.set_function(0), "function start should be marked");
         let function = Function::new(0, &graph).expect("function");
 
-        let mut lifter = Lifter::new(Architecture::ARM64, config);
-        lifter.lift_function(&function).expect("lift function");
+        let mut lifter = Lifter::from_architecture(Architecture::ARM64, config);
+        lifter.lift_function(&function, None).expect("lift function");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -300,17 +343,23 @@ mod tests {
             terminator: SemanticTerminator::Return { expression: None },
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(Abi::SysV));
+        semantics.set_abi(Some(
+            SemanticAbi::from_kind(
+                SemanticAbiKind::SysV,
+                &SemanticCpu::from_kind(SemanticCpuKind::Arm64).expect("cpu"),
+            )
+            .expect("abi"),
+        ));
 
-        let mut lifter = Lifter::new(Architecture::ARM64, config);
+        let mut lifter = Lifter::from_architecture(Architecture::ARM64, config);
         lifter
-            .lift_semantics(std::slice::from_ref(&semantics))
+            .lift_function_semantics(std::slice::from_ref(&semantics), None)
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
         assert!(text.contains("define i64"));
-        assert!(text.contains("@semantics_0("));
+        assert!(text.contains("@semantic_function_0("));
         assert!(text.contains("ret i64"));
         assert!(!text.contains("ret void"));
     }
@@ -328,18 +377,138 @@ mod tests {
             terminator: SemanticTerminator::Return { expression: None },
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(Abi::Windows64));
+        semantics.set_abi(Some(
+            SemanticAbi::from_kind(
+                SemanticAbiKind::Windows64,
+                &SemanticCpu::from_kind(SemanticCpuKind::Amd64).expect("cpu"),
+            )
+            .expect("abi"),
+        ));
 
-        let mut lifter = Lifter::new(Architecture::AMD64, config);
+        let mut lifter = Lifter::from_architecture(Architecture::AMD64, config);
         lifter
-            .lift_semantics(std::slice::from_ref(&semantics))
+            .lift_function_semantics(std::slice::from_ref(&semantics), None)
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
         assert!(text.contains("define i64"));
-        assert!(text.contains("@semantics_0("));
+        assert!(text.contains("@semantic_function_0("));
         assert!(text.contains("ret i64"));
+        assert!(!text.contains("ret void"));
+    }
+
+    #[test]
+    fn i386_stdcall_abi_lifted_function_returns_i32() {
+        let config = Configuration::default();
+        let mut semantics = Semantic {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
+            temporaries: Vec::new(),
+            effects: Vec::new(),
+            terminator: SemanticTerminator::Return { expression: None },
+            diagnostics: Vec::new(),
+        };
+        semantics.set_abi(Some(
+            SemanticAbi::from_kind(
+                SemanticAbiKind::Stdcall,
+                &SemanticCpu::from_kind(SemanticCpuKind::I386).expect("cpu"),
+            )
+            .expect("abi"),
+        ));
+
+        let mut lifter = Lifter::from_architecture(Architecture::I386, config);
+        lifter
+            .lift_function_semantics(std::slice::from_ref(&semantics), None)
+            .expect("lift semantics");
+        lifter.verify().expect("verify");
+        let text = lifter.text();
+
+        assert!(text.contains("define i32"));
+        assert!(text.contains("@semantic_function_0("));
+        assert!(text.contains("ret i32"));
+        assert!(!text.contains("ret void"));
+    }
+
+    #[test]
+    fn i386_stdcall_return_reads_eax_value() {
+        let config = Configuration::default();
+        let mut semantics = Semantic {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "eax".to_string(),
+                    bits: 32,
+                },
+                expression: SemanticExpression::Const {
+                    value: 1,
+                    bits: 32,
+                },
+            }],
+            terminator: SemanticTerminator::Return { expression: None },
+            diagnostics: Vec::new(),
+        };
+        semantics.set_abi(Some(
+            SemanticAbi::from_kind(
+                SemanticAbiKind::Stdcall,
+                &SemanticCpu::from_kind(SemanticCpuKind::I386).expect("cpu"),
+            )
+            .expect("abi"),
+        ));
+
+        let mut lifter = Lifter::from_architecture(Architecture::I386, config);
+        lifter
+            .lift_function_semantics(std::slice::from_ref(&semantics), None)
+            .expect("lift semantics");
+        lifter.verify().expect("verify");
+        let text = lifter.text();
+
+        assert!(text.contains("define i32"));
+        assert!(text.contains("store i32 1"));
+        assert!(text.contains("ret i32 1") || text.contains("ret i32 %abi_ret"));
+        assert!(!text.contains("ret void"));
+    }
+
+    #[test]
+    fn explicit_function_semantics_abi_controls_return_shape() {
+        let config = Configuration::default();
+        let semantics = Semantic {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "eax".to_string(),
+                    bits: 32,
+                },
+                expression: SemanticExpression::Const {
+                    value: 1,
+                    bits: 32,
+                },
+            }],
+            terminator: SemanticTerminator::Return { expression: None },
+            diagnostics: Vec::new(),
+        };
+        let cpu = SemanticCpu::from_kind(SemanticCpuKind::I386).expect("cpu");
+        let abi = SemanticAbi::from_kind(SemanticAbiKind::Stdcall, &cpu).expect("abi");
+
+        let mut lifter = Lifter::from_architecture(Architecture::I386, config);
+        lifter
+            .lift_function_semantics(std::slice::from_ref(&semantics), Some(&abi))
+            .expect("lift semantics");
+        lifter.verify().expect("verify");
+        let text = lifter.text();
+
+        assert!(text.contains("define i32 @semantic_function_0("));
+        assert!(text.contains("ret i32"));
         assert!(!text.contains("ret void"));
     }
 }

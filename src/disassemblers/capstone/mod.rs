@@ -24,7 +24,7 @@ extern crate capstone;
 
 use crate::Architecture;
 use crate::Configuration;
-use crate::controlflow::Graph;
+use crate::controlflow::{Block, Function, Graph, Instruction};
 use crate::disassemblers::arm64::Disassembler as Arm64Disassembler;
 use crate::disassemblers::x86::Disassembler as X86Disassembler;
 use crate::formats::Image;
@@ -35,9 +35,9 @@ pub mod arm64;
 pub mod x86;
 
 pub trait ArchDisassembler {
-    fn disassemble_instruction(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error>;
-    fn disassemble_block(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error>;
-    fn disassemble_function(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error>;
+    fn disassemble_instruction_address(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error>;
+    fn disassemble_block_address(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error>;
+    fn disassemble_function_address(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error>;
     fn disassemble(&self, addresses: BTreeSet<u64>, cfg: &mut Graph) -> Result<(), Error>;
     fn disassemble_sweep(&self) -> BTreeSet<u64>;
 }
@@ -55,24 +55,24 @@ impl ArchDisassembler for DisassemblerBackend<'_> {
         }
     }
 
-    fn disassemble_instruction(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
+    fn disassemble_instruction_address(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
         match self {
-            DisassemblerBackend::Arm64(d) => d.disassemble_instruction(address, cfg),
-            DisassemblerBackend::X86(d) => d.disassemble_instruction(address, cfg),
+            DisassemblerBackend::Arm64(d) => d.disassemble_instruction_address(address, cfg),
+            DisassemblerBackend::X86(d) => d.disassemble_instruction_address(address, cfg),
         }
     }
 
-    fn disassemble_block(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
+    fn disassemble_block_address(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
         match self {
-            DisassemblerBackend::Arm64(d) => d.disassemble_block(address, cfg),
-            DisassemblerBackend::X86(d) => d.disassemble_block(address, cfg),
+            DisassemblerBackend::Arm64(d) => d.disassemble_block_address(address, cfg),
+            DisassemblerBackend::X86(d) => d.disassemble_block_address(address, cfg),
         }
     }
 
-    fn disassemble_function(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
+    fn disassemble_function_address(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
         match self {
-            DisassemblerBackend::Arm64(d) => d.disassemble_function(address, cfg),
-            DisassemblerBackend::X86(d) => d.disassemble_function(address, cfg),
+            DisassemblerBackend::Arm64(d) => d.disassemble_function_address(address, cfg),
+            DisassemblerBackend::X86(d) => d.disassemble_function_address(address, cfg),
         }
     }
 
@@ -142,16 +142,54 @@ impl<'a> Disassembler<'a> {
         Ok(Self { backend })
     }
 
-    pub fn disassemble_instruction(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
-        self.backend.disassemble_instruction(address, cfg)
+    pub fn disassemble_instruction<'b>(
+        &self,
+        address: u64,
+        cfg: &'b mut Graph,
+    ) -> Result<Instruction<'b>, Error> {
+        let entry = self.disassemble_instruction_address(address, cfg)?;
+        cfg.get_instruction(entry)
+            .ok_or_else(|| Error::other(format!("0x{entry:x}: instruction missing after disassembly")))
     }
 
-    pub fn disassemble_block(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
-        self.backend.disassemble_block(address, cfg)
+    pub fn disassemble_instruction_address(
+        &self,
+        address: u64,
+        cfg: &mut Graph,
+    ) -> Result<u64, Error> {
+        self.backend.disassemble_instruction_address(address, cfg)
     }
 
-    pub fn disassemble_function(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
-        self.backend.disassemble_function(address, cfg)
+    pub fn disassemble_block<'b>(
+        &self,
+        address: u64,
+        cfg: &'b mut Graph,
+    ) -> Result<Block<'b>, Error> {
+        self.disassemble_block_address(address, cfg)?;
+        cfg.get_block(address)
+            .ok_or_else(|| Error::other(format!("0x{address:x}: block missing after disassembly")))
+    }
+
+    pub fn disassemble_block_address(&self, address: u64, cfg: &mut Graph) -> Result<u64, Error> {
+        self.backend.disassemble_block_address(address, cfg)
+    }
+
+    pub fn disassemble_function<'b>(
+        &self,
+        address: u64,
+        cfg: &'b mut Graph,
+    ) -> Result<Function<'b>, Error> {
+        self.disassemble_function_address(address, cfg)?;
+        cfg.get_function(address)
+            .ok_or_else(|| Error::other(format!("0x{address:x}: function missing after disassembly")))
+    }
+
+    pub fn disassemble_function_address(
+        &self,
+        address: u64,
+        cfg: &mut Graph,
+    ) -> Result<u64, Error> {
+        self.backend.disassemble_function_address(address, cfg)
     }
 
     pub fn disassemble(&self, addresses: BTreeSet<u64>, cfg: &mut Graph) -> Result<(), Error> {

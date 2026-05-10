@@ -7,6 +7,7 @@ use crate::Configuration;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::core::Architecture;
 use crate::semantics::{
+    SemanticAbi,
     SemanticAddressSpace, SemanticDiagnostic, SemanticEffect, SemanticExpression, SemanticJson,
     SemanticLocation, SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
     SemanticOperationUnary, SemanticTerminator,
@@ -109,7 +110,7 @@ impl Lifter {
         Ok(())
     }
 
-    pub fn lift_block(&mut self, block: &Block<'_>) -> Result<(), Error> {
+    pub fn lift_block(&mut self, block: &Block<'_>, _abi: Option<&SemanticAbi>) -> Result<(), Error> {
         self.ensure_enabled()?;
         let architecture = block.architecture();
         self.ensure_supported_architecture(architecture)?;
@@ -136,7 +137,11 @@ impl Lifter {
         Ok(())
     }
 
-    pub fn lift_function(&mut self, function: &Function<'_>) -> Result<(), Error> {
+    pub fn lift_function(
+        &mut self,
+        function: &Function<'_>,
+        _abi: Option<&SemanticAbi>,
+    ) -> Result<(), Error> {
         self.ensure_enabled()?;
         let architecture = function.architecture();
         self.ensure_supported_architecture(architecture)?;
@@ -168,14 +173,20 @@ impl Lifter {
         Ok(())
     }
 
-    pub fn text(&self) -> String {
+    pub fn ir(&self) -> String {
         self.rendered_override
             .clone()
             .unwrap_or_else(|| render_artifacts(self.artifacts.values()))
     }
 
+    pub fn clear(&mut self) -> Result<(), Error> {
+        self.artifacts.clear();
+        self.rendered_override = None;
+        Ok(())
+    }
+
     pub fn print(&self) {
-        println!("{}", self.text());
+        println!("{}", self.ir());
     }
 
     fn ensure_supported_architecture(&self, architecture: Architecture) -> Result<(), Error> {
@@ -528,6 +539,10 @@ fn render_location_write(location: &SemanticLocation) -> String {
 fn render_expression(expression: &SemanticExpression) -> String {
     match expression {
         SemanticExpression::Const { value, .. } => format!("0x{:x}", value),
+        SemanticExpression::Function { name, .. } => format!("FN({name})"),
+        SemanticExpression::AddressOf { location, .. } => {
+            format!("ADDR({})", render_location_read(location))
+        }
         SemanticExpression::Read(location) => render_location_read(location),
         SemanticExpression::Load { space, addr, bits } => format!(
             "LD{}({}, {})",
@@ -627,7 +642,7 @@ fn render_address_space(space: &SemanticAddressSpace) -> String {
         SemanticAddressSpace::Io => "io".to_string(),
         SemanticAddressSpace::CpuMemory { name } => format!("cpu:{name}"),
         SemanticAddressSpace::Segment { name } => format!("segment:{name}"),
-        SemanticAddressSpace::ArchSpecific { name } => format!("arch:{name}"),
+        SemanticAddressSpace::Named { name } => format!("named:{name}"),
     }
 }
 

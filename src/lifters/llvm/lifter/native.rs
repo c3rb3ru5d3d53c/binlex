@@ -1,6 +1,6 @@
 use super::LoweringContext;
 use super::helpers::render_location;
-use crate::lifters::llvm::abi::coerce_int_value_width;
+use super::helpers::coerce_int_value_width;
 use crate::semantics::SemanticLocation;
 use inkwell::IntPredicate;
 use inkwell::attributes::AttributeLoc;
@@ -450,6 +450,16 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             else {
                 continue;
             };
+            if self.uses_pure_callable_abi()
+                && self.is_callable_abi_boundary_location(
+                    &SemanticLocation::Register {
+                        name: name.clone(),
+                        bits: *bits,
+                    },
+                )
+            {
+                continue;
+            }
             if self
                 .x86_parent_register_alias(&SemanticLocation::Register {
                     name: name.clone(),

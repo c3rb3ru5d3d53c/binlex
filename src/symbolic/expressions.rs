@@ -30,6 +30,14 @@ impl SymbolicExecutor {
                 value: state.backend().const_bv(*value, *bits)?,
                 deps: BTreeSet::new(),
             }),
+            SemanticExpression::Function { bits, .. } => Ok(EvaluatedValue {
+                value: state.backend().const_bv(0, *bits)?,
+                deps: BTreeSet::new(),
+            }),
+            SemanticExpression::AddressOf { bits, .. } => Ok(EvaluatedValue {
+                value: state.backend().const_bv(0, *bits)?,
+                deps: BTreeSet::new(),
+            }),
             SemanticExpression::Read(location) => self.read_location(state, location),
             SemanticExpression::Load { addr, bits, .. } => {
                 let address = self.eval_expression(state, addr, false)?;
@@ -567,6 +575,8 @@ impl SymbolicExecutor {
     fn expression_is_probably_float(&self, expression: &SemanticExpression) -> bool {
         match expression {
             SemanticExpression::Const { bits, .. } => matches!(*bits, 32 | 64),
+            SemanticExpression::Function { .. } => false,
+            SemanticExpression::AddressOf { .. } => false,
             SemanticExpression::Read(location) => self.location_is_probably_float(location),
             SemanticExpression::Load { bits, .. } => matches!(*bits, 32 | 64),
             SemanticExpression::Unary { op, arg, .. } => match op {

@@ -25,7 +25,7 @@
 from binlex_bindings.binlex.disassemblers.cil import Disassembler as _DisassemblerBinding
 
 from binlex import Architecture, Configuration
-from binlex.controlflow import Graph
+from binlex.controlflow import Block, Function, Graph, Instruction
 from binlex.core.architecture import _coerce_architecture
 from binlex.formats import Image
 
@@ -50,25 +50,34 @@ class Disassembler:
             configuration,
         )
 
-    def disassemble_instruction(self, address: int, graph: Graph) -> int:
+    def disassemble_instruction(self, address: int, graph: Graph) -> Instruction:
         """Disassemble a single instruction into the provided graph."""
-        return self._inner.disassemble_instruction(
-            address,
-            graph._inner,
+        return Instruction._from_binding(
+            self._inner.disassemble_instruction(
+                address,
+                graph._inner,
+            ),
+            graph._config,
         )
 
-    def disassemble_function(self, address: int, graph: Graph) -> int:
+    def disassemble_function(self, address: int, graph: Graph) -> Function:
         """Disassemble the function that starts at `address` into the graph."""
-        return self._inner.disassemble_function(
-            address,
-            graph._inner,
+        return Function._from_binding(
+            self._inner.disassemble_function(
+                address,
+                graph._inner,
+            ),
+            graph._config,
         )
 
-    def disassemble_block(self, address: int, graph: Graph) -> int:
+    def disassemble_block(self, address: int, graph: Graph) -> Block:
         """Disassemble the basic block that starts at `address`."""
-        return self._inner.disassemble_block(
-            address,
-            graph._inner,
+        return Block._from_binding(
+            self._inner.disassemble_block(
+                address,
+                graph._inner,
+            ),
+            graph._config,
         )
 
     def disassemble(self, addresses: set[int], graph: Graph) -> None:

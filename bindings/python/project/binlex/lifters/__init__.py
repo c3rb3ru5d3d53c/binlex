@@ -7,9 +7,10 @@ from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from binlex import Architecture, Configuration
+    from binlex import Configuration
     from binlex.controlflow import Block, Function, Instruction
-    from binlex.semantics import Semantic
+    from binlex.semantics import Semantic, SemanticAbi, SemanticCpu
+    from .llvm import LiftedFunction
 
 _LAZY_SUBMODULES = {"llvm", "vex"}
 
@@ -35,12 +36,13 @@ class Lifter:
 
     def __init__(
         self,
-        architecture: Architecture,
+        cpu: SemanticCpu,
         configuration: Configuration,
         backend: LifterBackend = LifterBackend.DEFAULT,
+        triple: str | None = None,
         _inner: Any = None,
     ) -> None:
-        self._architecture = architecture
+        self._cpu = cpu
         self._configuration = configuration
         self._backend = _resolve_backend(backend)
         self._resolved_backend = (
@@ -53,11 +55,11 @@ class Lifter:
         if self._resolved_backend == LifterBackend.LLVM:
             from .llvm import Lifter as _LlvmLifter
 
-            self._inner = _LlvmLifter(architecture, configuration)
+            self._inner = _LlvmLifter(cpu, configuration, triple=triple)
         elif self._resolved_backend == LifterBackend.VEX:
             from .vex import Lifter as _VexLifter
 
-            self._inner = _VexLifter(configuration)
+            self._inner = _VexLifter(configuration, triple=triple)
         else:
             raise ValueError(f"unsupported lifter backend: {self._resolved_backend!r}")
 
@@ -66,8 +68,8 @@ class Lifter:
         return self._resolved_backend
 
     @property
-    def architecture(self) -> Architecture:
-        return self._architecture
+    def cpu(self) -> SemanticCpu:
+        return self._cpu
 
     @property
     def configuration(self) -> Configuration:
@@ -78,22 +80,64 @@ class Lifter:
             return self
         return None
 
-    def lift_block(self, block: Block) -> Lifter | None:
-        if self._inner.lift_block(block):
+    def lift_block(self, block: Block, abi: SemanticAbi | None = None) -> Lifter | None:
+        if self._inner.lift_block(block, abi):
             return self
         return None
 
-    def lift_function(self, function: Function) -> Lifter | None:
-        if self._inner.lift_function(function):
+    def lift_function(self, function: Function, abi: SemanticAbi | None = None) -> Lifter | None:
+        if self._inner.lift_function(function, abi):
             return self
         return None
 
-    def lift_semantics(self, semantics: list[Semantic]) -> Lifter | None:
-        self._require_backend(LifterBackend.LLVM, "lift_semantics")
-        return self._inner.lift_semantics(semantics)
+    def lift_block_semantics(
+        self,
+        semantics: list[Semantic],
+        abi: SemanticAbi | None = None,
+    ) -> Lifter | None:
+        self._require_backend(LifterBackend.LLVM, "lift_block_semantics")
+        return self._inner.lift_block_semantics(semantics, abi)
 
-    def text(self) -> str:
-        return self._inner.text()
+    def lift_function_semantics(
+        self,
+        semantics: list[Semantic],
+        abi: SemanticAbi | None = None,
+        name: str | None = None,
+    ) -> Lifter | None:
+        self._require_backend(LifterBackend.LLVM, "lift_function_semantics")
+        return self._inner.lift_function_semantics(semantics, abi, name)
+
+    def create_function(
+        self,
+        name: str,
+        abi: SemanticAbi | None = None,
+    ) -> LiftedFunction:
+        self._require_backend(LifterBackend.LLVM, "create_function")
+        return self._inner.create_function(name, abi)
+
+    def functions(self) -> list[LiftedFunction]:
+        self._require_backend(LifterBackend.LLVM, "functions")
+        return self._inner.functions()
+
+    def clear(self) -> Lifter | None:
+        if self._inner.clear():
+            return self
+        return None
+
+    def ir(self) -> str:
+        return self._inner.ir()
+
+    def set_ir(self, ir: str) -> Lifter | None:
+        self._require_backend(LifterBackend.LLVM, "set_ir")
+        if self._inner.set_ir(ir) is not None:
+            return self
+        return None
+
+    def set_bitcode(self, bitcode: bytes) -> Lifter | None:
+        self._require_backend(LifterBackend.LLVM, "set_bitcode")
+        if self._inner.set_bitcode(bitcode) is not None:
+            return self
+        return None
 
     def print(self) -> None:
         return self._inner.print()
@@ -110,102 +154,50 @@ class Lifter:
         self._require_backend(LifterBackend.LLVM, "verify")
         return self._inner.verify()
 
-    def optimizers(self) -> Optimizers:
-        self._require_backend(LifterBackend.LLVM, "optimizers")
-        return Optimizers(self)
+    def optimize_mem2reg(self) -> Lifter | None:
+        self._require_backend(LifterBackend.LLVM, "optimize_mem2reg")
+        if self._inner.optimize_mem2reg() is not None:
+            return self
+        return None
 
-    def mem2reg(self) -> Lifter:
-        return self._apply_llvm_pass("mem2reg")
+    def optimize_instcombine(self) -> Lifter | None:
+        self._require_backend(LifterBackend.LLVM, "optimize_instcombine")
+        if self._inner.optimize_instcombine() is not None:
+            return self
+        return None
 
-    def instcombine(self) -> Lifter:
-        return self._apply_llvm_pass("instcombine")
+    def optimize_cfg(self) -> Lifter | None:
+        self._require_backend(LifterBackend.LLVM, "optimize_cfg")
+        if self._inner.optimize_cfg() is not None:
+            return self
+        return None
 
-    def cfg(self) -> Lifter:
-        return self._apply_llvm_pass("cfg")
+    def optimize_gvn(self) -> Lifter | None:
+        self._require_backend(LifterBackend.LLVM, "optimize_gvn")
+        if self._inner.optimize_gvn() is not None:
+            return self
+        return None
 
-    def gvn(self) -> Lifter:
-        return self._apply_llvm_pass("gvn")
+    def optimize_sroa(self) -> Lifter | None:
+        self._require_backend(LifterBackend.LLVM, "optimize_sroa")
+        if self._inner.optimize_sroa() is not None:
+            return self
+        return None
 
-    def sroa(self) -> Lifter:
-        return self._apply_llvm_pass("sroa")
-
-    def dce(self) -> Lifter:
-        return self._apply_llvm_pass("dce")
+    def optimize_dce(self) -> Lifter | None:
+        self._require_backend(LifterBackend.LLVM, "optimize_dce")
+        if self._inner.optimize_dce() is not None:
+            return self
+        return None
 
     def __str__(self):
-        return self.text()
-
-    def _apply_llvm_pass(self, name: str) -> Lifter:
-        self._require_backend(LifterBackend.LLVM, name)
-        inner = getattr(self._inner._inner, name)()
-        if inner is None:
-            raise RuntimeError(f"llvm pass {name} failed")
-        from .llvm import Lifter as _LlvmLifter
-
-        return self.__class__(
-            self._architecture,
-            self._configuration,
-            backend=LifterBackend.LLVM,
-            _inner=_LlvmLifter(self._architecture, self._configuration, _inner=inner),
-        )
+        return self.ir()
 
     def _require_backend(self, backend: LifterBackend, capability: str) -> None:
         if self._resolved_backend != backend:
             raise UnsupportedCapabilityError(
                 f"lifter backend {self._resolved_backend.value} does not support capability {capability}"
             )
-
-
-class Optimizers:
-    """Chain optimizer passes over a unified lifter artifact."""
-
-    def __init__(self, lifter: Lifter) -> None:
-        self._lifter = lifter
-
-    def optimizers(self) -> Optimizers:
-        return self
-
-    def mem2reg(self) -> Optimizers:
-        self._lifter = self._lifter.mem2reg()
-        return self
-
-    def instcombine(self) -> Optimizers:
-        self._lifter = self._lifter.instcombine()
-        return self
-
-    def cfg(self) -> Optimizers:
-        self._lifter = self._lifter.cfg()
-        return self
-
-    def gvn(self) -> Optimizers:
-        self._lifter = self._lifter.gvn()
-        return self
-
-    def sroa(self) -> Optimizers:
-        self._lifter = self._lifter.sroa()
-        return self
-
-    def dce(self) -> Optimizers:
-        self._lifter = self._lifter.dce()
-        return self
-
-    def text(self) -> str:
-        return self._lifter.text()
-
-    def print(self) -> None:
-        return self._lifter.print()
-
-    def bitcode(self) -> bytes:
-        return self._lifter.bitcode()
-
-    def object(self) -> bytes:
-        return self._lifter.object()
-
-    def verify(self) -> Any:
-        return self._lifter.verify()
-
-    def __str__(self):
-        return self.text()
 
 
 def __getattr__(name):
@@ -220,7 +212,6 @@ def __getattr__(name):
 __all__ = [
     "Lifter",
     "LifterBackend",
-    "Optimizers",
     "UnsupportedCapabilityError",
     "llvm",
     "vex",

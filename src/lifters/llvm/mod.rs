@@ -1,4 +1,3 @@
-pub mod abi;
 pub mod lifter;
 pub mod optimizers;
 pub mod prepare;
@@ -8,7 +7,6 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(not(target_os = "windows"))]
 use super::vex::VexJson;
-pub use crate::Abi;
 pub use lifter::Lifter;
 pub use optimizers::Optimizers;
 

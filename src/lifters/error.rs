@@ -4,11 +4,15 @@ use std::fmt::{Display, Formatter};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LifterCapability {
-    LiftSemantics,
+    LiftBlockSemantics,
+    LiftFunctionSemantics,
+    CreateFunction,
+    Functions,
+    SetIr,
+    SetBitcode,
     Bitcode,
     Object,
     Verify,
-    Optimizers,
     Mem2Reg,
     InstCombine,
     Cfg,
@@ -20,11 +24,15 @@ pub enum LifterCapability {
 impl Display for LifterCapability {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let name = match self {
-            Self::LiftSemantics => "lift_semantics",
+            Self::LiftBlockSemantics => "lift_block_semantics",
+            Self::LiftFunctionSemantics => "lift_function_semantics",
+            Self::CreateFunction => "create_function",
+            Self::Functions => "functions",
+            Self::SetIr => "set_ir",
+            Self::SetBitcode => "set_bitcode",
             Self::Bitcode => "bitcode",
             Self::Object => "object",
             Self::Verify => "verify",
-            Self::Optimizers => "optimizers",
             Self::Mem2Reg => "mem2reg",
             Self::InstCombine => "instcombine",
             Self::Cfg => "cfg",
