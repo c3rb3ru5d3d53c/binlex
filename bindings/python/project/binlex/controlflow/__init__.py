@@ -95,6 +95,10 @@ class Instruction:
         """Return whether this instruction is conditional."""
         return self._inner.is_conditional()
 
+    def is_opaque_predicate(self):
+        """Return whether this instruction was resolved as a single-block opaque predicate."""
+        return self._inner.is_opaque_predicate()
+
     def callees(self):
         """Return the directly called functions."""
         return [Function._from_binding(item, self._config) for item in self._inner.callees()]
@@ -254,6 +258,10 @@ class InstructionJsonDeserializer:
     def is_conditional(self):
         """Return whether this instruction is conditional."""
         return self._inner.is_conditional()
+
+    def is_opaque_predicate(self):
+        """Return whether this instruction was resolved as a single-block opaque predicate."""
+        return self._inner.is_opaque_predicate()
 
     def callees(self):
         """Return the directly called functions."""
@@ -772,6 +780,10 @@ class BlockJsonDeserializer:
     def conditional(self):
         """Return whether the block ends with a conditional transfer of control."""
         return self._inner.conditional()
+
+    def opaque_predicate(self):
+        """Return whether the block terminates in a resolved opaque predicate."""
+        return self._inner.opaque_predicate()
 
     def entropy(self):
         """Return the block entropy, if available."""

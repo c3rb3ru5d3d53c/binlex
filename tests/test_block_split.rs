@@ -51,7 +51,8 @@ fn test_block_split_pending() {
     let bytes = vec![0x74, 0x02, 0x90, 0x90, 0xc3];
     let mut ranges = BTreeMap::new();
     ranges.insert(0u64, bytes.len() as u64);
-    let config = Configuration::new();
+    let mut config = Configuration::new();
+    config.semantics.enabled = false;
     let disasm = Disassembler::new(Architecture::I386, &bytes, ranges.clone(), config.clone())
         .expect("disasm");
     let mut graph = Graph::new(Architecture::I386, config.clone());
@@ -75,7 +76,8 @@ fn test_full_function_disassembly() {
         .collect();
     let mut ranges = BTreeMap::new();
     ranges.insert(0u64, bytes.len() as u64);
-    let config = Configuration::new();
+    let mut config = Configuration::new();
+    config.semantics.enabled = false;
     let disasm = Disassembler::new(Architecture::I386, &bytes, ranges.clone(), config.clone())
         .expect("disasm");
     let mut graph = Graph::new(Architecture::I386, config.clone());

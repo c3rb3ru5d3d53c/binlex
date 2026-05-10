@@ -168,6 +168,12 @@ impl BlockJsonDeserializer {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return whether this block terminates in a resolved opaque predicate.
+    pub fn opaque_predicate(&self) -> bool {
+        self.inner.lock().unwrap().opaque_predicate()
+    }
+
+    #[pyo3(text_signature = "($self)")]
     /// Return the entropy of the block bytes, if available.
     pub fn entropy(&self) -> Option<f64> {
         self.inner.lock().unwrap().entropy()
@@ -366,6 +372,12 @@ impl Block {
     /// Retrieves the set of explicit branch target addresses for this block.
     pub fn branches(&self, py: Python) -> PyResult<BTreeSet<u64>> {
         self.with_inner_block(py, |block| Ok(block.branches()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return whether this block terminates in a resolved opaque predicate.
+    pub fn opaque_predicate(&self, py: Python) -> PyResult<bool> {
+        self.with_inner_block(py, |block| Ok(block.opaque_predicate()))
     }
 
     #[pyo3(text_signature = "($self)")]

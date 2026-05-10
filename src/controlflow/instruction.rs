@@ -229,6 +229,8 @@ pub struct InstructionRecord {
     pub is_jump: bool,
     /// Indicates whether this instruction is a conditional instruction.
     pub is_conditional: bool,
+    /// Indicates whether this instruction was resolved as a single-block opaque predicate.
+    pub is_opaque_predicate: bool,
     /// Indicates whether this instruction is a trap instruction.
     pub is_trap: bool,
     /// Indicates whether this instruction uses an indirect control-flow target.
@@ -278,7 +280,11 @@ pub struct InstructionJson {
     #[serde(default)]
     pub has_indirect_target: bool,
     /// Indicates whether this instruction is conditional.
+    #[serde(default)]
     pub is_conditional: bool,
+    /// Indicates whether this instruction was resolved as a single-block opaque predicate.
+    #[serde(default)]
+    pub is_opaque_predicate: bool,
     /// The number of edges (connections) for this instruction.
     pub edges: usize,
     /// Stable decoded mnemonic for scripting and inspection.
@@ -349,6 +355,7 @@ impl InstructionRecord {
             is_return: false,
             functions: BTreeSet::<u64>::new(),
             is_conditional: false,
+            is_opaque_predicate: false,
             is_jump: false,
             has_indirect_target: false,
             to: BTreeSet::<u64>::new(),
@@ -424,6 +431,9 @@ impl InstructionRecord {
     /// Returns `Some(u64)` containing the address of the next instruction, or `None`
     /// if the current instruction is a return or trap instruction.
     pub fn fallthrough(&self) -> Option<u64> {
+        if self.is_opaque_predicate && self.is_jump && !self.is_conditional && self.to.is_empty() {
+            return Some(self.address + self.size() as u64);
+        }
         if self.is_jump && !self.is_conditional {
             return None;
         }
@@ -486,6 +496,7 @@ impl InstructionRecord {
             is_jump: self.is_jump,
             has_indirect_target: self.has_indirect_target,
             is_conditional: self.is_conditional,
+            is_opaque_predicate: self.is_opaque_predicate,
             is_function_start: self.is_function_start,
             is_prologue: self.is_prologue,
             edges: self.edges,
@@ -556,6 +567,11 @@ impl InstructionRecord {
     /// Indicates whether this instruction is conditional.
     pub fn is_conditional(&self) -> bool {
         self.is_conditional
+    }
+
+    /// Indicates whether this instruction was resolved as an opaque predicate.
+    pub fn is_opaque_predicate(&self) -> bool {
+        self.is_opaque_predicate
     }
 
     /// Retrieves the direct outgoing call references from this instruction.

@@ -665,6 +665,7 @@ impl Graph {
         existing.is_call |= incoming.is_call;
         existing.is_jump |= incoming.is_jump;
         existing.is_conditional |= incoming.is_conditional;
+        existing.is_opaque_predicate |= incoming.is_opaque_predicate;
         existing.is_trap |= incoming.is_trap;
         existing.has_indirect_target |= incoming.has_indirect_target;
         existing.edges = existing.edges.max(incoming.edges);

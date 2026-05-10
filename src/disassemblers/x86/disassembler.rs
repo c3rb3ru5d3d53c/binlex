@@ -24,6 +24,7 @@ use crate::Architecture;
 use crate::Configuration;
 use crate::controlflow::{Block, Function, Graph, Instruction};
 use crate::controlflow::InstructionRecord;
+use crate::disassemblers::opaque::{OpaquePredicateResolution, resolve_single_block_opaque_predicate};
 use crate::disassemblers::x86::classify as x86_classify;
 use crate::disassemblers::x86::pattern::{
     X86PatternOperand, X86PatternOperandKind, displacement_size_bits, instruction_chromosome_mask,
@@ -223,12 +224,38 @@ impl<'a> Disassembler<'a> {
             cfg.extend_instruction_edges(terminator, BTreeSet::from([successor]));
         }
 
+        self.resolve_block_opaque_predicate(address, terminator, cfg);
+
         if has_prologue {
             cfg.functions.enqueue(address);
         }
         cfg.blocks.insert_valid(address);
 
         Ok(terminator)
+    }
+
+    fn resolve_block_opaque_predicate(&self, block_start: u64, terminator: u64, cfg: &mut Graph) {
+        let Some(mut instruction) = cfg.get_instruction_record(terminator) else {
+            return;
+        };
+        let Some(resolution) =
+            resolve_single_block_opaque_predicate(self.machine, block_start, &instruction, cfg)
+        else {
+            return;
+        };
+
+        instruction.is_conditional = false;
+        instruction.is_opaque_predicate = true;
+        match resolution {
+            OpaquePredicateResolution::Taken { target } => {
+                instruction.to = BTreeSet::from([target]);
+            }
+            OpaquePredicateResolution::Fallthrough { .. } => {
+                instruction.to.clear();
+            }
+        }
+        instruction.edges = instruction.successors().len();
+        cfg.update_instruction(instruction);
     }
 
     pub fn disassemble_function_address(

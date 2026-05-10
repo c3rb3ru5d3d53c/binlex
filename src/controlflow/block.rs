@@ -69,6 +69,9 @@ pub struct BlockJson {
     pub edges: usize,
     /// Indicates whether this block contains a conditional instruction.
     pub conditional: bool,
+    /// Indicates whether this block terminates in a resolved opaque predicate.
+    #[serde(default)]
+    pub opaque_predicate: bool,
     /// The chromosome of the block in JSON format.
     pub chromosome: ChromosomeJson,
     /// The size of the block in bytes.
@@ -242,6 +245,11 @@ impl BlockJsonDeserializer {
     #[allow(dead_code)]
     pub fn conditional(&self) -> bool {
         self.json.conditional
+    }
+
+    #[allow(dead_code)]
+    pub fn opaque_predicate(&self) -> bool {
+        self.json.opaque_predicate
     }
 
     #[allow(dead_code)]
@@ -420,6 +428,7 @@ impl<'block> Block<'block> {
             edges: self.edges(),
             chromosome: chromosome.process(),
             conditional: self.terminator.is_conditional,
+            opaque_predicate: self.terminator.is_opaque_predicate,
             size,
             bytes: hex::encode(&bytes),
             number_of_instructions: self.number_of_instructions(),
@@ -670,6 +679,13 @@ impl<'block> Block<'block> {
         if self.terminator.is_trap {
             return None;
         }
+        if self.terminator.is_opaque_predicate
+            && self.terminator.is_jump
+            && !self.terminator.is_conditional
+            && self.terminator.to.is_empty()
+        {
+            return self.terminator.fallthrough();
+        }
         if self.terminator.is_jump && !self.terminator.is_conditional {
             return None;
         }
@@ -684,8 +700,17 @@ impl<'block> Block<'block> {
     /// # Returns
     ///
     /// Returns a `BTreeSet<u64>` containing the target addresses.
+    pub fn conditional(&self) -> bool {
+        self.terminator.is_conditional
+    }
+
     pub fn branches(&self) -> BTreeSet<u64> {
         self.terminator.branches()
+    }
+
+    /// Indicates whether this block terminates in a resolved opaque predicate.
+    pub fn opaque_predicate(&self) -> bool {
+        self.terminator.is_opaque_predicate
     }
 
     fn successor_addresses(&self) -> BTreeSet<u64> {

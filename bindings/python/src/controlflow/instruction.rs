@@ -426,6 +426,10 @@ impl InstructionJsonDeserializer {
         self.inner.lock().unwrap().is_conditional
     }
 
+    pub fn is_opaque_predicate(&self) -> bool {
+        self.inner.lock().unwrap().is_opaque_predicate
+    }
+
     pub fn callee_references(&self) -> Vec<Reference> {
         self.inner
             .lock()
@@ -648,6 +652,12 @@ impl Instruction {
     /// Return whether this instruction is conditional.
     pub fn is_conditional(&self, py: Python) -> PyResult<bool> {
         self.with_inner_instruction(py, |instruction| Ok(instruction.is_conditional()))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return whether this instruction was resolved as a single-block opaque predicate.
+    pub fn is_opaque_predicate(&self, py: Python) -> PyResult<bool> {
+        self.with_inner_instruction(py, |instruction| Ok(instruction.is_opaque_predicate()))
     }
 
     #[pyo3(text_signature = "($self)")]
