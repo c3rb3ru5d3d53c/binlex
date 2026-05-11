@@ -58,13 +58,13 @@ class Lifter:
         return None
 
     def lift_block_semantics(self, semantics, abi=None):
-        semantics = [getattr(semantics_item, "_inner", semantics_item) for semantics_item in semantics]
+        semantics = getattr(semantics, "_inner", semantics)
         if not self._inner.lift_block_semantics(semantics, abi):
             return None
         return self
 
     def lift_function_semantics(self, semantics, abi=None, name=None):
-        semantics = [getattr(semantics_item, "_inner", semantics_item) for semantics_item in semantics]
+        semantics = getattr(semantics, "_inner", semantics)
         if not self._inner.lift_function_semantics(semantics, abi, name):
             return None
         return self
@@ -160,13 +160,13 @@ class LiftedFunction:
         return None
 
     def lift_block_semantics(self, semantics, name=None):
-        semantics = [getattr(semantics_item, "_inner", semantics_item) for semantics_item in semantics]
+        semantics = getattr(semantics, "_inner", semantics)
         if self._inner.lift_block_semantics(semantics, name):
             return self
         return None
 
     def lift_function_semantics(self, semantics):
-        semantics = [getattr(semantics_item, "_inner", semantics_item) for semantics_item in semantics]
+        semantics = getattr(semantics, "_inner", semantics)
         if self._inner.lift_function_semantics(semantics):
             return self
         return None
@@ -225,11 +225,16 @@ class LiftedFunction:
         data = self._inner.object()
         return None if data is None else bytes(data)
 
-    def jit(self, restype=None, argtypes=None):
-        handle = self._inner.jit()
+    def jit(self, return_type=None, parameter_types=None, links=None):
+        resolved_links = _resolve_jit_links(links or {})
+        handle = self._inner.jit(resolved_links)
         if handle is None:
             return None
-        return NativeFunction(handle, restype=restype, argtypes=argtypes)
+        return NativeFunction(
+            handle,
+            return_type=return_type,
+            parameter_types=parameter_types,
+        )
 
 
 class LiftedBlock:
@@ -248,13 +253,13 @@ class LiftedBlock:
 
 
 class NativeFunction:
-    def __init__(self, handle, restype=None, argtypes=None):
+    def __init__(self, handle, return_type=None, parameter_types=None):
         if not isinstance(handle, _JittedFunctionBinding):
             raise TypeError("handle must be a binlex llvm jitted function")
         self._handle = handle
-        self._restype = ctypes.c_int if restype is None else restype
-        self._argtypes = list(argtypes or [])
-        self._functype = ctypes.CFUNCTYPE(self._restype, *self._argtypes)
+        self._return_type = ctypes.c_int if return_type is None else return_type
+        self._parameter_types = list(parameter_types or [])
+        self._functype = ctypes.CFUNCTYPE(self._return_type, *self._parameter_types)
         self._callable = self._functype(handle.address())
 
     def name(self):
@@ -265,3 +270,40 @@ class NativeFunction:
 
     def __call__(self, *args):
         return self._callable(*args)
+
+
+def _resolve_jit_links(links):
+    resolved = {}
+    for name, value in links.items():
+        resolved[str(name)] = _resolve_jit_link_target(str(name), value)
+    return resolved
+
+
+def _resolve_jit_link_target(name, value):
+    if isinstance(value, NativeFunction):
+        return int(value.address())
+    if isinstance(value, _JittedFunctionBinding):
+        return int(value.address())
+    if isinstance(value, int):
+        return int(value)
+
+    target = value
+    if _looks_like_ctypes_library(value):
+        try:
+            target = getattr(value, name)
+        except AttributeError as exc:
+            raise ValueError(f"jit link target {name!r} not found on module {value!r}") from exc
+
+    try:
+        pointer = ctypes.cast(target, ctypes.c_void_p).value
+    except Exception as exc:
+        raise TypeError(
+            f"unsupported jit link target for {name!r}: expected ctypes module, ctypes function, raw address, or jitted function"
+        ) from exc
+    if pointer is None:
+        raise ValueError(f"jit link target for {name!r} does not have an address")
+    return int(pointer)
+
+
+def _looks_like_ctypes_library(value):
+    return hasattr(value, "_handle") and not hasattr(value, "address")

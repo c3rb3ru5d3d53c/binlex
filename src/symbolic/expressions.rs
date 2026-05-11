@@ -34,6 +34,15 @@ impl SymbolicExecutor {
                 value: state.backend().const_bv(0, *bits)?,
                 deps: BTreeSet::new(),
             }),
+            SemanticExpression::DataAddress { name, bits } => {
+                let address = state.semantic_data_address(name).ok_or(
+                    Error::UnsupportedExpression("unknown semantic data_address symbol"),
+                )?;
+                Ok(EvaluatedValue {
+                    value: state.backend().const_bv(address as u128, *bits)?,
+                    deps: BTreeSet::new(),
+                })
+            }
             SemanticExpression::AddressOf { bits, .. } => Ok(EvaluatedValue {
                 value: state.backend().const_bv(0, *bits)?,
                 deps: BTreeSet::new(),
@@ -576,6 +585,7 @@ impl SymbolicExecutor {
         match expression {
             SemanticExpression::Const { bits, .. } => matches!(*bits, 32 | 64),
             SemanticExpression::Function { .. } => false,
+            SemanticExpression::DataAddress { .. } => false,
             SemanticExpression::AddressOf { .. } => false,
             SemanticExpression::Read(location) => self.location_is_probably_float(location),
             SemanticExpression::Load { bits, .. } => matches!(*bits, 32 | 64),

@@ -35,11 +35,11 @@ pub use cpus::{
     SemanticMemoryIndexed, SemanticMemoryStack,
 };
 pub use ir::{
-    Semantic, SemanticAddressSpace, SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect,
-    SemanticEffectKind, SemanticEncoding, SemanticExpression, SemanticExpressionKind,
-    SemanticFenceKind, SemanticJson, SemanticLocation, SemanticLocationKind, SemanticOperation,
-    SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
-    SemanticOperationUnary, SemanticStatus, SemanticTemporary, SemanticTerminator,
-    SemanticTerminatorKind, SemanticTrapKind, normalize_instruction_semantics,
-    validate_instruction_semantics,
+    Semantic, SemanticAddressSpace, SemanticData, SemanticDiagnostic, SemanticDiagnosticKind,
+    SemanticEffect, SemanticEffectKind, SemanticEncoding, SemanticExpression,
+    SemanticExpressionKind, SemanticFenceKind, SemanticJson, SemanticLocation,
+    SemanticLocationKind, SemanticOperation, SemanticOperationBinary, SemanticOperationCast,
+    SemanticOperationCompare, SemanticOperationUnary, SemanticStatus, SemanticTemporary,
+    SemanticTerminator, SemanticTerminatorKind, SemanticTrapKind, Semantics,
+    normalize_instruction_semantics, validate_instruction_semantics,
 };

@@ -790,6 +790,9 @@ fn eval_expression_wide(
         SemanticExpression::Function { .. } => {
             panic!("unsupported wide semantic function expression in x86 conformance")
         }
+        SemanticExpression::DataAddress { .. } => {
+            panic!("unsupported wide semantic data_address expression in x86 conformance")
+        }
         SemanticExpression::AddressOf { .. } => {
             panic!("unsupported wide address_of expression in x86 conformance")
         }
@@ -972,6 +975,9 @@ fn eval_expression(
         SemanticExpression::Const { value, bits } => mask_to_bits(*value, *bits),
         SemanticExpression::Function { .. } => {
             panic!("unsupported semantic function expression in x86 conformance")
+        }
+        SemanticExpression::DataAddress { .. } => {
+            panic!("unsupported semantic data_address expression in x86 conformance")
         }
         SemanticExpression::AddressOf { .. } => {
             panic!("unsupported address_of expression in x86 conformance")
@@ -1239,6 +1245,7 @@ fn arg_bits(expression: &SemanticExpression) -> u16 {
     match expression {
         SemanticExpression::Const { bits, .. }
         | SemanticExpression::Function { bits, .. }
+        | SemanticExpression::DataAddress { bits, .. }
         | SemanticExpression::AddressOf { bits, .. }
         | SemanticExpression::Load { bits, .. }
         | SemanticExpression::Unary { bits, .. }

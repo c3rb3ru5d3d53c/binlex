@@ -7,8 +7,8 @@ use crate::lifters::llvm::optimizers::Optimizers;
 use crate::lifters::llvm::prepare::prepare_instruction_semantics;
 use crate::lifters::llvm::verify::verify_module;
 use crate::semantics::{
-    Semantic, SemanticAbi, SemanticCpu, SemanticCpuKind, SemanticEffect, SemanticExpression, SemanticLocation,
-    SemanticTerminator,
+    Semantic, SemanticAbi, SemanticCpu, SemanticCpuKind, SemanticData, SemanticEffect,
+    SemanticExpression, SemanticLocation, SemanticTerminator, Semantics,
 };
 use inkwell::execution_engine::ExecutionEngine;
 use inkwell::OptimizationLevel;
@@ -49,6 +49,7 @@ pub struct Lifter {
     module: Module<'static>,
     emitted: BTreeSet<String>,
     function_abis: HashMap<String, SemanticAbi>,
+    data_symbols: HashMap<String, Vec<u8>>,
     cpu: SemanticCpu,
     architecture: Architecture,
     triple: String,
@@ -140,6 +141,7 @@ impl Lifter {
             module,
             emitted: BTreeSet::new(),
             function_abis: HashMap::new(),
+            data_symbols: HashMap::new(),
             cpu,
             architecture,
             triple,
@@ -245,21 +247,23 @@ impl Lifter {
 
     pub fn lift_block_semantics(
         &mut self,
-        semantics: &[Semantic],
+        semantics: &Semantics,
         abi: Option<&SemanticAbi>,
     ) -> Result<(), Error> {
         self.bind_architecture()?;
+        self.declare_semantics_data(&semantics.data)?;
         let abi = self
             .resolve_override_abi(abi)?
-            .or_else(|| self.resolve_semantics_abi(semantics));
+            .or_else(|| self.resolve_semantics_abi(&semantics.semantics));
         let name = self.next_emitted_name("semantic_block");
         let function_arguments =
-            self.active_function_arguments_for_semantics(semantics, abi.as_ref());
+            self.active_function_arguments_for_semantics(&semantics.semantics, abi.as_ref());
         let function = self.add_function_for_lift(&name, abi.clone(), &function_arguments);
-        let stack_layouts = self.collect_stack_layouts_for_semantics(semantics, abi.as_ref());
+        let stack_layouts =
+            self.collect_stack_layouts_for_semantics(&semantics.semantics, abi.as_ref());
         let mut lowering =
             self.lowering_context(function, abi, function_arguments, stack_layouts)?;
-        for semantics in semantics {
+        for semantics in &semantics.semantics {
             lowering.lower_instruction_semantics(semantics)?;
         }
         lowering.finish()?;
@@ -269,7 +273,7 @@ impl Lifter {
 
     pub fn lift_function_semantics(
         &mut self,
-        semantics: &[Semantic],
+        semantics: &Semantics,
         abi: Option<&SemanticAbi>,
     ) -> Result<(), Error> {
         let name = self.next_emitted_name("semantic_function");
@@ -278,24 +282,26 @@ impl Lifter {
 
     pub fn lift_function_semantics_named(
         &mut self,
-        semantics: &[Semantic],
+        semantics: &Semantics,
         abi: Option<&SemanticAbi>,
         name: &str,
     ) -> Result<(), Error> {
         self.bind_architecture()?;
+        self.declare_semantics_data(&semantics.data)?;
         let abi = self
             .resolve_override_abi(abi)?
-            .or_else(|| self.resolve_semantics_abi(semantics));
+            .or_else(|| self.resolve_semantics_abi(&semantics.semantics));
         if !self.emitted.insert(name.to_string()) {
             return Ok(());
         }
         let function_arguments =
-            self.active_function_arguments_for_semantics(semantics, abi.as_ref());
+            self.active_function_arguments_for_semantics(&semantics.semantics, abi.as_ref());
         let function = self.add_function_for_lift(name, abi.clone(), &function_arguments);
-        let stack_layouts = self.collect_stack_layouts_for_semantics(semantics, abi.as_ref());
+        let stack_layouts =
+            self.collect_stack_layouts_for_semantics(&semantics.semantics, abi.as_ref());
         let mut lowering =
             self.lowering_context(function, abi, function_arguments, stack_layouts)?;
-        for semantics in semantics {
+        for semantics in &semantics.semantics {
             lowering.lower_instruction_semantics(semantics)?;
         }
         lowering.finish()?;
@@ -307,6 +313,7 @@ impl Lifter {
         self.module = self.context.create_module(&self.config.lifters.llvm.module_name);
         self.emitted.clear();
         self.function_abis.clear();
+        self.data_symbols.clear();
         self.bind_architecture()
     }
 
@@ -315,6 +322,7 @@ impl Lifter {
     }
 
     pub fn set_ir(&mut self, ir: &str) -> Result<(), Error> {
+        let ir = format!("{ir}\0");
         let buffer = MemoryBuffer::create_from_memory_range_copy(ir.as_bytes(), "binlex.ll");
         let module = self
             .context
@@ -341,6 +349,7 @@ impl Lifter {
         ir: &str,
         required_function: Option<&str>,
     ) -> Result<(), Error> {
+        let ir = format!("{ir}\0");
         let buffer = MemoryBuffer::create_from_memory_range_copy(ir.as_bytes(), "binlex.ll");
         let module = self
             .context
@@ -394,7 +403,11 @@ impl Lifter {
         Ok(buffer.as_slice().to_vec())
     }
 
-    pub fn jit_function(self, function_name: &str) -> Result<JittedFunction, Error> {
+    pub fn jit_function(
+        self,
+        function_name: &str,
+        links: &BTreeMap<String, usize>,
+    ) -> Result<JittedFunction, Error> {
         self.ensure_native_jit_supported()?;
         let function = self
             .module
@@ -411,6 +424,13 @@ impl Lifter {
             .module
             .create_jit_execution_engine(OptimizationLevel::Default)
             .map_err(|err| Error::other(err.to_string()))?;
+        for (symbol, address) in links {
+            let function = self
+                .module
+                .get_function(symbol)
+                .ok_or_else(|| Error::other(format!("unknown jit link target symbol {symbol}")))?;
+            engine.add_global_mapping(&function, *address);
+        }
         let address = engine
             .get_function_address(function_name)
             .map_err(|err| Error::other(err.to_string()))?;
@@ -710,7 +730,7 @@ impl Lifter {
         }
     }
 
-    fn duplicate(&self) -> Result<Self, Error> {
+    pub(crate) fn duplicate(&self) -> Result<Self, Error> {
         let context: &'static Context = Box::leak(Box::new(Context::create()));
         let buffer = MemoryBuffer::create_from_memory_range_copy(&self.bitcode(), "binlex.bc");
         let module = Module::parse_bitcode_from_buffer(&buffer, context)
@@ -721,10 +741,44 @@ impl Lifter {
             module,
             emitted: self.emitted.clone(),
             function_abis: self.function_abis.clone(),
+            data_symbols: self.data_symbols.clone(),
             cpu: self.cpu.clone(),
             architecture: self.architecture,
             triple: self.triple.clone(),
         })
+    }
+
+    fn declare_semantics_data(&mut self, data: &[SemanticData]) -> Result<(), Error> {
+        for item in data {
+            if item.name.trim().is_empty() {
+                return Err(Error::other("semantic data item has empty name"));
+            }
+            if let Some(existing) = self.data_symbols.get(&item.name) {
+                if existing != &item.bytes {
+                    return Err(Error::other(format!(
+                        "semantic data symbol {} already exists with different contents",
+                        item.name
+                    )));
+                }
+                continue;
+            }
+            let global_name = sanitize_symbol(&format!("binlex_data_{}", item.name));
+            if self.module.get_global(&global_name).is_none() {
+                let bytes = self.context.i8_type().const_array(
+                    &item
+                        .bytes
+                        .iter()
+                        .map(|byte| self.context.i8_type().const_int(u64::from(*byte), false))
+                        .collect::<Vec<_>>(),
+                );
+                let global = self.module.add_global(bytes.get_type(), None, &global_name);
+                global.set_linkage(inkwell::module::Linkage::Private);
+                global.set_constant(true);
+                global.set_initializer(&bytes);
+            }
+            self.data_symbols.insert(item.name.clone(), item.bytes.clone());
+        }
+        Ok(())
     }
 
     pub fn duplicate_function_view(&self, function_name: &str) -> Result<Self, Error> {
@@ -1068,9 +1122,10 @@ mod jit_tests {
     use super::Lifter;
     use crate::semantics::{
         Semantic, SemanticAbi, SemanticCpu, SemanticEffect, SemanticExpression, SemanticLocation,
-        SemanticOperationBinary, SemanticStatus, SemanticTerminator,
+        SemanticOperationBinary, SemanticStatus, SemanticTerminator, Semantics,
     };
     use crate::Configuration;
+    use std::collections::BTreeMap;
 
     #[cfg(all(target_arch = "x86_64", not(target_os = "windows")))]
     #[test]
@@ -1079,7 +1134,8 @@ mod jit_tests {
         let abi = SemanticAbi::sysv(&cpu).expect("sysv abi");
         let mut lifter = Lifter::new(cpu, Configuration::default(), None).expect("lifter");
 
-        let semantics = [Semantic {
+        let semantics = Semantics {
+            semantics: vec![Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: None,
@@ -1109,7 +1165,9 @@ mod jit_tests {
             }],
             terminator: SemanticTerminator::Return { expression: None },
             diagnostics: Vec::new(),
-        }];
+        }],
+            data: Vec::new(),
+        };
 
         lifter
             .lift_function_semantics_named(&semantics, Some(&abi), "add_two")
@@ -1123,7 +1181,7 @@ mod jit_tests {
         let jitted = lifter
             .duplicate_function_view("add_two")
             .expect("function view")
-            .jit_function("add_two")
+            .jit_function("add_two", &BTreeMap::new())
             .expect("jit function");
 
         let function: extern "C" fn(u64, u64) -> u64 =
@@ -1461,6 +1519,7 @@ fn collect_expression_read_locations(
     reads: &mut std::collections::HashSet<SemanticLocation>,
 ) {
     match expression {
+        SemanticExpression::DataAddress { .. } => {}
         SemanticExpression::AddressOf { .. } => {}
         SemanticExpression::Read(location) => {
             reads.insert(location.as_ref().clone());
@@ -1523,6 +1582,7 @@ fn collect_expression_stack_layouts(
     layouts: &mut HashMap<String, u32>,
 ) {
     match expression {
+        SemanticExpression::DataAddress { .. } => {}
         SemanticExpression::AddressOf { location, .. } => {
             collect_stack_layout_for_location(location, layouts);
         }
@@ -2149,6 +2209,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     ) {
         match expression {
             SemanticExpression::Function { .. } => {}
+            SemanticExpression::DataAddress { .. } => {}
             SemanticExpression::AddressOf { .. } => {}
             SemanticExpression::Read(location) => match location.as_ref() {
                 SemanticLocation::Register { .. } => {

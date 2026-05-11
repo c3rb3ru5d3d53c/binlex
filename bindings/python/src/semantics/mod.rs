@@ -10,7 +10,8 @@ use binlex::semantics::{
     SemanticCpuRegister as InnerSemanticCpuRegister, SemanticDiagnostic as InnerSemanticDiagnostic,
     SemanticDiagnosticKind as InnerSemanticDiagnosticKind, SemanticEffect as InnerSemanticEffect,
     SemanticEffectKind as InnerSemanticEffectKind, SemanticEncoding as InnerSemanticEncoding,
-    SemanticExpression as InnerSemanticExpr, SemanticExpressionKind as InnerSemanticExprKind,
+    SemanticData as InnerSemanticData, SemanticExpression as InnerSemanticExpr,
+    SemanticExpressionKind as InnerSemanticExprKind,
     SemanticFenceKind as InnerFenceKind, SemanticLocation as InnerSemanticLocation,
     SemanticLocationKind as InnerSemanticLocationKind, SemanticMemory as InnerSemanticMemory,
     SemanticMemoryAddressed as InnerSemanticMemoryAddressed,
@@ -21,6 +22,7 @@ use binlex::semantics::{
     SemanticOperationUnary as InnerSemanticUnaryOp, SemanticStatus as InnerSemanticStatus,
     SemanticTemporary as InnerSemanticTemporary, SemanticTerminator as InnerSemanticTerminator,
     SemanticTerminatorKind as InnerSemanticTerminatorKind, SemanticTrapKind as InnerTrapKind,
+    Semantics as InnerSemantics,
 };
 use pyo3::class::basic::CompareOp;
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
@@ -126,6 +128,7 @@ simple_enum_binding!(
     {
         Const,
         Function,
+        DataAddress,
         AddressOf,
         Read,
         Load,
@@ -980,6 +983,7 @@ macro_rules! value_wrapper {
 }
 
 value_wrapper!(SemanticTemporary, InnerSemanticTemporary);
+value_wrapper!(SemanticData, InnerSemanticData);
 value_wrapper!(SemanticDiagnostic, InnerSemanticDiagnostic);
 value_wrapper!(SemanticEncoding, InnerSemanticEncoding);
 value_wrapper!(SemanticLocation, InnerSemanticLocation);
@@ -987,6 +991,7 @@ value_wrapper!(SemanticExpression, InnerSemanticExpr);
 value_wrapper!(SemanticEffect, InnerSemanticEffect);
 value_wrapper!(SemanticTerminator, InnerSemanticTerminator);
 value_wrapper!(Semantic, InnerSemantic);
+value_wrapper!(Semantics, InnerSemantics);
 
 #[pymethods]
 impl SemanticTemporary {
@@ -1329,6 +1334,10 @@ impl SemanticExpression {
     #[classmethod]
     pub fn function(_cls: &Bound<'_, PyType>, name: String, bits: u16) -> Self {
         Self::from_inner(InnerSemanticExpr::Function { name, bits })
+    }
+    #[classmethod]
+    pub fn data_address(_cls: &Bound<'_, PyType>, name: String, bits: u16) -> Self {
+        Self::from_inner(InnerSemanticExpr::DataAddress { name, bits })
     }
     #[classmethod]
     pub fn address_of(
@@ -2490,6 +2499,177 @@ impl Semantic {
     }
 }
 
+#[pymethods]
+impl SemanticData {
+    #[new]
+    pub fn new(name: String, bytes: Vec<u8>) -> Self {
+        Self::from_inner(InnerSemanticData { name, bytes })
+    }
+
+    #[classmethod]
+    pub fn from_dict(_cls: &Bound<'_, PyType>, py: Python<'_>, data: Py<PyAny>) -> PyResult<Self> {
+        let value = py_to_json_value(py, data)?;
+        let inner = serde_json::from_value(value)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        Ok(Self::from_inner(inner))
+    }
+
+    pub fn name(&self) -> String {
+        self.inner.lock().unwrap().name.clone()
+    }
+
+    pub fn bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.inner.lock().unwrap().bytes)
+    }
+
+    pub fn set_name(&mut self, name: String) {
+        self.inner.lock().unwrap().name = name;
+    }
+
+    pub fn set_bytes(&mut self, bytes: Vec<u8>) {
+        self.inner.lock().unwrap().bytes = bytes;
+    }
+
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(
+            py,
+            &serde_json::to_value(&*self.inner.lock().unwrap())
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
+        )
+    }
+
+    pub fn json(&self) -> PyResult<String> {
+        serde_json::to_string(&*self.inner.lock().unwrap())
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    pub fn print(&self) -> PyResult<()> {
+        println!("{}", self.json()?);
+        Ok(())
+    }
+
+    pub fn __hash__(&self) -> isize {
+        self.value_hash()
+    }
+
+    pub fn __richcmp__(&self, other: PyRef<'_, Self>, op: CompareOp) -> bool {
+        match op {
+            CompareOp::Eq => self.value_eq(&other),
+            CompareOp::Ne => !self.value_eq(&other),
+            _ => false,
+        }
+    }
+}
+
+#[pymethods]
+impl Semantics {
+    #[new]
+    #[pyo3(signature = (semantics=None, data=None))]
+    pub fn new(
+        py: Python<'_>,
+        semantics: Option<Vec<Py<Semantic>>>,
+        data: Option<Vec<Py<SemanticData>>>,
+    ) -> Self {
+        let semantics = semantics
+            .unwrap_or_default()
+            .into_iter()
+            .map(|item| item.borrow(py).inner.lock().unwrap().clone())
+            .collect();
+        let data = data
+            .unwrap_or_default()
+            .into_iter()
+            .map(|item| item.borrow(py).inner.lock().unwrap().clone())
+            .collect();
+        Self::from_inner(InnerSemantics { semantics, data })
+    }
+
+    #[classmethod]
+    pub fn from_dict(_cls: &Bound<'_, PyType>, py: Python<'_>, data: Py<PyAny>) -> PyResult<Self> {
+        let value = py_to_json_value(py, data)?;
+        let inner = serde_json::from_value(value)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        Ok(Self::from_inner(inner))
+    }
+
+    pub fn semantics(&self, py: Python<'_>) -> PyResult<Vec<Py<Semantic>>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .semantics
+            .iter()
+            .cloned()
+            .map(|item| Py::new(py, Semantic::from_inner(item)))
+            .collect()
+    }
+
+    pub fn data(&self, py: Python<'_>) -> PyResult<Vec<Py<SemanticData>>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .data
+            .iter()
+            .cloned()
+            .map(|item| Py::new(py, SemanticData::from_inner(item)))
+            .collect()
+    }
+
+    pub fn set_semantics(&mut self, py: Python<'_>, semantics: Vec<Py<Semantic>>) {
+        let semantics = semantics
+            .into_iter()
+            .map(|item| item.borrow(py).inner.lock().unwrap().clone())
+            .collect();
+        self.inner.lock().unwrap().semantics = semantics;
+    }
+
+    pub fn append_semantic(&mut self, py: Python<'_>, semantic: Py<Semantic>) {
+        let semantic = semantic.borrow(py).inner.lock().unwrap().clone();
+        self.inner.lock().unwrap().semantics.push(semantic);
+    }
+
+    pub fn set_data(&mut self, py: Python<'_>, data: Vec<Py<SemanticData>>) {
+        let data = data
+            .into_iter()
+            .map(|item| item.borrow(py).inner.lock().unwrap().clone())
+            .collect();
+        self.inner.lock().unwrap().data = data;
+    }
+
+    pub fn append_data(&mut self, py: Python<'_>, data: Py<SemanticData>) {
+        let data = data.borrow(py).inner.lock().unwrap().clone();
+        self.inner.lock().unwrap().data.push(data);
+    }
+
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(
+            py,
+            &serde_json::to_value(&*self.inner.lock().unwrap())
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
+        )
+    }
+
+    pub fn json(&self) -> PyResult<String> {
+        serde_json::to_string(&*self.inner.lock().unwrap())
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    pub fn print(&self) -> PyResult<()> {
+        println!("{}", self.json()?);
+        Ok(())
+    }
+
+    pub fn __hash__(&self) -> isize {
+        self.value_hash()
+    }
+
+    pub fn __richcmp__(&self, other: PyRef<'_, Self>, op: CompareOp) -> bool {
+        match op {
+            CompareOp::Eq => self.value_eq(&other),
+            CompareOp::Ne => !self.value_eq(&other),
+            _ => false,
+        }
+    }
+}
+
 #[pymodule]
 #[pyo3(name = "semantics")]
 pub fn semantics_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -2524,6 +2704,8 @@ pub fn semantics_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SemanticEffect>()?;
     m.add_class::<SemanticTerminator>()?;
     m.add_class::<Semantic>()?;
+    m.add_class::<SemanticData>()?;
+    m.add_class::<Semantics>()?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.semantics", m)?;

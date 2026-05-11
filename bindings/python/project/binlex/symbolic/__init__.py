@@ -23,6 +23,10 @@ class CpuState:
         instance._inner = inner
         return instance
 
+    def map_image(self, image):
+        image = getattr(image, "_inner", image)
+        return self._inner.map_image(image)
+
     def __getattr__(self, name):
         return getattr(self._inner, name)
 
@@ -39,7 +43,7 @@ class Executor:
         return [CpuState._from_inner(state) for state in states]
 
     def run(self, semantics, state, steps=None):
-        semantics = [getattr(item, "_inner", item) for item in semantics]
+        semantics = getattr(semantics, "_inner", semantics)
         states = self._inner.run(semantics, state._inner, steps)
         return [CpuState._from_inner(state) for state in states]
 

@@ -1,13 +1,73 @@
 use crate::symbolic::Error;
+use memmap2::Mmap;
+use std::fs::File;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use crate::symbolic::backend::z3::Z3Backend;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use z3::ast::{Array, BV};
+
+#[derive(Debug)]
+struct ImageBackingInner {
+    path: PathBuf,
+    file: Option<File>,
+    mmap: Option<Mmap>,
+}
+
+impl ImageBackingInner {
+    fn new(path: PathBuf) -> Self {
+        Self {
+            path,
+            file: None,
+            mmap: None,
+        }
+    }
+
+    fn read_byte(&mut self, address: u64) -> Result<Option<u8>, Error> {
+        if self.mmap.is_none() {
+            let file =
+                File::open(&self.path).map_err(|error| Error::solver(error.to_string()))?;
+            let mmap =
+                unsafe { Mmap::map(&file).map_err(|error| Error::solver(error.to_string()))? };
+            self.file = Some(file);
+            self.mmap = Some(mmap);
+        }
+        let Some(mmap) = self.mmap.as_ref() else {
+            return Ok(None);
+        };
+        Ok(mmap.get(address as usize).copied())
+    }
+}
+
+#[derive(Clone, Debug)]
+struct ImageBacking {
+    inner: Arc<Mutex<ImageBackingInner>>,
+}
+
+impl ImageBacking {
+    fn new(path: impl AsRef<Path>) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(ImageBackingInner::new(
+                path.as_ref().to_path_buf(),
+            ))),
+        }
+    }
+
+    fn read_byte(&self, address: u64) -> Result<Option<u8>, Error> {
+        self.inner
+            .lock()
+            .map_err(|_| Error::solver("image backing lock poisoned"))?
+            .read_byte(address)
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct FlatMemory {
     array: Array,
     provenance: HashMap<u64, u64>,
     mapped_ranges: Vec<(u64, u64)>,
+    touched: HashSet<u64>,
+    backing_image: Option<ImageBacking>,
     address_bits: u32,
 }
 
@@ -17,12 +77,18 @@ impl FlatMemory {
             array: backend.new_memory(address_bits),
             provenance: HashMap::new(),
             mapped_ranges: Vec::new(),
+            touched: HashSet::new(),
+            backing_image: None,
             address_bits,
         }
     }
 
     pub(crate) fn map(&mut self, address: u64, size: u64) {
         self.mapped_ranges.push((address, size));
+    }
+
+    pub(crate) fn map_image_path(&mut self, path: impl AsRef<Path>) {
+        self.backing_image = Some(ImageBacking::new(path));
     }
 
     pub(crate) fn store_bytes(
@@ -36,6 +102,7 @@ impl FlatMemory {
                 backend.const_bv((address + offset as u64) as u128, self.address_bits as u16)?;
             let value = backend.const_bv(*byte as u128, 8)?;
             self.array = self.array.store(&index, &value);
+            self.touched.insert(address + offset as u64);
             self.provenance.remove(&(address + offset as u64));
         }
         Ok(())
@@ -54,6 +121,7 @@ impl FlatMemory {
                 backend.const_bv((address + offset as u64) as u128, self.address_bits as u16)?;
             let value = backend.fresh_bv(&symbol_name(offset), 8)?;
             self.array = self.array.store(&index, &value);
+            self.touched.insert(address + offset as u64);
             values.push(value);
         }
         Ok(values)
@@ -85,7 +153,25 @@ impl FlatMemory {
                 let increment = backend.const_bv(offset as u128, address.get_size() as u16)?;
                 address.bvadd(&increment)
             };
-            bytes.push(backend.memory_select(&self.array, &byte_address)?);
+            let current_address = concrete_address.map(|base| base + offset as u64);
+            let byte = if let Some(current_address) = current_address {
+                if !self.touched.contains(&current_address) {
+                    if let Some(backing) = self.backing_image.as_ref() {
+                        if let Some(value) = backing.read_byte(current_address)? {
+                            backend.const_bv(value as u128, 8)?
+                        } else {
+                            backend.memory_select(&self.array, &byte_address)?
+                        }
+                    } else {
+                        backend.memory_select(&self.array, &byte_address)?
+                    }
+                } else {
+                    backend.memory_select(&self.array, &byte_address)?
+                }
+            } else {
+                backend.memory_select(&self.array, &byte_address)?
+            };
+            bytes.push(byte);
             if let Some(base) = concrete_address {
                 if let Some(def_id) = self.provenance.get(&(base + offset as u64)) {
                     parents.insert(*def_id);
@@ -130,6 +216,7 @@ impl FlatMemory {
             self.array = self.array.store(&byte_address, &byte);
             if let Some(base) = concrete_address {
                 let current = base + offset as u64;
+                self.touched.insert(current);
                 if let Some(def_id) = def_id {
                     self.provenance.insert(current, def_id);
                 } else {

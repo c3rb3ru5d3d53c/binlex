@@ -1,6 +1,6 @@
 use crate::controlflow::{Block as PyBlock, Function as PyFunction, Instruction as PyInstruction};
 use crate::semantics::abis::extract_abi;
-use crate::semantics::{Semantic as PySemantic, SemanticCpu as PySemanticCpu};
+use crate::semantics::{SemanticCpu as PySemanticCpu, Semantics as PySemantics};
 use crate::Configuration;
 use binlex::controlflow::{
     Block, Function, Graph, GraphSnapshot, Instruction, InstructionRecord,
@@ -8,7 +8,7 @@ use binlex::controlflow::{
 use binlex::core::Architecture;
 use binlex::io::Stderr;
 use binlex::lifters::llvm::{JittedFunction as InnerJittedFunction, Lifter as InnerLifter};
-use binlex::semantics::{Semantic, SemanticAbi, SemanticCpuKind, SemanticTerminator};
+use binlex::semantics::{Semantic, SemanticAbi, SemanticCpuKind, SemanticTerminator, Semantics};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 use std::collections::BTreeMap;
@@ -32,11 +32,11 @@ enum ModuleItemDef {
         name: Option<String>,
     },
     BlockSemantics {
-        semantics: Vec<Semantic>,
+        semantics: Semantics,
         abi: Option<SemanticAbi>,
     },
     FunctionSemantics {
-        semantics: Vec<Semantic>,
+        semantics: Semantics,
         abi: Option<SemanticAbi>,
         name: Option<String>,
     },
@@ -55,7 +55,7 @@ enum ModuleOverrideDef {
 struct CreatedFunctionDef {
     name: String,
     abi: Option<SemanticAbi>,
-    body_semantics: Option<Vec<Semantic>>,
+    body_semantics: Option<Semantics>,
     blocks: Vec<CreatedBlockDef>,
     raw_ir: Option<String>,
     raw_bitcode: Option<Vec<u8>>,
@@ -70,7 +70,7 @@ enum CreatedBlockDef {
     },
     Semantics {
         name: Option<String>,
-        semantics: Vec<Semantic>,
+        semantics: Semantics,
     },
 }
 
@@ -225,6 +225,12 @@ fn compile_created_function(
     cpu: &binlex::semantics::SemanticCpu,
     function: &CreatedFunctionDef,
 ) -> Result<(), Error> {
+    if let Some(ir) = &function.raw_ir {
+        return inner.link_ir_module(ir, Some(&function.name));
+    }
+    if let Some(bitcode) = &function.raw_bitcode {
+        return inner.link_bitcode_module(bitcode, Some(&function.name));
+    }
     if let Some(semantics) = &function.body_semantics {
         return inner.lift_function_semantics_named(semantics, function.abi.as_ref(), &function.name);
     }
@@ -275,7 +281,7 @@ fn compile_created_function(
                     &mut graph,
                     architecture,
                     block_address,
-                    semantics,
+                    &semantics.semantics,
                     next_block_address,
                     config,
                 );
@@ -506,13 +512,10 @@ impl Lifter {
     pub fn lift_block_semantics(
         &self,
         py: Python<'_>,
-        semantics: Vec<Py<PySemantic>>,
+        semantics: Py<PySemantics>,
         abi: Option<Py<PyAny>>,
     ) -> bool {
-        let semantics = semantics
-            .into_iter()
-            .map(|semantics| semantics.borrow(py).inner.lock().unwrap().clone())
-            .collect::<Vec<_>>();
+        let semantics = semantics.borrow(py).inner.lock().unwrap().clone();
         let abi = match abi {
             Some(value) => match extract_abi(value.bind(py)) {
                 Ok(abi) => Some(abi),
@@ -532,14 +535,11 @@ impl Lifter {
     pub fn lift_function_semantics(
         &self,
         py: Python<'_>,
-        semantics: Vec<Py<PySemantic>>,
+        semantics: Py<PySemantics>,
         abi: Option<Py<PyAny>>,
         name: Option<String>,
     ) -> bool {
-        let semantics = semantics
-            .into_iter()
-            .map(|semantics| semantics.borrow(py).inner.lock().unwrap().clone())
-            .collect::<Vec<_>>();
+        let semantics = semantics.borrow(py).inner.lock().unwrap().clone();
         let abi = match abi {
             Some(value) => match extract_abi(value.bind(py)) {
                 Ok(abi) => Some(abi),
@@ -867,13 +867,10 @@ impl LiftedFunction {
     pub fn lift_block_semantics(
         &self,
         py: Python<'_>,
-        semantics: Vec<Py<PySemantic>>,
+        semantics: Py<PySemantics>,
         name: Option<String>,
     ) -> bool {
-        let semantics = semantics
-            .into_iter()
-            .map(|semantics| semantics.borrow(py).inner.lock().unwrap().clone())
-            .collect::<Vec<_>>();
+        let semantics = semantics.borrow(py).inner.lock().unwrap().clone();
         let mut state = self.state.lock().unwrap();
         let item = state.items.get_mut(self.index);
         let Some(ModuleItemDef::CreatedFunction { function }) = item else {
@@ -901,11 +898,8 @@ impl LiftedFunction {
     }
 
     #[pyo3(signature = (semantics), text_signature = "($self, semantics)")]
-    pub fn lift_function_semantics(&self, py: Python<'_>, semantics: Vec<Py<PySemantic>>) -> bool {
-        let semantics = semantics
-            .into_iter()
-            .map(|semantics| semantics.borrow(py).inner.lock().unwrap().clone())
-            .collect::<Vec<_>>();
+    pub fn lift_function_semantics(&self, py: Python<'_>, semantics: Py<PySemantics>) -> bool {
+        let semantics = semantics.borrow(py).inner.lock().unwrap().clone();
         let mut state = self.state.lock().unwrap();
         let item = state.items.get_mut(self.index);
         let Some(ModuleItemDef::CreatedFunction { function }) = item else {
@@ -1085,7 +1079,7 @@ impl LiftedFunction {
     }
 
     pub fn ir(&self) -> Option<String> {
-        match function_preview_lifter(&self.state, self.index) {
+        match function_preview_lifter(&self.state, self.index, false) {
             Ok(lifter) => Some(lifter.ir()),
             Err(err) => {
                 let state = self.state.lock().unwrap();
@@ -1106,7 +1100,7 @@ impl LiftedFunction {
     }
 
     pub fn bitcode(&self) -> Option<Vec<u8>> {
-        match function_preview_lifter(&self.state, self.index) {
+        match function_preview_lifter(&self.state, self.index, false) {
             Ok(lifter) => Some(lifter.bitcode()),
             Err(err) => {
                 let state = self.state.lock().unwrap();
@@ -1117,7 +1111,7 @@ impl LiftedFunction {
     }
 
     pub fn object(&self) -> Option<Vec<u8>> {
-        match function_preview_lifter(&self.state, self.index) {
+        match function_preview_lifter(&self.state, self.index, false) {
             Ok(lifter) => match lifter.object() {
                 Ok(bytes) => Some(bytes),
                 Err(err) => {
@@ -1134,22 +1128,31 @@ impl LiftedFunction {
         }
     }
 
-    pub fn jit(&self) -> Option<JittedFunction> {
+    #[pyo3(signature = (links=None), text_signature = "($self, links=None)")]
+    pub fn jit(&self, links: Option<BTreeMap<String, u64>>) -> Option<JittedFunction> {
         let state = self.state.lock().unwrap();
         let name = match state.items.get(self.index) {
             Some(ModuleItemDef::CreatedFunction { function }) => function.name.clone(),
             _ => return None,
         };
+        let preserve_links = links.as_ref().is_some_and(|links| !links.is_empty());
         drop(state);
-        match function_preview_lifter(&self.state, self.index) {
-            Ok(lifter) => match lifter.jit_function(&name) {
+        match function_preview_lifter(&self.state, self.index, preserve_links) {
+            Ok(lifter) => {
+                let links = links
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|(name, address)| (name, address as usize))
+                    .collect::<BTreeMap<_, _>>();
+                match lifter.jit_function(&name, &links) {
                 Ok(inner) => Some(JittedFunction { inner }),
                 Err(err) => {
                     let state = self.state.lock().unwrap();
                     Stderr::print_debug(&state.config, format!("llvm function jit failed: {}", err));
                     None
                 }
-            },
+            }
+            }
             Err(err) => {
                 let state = self.state.lock().unwrap();
                 Stderr::print_debug(&state.config, format!("llvm function jit failed: {}", err));
@@ -1212,6 +1215,7 @@ impl JittedFunction {
 fn function_preview_lifter(
     state: &Arc<Mutex<BuildState>>,
     index: usize,
+    preserve_module: bool,
 ) -> Result<InnerLifter, Error> {
     let state = state.lock().unwrap();
     let item = state
@@ -1222,6 +1226,15 @@ fn function_preview_lifter(
         return Err(Error::other("lifted function is invalid"));
     };
     if !state.dirty {
+        if preserve_module {
+            let mut lifter = InnerLifter::new(
+                state.cpu.clone(),
+                state.config.clone(),
+                state.triple.clone(),
+            )?;
+            lifter.set_bitcode(&state.inner.bitcode())?;
+            return Ok(lifter);
+        }
         return state.inner.duplicate_function_view(&function.name);
     }
     let function = function.clone();

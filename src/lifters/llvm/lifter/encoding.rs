@@ -182,7 +182,7 @@ mod tests {
     use crate::Configuration;
     use crate::controlflow::{Function, Graph};
     use crate::disassemblers::capstone::Disassembler;
-    use crate::semantics::{SemanticAbi, SemanticAbiKind, SemanticCpu, SemanticCpuKind};
+    use crate::semantics::{SemanticAbi, SemanticAbiKind, SemanticCpu, SemanticCpuKind, Semantics};
     use crate::lifters::llvm::Lifter;
     use crate::semantics::{
         Semantic, SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect,
@@ -215,7 +215,13 @@ mod tests {
         };
 
         lifter
-            .lift_function_semantics(std::slice::from_ref(&semantics), None)
+            .lift_function_semantics(
+                &Semantics {
+                    semantics: vec![semantics],
+                    data: Vec::new(),
+                },
+                None,
+            )
             .expect("lift semantics");
         let text = lifter.text();
 
@@ -248,7 +254,13 @@ mod tests {
         };
 
         lifter
-            .lift_function_semantics(std::slice::from_ref(&semantics), None)
+            .lift_function_semantics(
+                &Semantics {
+                    semantics: vec![semantics],
+                    data: Vec::new(),
+                },
+                None,
+            )
             .expect("lift semantics");
         let text = lifter.text();
 
@@ -290,7 +302,13 @@ mod tests {
 
         let mut lifter = Lifter::new(cpu, Configuration::default(), None).expect("lifter");
         lifter
-            .lift_function_semantics(std::slice::from_ref(&semantics), Some(&abi))
+            .lift_function_semantics(
+                &Semantics {
+                    semantics: vec![semantics],
+                    data: Vec::new(),
+                },
+                Some(&abi),
+            )
             .expect("lift semantics");
         let text = lifter.ir();
 
@@ -353,7 +371,13 @@ mod tests {
 
         let mut lifter = Lifter::from_architecture(Architecture::ARM64, config);
         lifter
-            .lift_function_semantics(std::slice::from_ref(&semantics), None)
+            .lift_function_semantics(
+                &Semantics {
+                    semantics: vec![semantics],
+                    data: Vec::new(),
+                },
+                None,
+            )
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -387,7 +411,13 @@ mod tests {
 
         let mut lifter = Lifter::from_architecture(Architecture::AMD64, config);
         lifter
-            .lift_function_semantics(std::slice::from_ref(&semantics), None)
+            .lift_function_semantics(
+                &Semantics {
+                    semantics: vec![semantics],
+                    data: Vec::new(),
+                },
+                None,
+            )
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -421,7 +451,13 @@ mod tests {
 
         let mut lifter = Lifter::from_architecture(Architecture::I386, config);
         lifter
-            .lift_function_semantics(std::slice::from_ref(&semantics), None)
+            .lift_function_semantics(
+                &Semantics {
+                    semantics: vec![semantics],
+                    data: Vec::new(),
+                },
+                None,
+            )
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -464,7 +500,13 @@ mod tests {
 
         let mut lifter = Lifter::from_architecture(Architecture::I386, config);
         lifter
-            .lift_function_semantics(std::slice::from_ref(&semantics), None)
+            .lift_function_semantics(
+                &Semantics {
+                    semantics: vec![semantics],
+                    data: Vec::new(),
+                },
+                None,
+            )
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -502,7 +544,13 @@ mod tests {
 
         let mut lifter = Lifter::from_architecture(Architecture::I386, config);
         lifter
-            .lift_function_semantics(std::slice::from_ref(&semantics), Some(&abi))
+            .lift_function_semantics(
+                &Semantics {
+                    semantics: vec![semantics],
+                    data: Vec::new(),
+                },
+                Some(&abi),
+            )
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();

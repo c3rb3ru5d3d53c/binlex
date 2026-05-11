@@ -387,6 +387,9 @@ fn eval_expression(
         SemanticExpression::Function { .. } => {
             panic!("unsupported semantic function expression in arm64 conformance")
         }
+        SemanticExpression::DataAddress { .. } => {
+            panic!("unsupported semantic data_address expression in arm64 conformance")
+        }
         SemanticExpression::AddressOf { .. } => {
             panic!("unsupported address_of expression in arm64 conformance")
         }
@@ -985,6 +988,7 @@ fn expression_bits(expression: &SemanticExpression) -> u16 {
     match expression {
         SemanticExpression::Const { bits, .. }
         | SemanticExpression::Function { bits, .. }
+        | SemanticExpression::DataAddress { bits, .. }
         | SemanticExpression::AddressOf { bits, .. }
         | SemanticExpression::Load { bits, .. }
         | SemanticExpression::Unary { bits, .. }

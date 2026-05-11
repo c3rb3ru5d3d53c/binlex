@@ -71,6 +71,40 @@ pub struct Semantic {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct SemanticData {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bytes: Vec<u8>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Semantics {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub semantics: Vec<Semantic>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub data: Vec<SemanticData>,
+}
+
+impl Semantics {
+    pub fn semantics(&self) -> &[Semantic] {
+        &self.semantics
+    }
+
+    pub fn data(&self) -> &[SemanticData] {
+        &self.data
+    }
+
+    pub fn append_semantic(&mut self, semantic: Semantic) {
+        self.semantics.push(semantic);
+    }
+
+    pub fn append_data(&mut self, data: SemanticData) {
+        self.data.push(data);
+    }
+}
+
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SemanticJson {
     pub version: u32,
     pub status: SemanticStatus,
@@ -326,6 +360,10 @@ pub enum SemanticExpression {
         name: String,
         bits: u16,
     },
+    DataAddress {
+        name: String,
+        bits: u16,
+    },
     AddressOf {
         location: Box<SemanticLocation>,
         bits: u16,
@@ -407,6 +445,7 @@ pub enum SemanticExpression {
 pub enum SemanticExpressionKind {
     Const,
     Function,
+    DataAddress,
     AddressOf,
     Read,
     Load,
@@ -918,6 +957,7 @@ impl SemanticExpression {
         match self {
             Self::Const { .. } => SemanticExpressionKind::Const,
             Self::Function { .. } => SemanticExpressionKind::Function,
+            Self::DataAddress { .. } => SemanticExpressionKind::DataAddress,
             Self::AddressOf { .. } => SemanticExpressionKind::AddressOf,
             Self::Read(_) => SemanticExpressionKind::Read,
             Self::Load { .. } => SemanticExpressionKind::Load,
@@ -952,6 +992,7 @@ impl SemanticExpression {
         match self {
             Self::Const { bits, .. } => *bits,
             Self::Function { bits, .. } => *bits,
+            Self::DataAddress { bits, .. } => *bits,
             Self::AddressOf { bits, .. } => *bits,
             Self::Read(location) => location.bits(),
             Self::Load { bits, .. } => *bits,
@@ -1055,6 +1096,7 @@ impl SemanticExpression {
     pub fn name(&self) -> Option<&str> {
         match self {
             Self::Function { name, .. }
+            | Self::DataAddress { name, .. }
             | Self::Intrinsic { name, .. }
             | Self::Allocate { kind: name, .. }
             | Self::ReadProperty { name, .. } => Some(name.as_str()),
@@ -1095,6 +1137,7 @@ impl SemanticExpression {
         match self {
             Self::Const { bits: current, .. }
             | Self::Function { bits: current, .. }
+            | Self::DataAddress { bits: current, .. }
             | Self::AddressOf { bits: current, .. }
             | Self::Load { bits: current, .. }
             | Self::Unary { bits: current, .. }
@@ -1237,11 +1280,13 @@ impl SemanticExpression {
 
     pub fn set_name(&mut self, name: impl Into<String>) -> Result<(), &'static str> {
         match self {
-            Self::Function { name: current, .. } | Self::Intrinsic { name: current, .. } => {
+            Self::Function { name: current, .. }
+            | Self::DataAddress { name: current, .. }
+            | Self::Intrinsic { name: current, .. } => {
                 *current = name.into();
                 Ok(())
             }
-            _ => Err("expression name is only valid for function and intrinsic expressions"),
+            _ => Err("expression name is only valid for function, data_address, and intrinsic expressions"),
         }
     }
 
@@ -1321,6 +1366,10 @@ fn default_expression_for_kind(kind: SemanticExpressionKind, bits: u16) -> Seman
     match kind {
         SemanticExpressionKind::Const => SemanticExpression::Const { value: 0, bits },
         SemanticExpressionKind::Function => SemanticExpression::Function {
+            name: String::new(),
+            bits,
+        },
+        SemanticExpressionKind::DataAddress => SemanticExpression::DataAddress {
             name: String::new(),
             bits,
         },

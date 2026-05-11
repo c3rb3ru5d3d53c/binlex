@@ -3,7 +3,7 @@
 import binlex
 from binlex.controlflow import Graph
 from binlex.disassemblers import Disassembler
-from binlex.semantics import SemanticCpu
+from binlex.semantics import SemanticCpu, Semantics
 from binlex.symbolic import CpuState, Executor
 
 
@@ -35,12 +35,12 @@ for block in function.blocks():
     for instruction in block.instructions():
         print(f"{hex(instruction.address())}: {instruction.disassembly()}")
 
-        semantics = instruction.semantic()
+        semantic = instruction.semantic()
 
-        if semantics is None:
+        if semantic is None:
             continue
 
-        successors = executor.step(semantics, state)
+        successors = executor.step(Semantics(semantics=[semantic]), state)
 
         states = [successor for successor in successors if successor.satisfiable()]
 

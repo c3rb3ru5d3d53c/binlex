@@ -6,7 +6,7 @@ from binlex import Architecture, Configuration
 from binlex.assemblers import Assembler, AssemblerBackend
 from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
-from binlex.semantics import Semantic, SemanticCpu
+from binlex.semantics import Semantic, SemanticCpu, Semantics
 from binlex.symbolic import Executor, CpuState
 
 
@@ -68,7 +68,7 @@ instructions.sort(key=lambda instruction: instruction.address())
 assert instructions
 raw_semantics = [instruction.semantic() for instruction in instructions]
 assert all(semantic is not None for semantic in raw_semantics)
-semantics = cast(list[Semantic], raw_semantics)
+semantics = Semantics(cast(list[Semantic], raw_semantics))
 
 host_print_address = instructions[-1].address()
 

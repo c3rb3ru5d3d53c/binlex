@@ -242,6 +242,11 @@ fn validate_expression(expression: &SemanticExpression) -> Result<(), Error> {
                 return Err(Error::other("semantic function expression has empty name"));
             }
         }
+        SemanticExpression::DataAddress { name, .. } => {
+            if name.trim().is_empty() {
+                return Err(Error::other("semantic data_address expression has empty name"));
+            }
+        }
         SemanticExpression::AddressOf { location, .. } => validate_location(location)?,
         SemanticExpression::Read(location) => validate_location(location)?,
         SemanticExpression::Load { addr, .. } => validate_expression(addr)?,
@@ -293,6 +298,7 @@ fn expression_bits(expression: &SemanticExpression) -> u16 {
     match expression {
         SemanticExpression::Const { bits, .. }
         | SemanticExpression::Function { bits, .. }
+        | SemanticExpression::DataAddress { bits, .. }
         | SemanticExpression::AddressOf { bits, .. }
         | SemanticExpression::Load { bits, .. }
         | SemanticExpression::Unary { bits, .. }

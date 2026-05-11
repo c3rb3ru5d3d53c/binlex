@@ -201,6 +201,10 @@ fn normalize_expression(expression: &SemanticExpression) -> SemanticExpression {
             name: name.clone(),
             bits: *bits,
         },
+        SemanticExpression::DataAddress { name, bits } => SemanticExpression::DataAddress {
+            name: name.clone(),
+            bits: *bits,
+        },
         SemanticExpression::AddressOf { location, bits } => SemanticExpression::AddressOf {
             location: Box::new(normalize_location(location)),
             bits: *bits,

@@ -4,7 +4,7 @@ from binlex import Architecture
 from binlex.config import Configuration
 from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
-from binlex.semantics import SemanticCpu
+from binlex.semantics import SemanticCpu, Semantics
 from binlex.symbolic import CpuState, Executor
 
 
@@ -84,16 +84,16 @@ def main():
     done = False
     for block in function.blocks():
         for instruction in block.instructions():
-            semantics = instruction.semantic()
+            semantic = instruction.semantic()
 
-            if not semantics:
+            if not semantic:
                 continue
 
             pc = instruction.address()
 
             state.set_register("rip", 64, pc)
 
-            states = executor.step(semantics, state)
+            states = executor.step(Semantics(semantics=[semantic]), state)
 
             if len(states) == 1:
                 state = states[0]

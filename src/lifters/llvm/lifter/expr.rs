@@ -31,6 +31,19 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     )
                     .map_err(|err| Error::other(err.to_string()))
             }
+            SemanticExpression::DataAddress { name, bits } => {
+                let global_name = sanitize_symbol(&format!("binlex_data_{name}"));
+                let global = self.module.get_global(&global_name).ok_or_else(|| {
+                    Error::other(format!("unknown semantic data target {name}"))
+                })?;
+                self.builder
+                    .build_ptr_to_int(
+                        global.as_pointer_value(),
+                        self.int_type(*bits),
+                        "datatmp",
+                    )
+                    .map_err(|err| Error::other(err.to_string()))
+            }
             SemanticExpression::AddressOf { location, bits } => {
                 let pointer = self.pointer_for_location(location)?;
                 let pointer = self

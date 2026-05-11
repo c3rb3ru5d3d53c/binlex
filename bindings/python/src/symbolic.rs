@@ -1,6 +1,6 @@
-use crate::semantics::{Semantic as PySemantic, SemanticCpu as PySemanticCpu};
-use pyo3::exceptions::PyRuntimeError;
-use pyo3::exceptions::PyTypeError;
+use crate::formats::Image as PyImage;
+use crate::semantics::{SemanticCpu as PySemanticCpu, Semantics as PySemantics};
+use pyo3::exceptions::{PyRuntimeError, PyTypeError};
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes, PyModule};
 use std::collections::{BTreeMap, HashMap};
@@ -97,14 +97,8 @@ fn wrap_state(
     )
 }
 
-fn collect_semantics(
-    py: Python<'_>,
-    semantics: Vec<Py<PySemantic>>,
-) -> Vec<::binlex::semantics::Semantic> {
-    semantics
-        .into_iter()
-        .map(|item| item.borrow(py).inner.lock().unwrap().clone())
-        .collect::<Vec<_>>()
+fn collect_semantics(py: Python<'_>, semantics: Py<PySemantics>) -> ::binlex::semantics::Semantics {
+    semantics.borrow(py).inner.lock().unwrap().clone()
 }
 
 #[pymethods]
@@ -122,10 +116,10 @@ impl SymbolicExecutor {
     pub fn step(
         &self,
         py: Python<'_>,
-        semantics: PyRef<'_, PySemantic>,
+        semantics: Py<PySemantics>,
         state: PyRef<'_, SymbolicCpuState>,
     ) -> PyResult<Vec<Py<SymbolicCpuState>>> {
-        let semantics = semantics.inner.lock().unwrap().clone();
+        let semantics = collect_semantics(py, semantics);
         let state_guard = state.inner.lock().unwrap();
         let states = self
             .inner
@@ -144,12 +138,11 @@ impl SymbolicExecutor {
     pub fn run(
         &self,
         py: Python<'_>,
-        semantics: Vec<Py<PySemantic>>,
+        semantics: Py<PySemantics>,
         state: PyRef<'_, SymbolicCpuState>,
         steps: Option<usize>,
     ) -> PyResult<Vec<Py<SymbolicCpuState>>> {
         let owned = collect_semantics(py, semantics);
-        let refs = owned.iter().collect::<Vec<_>>();
         let hooks = self
             .hooks
             .lock()
@@ -164,7 +157,7 @@ impl SymbolicExecutor {
                 .inner
                 .lock()
                 .unwrap()
-                .run(refs, &state_guard, steps)
+                .run(&owned, &state_guard, steps)
                 .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
             return states
                 .into_iter()
@@ -186,7 +179,7 @@ impl SymbolicExecutor {
                 .inner
                 .lock()
                 .unwrap()
-                .run(refs.clone(), &current, None)
+                .run(&owned, &current, None)
                 .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
 
             for candidate in states {
@@ -214,7 +207,8 @@ impl SymbolicExecutor {
                             )
                         })?;
                 for returned_state in returned_states {
-                    pending.push(returned_state.borrow(py).inner.lock().unwrap().clone());
+                    let returned_state_ref: PyRef<'_, SymbolicCpuState> = returned_state.borrow(py);
+                    pending.push(returned_state_ref.inner.lock().unwrap().clone());
                 }
             }
         }
@@ -336,6 +330,11 @@ impl SymbolicCpuState {
     #[pyo3(text_signature = "($self, address, size)")]
     pub fn map_memory(&self, address: u64, size: u64) {
         self.inner.lock().unwrap().map_memory(address, size);
+    }
+
+    #[pyo3(text_signature = "($self, image)")]
+    pub fn map_image(&self, image: PyRef<'_, PyImage>) {
+        self.inner.lock().unwrap().map_image(&image.inner);
     }
 
     #[pyo3(text_signature = "($self, address, data)")]

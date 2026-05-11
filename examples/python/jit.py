@@ -3,6 +3,7 @@
 import ctypes
 from binlex import Configuration
 from binlex.semantics import (
+    Semantics,
     SemanticAbi,
     SemanticCpu,
     Semantic,
@@ -24,90 +25,94 @@ cpu = SemanticCpu.amd64()
 sysv = SemanticAbi.sysv(cpu)
 linux_syscall = SemanticAbi.linux_syscall(cpu)
 
-add_two_semantics = [
-    Semantic(
-        version=1,
-        status=SemanticStatus.Complete,
-        effects=[
-            SemanticEffect.set(
-                SemanticLocation.register("rax", 64),
-                SemanticExpression.binary(
-                    SemanticOperationBinary.Add,
-                    SemanticExpression.read(
-                        SemanticLocation.register("rdi", 64)
-                    ),
-                    SemanticExpression.read(
-                        SemanticLocation.register("rsi", 64)
-                    ),
-                    64
-                )
-            )
-        ],
-        terminator=SemanticTerminator.return_()
-    )
-]
-
-write_semantics = [
-    Semantic(
-        version=1,
-        status=SemanticStatus.Complete,
-        abi=linux_syscall,
-        effects=[
-            SemanticEffect.set(
-                SemanticLocation.stack_memory("stack", 8, 64),
-                SemanticExpression.read(
-                    SemanticLocation.register("rdi", 64)
-                )
-            ),
-            SemanticEffect.set(
-                SemanticLocation.stack_memory("stack", 0, 8),
-                SemanticExpression.cast(
-                    SemanticOperationCast.Truncate,
+add_two_semantics = Semantics(
+    semantics=[
+        Semantic(
+            version=1,
+            status=SemanticStatus.Complete,
+            effects=[
+                SemanticEffect.set(
+                    SemanticLocation.register("rax", 64),
                     SemanticExpression.binary(
                         SemanticOperationBinary.Add,
                         SemanticExpression.read(
                             SemanticLocation.register("rdi", 64)
                         ),
-                        SemanticExpression.const(48, 64),
+                        SemanticExpression.read(
+                            SemanticLocation.register("rsi", 64)
+                        ),
                         64
-                    ),
-                    8
+                    )
                 )
-            ),
-            SemanticEffect.set(
-                SemanticLocation.stack_memory("stack", 1, 8),
-                SemanticExpression.const(10, 8)
-            ),
-            SemanticEffect.set(
-                SemanticLocation.register("rax", 64),
-                SemanticExpression.const(1, 64)
-            ),
-            SemanticEffect.set(
-                SemanticLocation.register("rdi", 64),
-                SemanticExpression.const(1, 64)
-            ),
-            SemanticEffect.set(
-                SemanticLocation.register("rsi", 64),
-                SemanticExpression.address_of(
+            ],
+            terminator=SemanticTerminator.return_()
+        )
+    ]
+)
+
+write_semantics = Semantics(
+    semantics=[
+        Semantic(
+            version=1,
+            status=SemanticStatus.Complete,
+            abi=linux_syscall,
+            effects=[
+                SemanticEffect.set(
+                    SemanticLocation.stack_memory("stack", 8, 64),
+                    SemanticExpression.read(
+                        SemanticLocation.register("rdi", 64)
+                    )
+                ),
+                SemanticEffect.set(
                     SemanticLocation.stack_memory("stack", 0, 8),
-                    64
-                )
-            ),
-            SemanticEffect.set(
-                SemanticLocation.register("rdx", 64),
-                SemanticExpression.const(2, 64)
-            ),
-            SemanticEffect.trap(SemanticTrapKind.Syscall),
-            SemanticEffect.set(
-                SemanticLocation.register("rax", 64),
-                SemanticExpression.read(
-                    SemanticLocation.stack_memory("stack", 8, 64)
-                )
-            ),
-        ],
-        terminator=SemanticTerminator.return_()
-    )
-]
+                    SemanticExpression.cast(
+                        SemanticOperationCast.Truncate,
+                        SemanticExpression.binary(
+                            SemanticOperationBinary.Add,
+                            SemanticExpression.read(
+                                SemanticLocation.register("rdi", 64)
+                            ),
+                            SemanticExpression.const(48, 64),
+                            64
+                        ),
+                        8
+                    )
+                ),
+                SemanticEffect.set(
+                    SemanticLocation.stack_memory("stack", 1, 8),
+                    SemanticExpression.const(10, 8)
+                ),
+                SemanticEffect.set(
+                    SemanticLocation.register("rax", 64),
+                    SemanticExpression.const(1, 64)
+                ),
+                SemanticEffect.set(
+                    SemanticLocation.register("rdi", 64),
+                    SemanticExpression.const(1, 64)
+                ),
+                SemanticEffect.set(
+                    SemanticLocation.register("rsi", 64),
+                    SemanticExpression.address_of(
+                        SemanticLocation.stack_memory("stack", 0, 8),
+                        64
+                    )
+                ),
+                SemanticEffect.set(
+                    SemanticLocation.register("rdx", 64),
+                    SemanticExpression.const(2, 64)
+                ),
+                SemanticEffect.trap(SemanticTrapKind.Syscall),
+                SemanticEffect.set(
+                    SemanticLocation.register("rax", 64),
+                    SemanticExpression.read(
+                        SemanticLocation.stack_memory("stack", 8, 64)
+                    )
+                ),
+            ],
+            terminator=SemanticTerminator.return_()
+        )
+    ]
+)
 
 executor = Executor()
 
@@ -134,8 +139,8 @@ fn_add_two.optimize_gvn()
 fn_add_two.optimize_dce()
 
 add_two = fn_add_two.jit(
-    restype=ctypes.c_uint64,
-    argtypes=[ctypes.c_uint64, ctypes.c_uint64],
+    return_type=ctypes.c_uint64,
+    parameter_types=[ctypes.c_uint64, ctypes.c_uint64],
 )
 
 assert add_two
@@ -154,8 +159,8 @@ fn_write.optimize_gvn()
 fn_write.optimize_dce()
 
 write = fn_write.jit(
-    restype=ctypes.c_uint64,
-    argtypes=[ctypes.c_uint64],
+    return_type=ctypes.c_uint64,
+    parameter_types=[ctypes.c_uint64],
 )
 
 assert write

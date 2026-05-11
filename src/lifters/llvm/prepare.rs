@@ -9,6 +9,7 @@ fn expression_bits(expression: &SemanticExpression) -> u16 {
     match expression {
         SemanticExpression::Const { bits, .. }
         | SemanticExpression::Function { bits, .. }
+        | SemanticExpression::DataAddress { bits, .. }
         | SemanticExpression::AddressOf { bits, .. }
         | SemanticExpression::Load { bits, .. }
         | SemanticExpression::Unary { bits, .. }
@@ -490,6 +491,7 @@ fn collect_expression_reads(
 ) {
     match expression {
         SemanticExpression::Function { .. } => {}
+        SemanticExpression::DataAddress { .. } => {}
         SemanticExpression::AddressOf { .. } => {}
         SemanticExpression::Read(location) => {
             reads.insert(location.as_ref().clone());
@@ -551,6 +553,7 @@ fn collect_expression_loads(
     match expression {
         SemanticExpression::Read(_) => {}
         SemanticExpression::Function { .. } => {}
+        SemanticExpression::DataAddress { .. } => {}
         SemanticExpression::AddressOf { .. } => {}
         SemanticExpression::Load { space, addr, bits } => {
             reads.insert(SemanticExpression::Load {
@@ -833,6 +836,10 @@ fn prepare_expression(
             bits: *bits,
         },
         SemanticExpression::Function { name, bits } => SemanticExpression::Function {
+            name: name.clone(),
+            bits: *bits,
+        },
+        SemanticExpression::DataAddress { name, bits } => SemanticExpression::DataAddress {
             name: name.clone(),
             bits: *bits,
         },

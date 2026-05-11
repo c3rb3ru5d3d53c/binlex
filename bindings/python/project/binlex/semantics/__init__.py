@@ -3,7 +3,9 @@
 from binlex_bindings.binlex.semantics import *
 from binlex_bindings.binlex.semantics import SemanticAbi as _SemanticAbiBinding
 from binlex_bindings.binlex.semantics import SemanticCpu as _SemanticCpuBinding
+from binlex_bindings.binlex.semantics import SemanticData as _SemanticDataBinding
 from binlex_bindings.binlex.semantics import Semantic as _SemanticBinding
+from binlex_bindings.binlex.semantics import Semantics as _SemanticsBinding
 
 from binlex.core.architecture import Architecture
 
@@ -210,6 +212,70 @@ class Semantic:
     def set_abi(self, abi):
         abi = getattr(abi, "_inner", abi)
         self._inner.set_abi(abi)
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+
+class SemanticData:
+    """Named static data attached to a semantics container."""
+
+    def __init__(self, name, bytes):
+        self._inner = _SemanticDataBinding(name=name, bytes=bytes)
+
+    @classmethod
+    def _from_inner(cls, inner):
+        instance = cls.__new__(cls)
+        instance._inner = inner
+        return instance
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls._from_inner(_SemanticDataBinding.from_dict(data))
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+
+class Semantics:
+    """Semantic instructions plus attached static data."""
+
+    def __init__(self, semantics=None, data=None):
+        semantics = [getattr(item, "_inner", item) for item in list(semantics or [])]
+        data = [getattr(item, "_inner", item) for item in list(data or [])]
+        self._inner = _SemanticsBinding(semantics=semantics, data=data)
+
+    @classmethod
+    def _from_inner(cls, inner):
+        instance = cls.__new__(cls)
+        instance._inner = inner
+        return instance
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls._from_inner(_SemanticsBinding.from_dict(data))
+
+    def semantics(self):
+        return [Semantic._from_inner(item) for item in self._inner.semantics()]
+
+    def data(self):
+        return [SemanticData._from_inner(item) for item in self._inner.data()]
+
+    def set_semantics(self, semantics):
+        semantics = [getattr(item, "_inner", item) for item in semantics]
+        self._inner.set_semantics(semantics)
+
+    def append_semantic(self, semantic):
+        semantic = getattr(semantic, "_inner", semantic)
+        self._inner.append_semantic(semantic)
+
+    def set_data(self, data):
+        data = [getattr(item, "_inner", item) for item in data]
+        self._inner.set_data(data)
+
+    def append_data(self, data):
+        data = getattr(data, "_inner", data)
+        self._inner.append_data(data)
 
     def __getattr__(self, name):
         return getattr(self._inner, name)

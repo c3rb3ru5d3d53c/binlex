@@ -5,7 +5,7 @@ from binlex import Configuration
 from binlex.assemblers import Assembler
 from binlex.controlflow import Graph
 from binlex.disassemblers import Disassembler
-from binlex.semantics import SemanticCpu
+from binlex.semantics import SemanticCpu, Semantics
 from binlex.symbolic import CpuState, Executor
 
 assembly = """
@@ -59,12 +59,12 @@ state = CpuState(cpu)
 state.set_register("esp", 32, stack_base)
 state.map_memory(stack_base - stack_size, stack_size)
 
-semantics = [
+semantics = Semantics(semantics=[
     semantics
     for block in function.blocks()
     for instruction in block.instructions()
     if (semantics := instruction.semantic()) is not None
-]
+])
 
 states = executor.run(semantics, state)
 

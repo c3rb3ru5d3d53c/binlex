@@ -1,4 +1,5 @@
-use crate::semantics::{SemanticCpu, SemanticEncoding};
+use crate::formats::Image;
+use crate::semantics::{SemanticCpu, SemanticData, SemanticEncoding};
 use crate::symbolic::Error;
 use crate::symbolic::backend::z3::{TrackedAst, Z3Backend};
 use crate::symbolic::memory::FlatMemory;
@@ -36,6 +37,8 @@ pub struct SymbolicCpuState {
     stack_memory: HashMap<String, HashMap<u32, SymbolicCell>>,
     reference_properties: HashMap<String, HashMap<String, SymbolicCell>>,
     reference_elements: HashMap<String, HashMap<String, SymbolicCell>>,
+    semantic_data_addresses: HashMap<String, u64>,
+    next_semantic_data_address: u64,
     constraints: Vec<Bool>,
     tracked: HashMap<String, TrackedAst>,
     definitions: HashMap<u64, DefinitionNode>,
@@ -116,6 +119,8 @@ impl SymbolicCpuState {
             stack_memory: HashMap::new(),
             reference_properties: HashMap::new(),
             reference_elements: HashMap::new(),
+            semantic_data_addresses: HashMap::new(),
+            next_semantic_data_address: 0x100000,
             constraints: Vec::new(),
             tracked: HashMap::new(),
             definitions: HashMap::new(),
@@ -177,6 +182,10 @@ impl SymbolicCpuState {
 
     pub fn write_memory(&mut self, address: u64, data: &[u8]) -> Result<(), Error> {
         self.memory.store_bytes(&self.backend, address, data)
+    }
+
+    pub fn map_image(&mut self, image: &Image) {
+        self.memory.map_image_path(image.path());
     }
 
     pub fn symbolize_memory(
@@ -256,6 +265,31 @@ impl SymbolicCpuState {
         self.backend.is_sat(&self.constraints)
     }
 
+    pub fn load_semantic_data(&mut self, data: &[SemanticData]) -> Result<(), Error> {
+        for item in data {
+            if item.name.trim().is_empty() {
+                return Err(Error::UnsupportedExpression(
+                    "semantic data item has empty name",
+                ));
+            }
+            if self.semantic_data_addresses.contains_key(&item.name) {
+                continue;
+            }
+            let size = item.bytes.len().max(1) as u64;
+            let aligned_size = ((size + 0xfff) / 0x1000) * 0x1000;
+            let address = self.next_semantic_data_address;
+            self.map_memory(address, aligned_size);
+            self.write_memory(address, &item.bytes)?;
+            self.semantic_data_addresses
+                .insert(item.name.clone(), address);
+            self.next_semantic_data_address = self
+                .next_semantic_data_address
+                .checked_add(aligned_size)
+                .ok_or_else(|| Error::solver("semantic data address space overflow"))?;
+        }
+        Ok(())
+    }
+
     pub fn model(&self) -> Result<HashMap<String, String>, Error> {
         self.backend.model(&self.constraints, &self.tracked)
     }
@@ -289,6 +323,10 @@ impl SymbolicCpuState {
 
     pub(crate) fn memory_mut(&mut self) -> &mut FlatMemory {
         &mut self.memory
+    }
+
+    pub(crate) fn semantic_data_address(&self, name: &str) -> Option<u64> {
+        self.semantic_data_addresses.get(name).copied()
     }
 
     pub(crate) fn set_program_counter(&mut self, value: BV, def_id: Option<u64>) {

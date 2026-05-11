@@ -540,6 +540,7 @@ fn render_expression(expression: &SemanticExpression) -> String {
     match expression {
         SemanticExpression::Const { value, .. } => format!("0x{:x}", value),
         SemanticExpression::Function { name, .. } => format!("FN({name})"),
+        SemanticExpression::DataAddress { name, .. } => format!("DATA({name})"),
         SemanticExpression::AddressOf { location, .. } => {
             format!("ADDR({})", render_location_read(location))
         }

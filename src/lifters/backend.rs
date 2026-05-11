@@ -2,7 +2,9 @@ use super::error::{LifterCapability, LifterError};
 use crate::controlflow::{
     Block, Function, Graph, GraphSnapshot, Instruction, InstructionRecord,
 };
-use crate::semantics::{Semantic, SemanticAbi, SemanticCpu, SemanticExpression, SemanticTerminator};
+use crate::semantics::{
+    Semantic, SemanticAbi, SemanticCpu, SemanticExpression, SemanticTerminator, Semantics,
+};
 use crate::{Architecture, Configuration};
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
@@ -51,11 +53,11 @@ enum ModuleItemDef {
         name: Option<String>,
     },
     BlockSemantics {
-        semantics: Vec<Semantic>,
+        semantics: Semantics,
         abi: Option<SemanticAbi>,
     },
     FunctionSemantics {
-        semantics: Vec<Semantic>,
+        semantics: Semantics,
         abi: Option<SemanticAbi>,
         name: Option<String>,
     },
@@ -74,7 +76,7 @@ enum ModuleOverrideDef {
 struct CreatedFunctionDef {
     name: String,
     abi: Option<SemanticAbi>,
-    body_semantics: Option<Vec<Semantic>>,
+    body_semantics: Option<Semantics>,
     blocks: Vec<CreatedBlockDef>,
     raw_ir: Option<String>,
     raw_bitcode: Option<Vec<u8>>,
@@ -89,7 +91,7 @@ enum CreatedBlockDef {
     },
     Semantics {
         name: Option<String>,
-        semantics: Vec<Semantic>,
+        semantics: Semantics,
     },
 }
 
@@ -121,6 +123,10 @@ pub struct LiftedBlock {
     state: Arc<Mutex<BuildState>>,
     function_index: usize,
     block_index: usize,
+}
+
+pub struct JittedFunction {
+    inner: super::llvm::JittedFunction,
 }
 
 impl BuildState {
@@ -415,12 +421,12 @@ impl Lifter {
 
     pub fn lift_block_semantics(
         &self,
-        semantics: &[Semantic],
+        semantics: &Semantics,
         abi: Option<&SemanticAbi>,
     ) -> Result<(), LifterError> {
         let mut state = self.state.lock().unwrap();
         state.items.push(ModuleItemDef::BlockSemantics {
-            semantics: semantics.to_vec(),
+            semantics: semantics.clone(),
             abi: abi.cloned(),
         });
         state.rebuild()
@@ -428,7 +434,7 @@ impl Lifter {
 
     pub fn lift_function_semantics(
         &self,
-        semantics: &[Semantic],
+        semantics: &Semantics,
         abi: Option<&SemanticAbi>,
     ) -> Result<(), LifterError> {
         self.lift_function_semantics_named(semantics, abi, None)
@@ -436,13 +442,13 @@ impl Lifter {
 
     pub fn lift_function_semantics_named(
         &self,
-        semantics: &[Semantic],
+        semantics: &Semantics,
         abi: Option<&SemanticAbi>,
         name: Option<&str>,
     ) -> Result<(), LifterError> {
         let mut state = self.state.lock().unwrap();
         state.items.push(ModuleItemDef::FunctionSemantics {
-            semantics: semantics.to_vec(),
+            semantics: semantics.clone(),
             abi: abi.cloned(),
             name: name.map(str::to_string),
         });
@@ -679,7 +685,7 @@ impl LiftedFunction {
 
     pub fn lift_block_semantics(
         &self,
-        semantics: &[Semantic],
+        semantics: &Semantics,
         name: Option<&str>,
     ) -> Result<(), LifterError> {
         let mut state = self.state.lock().unwrap();
@@ -703,13 +709,13 @@ impl LiftedFunction {
         }
         function.blocks.push(CreatedBlockDef::Semantics {
             name: name.map(str::to_string),
-            semantics: semantics.to_vec(),
+            semantics: semantics.clone(),
         });
         state.mark_dirty();
         Ok(())
     }
 
-    pub fn lift_function_semantics(&self, semantics: &[Semantic]) -> Result<(), LifterError> {
+    pub fn lift_function_semantics(&self, semantics: &Semantics) -> Result<(), LifterError> {
         let mut state = self.state.lock().unwrap();
         #[cfg(not(target_os = "windows"))]
         if state.backend != LifterBackend::Llvm {
@@ -729,7 +735,7 @@ impl LiftedFunction {
                 "function already has raw llvm body",
             )));
         }
-        function.body_semantics = Some(semantics.to_vec());
+        function.body_semantics = Some(semantics.clone());
         state.mark_dirty();
         Ok(())
     }
@@ -859,6 +865,53 @@ impl LiftedFunction {
         lifter.object()
     }
 
+    pub fn jit(&self, links: &BTreeMap<String, usize>) -> Result<JittedFunction, LifterError> {
+        let state = self.state.lock().unwrap();
+        let name = match state.items.get(self.index) {
+            Some(ModuleItemDef::CreatedFunction { function }) => function.name.clone(),
+            _ => return Err(LifterError::Io(Error::other("lifted function is invalid"))),
+        };
+        let preserve_links = !links.is_empty();
+        let lifter = if !state.dirty {
+            match &state.inner {
+                ResolvedLifterBackend::Llvm(lifter) => {
+                    if preserve_links {
+                        let mut duplicate = super::llvm::Lifter::new(
+                            state.cpu.clone(),
+                            state.config.clone(),
+                            state.triple.clone(),
+                        )?;
+                        duplicate.set_bitcode(&lifter.bitcode())?;
+                        duplicate
+                    } else {
+                        lifter.duplicate_function_view(&name)?
+                    }
+                }
+                #[cfg(not(target_os = "windows"))]
+                ResolvedLifterBackend::Vex(_) => {
+                    return Err(state.unsupported(LifterCapability::Jit));
+                }
+            }
+        } else {
+            drop(state);
+            let preview = self.preview_lifter()?;
+            let mut preview_state = preview.state.lock().unwrap();
+            preview_state.ensure_built()?;
+            match &preview_state.inner {
+                ResolvedLifterBackend::Llvm(lifter) => lifter.duplicate()?,
+                #[cfg(not(target_os = "windows"))]
+                ResolvedLifterBackend::Vex(_) => {
+                    return Err(LifterError::UnsupportedCapability {
+                        backend: LifterBackend::Vex,
+                        capability: LifterCapability::Jit,
+                    });
+                }
+            }
+        };
+        let inner = lifter.jit_function(&name, links)?;
+        Ok(JittedFunction { inner })
+    }
+
     fn preview_lifter(&self) -> Result<Lifter, LifterError> {
         let state = self.state.lock().unwrap();
         let item = state
@@ -898,6 +951,16 @@ impl LiftedFunction {
         function.raw_bitcode = Some(bitcode.to_vec());
         state.mark_dirty();
         Ok(())
+    }
+}
+
+impl JittedFunction {
+    pub fn name(&self) -> &str {
+        self.inner.name()
+    }
+
+    pub fn address(&self) -> usize {
+        self.inner.address()
     }
 }
 
@@ -1074,7 +1137,7 @@ fn compile_created_function(
                     &mut graph,
                     architecture,
                     block_address,
-                    semantics,
+                    &semantics.semantics,
                     next_block_address,
                     config,
                 );
@@ -1190,7 +1253,7 @@ mod tests {
     use super::{Lifter, LifterBackend};
     use crate::semantics::{
         Semantic, SemanticAbi, SemanticAbiKind, SemanticCpu, SemanticCpuKind, SemanticEffect,
-        SemanticExpression, SemanticLocation, SemanticStatus, SemanticTerminator,
+        SemanticExpression, SemanticLocation, SemanticStatus, SemanticTerminator, Semantics,
     };
     use crate::Configuration;
 
@@ -1245,10 +1308,22 @@ mod tests {
         };
 
         function
-            .lift_block_semantics(std::slice::from_ref(&entry), Some("entry"))
+            .lift_block_semantics(
+                &Semantics {
+                    semantics: vec![entry],
+                    data: Vec::new(),
+                },
+                Some("entry"),
+            )
             .expect("entry block");
         function
-            .lift_block_semantics(std::slice::from_ref(&exit), Some("exit"))
+            .lift_block_semantics(
+                &Semantics {
+                    semantics: vec![exit],
+                    data: Vec::new(),
+                },
+                Some("exit"),
+            )
             .expect("exit block");
         function.optimize_cfg().expect("function cfg");
         function.optimize_dce().expect("function dce");
@@ -1306,7 +1381,10 @@ mod tests {
         };
 
         function
-            .lift_function_semantics(std::slice::from_ref(&body))
+            .lift_function_semantics(&Semantics {
+                semantics: vec![body],
+                data: Vec::new(),
+            })
             .expect("function semantics");
 
         let ir = function.ir().expect("function ir");
@@ -1329,86 +1407,92 @@ mod tests {
             .create_function("add_two", Some(&fastcall))
             .expect("created function");
         add_two
-            .lift_function_semantics(&[Semantic {
-                version: 1,
-                status: SemanticStatus::Complete,
-                abi: None,
-                encoding: None,
-                temporaries: Vec::new(),
-                effects: vec![SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
-                        name: "eax".to_string(),
-                        bits: 32,
-                    },
-                    expression: SemanticExpression::Binary {
-                        op: crate::semantics::SemanticOperationBinary::Add,
-                        left: Box::new(SemanticExpression::Read(Box::new(
-                            SemanticLocation::Register {
-                                name: "ecx".to_string(),
-                                bits: 32,
-                            },
-                        ))),
-                        right: Box::new(SemanticExpression::Read(Box::new(
-                            SemanticLocation::Register {
-                                name: "edx".to_string(),
-                                bits: 32,
-                            },
-                        ))),
-                        bits: 32,
-                    },
+            .lift_function_semantics(&Semantics {
+                semantics: vec![Semantic {
+                    version: 1,
+                    status: SemanticStatus::Complete,
+                    abi: None,
+                    encoding: None,
+                    temporaries: Vec::new(),
+                    effects: vec![SemanticEffect::Set {
+                        dst: SemanticLocation::Register {
+                            name: "eax".to_string(),
+                            bits: 32,
+                        },
+                        expression: SemanticExpression::Binary {
+                            op: crate::semantics::SemanticOperationBinary::Add,
+                            left: Box::new(SemanticExpression::Read(Box::new(
+                                SemanticLocation::Register {
+                                    name: "ecx".to_string(),
+                                    bits: 32,
+                                },
+                            ))),
+                            right: Box::new(SemanticExpression::Read(Box::new(
+                                SemanticLocation::Register {
+                                    name: "edx".to_string(),
+                                    bits: 32,
+                                },
+                            ))),
+                            bits: 32,
+                        },
+                    }],
+                    terminator: SemanticTerminator::Return { expression: None },
+                    diagnostics: Vec::new(),
                 }],
-                terminator: SemanticTerminator::Return { expression: None },
-                diagnostics: Vec::new(),
-            }])
+                data: Vec::new(),
+            })
             .expect("add_two semantics");
 
         let main = lifter
             .create_function("main", Some(&stdcall))
             .expect("created function");
-        main.lift_function_semantics(&[
-            Semantic {
-                version: 1,
-                status: SemanticStatus::Complete,
-                abi: None,
-                encoding: None,
-                temporaries: Vec::new(),
-                effects: vec![
-                    SemanticEffect::Set {
-                        dst: SemanticLocation::Register {
-                            name: "ecx".to_string(),
+        main.lift_function_semantics(&Semantics {
+            semantics: vec![
+                Semantic {
+                    version: 1,
+                    status: SemanticStatus::Complete,
+                    abi: None,
+                    encoding: None,
+                    temporaries: Vec::new(),
+                    effects: vec![
+                        SemanticEffect::Set {
+                            dst: SemanticLocation::Register {
+                                name: "ecx".to_string(),
+                                bits: 32,
+                            },
+                            expression: SemanticExpression::Const { value: 1, bits: 32 },
+                        },
+                        SemanticEffect::Set {
+                            dst: SemanticLocation::Register {
+                                name: "edx".to_string(),
+                                bits: 32,
+                            },
+                            expression: SemanticExpression::Const { value: 1, bits: 32 },
+                        },
+                    ],
+                    terminator: SemanticTerminator::Call {
+                        target: SemanticExpression::Function {
+                            name: "add_two".to_string(),
                             bits: 32,
                         },
-                        expression: SemanticExpression::Const { value: 1, bits: 32 },
+                        return_target: None,
+                        does_return: Some(true),
                     },
-                    SemanticEffect::Set {
-                        dst: SemanticLocation::Register {
-                            name: "edx".to_string(),
-                            bits: 32,
-                        },
-                        expression: SemanticExpression::Const { value: 1, bits: 32 },
-                    },
-                ],
-                terminator: SemanticTerminator::Call {
-                    target: SemanticExpression::Function {
-                        name: "add_two".to_string(),
-                        bits: 32,
-                    },
-                    return_target: None,
-                    does_return: Some(true),
+                    diagnostics: Vec::new(),
                 },
-                diagnostics: Vec::new(),
-            },
-            Semantic {
-                version: 1,
-                status: SemanticStatus::Complete,
-                abi: None,
-                encoding: None,
-                temporaries: Vec::new(),
-                effects: Vec::new(),
-                terminator: SemanticTerminator::Return { expression: None },
-                diagnostics: Vec::new(),
-            },
-        ])
+                Semantic {
+                    version: 1,
+                    status: SemanticStatus::Complete,
+                    abi: None,
+                    encoding: None,
+                    temporaries: Vec::new(),
+                    effects: Vec::new(),
+                    terminator: SemanticTerminator::Return { expression: None },
+                    diagnostics: Vec::new(),
+                },
+            ],
+            data: Vec::new(),
+        })
         .expect("main semantics");
 
         lifter.optimize_mem2reg().expect("mem2reg");
