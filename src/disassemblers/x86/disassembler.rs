@@ -52,6 +52,7 @@ pub struct Disassembler<'a> {
     pub(crate) cs: Capstone,
     pub(crate) machine: Architecture,
     pub(crate) image: &'a [u8],
+    pub(crate) image_base: u64,
     executable_address_ranges: BTreeMap<u64, u64>,
     pub(crate) config: Configuration,
     selected_backend: Backend,
@@ -64,10 +65,21 @@ impl<'a> Disassembler<'a> {
         executable_address_ranges: BTreeMap<u64, u64>,
         config: Configuration,
     ) -> Result<Self, Error> {
+        Self::new_with_image_base(machine, image, 0, executable_address_ranges, config)
+    }
+
+    pub fn new_with_image_base(
+        machine: Architecture,
+        image: &'a [u8],
+        image_base: u64,
+        executable_address_ranges: BTreeMap<u64, u64>,
+        config: Configuration,
+    ) -> Result<Self, Error> {
         Self::with_backend(
             Backend::Capstone,
             machine,
             image,
+            image_base,
             executable_address_ranges,
             config,
         )
@@ -77,6 +89,7 @@ impl<'a> Disassembler<'a> {
         backend: Backend,
         machine: Architecture,
         image: &'a [u8],
+        image_base: u64,
         executable_address_ranges: BTreeMap<u64, u64>,
         config: Configuration,
     ) -> Result<Self, Error> {
@@ -87,10 +100,18 @@ impl<'a> Disassembler<'a> {
             cs,
             machine,
             image,
+            image_base,
             executable_address_ranges,
             config,
             selected_backend: backend,
         })
+    }
+
+    pub(crate) fn image_offset(&self, address: u64) -> Option<usize> {
+        address
+            .checked_sub(self.image_base)
+            .map(|offset| offset as usize)
+            .filter(|offset| *offset <= self.image.len())
     }
 
     pub fn disassemble_instruction_address(
@@ -326,6 +347,7 @@ impl<'a> Disassembler<'a> {
         let external_config = self.config.clone();
         let graph_config = cfg.config.clone();
         let selected_backend = self.selected_backend;
+        let image_base = self.image_base;
 
         pool.install(|| {
             while !cfg.functions.queue.is_empty() {
@@ -347,6 +369,7 @@ impl<'a> Disassembler<'a> {
                                 selected_backend,
                                 external_machine,
                                 external_image,
+                                image_base,
                                 external_executable_address_ranges.clone(),
                                 external_config.clone(),
                             )

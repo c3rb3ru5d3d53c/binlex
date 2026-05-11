@@ -249,6 +249,14 @@ pub struct Function {
 }
 
 impl Function {
+    pub(crate) fn from_inner(address: u64, cfg: Py<Graph>, inner: InnerFunction<'static>) -> Self {
+        Self {
+            address,
+            cfg,
+            inner_function_cache: Arc::new(Mutex::new(Some(inner))),
+        }
+    }
+
     pub(crate) fn with_inner_function<F, R>(&self, py: Python, f: F) -> PyResult<R>
     where
         F: FnOnce(&InnerFunction<'static>) -> PyResult<R>,

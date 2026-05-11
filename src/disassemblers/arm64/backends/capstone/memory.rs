@@ -24,7 +24,7 @@ use crate::disassemblers::arm64::disassembler::Disassembler;
 
 impl<'disassembler> Disassembler<'disassembler> {
     pub(crate) fn read_pointer_sized(&self, address: u64, size: usize) -> Option<u64> {
-        let start = address as usize;
+        let start = self.image_offset(address)?;
         let end = start.checked_add(size)?;
         if end > self.image.len() {
             return None;
@@ -38,7 +38,7 @@ impl<'disassembler> Disassembler<'disassembler> {
     }
 
     pub(crate) fn read_i32(&self, address: u64) -> Option<i32> {
-        let start = address as usize;
+        let start = self.image_offset(address)?;
         let end = start.checked_add(4)?;
         if end > self.image.len() {
             return None;

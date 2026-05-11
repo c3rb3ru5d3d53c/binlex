@@ -185,7 +185,7 @@ impl SymbolicCpuState {
     }
 
     pub fn map_image(&mut self, image: &Image) {
-        self.memory.map_image_path(image.path());
+        self.memory.map_image_path(image.path(), image.base());
     }
 
     pub fn symbolize_memory(

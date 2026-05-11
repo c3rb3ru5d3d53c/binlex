@@ -5,7 +5,7 @@ use binlex::lifters::llvm::Lifter;
 use binlex::semantics::{
     Semantic, SemanticAbi, SemanticAbiKind, SemanticCpu, SemanticCpuKind,
     SemanticDiagnosticKind, SemanticEffect, SemanticExpression, SemanticLocation,
-    SemanticOperationBinary, SemanticStatus, SemanticTerminator,
+    SemanticOperationBinary, SemanticStatus, SemanticTerminator, Semantics,
 };
 use binlex::{Architecture, Configuration};
 
@@ -302,6 +302,72 @@ fn llvm_lift_function_uses_builtin_abi_arguments_for_signature() {
     assert!(ir.contains("define i32 @function_1000(i32 %0)"));
     assert!(!ir.contains("movl %ecx, $0"));
     assert!(ir.contains("ret i32 %abi_ret"));
+}
+
+#[test]
+fn llvm_lift_function_does_not_infer_callable_abi_without_override() {
+    let graph = build_fastcall_semantic_function_graph();
+    let function = Function::new(0x1000, &graph).expect("function");
+
+    let mut lifter =
+        Lifter::from_architecture(function.architecture(), Configuration::default());
+    lifter
+        .lift_function(&function, None)
+        .expect("function should lift");
+    lifter.verify().expect("function module should verify");
+
+    let ir = lifter.ir();
+    assert!(ir.contains("define void @function_1000()"));
+    assert!(ir.contains("ret void"));
+    assert!(!ir.contains("define i32 @function_1000("));
+    assert!(!ir.contains("ret i32"));
+    assert!(!ir.contains("asm sideeffect"));
+}
+
+#[test]
+fn llvm_lift_function_semantics_uses_explicit_abi_without_native_sync_epilogue() {
+    let cpu = SemanticCpu::from_kind(SemanticCpuKind::I386).expect("cpu");
+    let abi = SemanticAbi::from_kind(SemanticAbiKind::Fastcall, &cpu).expect("abi");
+    let semantics = Semantics {
+        semantics: vec![Semantic {
+            version: 1,
+            status: SemanticStatus::Complete,
+            abi: None,
+            encoding: None,
+            temporaries: Vec::new(),
+            effects: vec![SemanticEffect::Set {
+                dst: SemanticLocation::Register {
+                    name: "eax".to_string(),
+                    bits: 32,
+                },
+                expression: SemanticExpression::Binary {
+                    op: SemanticOperationBinary::Add,
+                    left: Box::new(SemanticExpression::Read(Box::new(
+                        SemanticLocation::Register {
+                            name: "ecx".to_string(),
+                            bits: 32,
+                        },
+                    ))),
+                    right: Box::new(SemanticExpression::Const { value: 1, bits: 32 }),
+                    bits: 32,
+                },
+            }],
+            terminator: SemanticTerminator::Return { expression: None },
+            diagnostics: Vec::new(),
+        }],
+        data: Vec::new(),
+    };
+
+    let mut lifter = Lifter::from_architecture(Architecture::I386, Configuration::default());
+    lifter
+        .lift_function_semantics_named(&semantics, Some(&abi), "add_one")
+        .expect("semantics should lift");
+    lifter.verify().expect("function module should verify");
+
+    let ir = lifter.ir();
+    assert!(ir.contains("define i32 @add_one(i32 %0)"));
+    assert!(ir.contains("ret i32 %abi_ret"));
+    assert!(!ir.contains("asm sideeffect"));
 }
 
 #[test]

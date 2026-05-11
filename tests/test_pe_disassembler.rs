@@ -882,6 +882,12 @@ mod tests {
             18432,
             "the size of the pe file in bytes is incorrect"
         );
+        let mapped_image = pe.image().expect("failed to build mapped pe image");
+        assert_eq!(mapped_image.base(), pe.imagebase(), "mapped image base is incorrect");
+        assert!(
+            mapped_image.size().expect("failed to size mapped image") < pe.imagebase(),
+            "mapped image should not retain a giant leading sparse gap",
+        );
         let set: BTreeSet<u64> = [
             0x140001180,
             0x1400012a0,

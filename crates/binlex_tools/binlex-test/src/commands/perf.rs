@@ -1,11 +1,12 @@
 use base64::Engine;
 use binlex::clients::Server;
-use binlex::controlflow::Graph;
+use binlex::controlflow::{Graph, GraphSnapshot};
 use binlex::indexing::{Collection, LocalIndex};
 use binlex::server::analyze;
 use binlex::server::dto::AnalyzeRequest;
 use binlex::{Architecture, Configuration, Magic};
 use clap::{Parser, Subcommand, ValueEnum};
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -21,6 +22,9 @@ pub struct PerfArgs {
 #[derive(Subcommand, Debug)]
 enum PerfCommand {
     Analyze(AnalyzeArgs),
+    LiftFunctions(LiftFunctionsArgs),
+    PrepareLiftSnapshot(PrepareLiftSnapshotArgs),
+    LiftFromSnapshot(LiftFromSnapshotArgs),
     IndexLocal(IndexLocalArgs),
     PipelineLocal(PipelineLocalArgs),
     PipelineRemote(PipelineRemoteArgs),
@@ -38,6 +42,54 @@ struct AnalyzeArgs {
     corpora: Vec<String>,
     #[arg(long, default_value_t = 1)]
     iterations: usize,
+}
+
+#[derive(Parser, Debug, Clone)]
+struct LiftFunctionsArgs {
+    #[arg(long)]
+    input: PathBuf,
+    #[arg(long)]
+    magic: Option<String>,
+    #[arg(long)]
+    architecture: Option<String>,
+    #[arg(long, value_delimiter = ',', default_value = "default")]
+    corpora: Vec<String>,
+    #[arg(long, default_value_t = 1)]
+    iterations: usize,
+    #[arg(long)]
+    emit_ir: bool,
+    #[arg(long)]
+    limit: Option<usize>,
+}
+
+#[derive(Parser, Debug, Clone)]
+struct PrepareLiftSnapshotArgs {
+    #[arg(long)]
+    input: PathBuf,
+    #[arg(long)]
+    output: PathBuf,
+    #[arg(long)]
+    magic: Option<String>,
+    #[arg(long)]
+    architecture: Option<String>,
+    #[arg(long, value_delimiter = ',', default_value = "default")]
+    corpora: Vec<String>,
+}
+
+#[derive(Parser, Debug, Clone)]
+struct LiftFromSnapshotArgs {
+    #[arg(long)]
+    snapshot: PathBuf,
+    #[arg(long, default_value_t = 1)]
+    iterations: usize,
+    #[arg(long)]
+    emit_ir: bool,
+    #[arg(long)]
+    limit: Option<usize>,
+    #[arg(long, default_value_t = 0)]
+    sleep_before_lift: u64,
+    #[arg(long, default_value_t = 1)]
+    repeat_lift: usize,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -137,6 +189,12 @@ struct AnalysisOutcome {
     analyze_elapsed: Duration,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+struct LiftSnapshotFile {
+    sha256: String,
+    graph: GraphSnapshot,
+}
+
 struct IndexRoot {
     path: PathBuf,
     temp_dir: Option<TempDir>,
@@ -145,6 +203,9 @@ struct IndexRoot {
 pub fn run(config: &Configuration, args: PerfArgs) -> Result<(), Box<dyn Error>> {
     match args.command {
         PerfCommand::Analyze(command) => run_analyze(config, &command),
+        PerfCommand::LiftFunctions(command) => run_lift_functions(config, &command),
+        PerfCommand::PrepareLiftSnapshot(command) => run_prepare_lift_snapshot(config, &command),
+        PerfCommand::LiftFromSnapshot(command) => run_lift_from_snapshot(config, &command),
         PerfCommand::IndexLocal(command) => run_index_local(config, &command),
         PerfCommand::PipelineLocal(command) => run_pipeline_local(config, &command),
         PerfCommand::PipelineRemote(command) => run_pipeline_remote(config, &command),
@@ -175,6 +236,136 @@ fn run_analyze(config: &Configuration, args: &AnalyzeArgs) -> Result<(), Box<dyn
         durations.push(outcome.analyze_elapsed);
     }
     print_summary("analyze", &durations);
+    Ok(())
+}
+
+fn run_lift_functions(config: &Configuration, args: &LiftFunctionsArgs) -> Result<(), Box<dyn Error>> {
+    let bytes = fs::read(&args.input)?;
+    let iterations = normalize_iterations(args.iterations);
+    let mut durations = Vec::with_capacity(iterations);
+
+    for iteration in 0..iterations {
+        let outcome = analyze_sample(
+            config,
+            &bytes,
+            &normalize_corpora(&args.corpora),
+            args.magic.as_deref(),
+            args.architecture.as_deref(),
+        )?;
+        let started_at = Instant::now();
+        let mut lifted_count = 0usize;
+        let mut ir_bytes = 0usize;
+
+        for function in outcome
+            .graph
+            .functions()
+            .into_iter()
+            .take(args.limit.unwrap_or(usize::MAX))
+        {
+            let lifter = function.lift()?;
+            lifted_count += 1;
+            if args.emit_ir {
+                ir_bytes += lifter.ir().len();
+            }
+        }
+
+        let elapsed = started_at.elapsed();
+        println!(
+            "iteration={} mode=lift-functions sha256={} functions={} lifted={} emit_ir={} ir_bytes={} elapsed_ms={}",
+            iteration + 1,
+            outcome.sha256,
+            outcome.graph.functions().len(),
+            lifted_count,
+            args.emit_ir,
+            ir_bytes,
+            elapsed.as_millis()
+        );
+        durations.push(elapsed);
+    }
+
+    print_summary("lift-functions", &durations);
+    Ok(())
+}
+
+fn run_prepare_lift_snapshot(
+    config: &Configuration,
+    args: &PrepareLiftSnapshotArgs,
+) -> Result<(), Box<dyn Error>> {
+    let bytes = fs::read(&args.input)?;
+    let outcome = analyze_sample(
+        config,
+        &bytes,
+        &normalize_corpora(&args.corpora),
+        args.magic.as_deref(),
+        args.architecture.as_deref(),
+    )?;
+    let snapshot = LiftSnapshotFile {
+        sha256: outcome.sha256.clone(),
+        graph: outcome.graph.snapshot(),
+    };
+    fs::write(&args.output, serde_json::to_vec(&snapshot)?)?;
+    println!(
+        "prepared_lift_snapshot sha256={} functions={} blocks={} instructions={} path={}",
+        snapshot.sha256,
+        outcome.graph.functions().len(),
+        outcome.graph.blocks().len(),
+        outcome.graph.instructions().len(),
+        args.output.display()
+    );
+    Ok(())
+}
+
+fn run_lift_from_snapshot(
+    config: &Configuration,
+    args: &LiftFromSnapshotArgs,
+) -> Result<(), Box<dyn Error>> {
+    let snapshot: LiftSnapshotFile = serde_json::from_slice(&fs::read(&args.snapshot)?)?;
+    let iterations = normalize_iterations(args.iterations);
+    let mut durations = Vec::with_capacity(iterations);
+
+    for iteration in 0..iterations {
+        let graph = Graph::from_snapshot(snapshot.graph.clone(), config.clone())?;
+        let function_addresses: Vec<u64> = graph
+            .functions()
+            .into_iter()
+            .map(|function| function.address())
+            .take(args.limit.unwrap_or(usize::MAX))
+            .collect();
+        let total_functions = graph.functions().len();
+        if args.sleep_before_lift > 0 {
+            std::thread::sleep(Duration::from_secs(args.sleep_before_lift));
+        }
+        let started_at = Instant::now();
+        let mut lifted_count = 0usize;
+        let mut ir_bytes = 0usize;
+
+        for _ in 0..args.repeat_lift {
+            for function_address in &function_addresses {
+                let function = binlex::controlflow::Function::new(*function_address, &graph)?;
+                let lifter = function.lift()?;
+                lifted_count += 1;
+                if args.emit_ir {
+                    ir_bytes += lifter.ir().len();
+                }
+            }
+        }
+
+        let elapsed = started_at.elapsed();
+        println!(
+            "iteration={} mode=lift-from-snapshot sha256={} functions={} lifted={} emit_ir={} repeat_lift={} ir_bytes={} elapsed_ms={}",
+            iteration + 1,
+            snapshot.sha256,
+            total_functions,
+            lifted_count,
+            args.emit_ir,
+            args.repeat_lift,
+            ir_bytes,
+            elapsed.as_millis()
+        );
+        durations.push(elapsed);
+    }
+
+    print_summary("lift-from-snapshot", &durations);
     Ok(())
 }
 

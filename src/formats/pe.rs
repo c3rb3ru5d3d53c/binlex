@@ -1024,7 +1024,7 @@ impl PE {
                 continue;
             }
             let section_virtual_adddress = PE::align_section_virtual_address(
-                self.imagebase() + section.pointerto_raw_data() as u64,
+                self.imagebase() + section.virtual_address(),
                 self.section_alignment(),
                 self.file_alignment(),
             );
@@ -1225,8 +1225,7 @@ impl PE {
             if file_offset >= section_raw_data_offset
                 && file_offset < section_raw_data_offset + section_raw_data_size
             {
-                let section_virtual_address =
-                    self.imagebase() + section.pointerto_raw_data() as u64;
+                let section_virtual_address = self.imagebase() + section.virtual_address();
                 let section_offset = file_offset - section_raw_data_offset;
                 let virtual_address = section_virtual_address + section_offset;
                 return Some(virtual_address);
@@ -1245,8 +1244,9 @@ impl PE {
     /// A `Result` containing the `Image` object on success or an `Error` on failure.
     pub fn image(&self) -> Result<Image, Error> {
         let pathbuf = PathBuf::from(self.config.mmap.directory.clone())
-            .join(self.file.sha256_no_config().unwrap());
+            .join(format!("{}.mapped-v2", self.file.sha256_no_config().unwrap()));
         let mut tempmap = Image::new(pathbuf, self.config.mmap.cache.enabled)?;
+        tempmap.set_base(self.imagebase());
         if tempmap.is_cached() {
             return Ok(tempmap);
         }
@@ -1267,7 +1267,7 @@ impl PE {
                 continue;
             }
             let section_virtual_adddress = PE::align_section_virtual_address(
-                self.imagebase() + section.pointerto_raw_data() as u64,
+                section.virtual_address(),
                 self.section_alignment(),
                 self.file_alignment(),
             );

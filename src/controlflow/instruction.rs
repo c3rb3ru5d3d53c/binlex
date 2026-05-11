@@ -49,6 +49,7 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
 use std::ops::{Deref, DerefMut};
+use std::sync::OnceLock;
 use std::{collections::BTreeMap, collections::BTreeSet, io::Error};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -200,7 +201,6 @@ impl InstructionDetail {
     }
 }
 
-#[derive(Clone)]
 pub struct InstructionRecord {
     // The instruction architecture
     pub architecture: Architecture,
@@ -248,6 +248,38 @@ pub struct InstructionRecord {
     pub instruction_detail: Option<InstructionDetail>,
     /// Optional canonical instruction semantics for later lifting.
     pub semantics: Option<Semantic>,
+    prepared_semantics_cache: OnceLock<Result<Semantic, String>>,
+}
+
+impl Clone for InstructionRecord {
+    fn clone(&self) -> Self {
+        Self {
+            architecture: self.architecture,
+            config: self.config.clone(),
+            address: self.address,
+            is_prologue: self.is_prologue,
+            is_block_start: self.is_block_start,
+            is_function_start: self.is_function_start,
+            bytes: self.bytes.clone(),
+            chromosome_mask: self.chromosome_mask.clone(),
+            pattern: self.pattern.clone(),
+            is_return: self.is_return,
+            is_call: self.is_call,
+            functions: self.functions.clone(),
+            is_jump: self.is_jump,
+            is_conditional: self.is_conditional,
+            is_trap: self.is_trap,
+            has_indirect_target: self.has_indirect_target,
+            to: self.to.clone(),
+            edges: self.edges,
+            mnemonic: self.mnemonic.clone(),
+            disassembly: self.disassembly.clone(),
+            operands: self.operands.clone(),
+            instruction_detail: self.instruction_detail.clone(),
+            semantics: self.semantics.clone(),
+            prepared_semantics_cache: OnceLock::new(),
+        }
+    }
 }
 
 /// Represents a JSON-serializable view of an `Instruction`.
@@ -360,6 +392,7 @@ impl InstructionRecord {
             operands: Vec::new(),
             instruction_detail: None,
             semantics: None,
+            prepared_semantics_cache: OnceLock::new(),
             architecture,
             config,
         }
@@ -392,7 +425,25 @@ impl InstructionRecord {
 
     /// Replaces the canonical semantics attached to this instruction.
     pub fn set_semantics(&mut self, semantics: Semantic) {
+        let _ = self.prepared_semantics_cache.take();
         self.semantics = Some(semantics);
+    }
+
+    pub fn prepared_semantics(&self) -> Result<Option<&Semantic>, Error> {
+        let Some(semantics) = self.semantics.as_ref() else {
+            return Ok(None);
+        };
+        match self
+            .prepared_semantics_cache
+            .get_or_init(|| crate::lifters::llvm::prepare::prepare_instruction_semantics(semantics).map_err(|error| error.to_string()))
+        {
+            Ok(prepared) => Ok(Some(prepared)),
+            Err(message) => Err(Error::other(message.clone())),
+        }
+    }
+
+    pub(crate) fn reset_prepared_semantics_cache(&mut self) {
+        let _ = self.prepared_semantics_cache.take();
     }
 
     pub fn set_instruction_detail(&mut self, detail: InstructionDetail) {

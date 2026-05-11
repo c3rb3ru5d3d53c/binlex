@@ -2,9 +2,7 @@ use crate::controlflow::{Block as PyBlock, Function as PyFunction, Instruction a
 use crate::semantics::abis::extract_abi;
 use crate::semantics::{SemanticCpu as PySemanticCpu, Semantics as PySemantics};
 use crate::Configuration;
-use binlex::controlflow::{
-    Block, Function, Graph, GraphSnapshot, Instruction, InstructionRecord,
-};
+use binlex::controlflow::{Block, Function, Graph, Instruction, InstructionRecord};
 use binlex::core::Architecture;
 use binlex::io::Stderr;
 use binlex::lifters::llvm::{JittedFunction as InnerJittedFunction, Lifter as InnerLifter};
@@ -21,13 +19,13 @@ enum ModuleItemDef {
         record: InstructionRecord,
     },
     Block {
-        snapshot: GraphSnapshot,
         address: u64,
+        records: Vec<InstructionRecord>,
         abi: Option<SemanticAbi>,
     },
     Function {
-        snapshot: GraphSnapshot,
         address: u64,
+        blocks: Vec<(u64, Vec<InstructionRecord>)>,
         abi: Option<SemanticAbi>,
         name: Option<String>,
     },
@@ -65,8 +63,8 @@ struct CreatedFunctionDef {
 enum CreatedBlockDef {
     Cfg {
         name: Option<String>,
-        snapshot: GraphSnapshot,
         address: u64,
+        records: Vec<InstructionRecord>,
     },
     Semantics {
         name: Option<String>,
@@ -127,21 +125,32 @@ impl BuildState {
                     inner.lift_instruction(&instruction)?;
                 }
                 ModuleItemDef::Block {
-                    snapshot,
                     address,
+                    records,
                     abi,
                 } => {
-                    let graph = Graph::from_snapshot(snapshot, self.config.clone())?;
+                    let mut graph = Graph::new(architecture_from_cpu(&self.cpu)?, self.config.clone());
+                    for record in records {
+                        graph.insert_instruction(record);
+                    }
+                    graph.set_block(address);
                     let block = Block::new(address, &graph)?;
                     inner.lift_block(&block, abi.as_ref())?;
                 }
                 ModuleItemDef::Function {
-                    snapshot,
                     address,
+                    blocks,
                     abi,
                     name,
                 } => {
-                    let graph = Graph::from_snapshot(snapshot, self.config.clone())?;
+                    let mut graph = Graph::new(architecture_from_cpu(&self.cpu)?, self.config.clone());
+                    for (block_address, records) in blocks {
+                        for record in records {
+                            graph.insert_instruction(record);
+                        }
+                        graph.set_block(block_address);
+                    }
+                    graph.set_function(address);
                     let function = Function::new(address, &graph)?;
                     if let Some(name) = name {
                         inner.lift_function_named(&function, abi.as_ref(), &name, None)?;
@@ -245,11 +254,9 @@ fn compile_created_function(
         match block {
             CreatedBlockDef::Cfg {
                 name,
-                snapshot,
-                address,
+                address: _,
+                records,
             } => {
-                let source = Graph::from_snapshot(snapshot.clone(), config.clone())?;
-                let records = instruction_records_for_block(&source, *address)?;
                 let block_address = records
                     .first()
                     .map(|record| record.address)
@@ -257,7 +264,7 @@ fn compile_created_function(
                 if entry_address.is_none() {
                     entry_address = Some(block_address);
                 }
-                for record in records {
+                for record in records.iter().cloned() {
                     graph.insert_instruction(record);
                 }
                 graph.set_block(block_address);
@@ -439,7 +446,8 @@ impl Lifter {
         };
         let mut state = self.state.lock().unwrap();
         state.items.push(ModuleItemDef::Instruction { record });
-        rebuild_state(&mut state, &self.config, "llvm lift instruction failed")
+        state.mark_dirty();
+        true
     }
 
     #[pyo3(signature = (block, abi=None), text_signature = "($self, block, abi=None)")]
@@ -454,8 +462,8 @@ impl Lifter {
             },
             None => None,
         };
-        let (snapshot, address) = match block.with_inner_block(py, |inner| {
-            Ok((inner.cfg.snapshot(), inner.address()))
+        let (records, address) = match block.with_inner_block(py, |inner| {
+            Ok((instruction_records_for_block(inner.cfg, inner.address())?, inner.address()))
         }) {
             Ok(values) => values,
             Err(err) => {
@@ -465,11 +473,12 @@ impl Lifter {
         };
         let mut state = self.state.lock().unwrap();
         state.items.push(ModuleItemDef::Block {
-            snapshot,
             address,
+            records,
             abi,
         });
-        rebuild_state(&mut state, &self.config, "llvm lift block failed")
+        state.mark_dirty();
+        true
     }
 
     #[pyo3(signature = (function, abi=None), text_signature = "($self, function, abi=None)")]
@@ -489,8 +498,12 @@ impl Lifter {
             },
             None => None,
         };
-        let (snapshot, address) = match function.with_inner_function(py, |inner| {
-            Ok((inner.cfg.snapshot(), inner.address()))
+        let (blocks, address) = match function.with_inner_function(py, |inner| {
+            let mut blocks = Vec::with_capacity(inner.blocks.len());
+            for block in inner.blocks.values() {
+                blocks.push((block.address(), instruction_records_for_block(inner.cfg, block.address())?));
+            }
+            Ok((blocks, inner.address()))
         }) {
             Ok(values) => values,
             Err(err) => {
@@ -500,12 +513,13 @@ impl Lifter {
         };
         let mut state = self.state.lock().unwrap();
         state.items.push(ModuleItemDef::Function {
-            snapshot,
             address,
+            blocks,
             abi,
             name: None,
         });
-        rebuild_state(&mut state, &self.config, "llvm lift function failed")
+        state.mark_dirty();
+        true
     }
 
     #[pyo3(signature = (semantics, abi=None), text_signature = "($self, semantics, abi=None)")]
@@ -528,7 +542,8 @@ impl Lifter {
         };
         let mut state = self.state.lock().unwrap();
         state.items.push(ModuleItemDef::BlockSemantics { semantics, abi });
-        rebuild_state(&mut state, &self.config, "llvm lift block semantics failed")
+        state.mark_dirty();
+        true
     }
 
     #[pyo3(signature = (semantics, abi=None, name=None), text_signature = "($self, semantics, abi=None, name=None)")]
@@ -552,7 +567,8 @@ impl Lifter {
         };
         let mut state = self.state.lock().unwrap();
         state.items.push(ModuleItemDef::FunctionSemantics { semantics, abi, name });
-        rebuild_state(&mut state, &self.config, "llvm lift function semantics failed")
+        state.mark_dirty();
+        true
     }
 
     #[pyo3(signature = (name, abi=None), text_signature = "($self, name, abi=None)")]
@@ -823,8 +839,8 @@ impl LiftedFunction {
 
     #[pyo3(signature = (block, name=None), text_signature = "($self, block, name=None)")]
     pub fn lift_block(&self, py: Python<'_>, block: &PyBlock, name: Option<String>) -> bool {
-        let (snapshot, address) = match block.with_inner_block(py, |inner| {
-            Ok((inner.cfg.snapshot(), inner.address()))
+        let (records, address) = match block.with_inner_block(py, |inner| {
+            Ok((instruction_records_for_block(inner.cfg, inner.address())?, inner.address()))
         }) {
             Ok(values) => values,
             Err(err) => {
@@ -856,8 +872,8 @@ impl LiftedFunction {
         }
         function.blocks.push(CreatedBlockDef::Cfg {
             name,
-            snapshot,
             address,
+            records,
         });
         state.mark_dirty();
         true

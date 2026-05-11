@@ -8,7 +8,7 @@ use binlex::semantics::{
     SemanticTerminator,
 };
 use binlex::{Architecture, Configuration};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 fn test_config() -> Configuration {
@@ -52,50 +52,33 @@ fn vex_global_disable_blocks_lifting() {
 }
 
 fn instruction(address: u64, bytes: &[u8]) -> InstructionRecord {
-    InstructionRecord {
-        architecture: Architecture::AMD64,
-        config: Configuration::default(),
-        address,
-        is_prologue: false,
-        is_block_start: false,
-        is_function_start: false,
-        bytes: bytes.to_vec(),
-        chromosome_mask: vec![0x00; bytes.len()],
-        pattern: bytes
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<Vec<_>>()
-            .join(""),
-        is_return: bytes == [0xC3],
-        is_call: false,
-        is_jump: false,
-        is_conditional: false,
-        is_trap: false,
-        has_indirect_target: false,
-        functions: BTreeSet::new(),
-        to: BTreeSet::new(),
-        edges: 0,
-        mnemonic: String::new(),
-        disassembly: String::new(),
-        operands: Vec::new(),
-        instruction_detail: None,
-        semantics: Some(Semantic {
-            version: 1,
-            status: SemanticStatus::Complete,
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::ProgramCounter { bits: 64 },
-                expression: SemanticExpression::Const {
-                    value: address as u128 + bytes.len() as u128,
-                    bits: 64,
-                },
-            }],
-            terminator: SemanticTerminator::Return { expression: None },
-            diagnostics: Vec::new(),
-        }),
-    }
+    let mut instruction =
+        InstructionRecord::create(address, Architecture::AMD64, Configuration::default());
+    instruction.bytes = bytes.to_vec();
+    instruction.chromosome_mask = vec![0x00; bytes.len()];
+    instruction.pattern = bytes
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<Vec<_>>()
+        .join("");
+    instruction.is_return = bytes == [0xC3];
+    instruction.semantics = Some(Semantic {
+        version: 1,
+        status: SemanticStatus::Complete,
+        abi: None,
+        encoding: None,
+        temporaries: Vec::new(),
+        effects: vec![SemanticEffect::Set {
+            dst: SemanticLocation::ProgramCounter { bits: 64 },
+            expression: SemanticExpression::Const {
+                value: address as u128 + bytes.len() as u128,
+                bits: 64,
+            },
+        }],
+        terminator: SemanticTerminator::Return { expression: None },
+        diagnostics: Vec::new(),
+    });
+    instruction
 }
 
 fn instruction_for_arch(

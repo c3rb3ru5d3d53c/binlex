@@ -649,6 +649,13 @@ impl Graph {
             .map(|entry| entry.value().clone())
     }
 
+    pub(crate) fn with_instruction_record<T, F>(&self, address: u64, f: F) -> Option<T>
+    where
+        F: FnOnce(&InstructionRecord) -> T,
+    {
+        self.listing.get(&address).map(|entry| f(entry.value()))
+    }
+
     pub fn get_instruction(&self, address: u64) -> Option<Instruction<'_>> {
         Instruction::new(address, self).ok()
     }
@@ -702,6 +709,7 @@ impl Graph {
         }
         existing.semantics =
             Graph::merge_instruction_semantics(existing.semantics, incoming.semantics);
+        existing.reset_prepared_semantics_cache();
         existing
     }
 

@@ -5,49 +5,29 @@ use binlex::semantics::{
 };
 use binlex::{Architecture, Configuration};
 use serde_json::to_value;
-use std::collections::BTreeSet;
 
 fn instruction_with_semantics(config: Configuration) -> InstructionRecord {
-    InstructionRecord {
-        architecture: Architecture::AMD64,
-        config,
-        address: 0x1000,
-        is_prologue: false,
-        is_block_start: false,
-        is_function_start: false,
-        bytes: vec![0x31, 0xC0],
-        chromosome_mask: vec![0x00, 0x00],
-        pattern: "31c0".to_string(),
-        is_return: false,
-        is_call: false,
-        is_jump: false,
-        is_conditional: false,
-        is_trap: false,
-        has_indirect_target: false,
-        functions: BTreeSet::new(),
-        to: BTreeSet::new(),
-        edges: 0,
-        mnemonic: String::new(),
-        disassembly: String::new(),
-        operands: Vec::new(),
-        instruction_detail: None,
-        semantics: Some(Semantic {
-            version: 1,
-            status: SemanticStatus::Complete,
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
-                    name: "eax".to_string(),
-                    bits: 32,
-                },
-                expression: SemanticExpression::Const { value: 0, bits: 32 },
-            }],
-            terminator: SemanticTerminator::FallThrough,
-            diagnostics: Vec::new(),
-        }),
-    }
+    let mut instruction = InstructionRecord::create(0x1000, Architecture::AMD64, config);
+    instruction.bytes = vec![0x31, 0xC0];
+    instruction.chromosome_mask = vec![0x00, 0x00];
+    instruction.pattern = "31c0".to_string();
+    instruction.semantics = Some(Semantic {
+        version: 1,
+        status: SemanticStatus::Complete,
+        abi: None,
+        encoding: None,
+        temporaries: Vec::new(),
+        effects: vec![SemanticEffect::Set {
+            dst: SemanticLocation::Register {
+                name: "eax".to_string(),
+                bits: 32,
+            },
+            expression: SemanticExpression::Const { value: 0, bits: 32 },
+        }],
+        terminator: SemanticTerminator::FallThrough,
+        diagnostics: Vec::new(),
+    });
+    instruction
 }
 
 #[test]

@@ -67,12 +67,12 @@ impl<'disassembler> Disassembler<'disassembler> {
         address: u64,
         count: u64,
     ) -> Result<Instructions<'_>, Error> {
-        if (address as usize) >= self.image.len() {
+        let Some(start) = self.image_offset(address) else {
             return Err(Error::other("address out of bounds"));
-        }
+        };
         let instructions = self
             .cs
-            .disasm_count(&self.image[address as usize..], address, count as usize)
+            .disasm_count(&self.image[start..], address, count as usize)
             .map_err(|_| Error::other("failed to disassemble instructions"))?;
         if instructions.is_empty() {
             return Err(Error::other("no instructions found"));

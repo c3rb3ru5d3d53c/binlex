@@ -92,13 +92,15 @@ impl Disassembler {
 
         if let Some(image) = &self.image {
             let mut image = image.borrow_mut(py);
+            let image_base = image.inner.base();
             let mmap = image
                 .inner
                 .mmap()
                 .map_err(|error| PyTypeError::new_err(error.to_string()))?;
-            let disassembler = InnerDisassembler::new(
+            let disassembler = InnerDisassembler::new_with_image_base(
                 machine,
                 &mmap[..],
+                image_base,
                 self.executable_address_ranges.clone(),
                 config,
             )

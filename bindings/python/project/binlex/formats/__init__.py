@@ -56,6 +56,10 @@ class Image:
         """Return the filesystem path backing the image."""
         return self._inner.path()
 
+    def base(self):
+        """Return the virtual base address represented by offset zero in the image mapping."""
+        return self._inner.base()
+
     def write(self, data):
         """Write raw bytes at the current file position."""
         return self._inner.write(data)
@@ -83,9 +87,12 @@ class Image:
     def __getitem__(self, key):
         """Access image bytes using standard Python indexing and slicing."""
         view = self.mmap()
+        base = self.base()
         if isinstance(key, slice):
-            return bytes(view[key])
-        return view[key]
+            start = None if key.start is None else key.start - base
+            stop = None if key.stop is None else key.stop - base
+            return bytes(view[slice(start, stop, key.step)])
+        return view[key - base]
 
     def mmap(self):
         """Return a read-only memory view over the image bytes."""

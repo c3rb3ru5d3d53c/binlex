@@ -10,14 +10,16 @@ use z3::ast::{Array, BV};
 #[derive(Debug)]
 struct ImageBackingInner {
     path: PathBuf,
+    base: u64,
     file: Option<File>,
     mmap: Option<Mmap>,
 }
 
 impl ImageBackingInner {
-    fn new(path: PathBuf) -> Self {
+    fn new(path: PathBuf, base: u64) -> Self {
         Self {
             path,
+            base,
             file: None,
             mmap: None,
         }
@@ -35,7 +37,8 @@ impl ImageBackingInner {
         let Some(mmap) = self.mmap.as_ref() else {
             return Ok(None);
         };
-        Ok(mmap.get(address as usize).copied())
+        let offset = address.checked_sub(self.base).map(|value| value as usize);
+        Ok(offset.and_then(|offset| mmap.get(offset).copied()))
     }
 }
 
@@ -45,10 +48,11 @@ struct ImageBacking {
 }
 
 impl ImageBacking {
-    fn new(path: impl AsRef<Path>) -> Self {
+    fn new(path: impl AsRef<Path>, base: u64) -> Self {
         Self {
             inner: Arc::new(Mutex::new(ImageBackingInner::new(
                 path.as_ref().to_path_buf(),
+                base,
             ))),
         }
     }
@@ -87,8 +91,8 @@ impl FlatMemory {
         self.mapped_ranges.push((address, size));
     }
 
-    pub(crate) fn map_image_path(&mut self, path: impl AsRef<Path>) {
-        self.backing_image = Some(ImageBacking::new(path));
+    pub(crate) fn map_image_path(&mut self, path: impl AsRef<Path>, base: u64) {
+        self.backing_image = Some(ImageBacking::new(path, base));
     }
 
     pub(crate) fn store_bytes(

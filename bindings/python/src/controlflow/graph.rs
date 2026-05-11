@@ -240,7 +240,10 @@ impl Graph {
     /// Return all functions currently materialized in the graph.
     pub fn functions(&self, py: Python) -> Vec<Function> {
         let mut result = Vec::<Function>::new();
-        for inner_function in self.inner.lock().unwrap().functions() {
+        let binding = self.inner.lock().unwrap();
+        let inner_ref: &'static binlex::controlflow::Graph =
+            unsafe { std::mem::transmute::<&binlex::controlflow::Graph, &'static binlex::controlflow::Graph>(&*binding) };
+        for inner_function in inner_ref.functions() {
             let cfg = Graph {
                 inner: Arc::clone(&self.inner),
             };
@@ -248,11 +251,11 @@ impl Graph {
             if pycfg.is_none() {
                 continue;
             }
-            let function = Function::new(inner_function.address, pycfg.unwrap()).ok();
-            if function.is_none() {
-                continue;
-            }
-            result.push(function.unwrap());
+            result.push(Function::from_inner(
+                inner_function.address,
+                pycfg.unwrap(),
+                unsafe { std::mem::transmute(inner_function) },
+            ));
         }
         result
     }

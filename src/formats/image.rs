@@ -51,6 +51,7 @@ pub struct Image {
     /// Flag to determine if the file should be cached. If `false`, the file will
     /// be deleted upon the object being dropped.
     pub cache: bool,
+    base: u64,
     mmap: Option<Mmap>,
     mmap_mut: Option<MmapMut>,
 }
@@ -99,9 +100,18 @@ impl Image {
             handle: Some(handle),
             is_cached,
             cache,
+            base: 0,
             mmap: None,
             mmap_mut: None,
         })
+    }
+
+    pub fn base(&self) -> u64 {
+        self.base
+    }
+
+    pub fn set_base(&mut self, base: u64) {
+        self.base = base;
     }
 
     pub fn seek_from_current(&mut self, offset: i64) -> Result<u64, io::Error> {

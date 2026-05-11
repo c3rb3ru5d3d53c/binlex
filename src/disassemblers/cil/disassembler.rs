@@ -44,6 +44,7 @@ pub struct Disassembler<'disassembler> {
     pub architecture: Architecture,
     pub executable_address_ranges: BTreeMap<u64, u64>,
     pub image: &'disassembler [u8],
+    pub image_base: u64,
     config: Configuration,
 }
 
@@ -56,10 +57,21 @@ impl<'disassembler> Disassembler<'disassembler> {
         executable_address_ranges: BTreeMap<u64, u64>,
         config: Configuration,
     ) -> Result<Self, Error> {
+        Self::new_with_image_base(architecture, image, 0, executable_address_ranges, config)
+    }
+
+    pub fn new_with_image_base(
+        architecture: Architecture,
+        image: &'disassembler [u8],
+        image_base: u64,
+        executable_address_ranges: BTreeMap<u64, u64>,
+        config: Configuration,
+    ) -> Result<Self, Error> {
         Self::with_backend(
             Backend::Native,
             architecture,
             image,
+            image_base,
             executable_address_ranges,
             config,
         )
@@ -69,6 +81,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         backend: Backend,
         architecture: Architecture,
         image: &'disassembler [u8],
+        image_base: u64,
         executable_address_ranges: BTreeMap<u64, u64>,
         config: Configuration,
     ) -> Result<Self, Error> {
@@ -80,8 +93,16 @@ impl<'disassembler> Disassembler<'disassembler> {
             architecture,
             executable_address_ranges,
             image,
+            image_base,
             config,
         })
+    }
+
+    fn image_offset(&self, address: u64) -> Option<usize> {
+        address
+            .checked_sub(self.image_base)
+            .map(|offset| offset as usize)
+            .filter(|offset| *offset <= self.image.len())
     }
 
     pub fn is_executable_address(&self, address: u64) -> bool {
@@ -140,8 +161,15 @@ impl<'disassembler> Disassembler<'disassembler> {
             ));
         }
 
-        let instruction = match native::decode_instruction(&self.image[address as usize..], address)
-        {
+        let Some(offset) = self.image_offset(address) else {
+            cfg.instructions.insert_invalid(address);
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("0x{:x}: instruction address is out of image bounds", address),
+            ));
+        };
+
+        let instruction = match native::decode_instruction(&self.image[offset..], address) {
             Ok(instruction) => instruction,
             Err(_) => {
                 cfg.instructions.insert_invalid(address);

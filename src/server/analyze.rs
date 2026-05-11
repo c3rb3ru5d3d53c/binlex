@@ -339,6 +339,7 @@ fn analyze_pe(
     let mut mapped = pe
         .image()
         .map_err(|error| ServerError::processor(format!("failed to map pe image: {}", error)))?;
+    let image_base = mapped.base();
     let image = mapped
         .mmap()
         .map_err(|error| ServerError::processor(format!("failed to map pe image: {}", error)))?;
@@ -358,9 +359,10 @@ fn analyze_pe(
 
     let mut cfg = Graph::new(architecture, config.clone());
     if pe.is_dotnet() {
-        let disassembler = CILDisassembler::new(
+        let disassembler = CILDisassembler::new_with_image_base(
             architecture,
             image,
+            image_base,
             executable_address_ranges,
             config.clone(),
         )
@@ -373,9 +375,10 @@ fn analyze_pe(
             )
             .map_err(|error| ServerError::processor(error.to_string()))?;
     } else {
-        let disassembler = Disassembler::new(
+        let disassembler = Disassembler::new_with_image_base(
             architecture,
             image,
+            image_base,
             executable_address_ranges,
             config.clone(),
         )
@@ -409,14 +412,16 @@ fn analyze_elf(
     let mut mapped = elf
         .image()
         .map_err(|error| ServerError::processor(format!("failed to map elf image: {}", error)))?;
+    let image_base = mapped.base();
     let image = mapped
         .mmap()
         .map_err(|error| ServerError::processor(format!("failed to map elf image: {}", error)))?;
 
     let mut cfg = Graph::new(architecture, config.clone());
-    let disassembler = Disassembler::new(
+    let disassembler = Disassembler::new_with_image_base(
         architecture,
         image,
+        image_base,
         elf.executable_virtual_address_ranges(),
         config.clone(),
     )
@@ -481,6 +486,7 @@ fn analyze_macho(
         let mut mapped = slice.image().map_err(|error| {
             ServerError::processor(format!("failed to map macho image: {}", error))
         })?;
+        let image_base = mapped.base();
         let image = mapped.mmap().map_err(|error| {
             ServerError::processor(format!("failed to map macho image: {}", error))
         })?;
@@ -495,9 +501,14 @@ fn analyze_macho(
             })
             .collect();
         let mut cfg = Graph::new(architecture, config.clone());
-        let disassembler =
-            Disassembler::new(architecture, image, executable_ranges, config.clone())
-                .map_err(|error| ServerError::processor(error.to_string()))?;
+        let disassembler = Disassembler::new_with_image_base(
+            architecture,
+            image,
+            image_base,
+            executable_ranges,
+            config.clone(),
+        )
+        .map_err(|error| ServerError::processor(error.to_string()))?;
         disassembler
             .disassemble(entrypoints, &mut cfg)
             .map_err(|error| ServerError::processor(error.to_string()))?;

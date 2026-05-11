@@ -418,8 +418,9 @@ mod tests {
                 .as_nanos()
         ));
         let mut image = Image::new(temp_path.clone(), false).expect("image");
+        image.set_base(0x1000);
         image.write_padding(0x2000).expect("padding");
-        image.seek(0x1234).expect("seek");
+        image.seek(0x234).expect("seek");
         image
             .write(Cursor::new([0x41u8, 0x42u8, 0x43u8, 0x44u8]))
             .expect("write bytes");
@@ -441,7 +442,7 @@ mod tests {
                     expression: SemanticExpression::Load {
                         space: SemanticAddressSpace::Global,
                         addr: Box::new(SemanticExpression::Const {
-                            value: 0x1234,
+                                    value: 0x1234,
                             bits: 64,
                         }),
                         bits: 32,

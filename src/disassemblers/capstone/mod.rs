@@ -95,8 +95,9 @@ impl<'a> Disassembler<'a> {
         executable_address_ranges: BTreeMap<u64, u64>,
         config: Configuration,
     ) -> Result<Self, Error> {
+        let image_base = image.base();
         let bytes = image.mmap()?;
-        Self::new(machine, bytes, executable_address_ranges, config)
+        Self::new_with_image_base(machine, bytes, image_base, executable_address_ranges, config)
     }
 
     pub fn from_bytes(
@@ -114,11 +115,22 @@ impl<'a> Disassembler<'a> {
         executable_address_ranges: BTreeMap<u64, u64>,
         config: Configuration,
     ) -> Result<Self, Error> {
+        Self::new_with_image_base(machine, image, 0, executable_address_ranges, config)
+    }
+
+    pub fn new_with_image_base(
+        machine: Architecture,
+        image: &'a [u8],
+        image_base: u64,
+        executable_address_ranges: BTreeMap<u64, u64>,
+        config: Configuration,
+    ) -> Result<Self, Error> {
         let backend = match machine {
             Architecture::ARM64 => {
-                let disasm = Arm64Disassembler::new(
+                let disasm = Arm64Disassembler::new_with_image_base(
                     machine,
                     image,
+                    image_base,
                     executable_address_ranges.clone(),
                     config,
                 )
@@ -126,9 +138,14 @@ impl<'a> Disassembler<'a> {
                 DisassemblerBackend::Arm64(disasm)
             }
             Architecture::AMD64 | Architecture::I386 => {
-                let disasm =
-                    X86Disassembler::new(machine, image, executable_address_ranges.clone(), config)
-                        .map_err(|_| Error::other("failed to create X86 disassembler"))?;
+                let disasm = X86Disassembler::new_with_image_base(
+                    machine,
+                    image,
+                    image_base,
+                    executable_address_ranges.clone(),
+                    config,
+                )
+                .map_err(|_| Error::other("failed to create X86 disassembler"))?;
                 DisassemblerBackend::X86(disasm)
             }
             _ => {

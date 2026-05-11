@@ -57,8 +57,15 @@ impl<'a> Disassembler<'a> {
         executable_address_ranges: BTreeMap<u64, u64>,
         config: Configuration,
     ) -> Result<Self, Error> {
+        let image_base = image.base();
         let bytes = image.mmap()?;
-        Self::new(architecture, bytes, executable_address_ranges, config)
+        Self::new_with_image_base(
+            architecture,
+            bytes,
+            image_base,
+            executable_address_ranges,
+            config,
+        )
     }
 
     pub fn from_bytes(
@@ -76,10 +83,21 @@ impl<'a> Disassembler<'a> {
         executable_address_ranges: BTreeMap<u64, u64>,
         config: Configuration,
     ) -> Result<Self, Error> {
+        Self::new_with_image_base(architecture, image, 0, executable_address_ranges, config)
+    }
+
+    pub fn new_with_image_base(
+        architecture: Architecture,
+        image: &'a [u8],
+        image_base: u64,
+        executable_address_ranges: BTreeMap<u64, u64>,
+        config: Configuration,
+    ) -> Result<Self, Error> {
         Self::new_with_backend(
             DisassemblerBackend::Default,
             architecture,
             image,
+            image_base,
             executable_address_ranges,
             config,
         )
@@ -89,6 +107,7 @@ impl<'a> Disassembler<'a> {
         backend: DisassemblerBackend,
         architecture: Architecture,
         image: &'a [u8],
+        image_base: u64,
         executable_address_ranges: BTreeMap<u64, u64>,
         config: Configuration,
     ) -> Result<Self, Error> {
@@ -105,6 +124,7 @@ impl<'a> Disassembler<'a> {
                     x86::disassembler::Backend::Capstone,
                     architecture,
                     image,
+                    image_base,
                     executable_address_ranges,
                     config,
                 )?)
@@ -115,6 +135,7 @@ impl<'a> Disassembler<'a> {
                     arm64::disassembler::Backend::Capstone,
                     architecture,
                     image,
+                    image_base,
                     executable_address_ranges,
                     config,
                 )?)
@@ -125,6 +146,7 @@ impl<'a> Disassembler<'a> {
                     cil::disassembler::Backend::Native,
                     architecture,
                     image,
+                    image_base,
                     executable_address_ranges,
                     config,
                 )?)

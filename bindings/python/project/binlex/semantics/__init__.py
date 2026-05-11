@@ -63,6 +63,10 @@ class SemanticCpu:
         return cls._from_inner(_SemanticCpuBinding.from_kind(kind))
 
     @classmethod
+    def from_architecture(cls, architecture):
+        return cls.from_kind(_cpu_kind_from_architecture(architecture))
+
+    @classmethod
     def i386(cls):
         return cls._from_inner(_SemanticCpuBinding.i386())
 

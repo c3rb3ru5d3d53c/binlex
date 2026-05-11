@@ -1,6 +1,6 @@
 use super::error::{LifterCapability, LifterError};
 use crate::controlflow::{
-    Block, Function, Graph, GraphSnapshot, Instruction, InstructionRecord,
+    Block, Function, Graph, Instruction, InstructionRecord,
 };
 use crate::semantics::{
     Semantic, SemanticAbi, SemanticCpu, SemanticExpression, SemanticTerminator, Semantics,
@@ -38,20 +38,6 @@ enum ResolvedLifterBackend {
 
 #[derive(Clone)]
 enum ModuleItemDef {
-    Instruction {
-        record: InstructionRecord,
-    },
-    Block {
-        snapshot: GraphSnapshot,
-        address: u64,
-        abi: Option<SemanticAbi>,
-    },
-    Function {
-        snapshot: GraphSnapshot,
-        address: u64,
-        abi: Option<SemanticAbi>,
-        name: Option<String>,
-    },
     BlockSemantics {
         semantics: Semantics,
         abi: Option<SemanticAbi>,
@@ -86,8 +72,8 @@ struct CreatedFunctionDef {
 enum CreatedBlockDef {
     Cfg {
         name: Option<String>,
-        snapshot: GraphSnapshot,
         address: u64,
+        records: Vec<InstructionRecord>,
     },
     Semantics {
         name: Option<String>,
@@ -239,61 +225,27 @@ impl BuildState {
         inner: &mut ResolvedLifterBackend,
         item: ModuleItemDef,
     ) -> Result<(), LifterError> {
+        Self::apply_item_static(&self.config, self.architecture, self.backend, inner, item)
+    }
+
+    fn apply_item_static(
+        config: &Configuration,
+        architecture: Architecture,
+        backend: LifterBackend,
+        inner: &mut ResolvedLifterBackend,
+        item: ModuleItemDef,
+    ) -> Result<(), LifterError> {
         match item {
-            ModuleItemDef::Instruction { record } => {
-                let graph = graph_from_instruction_record(self.architecture, &self.config, record);
-                let address = *graph
-                    .instruction_addresses()
-                    .iter()
-                    .next()
-                    .ok_or_else(|| LifterError::Io(Error::other("instruction graph is empty")))?;
-                let instruction = Instruction::new(address, &graph)?;
-                match inner {
-                    ResolvedLifterBackend::Llvm(lifter) => lifter.lift_instruction(&instruction)?,
-                    #[cfg(not(target_os = "windows"))]
-                    ResolvedLifterBackend::Vex(lifter) => lifter.lift_instruction(&instruction)?,
-                }
-            }
-            ModuleItemDef::Block {
-                snapshot,
-                address,
-                abi,
-            } => {
-                let graph = Graph::from_snapshot(snapshot, self.config.clone())?;
-                let block = Block::new(address, &graph)?;
-                match inner {
-                    ResolvedLifterBackend::Llvm(lifter) => lifter.lift_block(&block, abi.as_ref())?,
-                    #[cfg(not(target_os = "windows"))]
-                    ResolvedLifterBackend::Vex(lifter) => lifter.lift_block(&block, abi.as_ref())?,
-                }
-            }
-            ModuleItemDef::Function {
-                snapshot,
-                address,
-                abi,
-                name,
-            } => {
-                let graph = Graph::from_snapshot(snapshot, self.config.clone())?;
-                let function = Function::new(address, &graph)?;
-                match inner {
-                    ResolvedLifterBackend::Llvm(lifter) => {
-                        if let Some(name) = name {
-                            lifter.lift_function_named(&function, abi.as_ref(), &name, None)?;
-                        } else {
-                            lifter.lift_function(&function, abi.as_ref())?;
-                        }
-                    }
-                    #[cfg(not(target_os = "windows"))]
-                    ResolvedLifterBackend::Vex(lifter) => lifter.lift_function(&function, abi.as_ref())?,
-                }
-            }
             ModuleItemDef::BlockSemantics { semantics, abi } => match inner {
                 ResolvedLifterBackend::Llvm(lifter) => {
                     lifter.lift_block_semantics(&semantics, abi.as_ref())?
                 }
                 #[cfg(not(target_os = "windows"))]
                 ResolvedLifterBackend::Vex(_) => {
-                    return Err(self.unsupported(LifterCapability::LiftBlockSemantics));
+                    return Err(LifterError::UnsupportedCapability {
+                        backend,
+                        capability: LifterCapability::LiftBlockSemantics,
+                    });
                 }
             },
             ModuleItemDef::FunctionSemantics {
@@ -310,16 +262,22 @@ impl BuildState {
                 }
                 #[cfg(not(target_os = "windows"))]
                 ResolvedLifterBackend::Vex(_) => {
-                    return Err(self.unsupported(LifterCapability::LiftFunctionSemantics));
+                    return Err(LifterError::UnsupportedCapability {
+                        backend,
+                        capability: LifterCapability::LiftFunctionSemantics,
+                    });
                 }
             },
             ModuleItemDef::CreatedFunction { function } => match inner {
                 ResolvedLifterBackend::Llvm(lifter) => {
-                    compile_created_function(lifter, &self.config, self.architecture, &function)?
+                    compile_created_function(lifter, config, architecture, &function)?
                 }
                 #[cfg(not(target_os = "windows"))]
                 ResolvedLifterBackend::Vex(_) => {
-                    return Err(self.unsupported(LifterCapability::CreateFunction));
+                    return Err(LifterError::UnsupportedCapability {
+                        backend,
+                        capability: LifterCapability::CreateFunction,
+                    });
                 }
             },
         }
@@ -375,10 +333,28 @@ impl Lifter {
     }
 
     pub fn lift_instruction(&self, instruction: &Instruction) -> Result<(), LifterError> {
-        let record = instruction.clone().into_record();
         let mut state = self.state.lock().unwrap();
-        state.items.push(ModuleItemDef::Instruction { record });
-        state.rebuild()
+        #[cfg(not(target_os = "windows"))]
+        if state.backend != LifterBackend::Llvm {
+            return Err(state.unsupported(LifterCapability::CreateFunction));
+        }
+        let name = format!("instruction_{:x}", instruction.address);
+        state.items.push(ModuleItemDef::CreatedFunction {
+            function: CreatedFunctionDef {
+                name,
+                abi: None,
+                body_semantics: None,
+                blocks: vec![CreatedBlockDef::Cfg {
+                    name: None,
+                    address: instruction.address,
+                    records: vec![instruction.clone().into_record()],
+                }],
+                raw_ir: None,
+                raw_bitcode: None,
+            },
+        });
+        state.mark_dirty();
+        Ok(())
     }
 
     pub fn lift_block(
@@ -387,12 +363,27 @@ impl Lifter {
         abi: Option<&SemanticAbi>,
     ) -> Result<(), LifterError> {
         let mut state = self.state.lock().unwrap();
-        state.items.push(ModuleItemDef::Block {
-            snapshot: block.cfg.snapshot(),
-            address: block.address(),
-            abi: abi.cloned(),
+        #[cfg(not(target_os = "windows"))]
+        if state.backend != LifterBackend::Llvm {
+            return Err(state.unsupported(LifterCapability::CreateFunction));
+        }
+        let name = format!("block_{:x}", block.address());
+        state.items.push(ModuleItemDef::CreatedFunction {
+            function: CreatedFunctionDef {
+                name,
+                abi: abi.cloned(),
+                body_semantics: None,
+                blocks: vec![CreatedBlockDef::Cfg {
+                    name: None,
+                    address: block.address(),
+                    records: instruction_records_for_block(block.cfg, block.address())?,
+                }],
+                raw_ir: None,
+                raw_bitcode: None,
+            },
         });
-        state.rebuild()
+        state.mark_dirty();
+        Ok(())
     }
 
     pub fn lift_function(
@@ -410,13 +401,33 @@ impl Lifter {
         name: Option<&str>,
     ) -> Result<(), LifterError> {
         let mut state = self.state.lock().unwrap();
-        state.items.push(ModuleItemDef::Function {
-            snapshot: function.cfg.snapshot(),
-            address: function.address(),
-            abi: abi.cloned(),
-            name: name.map(str::to_string),
+        #[cfg(not(target_os = "windows"))]
+        if state.backend != LifterBackend::Llvm {
+            return Err(state.unsupported(LifterCapability::CreateFunction));
+        }
+        let function_name = name
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("function_{:x}", function.address()));
+        let mut blocks = Vec::with_capacity(function.blocks.len());
+        for block in function.blocks.values() {
+            blocks.push(CreatedBlockDef::Cfg {
+                name: None,
+                address: block.address(),
+                records: instruction_records_for_block(function.cfg, block.address())?,
+            });
+        }
+        state.items.push(ModuleItemDef::CreatedFunction {
+            function: CreatedFunctionDef {
+                name: function_name,
+                abi: abi.cloned(),
+                body_semantics: None,
+                blocks,
+                raw_ir: None,
+                raw_bitcode: None,
+            },
         });
-        state.rebuild()
+        state.mark_dirty();
+        Ok(())
     }
 
     pub fn lift_block_semantics(
@@ -425,11 +436,22 @@ impl Lifter {
         abi: Option<&SemanticAbi>,
     ) -> Result<(), LifterError> {
         let mut state = self.state.lock().unwrap();
+        state.ensure_built()?;
+        BuildState::apply_item_static(
+            &state.config.clone(),
+            state.architecture,
+            state.backend,
+            &mut state.inner,
+            ModuleItemDef::BlockSemantics {
+            semantics: semantics.clone(),
+            abi: abi.cloned(),
+        })?;
         state.items.push(ModuleItemDef::BlockSemantics {
             semantics: semantics.clone(),
             abi: abi.cloned(),
         });
-        state.rebuild()
+        state.dirty = false;
+        Ok(())
     }
 
     pub fn lift_function_semantics(
@@ -447,12 +469,22 @@ impl Lifter {
         name: Option<&str>,
     ) -> Result<(), LifterError> {
         let mut state = self.state.lock().unwrap();
-        state.items.push(ModuleItemDef::FunctionSemantics {
+        state.ensure_built()?;
+        let item = ModuleItemDef::FunctionSemantics {
             semantics: semantics.clone(),
             abi: abi.cloned(),
             name: name.map(str::to_string),
-        });
-        state.rebuild()
+        };
+        BuildState::apply_item_static(
+            &state.config.clone(),
+            state.architecture,
+            state.backend,
+            &mut state.inner,
+            item.clone(),
+        )?;
+        state.items.push(item);
+        state.dirty = false;
+        Ok(())
     }
 
     pub fn create_function(
@@ -676,8 +708,8 @@ impl LiftedFunction {
         }
         function.blocks.push(CreatedBlockDef::Cfg {
             name: name.map(str::to_string),
-            snapshot: block.cfg.snapshot(),
             address: block.address(),
+            records: instruction_records_for_block(block.cfg, block.address())?,
         });
         state.mark_dirty();
         Ok(())
@@ -1054,19 +1086,6 @@ fn block_preview_function_name(
     }
 }
 
-fn graph_from_instruction_record(
-    architecture: Architecture,
-    config: &Configuration,
-    record: InstructionRecord,
-) -> Graph {
-    let mut graph = Graph::new(architecture, config.clone());
-    let address = record.address;
-    graph.insert_instruction(record);
-    graph.instructions.insert_processed(address);
-    graph.instructions.insert_valid(address);
-    graph
-}
-
 fn instruction_records_for_block(graph: &Graph, address: u64) -> Result<Vec<InstructionRecord>, Error> {
     let block = Block::new(address, graph)?;
     Ok(block
@@ -1101,11 +1120,9 @@ fn compile_created_function(
         match block {
             CreatedBlockDef::Cfg {
                 name,
-                snapshot,
-                address,
+                address: _,
+                records,
             } => {
-                let source = Graph::from_snapshot(snapshot.clone(), config.clone())?;
-                let records = instruction_records_for_block(&source, *address)?;
                 let block_address = records
                     .first()
                     .map(|record| record.address)
@@ -1113,7 +1130,7 @@ fn compile_created_function(
                 if entry_address.is_none() {
                     entry_address = Some(block_address);
                 }
-                for record in records {
+                for record in records.iter().cloned() {
                     graph.insert_instruction(record);
                 }
                 graph.set_block(block_address);

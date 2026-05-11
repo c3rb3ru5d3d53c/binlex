@@ -57,6 +57,12 @@ impl Image {
         self.inner.path()
     }
 
+    #[pyo3(text_signature = "($self)")]
+    /// Return the virtual base address represented by offset zero in the image mapping.
+    pub fn base(&self) -> u64 {
+        self.inner.base()
+    }
+
     #[pyo3(text_signature = "($self, data)")]
     /// Write raw bytes at the current file position.
     pub fn write(&mut self, data: &[u8]) -> PyResult<u64> {

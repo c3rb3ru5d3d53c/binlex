@@ -123,16 +123,14 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     }
 
     fn initial_location_value(&self, location: &SemanticLocation) -> Result<IntValue<'ctx>, Error> {
-        if self.uses_pure_callable_abi() && self.is_callable_abi_boundary_location(location) {
-            return Ok(self.location_type(location).const_zero());
-        }
+        // Lowered functions do not inherit ambient host machine state by default.
+        // The only callable boundary state we model is what the user passes
+        // explicitly through the selected ABI, which is bound separately via
+        // `bind_function_arguments()`.
         match location {
-            SemanticLocation::Register { name, bits } => self
-                .read_native_register(name, *bits)
-                .or_else(|_| Ok(self.int_type(*bits).const_zero())),
-            SemanticLocation::Flag { name, bits } => self
-                .read_native_flag(name, *bits)
-                .or_else(|_| Ok(self.int_type(*bits).const_zero())),
+            SemanticLocation::Register { bits, .. } => Ok(self.int_type(*bits).const_zero()),
+            SemanticLocation::Flag { bits, .. } => Ok(self.int_type(*bits).const_zero()),
+            SemanticLocation::ProgramCounter { bits } => Ok(self.int_type(*bits).const_zero()),
             _ => Ok(self.location_type(location).const_zero()),
         }
     }

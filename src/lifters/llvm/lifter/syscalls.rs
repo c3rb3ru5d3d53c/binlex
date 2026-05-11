@@ -753,6 +753,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
         semantics.set_abi(Some(builtin_abi(Architecture::ARM64, SemanticAbiKind::LinuxSyscall)));
+        let abi = builtin_abi(Architecture::ARM64, SemanticAbiKind::LinuxSyscall);
 
         let mut lifter = Lifter::from_architecture(Architecture::ARM64, Configuration::default());
         lifter
@@ -761,7 +762,7 @@ mod tests {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },
-                None,
+                Some(&abi),
             )
             .expect("lift semantics");
         lifter.verify().expect("verify");
@@ -793,6 +794,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
         semantics.set_abi(Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::LinuxSyscall)));
+        let abi = builtin_abi(Architecture::AMD64, SemanticAbiKind::LinuxSyscall);
 
         let mut lifter = Lifter::from_architecture(Architecture::AMD64, Configuration::default());
         lifter
@@ -801,7 +803,7 @@ mod tests {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },
-                None,
+                Some(&abi),
             )
             .expect("lift semantics");
         lifter.verify().expect("verify");
@@ -813,8 +815,8 @@ mod tests {
     }
 
     #[test]
-    fn explicit_function_abi_does_not_override_embedded_syscall_semantics() {
-        let mut semantics = Semantic {
+    fn explicit_function_syscall_abi_controls_native_syscall_lowering() {
+        let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
             abi: Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::LinuxSyscall)),
@@ -836,8 +838,7 @@ mod tests {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::LinuxSyscall)));
-        let function_abi = builtin_abi(Architecture::AMD64, SemanticAbiKind::SysV);
+        let function_abi = builtin_abi(Architecture::AMD64, SemanticAbiKind::LinuxSyscall);
 
         let mut lifter = Lifter::from_architecture(Architecture::AMD64, Configuration::default());
         lifter
@@ -852,7 +853,6 @@ mod tests {
         lifter.verify().expect("verify");
         let text = lifter.text();
 
-        assert!(text.contains("define i64 @semantic_function_0("));
         assert!(text.contains("asm sideeffect \"syscall\""));
         assert!(!text.contains("@binlex_trap_syscall"));
         assert!(!text.contains("@binlex_term_trap"));
@@ -879,6 +879,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
         semantics.set_abi(Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::WindowsSyscall)));
+        let abi = builtin_abi(Architecture::AMD64, SemanticAbiKind::WindowsSyscall);
 
         let mut lifter = Lifter::from_architecture(Architecture::AMD64, Configuration::default());
         lifter
@@ -887,7 +888,7 @@ mod tests {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },
-                None,
+                Some(&abi),
             )
             .expect("lift semantics");
         lifter.verify().expect("verify");
@@ -938,6 +939,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
         semantics.set_abi(Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::WindowsSyscall)));
+        let abi = builtin_abi(Architecture::AMD64, SemanticAbiKind::WindowsSyscall);
 
         let mut lifter = Lifter::from_architecture(Architecture::AMD64, Configuration::default());
         lifter
@@ -946,7 +948,7 @@ mod tests {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },
-                None,
+                Some(&abi),
             )
             .expect("lift semantics");
         lifter.verify().expect("verify");
@@ -987,6 +989,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
         semantics.set_abi(Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::WindowsSyscall)));
+        let abi = builtin_abi(Architecture::AMD64, SemanticAbiKind::WindowsSyscall);
 
         let mut lifter = Lifter::from_architecture(Architecture::AMD64, Configuration::default());
         lifter
@@ -995,7 +998,7 @@ mod tests {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },
-                None,
+                Some(&abi),
             )
             .expect("lift semantics");
         lifter.verify().expect("verify");
@@ -1027,6 +1030,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
         semantics.set_abi(Some(builtin_abi(Architecture::I386, SemanticAbiKind::LinuxSyscall)));
+        let abi = builtin_abi(Architecture::I386, SemanticAbiKind::LinuxSyscall);
 
         let mut lifter = Lifter::from_architecture(Architecture::I386, Configuration::default());
         lifter
@@ -1035,7 +1039,7 @@ mod tests {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },
-                None,
+                Some(&abi),
             )
             .expect("lift semantics");
         lifter.verify().expect("verify");
@@ -1070,6 +1074,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
         semantics.set_abi(Some(builtin_abi(Architecture::I386, SemanticAbiKind::WindowsSyscall)));
+        let abi = builtin_abi(Architecture::I386, SemanticAbiKind::WindowsSyscall);
 
         let mut lifter = Lifter::from_architecture(Architecture::I386, Configuration::default());
         lifter
@@ -1078,7 +1083,7 @@ mod tests {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },
-                None,
+                Some(&abi),
             )
             .expect("lift semantics");
         lifter.verify().expect("verify");
@@ -1112,6 +1117,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
         semantics.set_abi(Some(builtin_abi(Architecture::I386, SemanticAbiKind::LinuxSyscall)));
+        let abi = builtin_abi(Architecture::I386, SemanticAbiKind::LinuxSyscall);
 
         let mut lifter = Lifter::from_architecture(Architecture::I386, Configuration::default());
         lifter
@@ -1120,7 +1126,7 @@ mod tests {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },
-                None,
+                Some(&abi),
             )
             .expect("lift semantics");
         lifter.verify().expect("verify");
@@ -1157,6 +1163,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
         semantics.set_abi(Some(builtin_abi(Architecture::I386, SemanticAbiKind::WindowsSyscall)));
+        let abi = builtin_abi(Architecture::I386, SemanticAbiKind::WindowsSyscall);
 
         let mut lifter = Lifter::from_architecture(Architecture::I386, Configuration::default());
         lifter
@@ -1165,7 +1172,7 @@ mod tests {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },
-                None,
+                Some(&abi),
             )
             .expect("lift semantics");
         lifter.verify().expect("verify");
@@ -1204,6 +1211,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
         semantics.set_abi(Some(builtin_abi(Architecture::ARM64, SemanticAbiKind::WindowsSyscall)));
+        let abi = builtin_abi(Architecture::ARM64, SemanticAbiKind::WindowsSyscall);
 
         let mut lifter = Lifter::from_architecture(Architecture::ARM64, Configuration::default());
         lifter
@@ -1212,7 +1220,7 @@ mod tests {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },
-                None,
+                Some(&abi),
             )
             .expect("lift semantics");
         lifter.verify().expect("verify");

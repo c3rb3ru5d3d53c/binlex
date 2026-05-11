@@ -31,6 +31,7 @@ use std::ffi::CStr;
 use std::ffi::c_void;
 use std::io::Error;
 use std::num::NonZeroU32;
+use std::sync::{Mutex, Once, OnceLock};
 
 mod effects;
 mod encoding;
@@ -114,6 +115,10 @@ struct LoweringSummaryEntry {
     sample_addresses: Vec<u64>,
 }
 
+static LLVM_X86_INIT: Once = Once::new();
+static LLVM_AARCH64_INIT: Once = Once::new();
+static LLVM_DATA_LAYOUTS: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
+
 impl Lifter {
     pub fn new(
         cpu: SemanticCpu,
@@ -170,9 +175,11 @@ impl Lifter {
         }
         let function = self.add_void_function(&name);
         let mut lowering = self.lowering_context(function, None, Vec::new(), HashMap::new())?;
-        lowering.lower_instruction(instruction)?;
+        lowering.lower_prepared_instruction_record(
+            instruction.address,
+            instruction.prepared_semantics()?,
+        )?;
         lowering.finish()?;
-        self.verify_if_enabled()?;
         Ok(())
     }
 
@@ -189,17 +196,23 @@ impl Lifter {
         if !self.emitted.insert(name.clone()) {
             return Ok(());
         }
-        let abi = self.resolve_override_abi(abi)?.or_else(|| self.resolve_block_abi(block));
+        let abi = self.resolve_override_abi(abi)?;
         let function_arguments = self.active_function_arguments_for_block(block, abi.as_ref());
         let function = self.add_function_for_lift(&name, abi.clone(), &function_arguments);
         let stack_layouts = self.collect_stack_layouts_for_block(block, abi.as_ref());
         let mut lowering =
             self.lowering_context(function, abi, function_arguments, stack_layouts)?;
-        for instruction in block.instructions() {
-            lowering.lower_instruction(&instruction)?;
+        for instruction_address in block.instruction_addresses() {
+            let lowered = block
+                .cfg
+                .with_instruction_record(instruction_address, |record| {
+                    lowering
+                        .lower_prepared_instruction_record(record.address, record.prepared_semantics()?)
+                })
+                .ok_or_else(|| Error::other("prepared block instruction should exist"))?;
+            lowered?;
         }
         lowering.finish()?;
-        self.verify_if_enabled()?;
         Ok(())
     }
 
@@ -230,18 +243,17 @@ impl Lifter {
         if !self.emitted.insert(name.to_string()) {
             return Ok(());
         }
-        let abi = self
-            .resolve_override_abi(abi)?
-            .or_else(|| self.resolve_function_abi(function));
-        let function_arguments = self.active_function_arguments_for_function(function, abi.as_ref());
+        let prepared_blocks = self.prepare_function_blocks(function);
+        let abi = self.resolve_override_abi(abi)?;
+        let function_arguments =
+            self.active_function_arguments_for_function(&prepared_blocks, abi.as_ref());
         let llvm_function = self.add_function_for_lift(name, abi.clone(), &function_arguments);
-        let stack_layouts = self.collect_stack_layouts_for_function(function, abi.as_ref());
+        let stack_layouts = self.collect_stack_layouts_for_function(&prepared_blocks, abi.as_ref());
         let mut lowering =
             self.lowering_context(llvm_function, abi, function_arguments, stack_layouts)?;
         lowering.emit_terminator_helpers = false;
-        lowering.lower_function(function, block_names)?;
+        lowering.lower_function(function.address(), &prepared_blocks, block_names)?;
         lowering.finish()?;
-        self.verify_if_enabled()?;
         Ok(())
     }
 
@@ -267,7 +279,6 @@ impl Lifter {
             lowering.lower_instruction_semantics(semantics)?;
         }
         lowering.finish()?;
-        self.verify_if_enabled()?;
         Ok(())
     }
 
@@ -305,7 +316,6 @@ impl Lifter {
             lowering.lower_instruction_semantics(semantics)?;
         }
         lowering.finish()?;
-        self.verify_if_enabled()?;
         Ok(())
     }
 
@@ -318,6 +328,7 @@ impl Lifter {
     }
 
     pub fn ir(&self) -> String {
+        let _ = self.verify_if_enabled();
         self.module.print_to_string().to_string()
     }
 
@@ -388,11 +399,13 @@ impl Lifter {
     }
 
     pub fn bitcode(&self) -> Vec<u8> {
+        let _ = self.verify_if_enabled();
         let buffer = self.module.write_bitcode_to_memory();
         buffer.as_slice().to_vec()
     }
 
     pub fn object(&self) -> Result<Vec<u8>, Error> {
+        self.verify_if_enabled()?;
         let codegen = self
             .mem2reg()
             .unwrap_or_else(|_| self.duplicate().expect("duplicate lifter"));
@@ -408,6 +421,7 @@ impl Lifter {
         function_name: &str,
         links: &BTreeMap<String, usize>,
     ) -> Result<JittedFunction, Error> {
+        self.verify_if_enabled()?;
         self.ensure_native_jit_supported()?;
         let function = self
             .module
@@ -541,46 +555,14 @@ impl Lifter {
         }
     }
 
-    fn resolve_block_abi(&self, block: &Block<'_>) -> Option<SemanticAbi> {
-        block.instructions()
-            .into_iter()
-            .find_map(|instruction| instruction.semantics.as_ref()?.abi.clone())
-            .and_then(|abi| self.resolve_embedded_abi(abi))
-    }
-
-    fn resolve_function_abi(&self, function: &Function<'_>) -> Option<SemanticAbi> {
-        let abi = function
-            .reconstruction_instructions()
-            .into_iter()
-            .find(|instruction| instruction.address == function.address())
-            .or_else(|| function.reconstruction_instructions().into_iter().next())?
-            .semantics
-            .as_ref()?
-            .abi
-            .clone()?;
-        self.resolve_embedded_abi(abi)
-    }
-
     fn resolve_semantics_abi(&self, semantics: &[Semantic]) -> Option<SemanticAbi> {
-        semantics
-            .iter()
-            .find_map(|semantics| semantics.abi.clone())
-            .and_then(|abi| self.resolve_embedded_abi(abi))
-    }
-
-    fn resolve_embedded_abi(&self, abi: SemanticAbi) -> Option<SemanticAbi> {
-        if abi.supports_architecture(self.architecture) {
-            Some(abi)
-        } else {
-            Stderr::print_debug(
-                &self.config,
-                format!(
-                    "semantics abi={} unsupported for architecture={}",
-                    abi, self.architecture
-                ),
-            );
-            None
-        }
+        semantics.iter().find_map(|semantic| {
+            semantic
+                .abi
+                .as_ref()
+                .filter(|abi| abi.supports_architecture(self.architecture))
+                .cloned()
+        })
     }
 
     fn next_emitted_name(&mut self, prefix: &str) -> String {
@@ -901,10 +883,12 @@ impl Lifter {
             return Vec::new();
         };
         let mut read_locations = std::collections::HashSet::new();
-        for instruction in block.instructions() {
-            if let Some(semantics) = instruction.semantics.as_ref() {
-                collect_semantic_read_locations(semantics, &mut read_locations);
-            }
+        for instruction_address in block.instruction_addresses() {
+            block.cfg.with_instruction_record(instruction_address, |record| {
+                if let Some(semantics) = record.semantics.as_ref() {
+                    collect_semantic_read_locations(semantics, &mut read_locations);
+                }
+            });
         }
         if let Some(semantics) = block.terminator.semantics.as_ref() {
             collect_semantic_read_locations(semantics, &mut read_locations);
@@ -918,10 +902,12 @@ impl Lifter {
         abi: Option<&SemanticAbi>,
     ) -> HashMap<String, u32> {
         let mut layouts = HashMap::new();
-        for instruction in block.instructions() {
-            if let Some(semantics) = instruction.semantics.as_ref() {
-                collect_semantic_stack_layouts(semantics, &mut layouts);
-            }
+        for instruction_address in block.instruction_addresses() {
+            block.cfg.with_instruction_record(instruction_address, |record| {
+                if let Some(semantics) = record.semantics.as_ref() {
+                    collect_semantic_stack_layouts(semantics, &mut layouts);
+                }
+            });
         }
         if let Some(semantics) = block.terminator.semantics.as_ref() {
             collect_semantic_stack_layouts(semantics, &mut layouts);
@@ -932,20 +918,34 @@ impl Lifter {
         layouts
     }
 
+    fn prepare_function_blocks<'a>(
+        &self,
+        function: &'a Function<'a>,
+    ) -> Vec<(Block<'a>, Vec<u64>)> {
+        function
+            .blocks
+            .values()
+            .cloned()
+            .map(|block| (block.clone(), block.instruction_addresses()))
+            .collect()
+    }
+
     fn active_function_arguments_for_function(
         &self,
-        function: &Function<'_>,
+        blocks: &[(Block<'_>, Vec<u64>)],
         abi: Option<&SemanticAbi>,
     ) -> Vec<SemanticLocation> {
         let Some(abi) = abi else {
             return Vec::new();
         };
         let mut read_locations = std::collections::HashSet::new();
-        for block in function.blocks() {
-            for instruction in block.instructions() {
-                if let Some(semantics) = instruction.semantics.as_ref() {
-                    collect_semantic_read_locations(semantics, &mut read_locations);
-                }
+        for (block, instruction_addresses) in blocks {
+            for instruction_address in instruction_addresses {
+                block.cfg.with_instruction_record(*instruction_address, |record| {
+                    if let Some(semantics) = record.semantics.as_ref() {
+                        collect_semantic_read_locations(semantics, &mut read_locations);
+                    }
+                });
             }
             if let Some(semantics) = block.terminator.semantics.as_ref() {
                 collect_semantic_read_locations(semantics, &mut read_locations);
@@ -956,15 +956,17 @@ impl Lifter {
 
     fn collect_stack_layouts_for_function(
         &self,
-        function: &Function<'_>,
+        blocks: &[(Block<'_>, Vec<u64>)],
         abi: Option<&SemanticAbi>,
     ) -> HashMap<String, u32> {
         let mut layouts = HashMap::new();
-        for block in function.blocks() {
-            for instruction in block.instructions() {
-                if let Some(semantics) = instruction.semantics.as_ref() {
-                    collect_semantic_stack_layouts(semantics, &mut layouts);
-                }
+        for (block, instruction_addresses) in blocks {
+            for instruction_address in instruction_addresses {
+                block.cfg.with_instruction_record(*instruction_address, |record| {
+                    if let Some(semantics) = record.semantics.as_ref() {
+                        collect_semantic_stack_layouts(semantics, &mut layouts);
+                    }
+                });
             }
             if let Some(semantics) = block.terminator.semantics.as_ref() {
                 collect_semantic_stack_layouts(semantics, &mut layouts);
@@ -1086,12 +1088,7 @@ impl Lifter {
     }
 
     fn target_machine(&self) -> Result<TargetMachine, Error> {
-        let config = InitializationConfig::default();
-        match self.architecture {
-            Architecture::I386 | Architecture::AMD64 => Target::initialize_x86(&config),
-            Architecture::ARM64 => Target::initialize_aarch64(&config),
-            _ => Target::initialize_x86(&config),
-        }
+        Self::ensure_target_initialized(self.architecture);
         let triple = inkwell::targets::TargetTriple::create(&self.triple);
         let target = Target::from_triple(&triple).map_err(|err| Error::other(err.to_string()))?;
         target
@@ -1109,11 +1106,59 @@ impl Lifter {
     fn bind_architecture(&self) -> Result<(), Error> {
         self.module
             .set_triple(&inkwell::targets::TargetTriple::create(&self.triple));
-        if let Ok(machine) = self.target_machine() {
-            let data_layout = machine.get_target_data().get_data_layout();
-            self.module.set_data_layout(&data_layout);
-        }
+        let data_layout = Self::cached_data_layout(self.architecture, &self.triple)?;
+        self.module
+            .set_data_layout(&inkwell::targets::TargetData::create(&data_layout).get_data_layout());
         Ok(())
+    }
+
+    fn ensure_target_initialized(architecture: Architecture) {
+        let config = InitializationConfig::default();
+        match architecture {
+            Architecture::I386 | Architecture::AMD64 => {
+                LLVM_X86_INIT.call_once(|| Target::initialize_x86(&config));
+            }
+            Architecture::ARM64 => {
+                LLVM_AARCH64_INIT.call_once(|| Target::initialize_aarch64(&config));
+            }
+            _ => {
+                LLVM_X86_INIT.call_once(|| Target::initialize_x86(&config));
+            }
+        }
+    }
+
+    fn cached_data_layout(architecture: Architecture, triple: &str) -> Result<String, Error> {
+        let cache = LLVM_DATA_LAYOUTS.get_or_init(|| Mutex::new(HashMap::new()));
+        if let Some(layout) = cache.lock().unwrap().get(triple).cloned() {
+            return Ok(layout);
+        }
+
+        Self::ensure_target_initialized(architecture);
+        let triple_ref = inkwell::targets::TargetTriple::create(triple);
+        let target =
+            Target::from_triple(&triple_ref).map_err(|err| Error::other(err.to_string()))?;
+        let machine = target
+            .create_target_machine(
+                &triple_ref,
+                "generic",
+                "",
+                OptimizationLevel::Default,
+                RelocMode::Default,
+                CodeModel::Default,
+            )
+            .ok_or_else(|| Error::other("failed to create llvm target machine"))?;
+        let layout = machine
+            .get_target_data()
+            .get_data_layout()
+            .as_str()
+            .to_str()
+            .map_err(|error| Error::other(error.to_string()))?
+            .to_string();
+        cache
+            .lock()
+            .unwrap()
+            .insert(triple.to_string(), layout.clone());
+        Ok(layout)
     }
 }
 
@@ -1742,11 +1787,12 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
     fn lower_function(
         &mut self,
-        function: &Function<'_>,
+        function_address: u64,
+        blocks: &[(Block<'_>, Vec<u64>)],
         block_names: Option<&BTreeMap<u64, String>>,
     ) -> Result<(), Error> {
         let mut block_map = HashMap::<u64, BasicBlock<'ctx>>::new();
-        for block in function.blocks() {
+        for (block, _) in blocks {
             let block_name = block_names
                 .and_then(|names| names.get(&block.address()).map(|name| name.as_str()))
                 .map(str::to_string)
@@ -1762,11 +1808,14 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .function
             .get_first_basic_block()
             .expect("function should have entry block");
-        let block_addresses = function.block_addresses();
+        let block_addresses = blocks
+            .iter()
+            .map(|(block, _)| block.address())
+            .collect::<Vec<_>>();
         let entry_address = block_addresses
             .iter()
             .copied()
-            .find(|address| *address == function.address())
+            .find(|address| *address == function_address)
             .or_else(|| block_addresses.first().copied())
             .ok_or_else(|| Error::other("function contains no basic blocks"))?;
         let entry_target = *block_map
@@ -1777,13 +1826,22 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .build_unconditional_branch(entry_target)
             .map_err(|err| Error::other(err.to_string()))?;
 
-        for block in function.blocks() {
+        for (block, instruction_addresses) in blocks {
             let llvm_block = *block_map
                 .get(&block.address())
                 .ok_or_else(|| Error::other("missing llvm block for binlex block"))?;
             self.builder.position_at_end(llvm_block);
-            for instruction in block.instructions() {
-                self.lower_instruction(&instruction)?;
+            for instruction_address in instruction_addresses {
+                let lowered = block
+                    .cfg
+                    .with_instruction_record(*instruction_address, |record| {
+                        self.lower_prepared_instruction_record(
+                            record.address,
+                            record.prepared_semantics()?,
+                        )
+                    })
+                    .ok_or_else(|| Error::other("prepared function instruction should exist"))?;
+                lowered?;
             }
             if self
                 .builder
@@ -1808,9 +1866,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .and_then(|block| block.get_terminator())
             .is_none();
         if needs_return {
-            self.sync_slots_to_architecture()?;
             if self.emit_abi_return()? {
             } else if let Some(adjust) = self.native_return_adjust {
+                self.sync_slots_to_architecture()?;
                 self.emit_native_return(adjust)?;
             } else {
                 self.emit_default_return()?;
@@ -1949,9 +2007,13 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         }
     }
 
-    fn lower_instruction(&mut self, instruction: &Instruction) -> Result<(), Error> {
-        self.current_instruction_address = Some(instruction.address);
-        if let Some(semantics) = instruction.semantics.as_ref() {
+    fn lower_prepared_instruction_record(
+        &mut self,
+        instruction_address: u64,
+        semantics: Option<&Semantic>,
+    ) -> Result<(), Error> {
+        self.current_instruction_address = Some(instruction_address);
+        if let Some(semantics) = semantics {
             if self.debug
                 && (matches!(semantics.status, crate::semantics::SemanticStatus::Partial)
                     || !semantics.diagnostics.is_empty())
@@ -1982,7 +2044,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 self.emit_instruction_encoding(encoding)?;
             }
             let previous_semantics_abi = self.current_semantics_abi.clone();
-            self.current_semantics_abi = prepared.abi.clone();
+            self.current_semantics_abi = prepared.abi.clone().or_else(|| self.abi.clone());
             let result = (|| -> Result<(), Error> {
                 self.seed_instruction_inputs(&prepared)?;
                 self.lower_semantics(&prepared)
@@ -2026,7 +2088,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             self.emit_instruction_encoding(encoding)?;
         }
         let previous_semantics_abi = self.current_semantics_abi.clone();
-        self.current_semantics_abi = prepared.abi.clone();
+        self.current_semantics_abi = prepared.abi.clone().or_else(|| self.abi.clone());
         let result = (|| -> Result<(), Error> {
             self.seed_instruction_inputs(&prepared)?;
             self.lower_semantics(&prepared)

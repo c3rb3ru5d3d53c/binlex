@@ -368,6 +368,7 @@ mod tests {
             )
             .expect("abi"),
         ));
+        let abi = semantics.abi.clone().expect("abi");
 
         let mut lifter = Lifter::from_architecture(Architecture::ARM64, config);
         lifter
@@ -376,7 +377,7 @@ mod tests {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },
-                None,
+                Some(&abi),
             )
             .expect("lift semantics");
         lifter.verify().expect("verify");
@@ -408,6 +409,7 @@ mod tests {
             )
             .expect("abi"),
         ));
+        let abi = semantics.abi.clone().expect("abi");
 
         let mut lifter = Lifter::from_architecture(Architecture::AMD64, config);
         lifter
@@ -416,7 +418,7 @@ mod tests {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },
-                None,
+                Some(&abi),
             )
             .expect("lift semantics");
         lifter.verify().expect("verify");
@@ -448,6 +450,7 @@ mod tests {
             )
             .expect("abi"),
         ));
+        let abi = semantics.abi.clone().expect("abi");
 
         let mut lifter = Lifter::from_architecture(Architecture::I386, config);
         lifter
@@ -456,7 +459,7 @@ mod tests {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },
-                None,
+                Some(&abi),
             )
             .expect("lift semantics");
         lifter.verify().expect("verify");
@@ -497,6 +500,7 @@ mod tests {
             )
             .expect("abi"),
         ));
+        let abi = semantics.abi.clone().expect("abi");
 
         let mut lifter = Lifter::from_architecture(Architecture::I386, config);
         lifter
@@ -505,7 +509,7 @@ mod tests {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },
-                None,
+                Some(&abi),
             )
             .expect("lift semantics");
         lifter.verify().expect("verify");

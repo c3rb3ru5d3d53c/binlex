@@ -171,8 +171,10 @@ impl ELF {
 
     pub fn image(&self) -> Result<Image, Error> {
         let pathbuf = PathBuf::from(self.config.mmap.directory.clone())
-            .join(self.file.sha256_no_config().unwrap());
+            .join(format!("{}.mapped-v2", self.file.sha256_no_config().unwrap()));
         let mut tempmap = Image::new(pathbuf, self.config.mmap.cache.enabled)?;
+        let image_base = self.imagebase();
+        tempmap.set_base(image_base);
 
         if tempmap.is_cached() {
             return Ok(tempmap);
@@ -182,7 +184,7 @@ impl ELF {
         tempmap.write(&self.file.data[0..self.elf.header().header_size() as usize])?;
 
         for segment in self.elf.segments() {
-            let segment_virtual_address = segment.virtual_address();
+            let segment_virtual_address = segment.virtual_address().saturating_sub(image_base);
 
             if segment_virtual_address > tempmap.size()? {
                 let padding_length = segment_virtual_address - tempmap.size()?;
