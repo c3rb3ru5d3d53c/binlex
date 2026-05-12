@@ -151,6 +151,11 @@ class LiftedFunction:
     def name(self):
         return self._inner.name()
 
+    def set_name(self, name):
+        if self._inner.set_name(name):
+            return self
+        return None
+
     def blocks(self):
         return [LiftedBlock(self, inner) for inner in self._inner.blocks()]
 

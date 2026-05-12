@@ -667,6 +667,23 @@ impl LiftedFunction {
         }
     }
 
+    pub fn set_name(&self, name: impl Into<String>) -> Result<(), LifterError> {
+        let name = name.into();
+        if name.trim().is_empty() {
+            return Err(LifterError::Io(Error::other(
+                "lifted function name cannot be empty",
+            )));
+        }
+        let mut state = self.state.lock().unwrap();
+        let item = state.items.get_mut(self.index);
+        let Some(ModuleItemDef::CreatedFunction { function }) = item else {
+            return Err(LifterError::Io(Error::other("lifted function is invalid")));
+        };
+        function.name = name;
+        state.mark_dirty();
+        Ok(())
+    }
+
     pub fn blocks(&self) -> Vec<LiftedBlock> {
         let state = self.state.lock().unwrap();
         let count = match &state.items[self.index] {

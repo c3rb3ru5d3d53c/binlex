@@ -181,6 +181,10 @@ class ELF:
         """Return the ELF image size in bytes."""
         return self._inner.size()
 
+    def bytes(self):
+        """Return the original unmapped ELF container bytes."""
+        return bytes(self._inner.bytes())
+
     def symbols(self):
         """Return typed symbols extracted from the ELF image."""
         return [Symbol(item) for item in self._inner.symbols()]
@@ -189,6 +193,14 @@ class ELF:
         """Return the symbol exactly matching `virtual_address`, if present."""
         result = self._inner.virtual_address_to_symbol(virtual_address)
         return None if result is None else Symbol(result)
+
+    def symbol_name_to_virtual_address(self, name):
+        """Return the virtual address for symbol `name`, if present."""
+        return self._inner.symbol_name_to_virtual_address(name)
+
+    def symbol_name_to_offset(self, name):
+        """Return the file offset for symbol `name`, if present."""
+        return self._inner.symbol_name_to_offset(name)
 
     def relative_virtual_address_to_symbol(self, relative_virtual_address):
         """Return the symbol exactly matching `relative_virtual_address`, if present."""
@@ -267,6 +279,10 @@ class PE:
         """Return typed symbols extracted from the PE image."""
         return [Symbol(item) for item in self._inner.symbols()]
 
+    def bytes(self):
+        """Return the original unmapped PE container bytes."""
+        return bytes(self._inner.bytes())
+
     def native_symbols(self):
         """Return native PE symbols only."""
         return [Symbol(item) for item in self._inner.native_symbols()]
@@ -279,6 +295,14 @@ class PE:
         """Return the symbol exactly matching `virtual_address`, if present."""
         result = self._inner.virtual_address_to_symbol(virtual_address)
         return None if result is None else Symbol(result)
+
+    def symbol_name_to_virtual_address(self, name):
+        """Return the virtual address for symbol `name`, if present."""
+        return self._inner.symbol_name_to_virtual_address(name)
+
+    def symbol_name_to_offset(self, name):
+        """Return the file offset for symbol `name`, if present."""
+        return self._inner.symbol_name_to_offset(name)
 
     def relative_virtual_address_to_symbol(self, relative_virtual_address):
         """Return the symbol exactly matching `relative_virtual_address`, if present."""
@@ -344,6 +368,10 @@ class MACHO:
         def __init__(self, binding):
             self._inner = binding
 
+        def bytes(self):
+            """Return the original unmapped Mach-O container bytes for this slice context."""
+            return bytes(self._inner.bytes())
+
         def index(self):
             return self._inner.index()
 
@@ -374,6 +402,12 @@ class MACHO:
             result = self._inner.virtual_address_to_symbol(virtual_address)
             return None if result is None else Symbol(result)
 
+        def symbol_name_to_virtual_address(self, name):
+            return self._inner.symbol_name_to_virtual_address(name)
+
+        def symbol_name_to_offset(self, name):
+            return self._inner.symbol_name_to_offset(name)
+
         def relative_virtual_address_to_symbol(self, relative_virtual_address):
             result = self._inner.relative_virtual_address_to_symbol(
                 relative_virtual_address
@@ -399,6 +433,10 @@ class MACHO:
     def __init__(self, data, config):
         """Parse a Mach-O image from an in-memory byte sequence."""
         self._inner = _MACHOBinding(data, config)
+
+    def bytes(self):
+        """Return the original unmapped Mach-O container bytes."""
+        return bytes(self._inner.bytes())
 
     def relative_virtual_address_to_virtual_address(
         self, relative_virtual_address, slice
@@ -449,6 +487,14 @@ class MACHO:
         """Return the symbol exactly matching `virtual_address` in `slice`, if present."""
         result = self._inner.virtual_address_to_symbol(virtual_address, slice)
         return None if result is None else Symbol(result)
+
+    def symbol_name_to_virtual_address(self, name, slice):
+        """Return the virtual address for symbol `name` in `slice`, if present."""
+        return self._inner.symbol_name_to_virtual_address(name, slice)
+
+    def symbol_name_to_offset(self, name, slice):
+        """Return the file offset for symbol `name` in `slice`, if present."""
+        return self._inner.symbol_name_to_offset(name, slice)
 
     def relative_virtual_address_to_symbol(self, relative_virtual_address, slice):
         """Return the symbol exactly matching `relative_virtual_address` in `slice`, if present."""

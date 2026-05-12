@@ -54,6 +54,10 @@ pub struct MachoSlice<'a> {
 }
 
 impl<'a> MachoSlice<'a> {
+    pub fn bytes(&self) -> Vec<u8> {
+        self.macho.bytes()
+    }
+
     pub fn index(&self) -> usize {
         self.index
     }
@@ -94,6 +98,14 @@ impl<'a> MachoSlice<'a> {
     pub fn virtual_address_to_symbol(&self, virtual_address: u64) -> Option<BlSymbol> {
         self.macho
             .virtual_address_to_symbol(virtual_address, self.index)
+    }
+
+    pub fn symbol_name_to_virtual_address(&self, name: &str) -> Option<u64> {
+        self.macho.symbol_name_to_virtual_address(name, self.index)
+    }
+
+    pub fn symbol_name_to_offset(&self, name: &str) -> Option<u64> {
+        self.macho.symbol_name_to_offset(name, self.index)
     }
 
     pub fn relative_virtual_address_to_symbol(
@@ -138,6 +150,10 @@ impl MACHO {
             });
         }
         Err(Error::new(ErrorKind::InvalidInput, "invalid macho file"))
+    }
+
+    pub fn bytes(&self) -> Vec<u8> {
+        self.file.data.clone()
     }
 
     pub fn relative_virtual_address_to_virtual_address(
@@ -297,6 +313,18 @@ impl MACHO {
         slice: usize,
     ) -> Option<BlSymbol> {
         self.symbols(slice).get(&virtual_address).cloned()
+    }
+
+    pub fn symbol_name_to_virtual_address(&self, name: &str, slice: usize) -> Option<u64> {
+        self.symbols(slice)
+            .into_iter()
+            .find_map(|(virtual_address, symbol)| (symbol.name == name).then_some(virtual_address))
+    }
+
+    pub fn symbol_name_to_offset(&self, name: &str, slice: usize) -> Option<u64> {
+        self.symbols(slice)
+            .into_values()
+            .find_map(|symbol| (symbol.name == name).then_some(symbol.offset))
     }
 
     pub fn relative_virtual_address_to_symbol(

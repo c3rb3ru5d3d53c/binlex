@@ -47,6 +47,17 @@ pub struct ELF {
 }
 
 impl ELF {
+    fn symbol_file_offset(&self, symbol: &lief::elf::Symbol<'_>) -> u64 {
+        let virtual_address = symbol.value();
+        if let Some(offset) = self.virtual_address_to_file_offset(virtual_address) {
+            return offset;
+        }
+        if let Some(section) = symbol.section() {
+            return section.file_offset() + virtual_address;
+        }
+        0
+    }
+
     pub fn new(bytes: Vec<u8>, config: Configuration) -> Result<Self, Error> {
         let file = File::from_bytes(bytes, config.clone());
         let mut cursor = Cursor::new(&file.data);
@@ -86,6 +97,10 @@ impl ELF {
         self.file.size()
     }
 
+    pub fn bytes(&self) -> Vec<u8> {
+        self.file.data.clone()
+    }
+
     pub fn export_virtual_addresses(&self) -> BTreeSet<u64> {
         let mut result = BTreeSet::<u64>::new();
         for symbol in self.elf.exported_symbols() {
@@ -103,9 +118,7 @@ impl ELF {
             .filter(|symbol| symbol.get_type() == ElfSymbolType::FUNC)
             .map(|symbol| {
                 let virtual_address = symbol.value();
-                let offset = self
-                    .virtual_address_to_file_offset(virtual_address)
-                    .unwrap_or(0);
+                let offset = self.symbol_file_offset(&symbol);
                 (
                     virtual_address,
                     BlSymbol {
@@ -122,6 +135,18 @@ impl ELF {
 
     pub fn virtual_address_to_symbol(&self, virtual_address: u64) -> Option<BlSymbol> {
         self.symbols().get(&virtual_address).cloned()
+    }
+
+    pub fn symbol_name_to_virtual_address(&self, name: &str) -> Option<u64> {
+        self.symbols()
+            .into_iter()
+            .find_map(|(virtual_address, symbol)| (symbol.name == name).then_some(virtual_address))
+    }
+
+    pub fn symbol_name_to_offset(&self, name: &str) -> Option<u64> {
+        self.symbols()
+            .into_values()
+            .find_map(|symbol| (symbol.name == name).then_some(symbol.offset))
     }
 
     pub fn relative_virtual_address_to_symbol(

@@ -28,6 +28,7 @@ use crate::Architecture;
 use crate::Configuration;
 use binlex::formats::ELF as InnerELF;
 use pyo3::prelude::*;
+use pyo3::types::PyBytes;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::io::Error;
@@ -136,6 +137,11 @@ impl ELF {
     }
 
     #[pyo3(text_signature = "($self)")]
+    pub fn bytes(&self, py: Python<'_>) -> Py<PyBytes> {
+        PyBytes::new(py, &self.inner.lock().unwrap().bytes()).unbind()
+    }
+
+    #[pyo3(text_signature = "($self)")]
     pub fn symbols(&self, py: Python<'_>) -> PyResult<Vec<Py<PySymbol>>> {
         self.inner
             .lock()
@@ -158,6 +164,19 @@ impl ELF {
             .virtual_address_to_symbol(virtual_address)
             .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
             .transpose()
+    }
+
+    #[pyo3(text_signature = "($self, name)")]
+    pub fn symbol_name_to_virtual_address(&self, name: &str) -> Option<u64> {
+        self.inner
+            .lock()
+            .unwrap()
+            .symbol_name_to_virtual_address(name)
+    }
+
+    #[pyo3(text_signature = "($self, name)")]
+    pub fn symbol_name_to_offset(&self, name: &str) -> Option<u64> {
+        self.inner.lock().unwrap().symbol_name_to_offset(name)
     }
 
     #[pyo3(text_signature = "($self, relative_virtual_address)")]

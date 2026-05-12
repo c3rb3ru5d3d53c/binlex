@@ -39,7 +39,7 @@ use crate::hex;
 use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
-use crate::lifters::{Lifter, LifterBackend, LifterError};
+use crate::lifters::{LiftedFunction, Lifter, LifterBackend, LifterError};
 use crate::semantics::{SemanticAbi, SemanticCpu};
 use crate::metadata::Attributes;
 use serde::{Deserialize, Serialize};
@@ -527,9 +527,17 @@ impl<'function> Function<'function> {
         .embed_function(self)
     }
 
-    /// Return a lifter artifact for this function using the default backend.
-    pub fn lift(&self) -> Result<Lifter, LifterError> {
-        self.lift_with(LifterBackend::Default, None, None)
+    /// Return a lifted function handle for this function using the default backend.
+    pub fn lift(&self) -> Result<LiftedFunction, LifterError> {
+        let cpu = SemanticCpu::from_architecture(self.architecture())
+            .map_err(|error| LifterError::Io(Error::other(error.to_string())))?;
+        let lifter = Lifter::new(cpu, self.cfg.config.clone(), LifterBackend::Default, None)?;
+        lifter.lift_function(self, None)?;
+        lifter
+            .functions()?
+            .into_iter()
+            .next()
+            .ok_or_else(|| LifterError::Io(Error::other("lifted function handle missing")))
     }
 
     /// Return a lifter artifact for this function using the provided backend, ABI, and optional triple.

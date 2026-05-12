@@ -822,6 +822,25 @@ impl LiftedFunction {
         }
     }
 
+    #[pyo3(text_signature = "($self, name)")]
+    pub fn set_name(&self, name: String) -> bool {
+        if name.trim().is_empty() {
+            Stderr::print_debug(
+                &self.state.lock().unwrap().config,
+                "llvm set function name failed: name cannot be empty".to_string(),
+            );
+            return false;
+        }
+        let mut state = self.state.lock().unwrap();
+        let item = state.items.get_mut(self.index);
+        let Some(ModuleItemDef::CreatedFunction { function }) = item else {
+            return false;
+        };
+        function.name = name;
+        state.mark_dirty();
+        true
+    }
+
     pub fn blocks(&self) -> Vec<LiftedBlock> {
         let state = self.state.lock().unwrap();
         let count = match &state.items[self.index] {

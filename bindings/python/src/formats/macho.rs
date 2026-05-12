@@ -29,6 +29,7 @@ use crate::Configuration;
 use binlex::formats::MachoSlice as InnerMachoSlice;
 use binlex::formats::MACHO as InnerMACHO;
 use pyo3::prelude::*;
+use pyo3::types::PyBytes;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::io::Error;
@@ -71,6 +72,11 @@ impl PyMachoSlice {
 
 #[pymethods]
 impl PyMachoSlice {
+    #[pyo3(text_signature = "($self)")]
+    pub fn bytes(&self, py: Python<'_>) -> Py<PyBytes> {
+        PyBytes::new(py, &self.inner.lock().unwrap().bytes()).unbind()
+    }
+
     #[pyo3(text_signature = "($self)")]
     pub fn index(&self) -> usize {
         self.index
@@ -146,6 +152,18 @@ impl PyMachoSlice {
         .transpose()
     }
 
+    #[pyo3(text_signature = "($self, name)")]
+    pub fn symbol_name_to_virtual_address(&self, name: &str) -> Option<u64> {
+        self.with_slice(|slice: InnerMachoSlice<'_>| slice.symbol_name_to_virtual_address(name))
+            .flatten()
+    }
+
+    #[pyo3(text_signature = "($self, name)")]
+    pub fn symbol_name_to_offset(&self, name: &str) -> Option<u64> {
+        self.with_slice(|slice: InnerMachoSlice<'_>| slice.symbol_name_to_offset(name))
+            .flatten()
+    }
+
     #[pyo3(text_signature = "($self, relative_virtual_address)")]
     pub fn relative_virtual_address_to_symbol(
         &self,
@@ -206,6 +224,11 @@ impl MACHO {
         Ok(Self {
             inner: Arc::new(Mutex::new(inner)),
         })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn bytes(&self, py: Python<'_>) -> Py<PyBytes> {
+        PyBytes::new(py, &self.inner.lock().unwrap().bytes()).unbind()
     }
 
     #[pyo3(text_signature = "($self, relative_virtual_address, slice)")]
@@ -312,6 +335,19 @@ impl MACHO {
             .virtual_address_to_symbol(virtual_address, slice)
             .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
             .transpose()
+    }
+
+    #[pyo3(text_signature = "($self, name, slice)")]
+    pub fn symbol_name_to_virtual_address(&self, name: &str, slice: usize) -> Option<u64> {
+        self.inner
+            .lock()
+            .unwrap()
+            .symbol_name_to_virtual_address(name, slice)
+    }
+
+    #[pyo3(text_signature = "($self, name, slice)")]
+    pub fn symbol_name_to_offset(&self, name: &str, slice: usize) -> Option<u64> {
+        self.inner.lock().unwrap().symbol_name_to_offset(name, slice)
     }
 
     #[pyo3(text_signature = "($self, relative_virtual_address, slice)")]

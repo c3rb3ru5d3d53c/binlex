@@ -581,18 +581,25 @@ class Function:
         ).embed_function(self)
 
     def lift(self, backend=None, abi=None, triple=None):
-        """Return a lifter artifact for this function, if available."""
+        """Return a lifted function handle for LLVM-backed lifts."""
         from binlex.lifters import Lifter, LifterBackend
 
         if self._config is None:
             return None
         backend = LifterBackend.DEFAULT if backend is None else backend
-        return Lifter(
+        if backend not in (LifterBackend.DEFAULT, LifterBackend.LLVM):
+            return None
+        lifter = Lifter(
             _cpu_for_architecture(self.architecture()),
             self._config,
             backend=backend,
             triple=triple,
-        ).lift_function(self, abi=abi)
+        )
+        lifted = lifter.create_function(f"function_{self.address():x}", abi=abi)
+        for block in self.blocks():
+            if lifted.lift_block(block) is None:
+                return None
+        return lifted
 
     def tlsh(self):
         """Return the TLSH object for this function, if available."""

@@ -235,6 +235,31 @@ fn llvm_lifter_renders_instruction_block_and_function_ir() {
 }
 
 #[test]
+fn function_lift_returns_lifted_function_handle() {
+    let graph = disassemble_graph(Architecture::I386, &[0x31, 0xc0, 0x40, 0xc3]);
+    let function = Function::new(0, &graph).expect("function");
+
+    let lifted = function.lift().expect("function should lift");
+    assert_eq!(lifted.name(), "function_0");
+
+    let ir = lifted.ir().expect("lifted function ir");
+    assert!(ir.contains("define void @function_0()"));
+}
+
+#[test]
+fn lifted_function_set_name_updates_ir() {
+    let graph = disassemble_graph(Architecture::I386, &[0x31, 0xc0, 0x40, 0xc3]);
+    let function = Function::new(0, &graph).expect("function");
+
+    let lifted = function.lift().expect("function should lift");
+    lifted.set_name("renamed_function").expect("rename should succeed");
+
+    assert_eq!(lifted.name(), "renamed_function");
+    let ir = lifted.ir().expect("lifted function ir");
+    assert!(ir.contains("define void @renamed_function()"));
+}
+
+#[test]
 fn llvm_lifter_handles_noncontiguous_functions() {
     let graph = build_noncontiguous_function_graph();
     let function = Function::new(0x1000, &graph).expect("function");

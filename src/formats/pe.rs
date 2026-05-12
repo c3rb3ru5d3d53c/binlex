@@ -266,6 +266,10 @@ impl PE {
         Err(Error::new(ErrorKind::InvalidInput, "invalid pe file"))
     }
 
+    pub fn bytes(&self) -> Vec<u8> {
+        self.file.data.clone()
+    }
+
     /// Converts a relative virtual address to a file offset
     ///
     /// # Returns
@@ -1501,6 +1505,18 @@ impl PE {
 
     pub fn virtual_address_to_symbol(&self, virtual_address: u64) -> Option<BlSymbol> {
         self.symbols().get(&virtual_address).cloned()
+    }
+
+    pub fn symbol_name_to_virtual_address(&self, name: &str) -> Option<u64> {
+        self.symbols()
+            .into_iter()
+            .find_map(|(virtual_address, symbol)| (symbol.name == name).then_some(virtual_address))
+    }
+
+    pub fn symbol_name_to_offset(&self, name: &str) -> Option<u64> {
+        self.symbols()
+            .into_values()
+            .find_map(|symbol| (symbol.name == name).then_some(symbol.offset))
     }
 
     pub fn relative_virtual_address_to_symbol(
