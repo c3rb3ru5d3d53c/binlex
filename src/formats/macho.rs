@@ -53,6 +53,16 @@ pub struct MachoSlice<'a> {
     index: usize,
 }
 
+#[derive(Clone, Debug)]
+pub struct MachoSection {
+    pub name: String,
+    pub segment_name: String,
+    pub file_offset: u64,
+    pub size: u64,
+    pub virtual_address: u64,
+    pub bytes: Vec<u8>,
+}
+
 impl<'a> MachoSlice<'a> {
     pub fn bytes(&self) -> Vec<u8> {
         self.macho.bytes()
@@ -95,6 +105,23 @@ impl<'a> MachoSlice<'a> {
         self.macho.symbols(self.index)
     }
 
+    pub fn sections(&self) -> Vec<MachoSection> {
+        self.macho.sections(self.index)
+    }
+
+    pub fn section_name_to_section(&self, name: &str) -> Option<MachoSection> {
+        self.macho.section_name_to_section(name, self.index)
+    }
+
+    pub fn segment_and_section_name_to_section(
+        &self,
+        segment_name: &str,
+        section_name: &str,
+    ) -> Option<MachoSection> {
+        self.macho
+            .segment_and_section_name_to_section(segment_name, section_name, self.index)
+    }
+
     pub fn virtual_address_to_symbol(&self, virtual_address: u64) -> Option<BlSymbol> {
         self.macho
             .virtual_address_to_symbol(virtual_address, self.index)
@@ -104,8 +131,8 @@ impl<'a> MachoSlice<'a> {
         self.macho.symbol_name_to_virtual_address(name, self.index)
     }
 
-    pub fn symbol_name_to_offset(&self, name: &str) -> Option<u64> {
-        self.macho.symbol_name_to_offset(name, self.index)
+    pub fn symbol_name_to_file_offset(&self, name: &str) -> Option<u64> {
+        self.macho.symbol_name_to_file_offset(name, self.index)
     }
 
     pub fn relative_virtual_address_to_symbol(
@@ -116,8 +143,8 @@ impl<'a> MachoSlice<'a> {
             .relative_virtual_address_to_symbol(relative_virtual_address, self.index)
     }
 
-    pub fn offset_to_symbol(&self, offset: u64) -> Option<BlSymbol> {
-        self.macho.offset_to_symbol(offset, self.index)
+    pub fn file_offset_to_symbol(&self, file_offset: u64) -> Option<BlSymbol> {
+        self.macho.file_offset_to_symbol(file_offset, self.index)
     }
 
     pub fn entrypoint_virtual_addresses(&self) -> BTreeSet<u64> {
@@ -295,7 +322,7 @@ impl MACHO {
                 virtual_address,
                 BlSymbol {
                     name: symbol.name(),
-                    offset,
+                    file_offset: offset,
                     virtual_address: Some(virtual_address),
                     relative_virtual_address: self
                         .imagebase(slice)
@@ -305,6 +332,44 @@ impl MACHO {
             );
         }
         symbols
+    }
+
+    pub fn sections(&self, slice: usize) -> Vec<MachoSection> {
+        let mut sections = Vec::new();
+        let binding = self.macho.iter().nth(slice);
+        let Some(binary) = binding else {
+            return sections;
+        };
+        for segment in binary.segments() {
+            for section in segment.sections() {
+                sections.push(MachoSection {
+                    name: section.name(),
+                    segment_name: section.segment_name(),
+                    file_offset: section.offset(),
+                    size: section.size(),
+                    virtual_address: section.virtual_address(),
+                    bytes: section.content().to_vec(),
+                });
+            }
+        }
+        sections
+    }
+
+    pub fn section_name_to_section(&self, name: &str, slice: usize) -> Option<MachoSection> {
+        self.sections(slice)
+            .into_iter()
+            .find(|section| section.name == name)
+    }
+
+    pub fn segment_and_section_name_to_section(
+        &self,
+        segment_name: &str,
+        section_name: &str,
+        slice: usize,
+    ) -> Option<MachoSection> {
+        self.sections(slice).into_iter().find(|section| {
+            section.segment_name == segment_name && section.name == section_name
+        })
     }
 
     pub fn virtual_address_to_symbol(
@@ -321,10 +386,10 @@ impl MACHO {
             .find_map(|(virtual_address, symbol)| (symbol.name == name).then_some(virtual_address))
     }
 
-    pub fn symbol_name_to_offset(&self, name: &str, slice: usize) -> Option<u64> {
+    pub fn symbol_name_to_file_offset(&self, name: &str, slice: usize) -> Option<u64> {
         self.symbols(slice)
             .into_values()
-            .find_map(|symbol| (symbol.name == name).then_some(symbol.offset))
+            .find_map(|symbol| (symbol.name == name).then_some(symbol.file_offset))
     }
 
     pub fn relative_virtual_address_to_symbol(
@@ -337,10 +402,10 @@ impl MACHO {
         self.virtual_address_to_symbol(virtual_address, slice)
     }
 
-    pub fn offset_to_symbol(&self, offset: u64, slice: usize) -> Option<BlSymbol> {
+    pub fn file_offset_to_symbol(&self, file_offset: u64, slice: usize) -> Option<BlSymbol> {
         self.symbols(slice)
             .into_values()
-            .find(|symbol| symbol.offset == offset)
+            .find(|symbol| symbol.file_offset == file_offset)
     }
 
     /// Returns a set of function addresses identified in the MachO slice.

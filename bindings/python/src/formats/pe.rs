@@ -275,8 +275,8 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self, name)")]
-    pub fn symbol_name_to_offset(&self, name: &str) -> Option<u64> {
-        self.inner.lock().unwrap().symbol_name_to_offset(name)
+    pub fn symbol_name_to_file_offset(&self, name: &str) -> Option<u64> {
+        self.inner.lock().unwrap().symbol_name_to_file_offset(name)
     }
 
     #[pyo3(text_signature = "($self, relative_virtual_address)")]
@@ -294,11 +294,15 @@ impl PE {
     }
 
     #[pyo3(text_signature = "($self, offset)")]
-    pub fn offset_to_symbol(&self, py: Python<'_>, offset: u64) -> PyResult<Option<Py<PySymbol>>> {
+    pub fn file_offset_to_symbol(
+        &self,
+        py: Python<'_>,
+        file_offset: u64,
+    ) -> PyResult<Option<Py<PySymbol>>> {
         self.inner
             .lock()
             .unwrap()
-            .offset_to_symbol(offset)
+            .file_offset_to_symbol(file_offset)
             .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
             .transpose()
     }

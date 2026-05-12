@@ -26,6 +26,7 @@ use crate::formats::Symbol as PySymbol;
 use crate::hashing::{SSDeep, SHA256, TLSH};
 use crate::Architecture;
 use crate::Configuration;
+use binlex::formats::MachoSection as InnerMachoSection;
 use binlex::formats::MachoSlice as InnerMachoSlice;
 use binlex::formats::MACHO as InnerMACHO;
 use pyo3::prelude::*;
@@ -48,6 +49,17 @@ pub struct PyMachoSlice {
     pub index: usize,
 }
 
+#[pyclass(name = "MachoSection", unsendable)]
+pub struct PyMachoSection {
+    pub inner: InnerMachoSection,
+}
+
+impl PyMachoSection {
+    fn from_inner(inner: InnerMachoSection) -> Self {
+        Self { inner }
+    }
+}
+
 impl PyMachoSlice {
     fn with_slice<T, F>(&self, func: F) -> Option<T>
     where
@@ -67,6 +79,39 @@ impl PyMachoSlice {
             return Err(Error::other("invalid Mach-O slice"));
         };
         func(slice)
+    }
+}
+
+#[pymethods]
+impl PyMachoSection {
+    #[pyo3(text_signature = "($self)")]
+    pub fn name(&self) -> String {
+        self.inner.name.clone()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn segment_name(&self) -> String {
+        self.inner.segment_name.clone()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn file_offset(&self) -> u64 {
+        self.inner.file_offset
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn size(&self) -> u64 {
+        self.inner.size
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn virtual_address(&self) -> u64 {
+        self.inner.virtual_address
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn bytes(&self, py: Python<'_>) -> Py<PyBytes> {
+        PyBytes::new(py, &self.inner.bytes).unbind()
     }
 }
 
@@ -138,6 +183,42 @@ impl PyMachoSlice {
             .collect()
     }
 
+    #[pyo3(text_signature = "($self)")]
+    pub fn sections(&self, py: Python<'_>) -> PyResult<Vec<Py<PyMachoSection>>> {
+        self.with_slice(|slice: InnerMachoSlice<'_>| slice.sections())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|section| Py::new(py, PyMachoSection::from_inner(section)))
+            .collect()
+    }
+
+    #[pyo3(text_signature = "($self, name)")]
+    pub fn section_name_to_section(
+        &self,
+        py: Python<'_>,
+        name: &str,
+    ) -> PyResult<Option<Py<PyMachoSection>>> {
+        self.with_slice(|slice: InnerMachoSlice<'_>| slice.section_name_to_section(name))
+            .flatten()
+            .map(|section| Py::new(py, PyMachoSection::from_inner(section)))
+            .transpose()
+    }
+
+    #[pyo3(text_signature = "($self, segment_name, section_name)")]
+    pub fn segment_and_section_name_to_section(
+        &self,
+        py: Python<'_>,
+        segment_name: &str,
+        section_name: &str,
+    ) -> PyResult<Option<Py<PyMachoSection>>> {
+        self.with_slice(|slice: InnerMachoSlice<'_>| {
+            slice.segment_and_section_name_to_section(segment_name, section_name)
+        })
+        .flatten()
+        .map(|section| Py::new(py, PyMachoSection::from_inner(section)))
+        .transpose()
+    }
+
     #[pyo3(text_signature = "($self, virtual_address)")]
     pub fn virtual_address_to_symbol(
         &self,
@@ -159,8 +240,8 @@ impl PyMachoSlice {
     }
 
     #[pyo3(text_signature = "($self, name)")]
-    pub fn symbol_name_to_offset(&self, name: &str) -> Option<u64> {
-        self.with_slice(|slice: InnerMachoSlice<'_>| slice.symbol_name_to_offset(name))
+    pub fn symbol_name_to_file_offset(&self, name: &str) -> Option<u64> {
+        self.with_slice(|slice: InnerMachoSlice<'_>| slice.symbol_name_to_file_offset(name))
             .flatten()
     }
 
@@ -179,8 +260,12 @@ impl PyMachoSlice {
     }
 
     #[pyo3(text_signature = "($self, offset)")]
-    pub fn offset_to_symbol(&self, py: Python<'_>, offset: u64) -> PyResult<Option<Py<PySymbol>>> {
-        self.with_slice(|slice: InnerMachoSlice<'_>| slice.offset_to_symbol(offset))
+    pub fn file_offset_to_symbol(
+        &self,
+        py: Python<'_>,
+        file_offset: u64,
+    ) -> PyResult<Option<Py<PySymbol>>> {
+        self.with_slice(|slice: InnerMachoSlice<'_>| slice.file_offset_to_symbol(file_offset))
             .flatten()
             .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
             .transpose()
@@ -346,8 +431,11 @@ impl MACHO {
     }
 
     #[pyo3(text_signature = "($self, name, slice)")]
-    pub fn symbol_name_to_offset(&self, name: &str, slice: usize) -> Option<u64> {
-        self.inner.lock().unwrap().symbol_name_to_offset(name, slice)
+    pub fn symbol_name_to_file_offset(&self, name: &str, slice: usize) -> Option<u64> {
+        self.inner
+            .lock()
+            .unwrap()
+            .symbol_name_to_file_offset(name, slice)
     }
 
     #[pyo3(text_signature = "($self, relative_virtual_address, slice)")]
@@ -366,16 +454,16 @@ impl MACHO {
     }
 
     #[pyo3(text_signature = "($self, offset, slice)")]
-    pub fn offset_to_symbol(
+    pub fn file_offset_to_symbol(
         &self,
         py: Python<'_>,
-        offset: u64,
+        file_offset: u64,
         slice: usize,
     ) -> PyResult<Option<Py<PySymbol>>> {
         self.inner
             .lock()
             .unwrap()
-            .offset_to_symbol(offset, slice)
+            .file_offset_to_symbol(file_offset, slice)
             .map(|symbol| Py::new(py, PySymbol::from_inner(symbol)))
             .transpose()
     }
@@ -469,6 +557,7 @@ impl MACHO {
 pub fn macho_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<MACHO>()?;
     m.add_class::<PyMachoSlice>()?;
+    m.add_class::<PyMachoSection>()?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.formats.macho", m)?;

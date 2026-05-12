@@ -123,7 +123,7 @@ impl ELF {
                     virtual_address,
                     BlSymbol {
                         name: symbol.name(),
-                        offset,
+                        file_offset: offset,
                         virtual_address: Some(virtual_address),
                         relative_virtual_address: Some(virtual_address - self.imagebase()),
                         kind: SymbolKind::Function,
@@ -143,10 +143,10 @@ impl ELF {
             .find_map(|(virtual_address, symbol)| (symbol.name == name).then_some(virtual_address))
     }
 
-    pub fn symbol_name_to_offset(&self, name: &str) -> Option<u64> {
+    pub fn symbol_name_to_file_offset(&self, name: &str) -> Option<u64> {
         self.symbols()
             .into_values()
-            .find_map(|symbol| (symbol.name == name).then_some(symbol.offset))
+            .find_map(|symbol| (symbol.name == name).then_some(symbol.file_offset))
     }
 
     pub fn relative_virtual_address_to_symbol(
@@ -158,10 +158,10 @@ impl ELF {
         self.virtual_address_to_symbol(virtual_address)
     }
 
-    pub fn offset_to_symbol(&self, offset: u64) -> Option<BlSymbol> {
+    pub fn file_offset_to_symbol(&self, file_offset: u64) -> Option<BlSymbol> {
         self.symbols()
             .into_values()
-            .find(|symbol| symbol.offset == offset)
+            .find(|symbol| symbol.file_offset == file_offset)
     }
 
     pub fn relative_virtual_address_to_virtual_address(

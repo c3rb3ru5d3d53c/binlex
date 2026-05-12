@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 pub mod cli;
+pub mod coff;
 pub mod elf;
 pub mod file;
 pub mod image;
@@ -28,11 +29,13 @@ pub mod macho;
 pub mod pe;
 pub mod symbol;
 
+pub use coff::COFF;
 pub use elf::ELF;
 pub use file::File;
 pub use file::FileJson;
 pub use image::Image;
 pub use macho::MACHO;
+pub use macho::MachoSection;
 pub use macho::MachoSlice;
 pub use pe::PE;
 pub use symbol::Symbol;

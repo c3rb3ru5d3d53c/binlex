@@ -95,7 +95,7 @@ pub struct Symbol {
     /// Names associated with the function symbol.
     pub name: String,
     /// The file offset of the function symbol.
-    pub offset: u64,
+    pub file_offset: u64,
     /// The virtual address of the function symbol, if available.
     pub virtual_address: Option<u64>,
     /// The relative virtual address of the function symbol, if available.
@@ -107,7 +107,7 @@ pub struct Symbol {
 impl Symbol {
     #[allow(dead_code)]
     pub fn new(
-        offset: u64,
+        file_offset: u64,
         virtual_address: Option<u64>,
         relative_virtual_address: Option<u64>,
         kind: SymbolKind,
@@ -115,15 +115,15 @@ impl Symbol {
     ) -> Self {
         Self {
             name,
-            offset,
+            file_offset,
             virtual_address,
             relative_virtual_address,
             kind,
         }
     }
 
-    pub fn offset(&self) -> u64 {
-        self.offset
+    pub fn file_offset(&self) -> u64 {
+        self.file_offset
     }
 
     pub fn virtual_address(&self) -> Option<u64> {
@@ -144,7 +144,7 @@ impl Symbol {
             type_: "symbol".to_string(),
             symbol_type: self.kind.to_string(),
             name: self.name.clone(),
-            address: self.virtual_address.unwrap_or(self.offset),
+            address: self.virtual_address.unwrap_or(self.file_offset),
             username: String::new(),
             timestamp: String::new(),
         }

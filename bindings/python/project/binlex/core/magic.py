@@ -33,11 +33,12 @@ class Magic(str):
     """Known file kinds returned by binlex type detection helpers."""
 
     _VALID_NAMES: ClassVar[frozenset[str]] = frozenset(
-        {"code", "pe", "elf", "macho", "png", "unknown"}
+        {"code", "pe", "coff", "elf", "macho", "png", "unknown"}
     )
 
     CODE: ClassVar["Magic"]
     PE: ClassVar["Magic"]
+    COFF: ClassVar["Magic"]
     ELF: ClassVar["Magic"]
     MACHO: ClassVar["Magic"]
     PNG: ClassVar["Magic"]
@@ -79,6 +80,7 @@ class Magic(str):
 
 Magic.CODE = Magic("code")
 Magic.PE = Magic("pe")
+Magic.COFF = Magic("coff")
 Magic.ELF = Magic("elf")
 Magic.MACHO = Magic("macho")
 Magic.PNG = Magic("png")

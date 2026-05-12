@@ -64,6 +64,9 @@ pub fn execute(
             corpora,
             collections,
         ),
+        Magic::COFF => Err(ServerError::unsupported_media(
+            "coff object inputs do not currently produce a control-flow graph".to_string(),
+        )),
         Magic::CODE => analyze_code(
             &mut analysis_config,
             requested_architecture,

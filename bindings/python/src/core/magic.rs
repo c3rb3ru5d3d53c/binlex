@@ -47,6 +47,7 @@ impl Magic {
         let inner = match value {
             0x00 => InnerMagic::CODE,
             0x01 => InnerMagic::PE,
+            0x06 => InnerMagic::COFF,
             0x02 => InnerMagic::ELF,
             0x03 => InnerMagic::MACHO,
             0x04 => InnerMagic::PNG,

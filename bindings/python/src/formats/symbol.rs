@@ -99,8 +99,8 @@ impl Symbol {
         self.inner.name.clone()
     }
 
-    pub fn offset(&self) -> u64 {
-        self.inner.offset()
+    pub fn file_offset(&self) -> u64 {
+        self.inner.file_offset()
     }
 
     pub fn virtual_address(&self) -> Option<u64> {
@@ -117,9 +117,9 @@ impl Symbol {
 
     pub fn __str__(&self) -> String {
         format!(
-            "Symbol(name={}, offset=0x{:x}, virtual_address={:?}, relative_virtual_address={:?}, kind={})",
+            "Symbol(name={}, file_offset=0x{:x}, virtual_address={:?}, relative_virtual_address={:?}, kind={})",
             self.inner.name,
-            self.inner.offset(),
+            self.inner.file_offset(),
             self.inner.virtual_address(),
             self.inner.relative_virtual_address(),
             self.inner.kind

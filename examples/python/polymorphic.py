@@ -63,7 +63,7 @@ assert obj
 
 elf = ELF(obj, configuration)
 
-start = elf.symbol_name_to_offset("_start")
+start = elf.symbol_name_to_file_offset("_start")
 
 assert start is not None
 

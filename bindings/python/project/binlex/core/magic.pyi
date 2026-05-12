@@ -4,11 +4,12 @@ from typing import ClassVar, Literal, TypeAlias
 
 from binlex_bindings.binlex.core.magic import Magic as _MagicBinding
 
-MagicValue: TypeAlias = Literal["code", "pe", "elf", "macho", "png", "unknown"]
+MagicValue: TypeAlias = Literal["code", "pe", "coff", "elf", "macho", "png", "unknown"]
 
 class Magic(str):
     CODE: ClassVar[Magic]
     PE: ClassVar[Magic]
+    COFF: ClassVar[Magic]
     ELF: ClassVar[Magic]
     MACHO: ClassVar[Magic]
     PNG: ClassVar[Magic]

@@ -32,6 +32,8 @@ pub enum Magic {
     CODE = 0x00,
     /// Portable Executable
     PE = 0x01,
+    /// COFF Object
+    COFF = 0x06,
     /// ELF Executable
     ELF = 0x02,
     /// MachO Executable
@@ -46,6 +48,10 @@ impl Magic {
     pub fn new(bytes: &[u8]) -> Magic {
         if Self::is_pe(bytes) {
             return Magic::PE;
+        }
+
+        if Self::is_coff(bytes) {
+            return Magic::COFF;
         }
 
         if Self::is_elf(bytes) {
@@ -90,6 +96,31 @@ impl Magic {
             .is_some_and(|magic| magic == [0x45, 0x4c, 0x46])
     }
 
+    fn is_coff(bytes: &[u8]) -> bool {
+        if bytes.len() < 20 {
+            return false;
+        }
+        let machine = u16::from_le_bytes([bytes[0], bytes[1]]);
+        if !matches!(machine, 0x014c | 0x8664 | 0xAA64) {
+            return false;
+        }
+        let number_of_sections = u16::from_le_bytes([bytes[2], bytes[3]]) as usize;
+        if number_of_sections == 0 {
+            return false;
+        }
+        let size_of_optional_header = u16::from_le_bytes([bytes[16], bytes[17]]) as usize;
+        let section_table_offset = 20usize.saturating_add(size_of_optional_header);
+        let section_table_size = match number_of_sections.checked_mul(40) {
+            Some(size) => size,
+            None => return false,
+        };
+        let section_table_end = match section_table_offset.checked_add(section_table_size) {
+            Some(end) => end,
+            None => return false,
+        };
+        section_table_end <= bytes.len()
+    }
+
     fn is_macho(bytes: &[u8]) -> bool {
         bytes.get(0x00..0x04).is_some_and(|magic| {
             magic == [0xCE, 0xFA, 0xED, 0xFE]
@@ -108,6 +139,7 @@ impl fmt::Display for Magic {
         let format: &str = match self {
             Magic::CODE => "code",
             Magic::PE => "pe",
+            Magic::COFF => "coff",
             Magic::ELF => "elf",
             Magic::MACHO => "macho",
             Magic::PNG => "png",
@@ -130,6 +162,15 @@ mod tests {
         bytes[0x40..0x44].copy_from_slice(&[0x50, 0x45, 0x00, 0x00]);
 
         assert_eq!(Magic::new(&bytes), Magic::PE);
+    }
+
+    #[test]
+    fn detects_coff_from_bytes() {
+        let mut bytes = vec![0u8; 60];
+        bytes[0..2].copy_from_slice(&0x14cu16.to_le_bytes());
+        bytes[2..4].copy_from_slice(&1u16.to_le_bytes());
+
+        assert_eq!(Magic::new(&bytes), Magic::COFF);
     }
 
     #[test]
@@ -168,6 +209,7 @@ impl FromStr for Magic {
         match s {
             "code" => Ok(Magic::CODE),
             "pe" => Ok(Magic::PE),
+            "coff" => Ok(Magic::COFF),
             "elf" => Ok(Magic::ELF),
             "macho" => Ok(Magic::MACHO),
             "png" => Ok(Magic::PNG),
