@@ -1247,8 +1247,10 @@ impl PE {
     /// # Returns
     /// A `Result` containing the `Image` object on success or an `Error` on failure.
     pub fn image(&self) -> Result<Image, Error> {
-        let pathbuf = PathBuf::from(self.config.mmap.directory.clone())
-            .join(format!("{}.mapped-v2", self.file.sha256_no_config().unwrap()));
+        let pathbuf = PathBuf::from(self.config.mmap.directory.clone()).join(format!(
+            "{}.mapped-v2",
+            self.file.sha256_no_config().unwrap()
+        ));
         let mut tempmap = Image::new(pathbuf, self.config.mmap.cache.enabled)?;
         tempmap.set_base(self.imagebase());
         if tempmap.is_cached() {

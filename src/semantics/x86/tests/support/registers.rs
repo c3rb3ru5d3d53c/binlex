@@ -207,8 +207,7 @@ pub(crate) fn write_register_value(
 }
 
 pub(crate) fn normalize_register_name(name: &str) -> String {
-    if matches!(name, AX | AH | AL)
-    {
+    if matches!(name, AX | AH | AL) {
         return EAX.to_string();
     }
     for register in [

@@ -14,7 +14,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     ) -> Result<Option<IntValue<'ctx>>, Error> {
         if !matches!(
             space,
-            SemanticAddressSpace::Default | SemanticAddressSpace::Stack | SemanticAddressSpace::Global
+            SemanticAddressSpace::Default
+                | SemanticAddressSpace::Stack
+                | SemanticAddressSpace::Global
         ) {
             return Ok(None);
         }

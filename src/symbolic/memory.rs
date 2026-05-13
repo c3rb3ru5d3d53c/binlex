@@ -1,10 +1,10 @@
 use crate::symbolic::Error;
+use crate::symbolic::backend::z3::Z3Backend;
 use memmap2::Mmap;
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use crate::symbolic::backend::z3::Z3Backend;
-use std::collections::{BTreeSet, HashMap, HashSet};
 use z3::ast::{Array, BV};
 
 #[derive(Debug)]
@@ -27,8 +27,7 @@ impl ImageBackingInner {
 
     fn read_byte(&mut self, address: u64) -> Result<Option<u8>, Error> {
         if self.mmap.is_none() {
-            let file =
-                File::open(&self.path).map_err(|error| Error::solver(error.to_string()))?;
+            let file = File::open(&self.path).map_err(|error| Error::solver(error.to_string()))?;
             let mmap =
                 unsafe { Mmap::map(&file).map_err(|error| Error::solver(error.to_string()))? };
             self.file = Some(file);

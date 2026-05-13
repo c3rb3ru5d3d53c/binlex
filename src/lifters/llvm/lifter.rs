@@ -10,12 +10,12 @@ use crate::semantics::{
     Semantic, SemanticAbi, SemanticCpu, SemanticCpuKind, SemanticData, SemanticEffect,
     SemanticExpression, SemanticLocation, SemanticTerminator, Semantics,
 };
-use inkwell::execution_engine::ExecutionEngine;
 use inkwell::OptimizationLevel;
 use inkwell::attributes::AttributeLoc;
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
+use inkwell::execution_engine::ExecutionEngine;
 use inkwell::llvm_sys::core::{
     LLVMContextSetDiagnosticHandler, LLVMDisposeMessage, LLVMGetDiagInfoDescription,
 };
@@ -133,13 +133,13 @@ impl Lifter {
             None => {
                 return Err(Error::other(
                     "llvm lifter requires a built-in semantic CPU kind",
-                ))
+                ));
             }
         };
         let context: &'static Context = Box::leak(Box::new(Context::create()));
         let module = context.create_module(&config.lifters.llvm.module_name);
-        let triple =
-            triple.unwrap_or_else(|| Self::default_triple_for_architecture(architecture).to_string());
+        let triple = triple
+            .unwrap_or_else(|| Self::default_triple_for_architecture(architecture).to_string());
         let lifter = Self {
             config,
             context,
@@ -183,7 +183,11 @@ impl Lifter {
         Ok(())
     }
 
-    pub fn lift_block(&mut self, block: &Block<'_>, abi: Option<&SemanticAbi>) -> Result<(), Error> {
+    pub fn lift_block(
+        &mut self,
+        block: &Block<'_>,
+        abi: Option<&SemanticAbi>,
+    ) -> Result<(), Error> {
         if self.architecture != block.architecture() {
             return Err(Error::other(format!(
                 "llvm lift block architecture mismatch: lifter={} block={}",
@@ -206,8 +210,10 @@ impl Lifter {
             let lowered = block
                 .cfg
                 .with_instruction_record(instruction_address, |record| {
-                    lowering
-                        .lower_prepared_instruction_record(record.address, record.prepared_semantics()?)
+                    lowering.lower_prepared_instruction_record(
+                        record.address,
+                        record.prepared_semantics()?,
+                    )
                 })
                 .ok_or_else(|| Error::other("prepared block instruction should exist"))?;
             lowered?;
@@ -320,7 +326,9 @@ impl Lifter {
     }
 
     pub fn clear(&mut self) -> Result<(), Error> {
-        self.module = self.context.create_module(&self.config.lifters.llvm.module_name);
+        self.module = self
+            .context
+            .create_module(&self.config.lifters.llvm.module_name);
         self.emitted.clear();
         self.function_abis.clear();
         self.data_symbols.clear();
@@ -541,7 +549,10 @@ impl Lifter {
         verify_module(&self.module)
     }
 
-    fn resolve_override_abi(&self, abi: Option<&SemanticAbi>) -> Result<Option<SemanticAbi>, Error> {
+    fn resolve_override_abi(
+        &self,
+        abi: Option<&SemanticAbi>,
+    ) -> Result<Option<SemanticAbi>, Error> {
         let Some(abi) = abi else {
             return Ok(None);
         };
@@ -688,7 +699,8 @@ impl Lifter {
             self.emitted
                 .insert(function.get_name().to_string_lossy().into_owned());
         }
-        self.function_abis.retain(|name, _| self.emitted.contains(name));
+        self.function_abis
+            .retain(|name, _| self.emitted.contains(name));
     }
 
     fn validate_imported_module(
@@ -758,7 +770,8 @@ impl Lifter {
                 global.set_constant(true);
                 global.set_initializer(&bytes);
             }
-            self.data_symbols.insert(item.name.clone(), item.bytes.clone());
+            self.data_symbols
+                .insert(item.name.clone(), item.bytes.clone());
         }
         Ok(())
     }
@@ -884,11 +897,13 @@ impl Lifter {
         };
         let mut read_locations = std::collections::HashSet::new();
         for instruction_address in block.instruction_addresses() {
-            block.cfg.with_instruction_record(instruction_address, |record| {
-                if let Some(semantics) = record.semantics.as_ref() {
-                    collect_semantic_read_locations(semantics, &mut read_locations);
-                }
-            });
+            block
+                .cfg
+                .with_instruction_record(instruction_address, |record| {
+                    if let Some(semantics) = record.semantics.as_ref() {
+                        collect_semantic_read_locations(semantics, &mut read_locations);
+                    }
+                });
         }
         if let Some(semantics) = block.terminator.semantics.as_ref() {
             collect_semantic_read_locations(semantics, &mut read_locations);
@@ -903,11 +918,13 @@ impl Lifter {
     ) -> HashMap<String, u32> {
         let mut layouts = HashMap::new();
         for instruction_address in block.instruction_addresses() {
-            block.cfg.with_instruction_record(instruction_address, |record| {
-                if let Some(semantics) = record.semantics.as_ref() {
-                    collect_semantic_stack_layouts(semantics, &mut layouts);
-                }
-            });
+            block
+                .cfg
+                .with_instruction_record(instruction_address, |record| {
+                    if let Some(semantics) = record.semantics.as_ref() {
+                        collect_semantic_stack_layouts(semantics, &mut layouts);
+                    }
+                });
         }
         if let Some(semantics) = block.terminator.semantics.as_ref() {
             collect_semantic_stack_layouts(semantics, &mut layouts);
@@ -941,11 +958,13 @@ impl Lifter {
         let mut read_locations = std::collections::HashSet::new();
         for (block, instruction_addresses) in blocks {
             for instruction_address in instruction_addresses {
-                block.cfg.with_instruction_record(*instruction_address, |record| {
-                    if let Some(semantics) = record.semantics.as_ref() {
-                        collect_semantic_read_locations(semantics, &mut read_locations);
-                    }
-                });
+                block
+                    .cfg
+                    .with_instruction_record(*instruction_address, |record| {
+                        if let Some(semantics) = record.semantics.as_ref() {
+                            collect_semantic_read_locations(semantics, &mut read_locations);
+                        }
+                    });
             }
             if let Some(semantics) = block.terminator.semantics.as_ref() {
                 collect_semantic_read_locations(semantics, &mut read_locations);
@@ -962,11 +981,13 @@ impl Lifter {
         let mut layouts = HashMap::new();
         for (block, instruction_addresses) in blocks {
             for instruction_address in instruction_addresses {
-                block.cfg.with_instruction_record(*instruction_address, |record| {
-                    if let Some(semantics) = record.semantics.as_ref() {
-                        collect_semantic_stack_layouts(semantics, &mut layouts);
-                    }
-                });
+                block
+                    .cfg
+                    .with_instruction_record(*instruction_address, |record| {
+                        if let Some(semantics) = record.semantics.as_ref() {
+                            collect_semantic_stack_layouts(semantics, &mut layouts);
+                        }
+                    });
             }
             if let Some(semantics) = block.terminator.semantics.as_ref() {
                 collect_semantic_stack_layouts(semantics, &mut layouts);
@@ -1039,7 +1060,11 @@ impl Lifter {
         Ok(optimized)
     }
 
-    fn run_named_function_pass(&self, pass_pipeline: &str, function_name: &str) -> Result<Self, Error> {
+    fn run_named_function_pass(
+        &self,
+        pass_pipeline: &str,
+        function_name: &str,
+    ) -> Result<Self, Error> {
         let optimized = self.duplicate()?;
         let machine = optimized.target_machine()?;
         let context = optimized.module.get_context();
@@ -1165,11 +1190,11 @@ impl Lifter {
 #[cfg(test)]
 mod jit_tests {
     use super::Lifter;
+    use crate::Configuration;
     use crate::semantics::{
         Semantic, SemanticAbi, SemanticCpu, SemanticEffect, SemanticExpression, SemanticLocation,
         SemanticOperationBinary, SemanticStatus, SemanticTerminator, Semantics,
     };
-    use crate::Configuration;
     use std::collections::BTreeMap;
 
     #[cfg(all(target_arch = "x86_64", not(target_os = "windows")))]
@@ -1181,36 +1206,36 @@ mod jit_tests {
 
         let semantics = Semantics {
             semantics: vec![Semantic {
-            version: 1,
-            status: SemanticStatus::Complete,
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
-                    name: "rax".to_string(),
-                    bits: 64,
-                },
-                expression: SemanticExpression::Binary {
-                    op: SemanticOperationBinary::Add,
-                    left: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "rdi".to_string(),
-                            bits: 64,
-                        },
-                    ))),
-                    right: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "rsi".to_string(),
-                            bits: 64,
-                        },
-                    ))),
-                    bits: 64,
-                },
+                version: 1,
+                status: SemanticStatus::Complete,
+                abi: None,
+                encoding: None,
+                temporaries: Vec::new(),
+                effects: vec![SemanticEffect::Set {
+                    dst: SemanticLocation::Register {
+                        name: "rax".to_string(),
+                        bits: 64,
+                    },
+                    expression: SemanticExpression::Binary {
+                        op: SemanticOperationBinary::Add,
+                        left: Box::new(SemanticExpression::Read(Box::new(
+                            SemanticLocation::Register {
+                                name: "rdi".to_string(),
+                                bits: 64,
+                            },
+                        ))),
+                        right: Box::new(SemanticExpression::Read(Box::new(
+                            SemanticLocation::Register {
+                                name: "rsi".to_string(),
+                                bits: 64,
+                            },
+                        ))),
+                        bits: 64,
+                    },
+                }],
+                terminator: SemanticTerminator::Return { expression: None },
+                diagnostics: Vec::new(),
             }],
-            terminator: SemanticTerminator::Return { expression: None },
-            diagnostics: Vec::new(),
-        }],
             data: Vec::new(),
         };
 
@@ -1272,7 +1297,10 @@ fn location_matches_abi_argument(read: &SemanticLocation, argument: &SemanticLoc
     if read == argument {
         return true;
     }
-    match (x86_argument_register_alias(read), x86_argument_register_alias(argument)) {
+    match (
+        x86_argument_register_alias(read),
+        x86_argument_register_alias(argument),
+    ) {
         (Some(read), Some(argument)) => read == argument,
         _ => false,
     }
@@ -1339,8 +1367,12 @@ fn collect_effect_read_locations(
     reads: &mut std::collections::HashSet<SemanticLocation>,
 ) {
     match effect {
-        SemanticEffect::Set { expression, .. } => collect_expression_read_locations(expression, reads),
-        SemanticEffect::Store { addr, expression, .. } => {
+        SemanticEffect::Set { expression, .. } => {
+            collect_expression_read_locations(expression, reads)
+        }
+        SemanticEffect::Store {
+            addr, expression, ..
+        } => {
             collect_expression_read_locations(addr, reads);
             collect_expression_read_locations(expression, reads);
         }
@@ -1396,7 +1428,9 @@ fn collect_effect_read_locations(
             collect_expression_read_locations(index, reads);
             collect_expression_read_locations(expression, reads);
         }
-        SemanticEffect::Push { expression, .. } => collect_expression_read_locations(expression, reads),
+        SemanticEffect::Push { expression, .. } => {
+            collect_expression_read_locations(expression, reads)
+        }
         SemanticEffect::Intrinsic { args, .. } => {
             for arg in args {
                 collect_expression_read_locations(arg, reads);
@@ -1415,7 +1449,9 @@ fn collect_effect_stack_layouts(effect: &SemanticEffect, layouts: &mut HashMap<S
             collect_stack_layout_for_location(dst, layouts);
             collect_expression_stack_layouts(expression, layouts);
         }
-        SemanticEffect::Store { addr, expression, .. } => {
+        SemanticEffect::Store {
+            addr, expression, ..
+        } => {
             collect_expression_stack_layouts(addr, layouts);
             collect_expression_stack_layouts(expression, layouts);
         }
@@ -1473,7 +1509,9 @@ fn collect_effect_stack_layouts(effect: &SemanticEffect, layouts: &mut HashMap<S
             collect_expression_stack_layouts(index, layouts);
             collect_expression_stack_layouts(expression, layouts);
         }
-        SemanticEffect::Push { expression, .. } => collect_expression_stack_layouts(expression, layouts),
+        SemanticEffect::Push { expression, .. } => {
+            collect_expression_stack_layouts(expression, layouts)
+        }
         SemanticEffect::Pop { dst, .. } => collect_stack_layout_for_location(dst, layouts),
         SemanticEffect::Intrinsic { args, outputs, .. } => {
             for arg in args {
@@ -1569,7 +1607,9 @@ fn collect_expression_read_locations(
         SemanticExpression::Read(location) => {
             reads.insert(location.as_ref().clone());
             match location.as_ref() {
-                SemanticLocation::Memory { addr, .. } => collect_expression_read_locations(addr, reads),
+                SemanticLocation::Memory { addr, .. } => {
+                    collect_expression_read_locations(addr, reads)
+                }
                 SemanticLocation::IndexedMemory { index, .. } => {
                     collect_expression_read_locations(index, reads)
                 }
@@ -1608,7 +1648,8 @@ fn collect_expression_read_locations(
             collect_expression_read_locations(when_true, reads);
             collect_expression_read_locations(when_false, reads);
         }
-        SemanticExpression::Concat { parts, .. } | SemanticExpression::Intrinsic { args: parts, .. } => {
+        SemanticExpression::Concat { parts, .. }
+        | SemanticExpression::Intrinsic { args: parts, .. } => {
             for part in parts {
                 collect_expression_read_locations(part, reads);
             }
@@ -1660,7 +1701,8 @@ fn collect_expression_stack_layouts(
             collect_expression_stack_layouts(when_true, layouts);
             collect_expression_stack_layouts(when_false, layouts);
         }
-        SemanticExpression::Concat { parts, .. } | SemanticExpression::Intrinsic { args: parts, .. } => {
+        SemanticExpression::Concat { parts, .. }
+        | SemanticExpression::Intrinsic { args: parts, .. } => {
             for part in parts {
                 collect_expression_stack_layouts(part, layouts);
             }
@@ -1674,7 +1716,10 @@ fn collect_expression_stack_layouts(
     }
 }
 
-fn collect_stack_layout_for_location(location: &SemanticLocation, layouts: &mut HashMap<String, u32>) {
+fn collect_stack_layout_for_location(
+    location: &SemanticLocation,
+    layouts: &mut HashMap<String, u32>,
+) {
     match location {
         SemanticLocation::StackMemory { name, offset, bits } => {
             let bytes = u32::from((*bits).div_ceil(8));
@@ -1797,9 +1842,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 .and_then(|names| names.get(&block.address()).map(|name| name.as_str()))
                 .map(str::to_string)
                 .unwrap_or_else(|| format!("block_{:x}", block.address()));
-            let llvm_block = self
-                .context
-                .append_basic_block(self.function, &block_name);
+            let llvm_block = self.context.append_basic_block(self.function, &block_name);
             block_map.insert(block.address(), llvm_block);
         }
 

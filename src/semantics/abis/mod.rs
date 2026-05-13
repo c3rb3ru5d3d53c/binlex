@@ -19,7 +19,10 @@ pub(crate) fn reg(name: &str, bits: u16) -> crate::semantics::SemanticLocation {
     }
 }
 
-pub(crate) fn build_builtin(kind: SemanticAbiKind, cpu: &SemanticCpu) -> Result<SemanticAbi, Error> {
+pub(crate) fn build_builtin(
+    kind: SemanticAbiKind,
+    cpu: &SemanticCpu,
+) -> Result<SemanticAbi, Error> {
     match (kind, cpu.kind()) {
         (SemanticAbiKind::SysV, Some(SemanticCpuKind::Arm64)) => sysv::arm64(cpu),
         (SemanticAbiKind::SysV, Some(SemanticCpuKind::Amd64)) => sysv::amd64(cpu),
@@ -30,9 +33,15 @@ pub(crate) fn build_builtin(kind: SemanticAbiKind, cpu: &SemanticCpu) -> Result<
         (SemanticAbiKind::LinuxSyscall, Some(SemanticCpuKind::Arm64)) => linux_syscall::arm64(cpu),
         (SemanticAbiKind::LinuxSyscall, Some(SemanticCpuKind::Amd64)) => linux_syscall::amd64(cpu),
         (SemanticAbiKind::LinuxSyscall, Some(SemanticCpuKind::I386)) => linux_syscall::i386(cpu),
-        (SemanticAbiKind::WindowsSyscall, Some(SemanticCpuKind::Arm64)) => windows_syscall::arm64(cpu),
-        (SemanticAbiKind::WindowsSyscall, Some(SemanticCpuKind::Amd64)) => windows_syscall::amd64(cpu),
-        (SemanticAbiKind::WindowsSyscall, Some(SemanticCpuKind::I386)) => windows_syscall::i386(cpu),
+        (SemanticAbiKind::WindowsSyscall, Some(SemanticCpuKind::Arm64)) => {
+            windows_syscall::arm64(cpu)
+        }
+        (SemanticAbiKind::WindowsSyscall, Some(SemanticCpuKind::Amd64)) => {
+            windows_syscall::amd64(cpu)
+        }
+        (SemanticAbiKind::WindowsSyscall, Some(SemanticCpuKind::I386)) => {
+            windows_syscall::i386(cpu)
+        }
         (kind, Some(cpu_kind)) => Err(Error::UnsupportedCpu(format!(
             "{} ABI is not available for {}",
             kind.name(),

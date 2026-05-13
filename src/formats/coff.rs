@@ -166,11 +166,11 @@ impl COFF {
 
     fn string_table(&self) -> &[u8] {
         let pointer = self.header.pointer_to_symbol_table as usize;
-        let table_size = match (self.header.number_of_symbols as usize).checked_mul(COFF_SYMBOL_SIZE)
-        {
-            Some(size) => size,
-            None => return &[],
-        };
+        let table_size =
+            match (self.header.number_of_symbols as usize).checked_mul(COFF_SYMBOL_SIZE) {
+                Some(size) => size,
+                None => return &[],
+            };
         let table_end = match pointer.checked_add(table_size) {
             Some(end) => end,
             None => return &[],

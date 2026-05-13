@@ -21,9 +21,7 @@
 // SOFTWARE.
 
 use crate::semantics::arm64::InstructionDetailArm64;
-use crate::semantics::arm64::builders::memory::{
-    operand_expression, register_location,
-};
+use crate::semantics::arm64::builders::memory::{operand_expression, register_location};
 use crate::semantics::arm64::helpers::{
     binary, complete, const_u64, location_bits, sign_extend_to_bits, zero_extend_to_bits,
 };

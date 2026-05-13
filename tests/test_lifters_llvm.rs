@@ -3,9 +3,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use binlex::controlflow::{Block, Function, Graph, Instruction};
 use binlex::lifters::llvm::Lifter;
 use binlex::semantics::{
-    Semantic, SemanticAbi, SemanticAbiKind, SemanticCpu, SemanticCpuKind,
-    SemanticDiagnosticKind, SemanticEffect, SemanticExpression, SemanticLocation,
-    SemanticOperationBinary, SemanticStatus, SemanticTerminator, Semantics,
+    Semantic, SemanticAbi, SemanticAbiKind, SemanticCpu, SemanticCpuKind, SemanticDiagnosticKind,
+    SemanticEffect, SemanticExpression, SemanticLocation, SemanticOperationBinary, SemanticStatus,
+    SemanticTerminator, Semantics,
 };
 use binlex::{Architecture, Configuration};
 
@@ -124,10 +124,8 @@ fn verify_all_entity_lifts(graph: &Graph) {
             block_lifter.verify().expect("block module should verify");
 
             for instruction in block.instructions() {
-                let mut instruction_lifter = Lifter::from_architecture(
-                    instruction.architecture,
-                    Configuration::default(),
-                );
+                let mut instruction_lifter =
+                    Lifter::from_architecture(instruction.architecture, Configuration::default());
                 instruction_lifter
                     .lift_instruction(&instruction)
                     .expect("instruction should lift");
@@ -252,7 +250,9 @@ fn lifted_function_set_name_updates_ir() {
     let function = Function::new(0, &graph).expect("function");
 
     let lifted = function.lift().expect("function should lift");
-    lifted.set_name("renamed_function").expect("rename should succeed");
+    lifted
+        .set_name("renamed_function")
+        .expect("rename should succeed");
 
     assert_eq!(lifted.name(), "renamed_function");
     let ir = lifted.ir().expect("lifted function ir");
@@ -266,8 +266,7 @@ fn llvm_lifter_handles_noncontiguous_functions() {
 
     assert_eq!(function.block_addresses(), vec![0x1000, 0x2000]);
 
-    let mut lifter =
-        Lifter::from_architecture(function.architecture(), Configuration::default());
+    let mut lifter = Lifter::from_architecture(function.architecture(), Configuration::default());
     lifter
         .lift_function(&function, None)
         .expect("non-contiguous function should lift");
@@ -296,8 +295,7 @@ fn llvm_lift_function_explicit_abi_controls_return_shape_without_embedded_semant
     )
     .expect("abi");
 
-    let mut lifter =
-        Lifter::from_architecture(function.architecture(), Configuration::default());
+    let mut lifter = Lifter::from_architecture(function.architecture(), Configuration::default());
     lifter
         .lift_function(&function, Some(&abi))
         .expect("function should lift");
@@ -316,8 +314,7 @@ fn llvm_lift_function_uses_builtin_abi_arguments_for_signature() {
     let cpu = SemanticCpu::from_kind(SemanticCpuKind::I386).expect("cpu");
     let abi = SemanticAbi::from_kind(SemanticAbiKind::Fastcall, &cpu).expect("abi");
 
-    let mut lifter =
-        Lifter::from_architecture(function.architecture(), Configuration::default());
+    let mut lifter = Lifter::from_architecture(function.architecture(), Configuration::default());
     lifter
         .lift_function(&function, Some(&abi))
         .expect("function should lift");
@@ -334,8 +331,7 @@ fn llvm_lift_function_does_not_infer_callable_abi_without_override() {
     let graph = build_fastcall_semantic_function_graph();
     let function = Function::new(0x1000, &graph).expect("function");
 
-    let mut lifter =
-        Lifter::from_architecture(function.architecture(), Configuration::default());
+    let mut lifter = Lifter::from_architecture(function.architecture(), Configuration::default());
     lifter
         .lift_function(&function, None)
         .expect("function should lift");
@@ -400,8 +396,7 @@ fn llvm_lifter_optimizers_chain_and_preserve_outputs() {
     let graph = disassemble_graph(Architecture::I386, &[0x31, 0xc0, 0x40, 0xc3]);
     let function = Function::new(0, &graph).expect("function");
 
-    let mut lifter =
-        Lifter::from_architecture(function.architecture(), Configuration::default());
+    let mut lifter = Lifter::from_architecture(function.architecture(), Configuration::default());
     lifter
         .lift_function(&function, None)
         .expect("function should lift before optimization");

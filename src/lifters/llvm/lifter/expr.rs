@@ -19,10 +19,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 Ok(const_int(self.int_type(*bits), *value))
             }
             SemanticExpression::Function { name, bits } => {
-                let function = self
-                    .module
-                    .get_function(name)
-                    .ok_or_else(|| Error::other(format!("unknown semantic function target {name}")))?;
+                let function = self.module.get_function(name).ok_or_else(|| {
+                    Error::other(format!("unknown semantic function target {name}"))
+                })?;
                 self.builder
                     .build_ptr_to_int(
                         function.as_global_value().as_pointer_value(),
@@ -33,15 +32,12 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             }
             SemanticExpression::DataAddress { name, bits } => {
                 let global_name = sanitize_symbol(&format!("binlex_data_{name}"));
-                let global = self.module.get_global(&global_name).ok_or_else(|| {
-                    Error::other(format!("unknown semantic data target {name}"))
-                })?;
+                let global = self
+                    .module
+                    .get_global(&global_name)
+                    .ok_or_else(|| Error::other(format!("unknown semantic data target {name}")))?;
                 self.builder
-                    .build_ptr_to_int(
-                        global.as_pointer_value(),
-                        self.int_type(*bits),
-                        "datatmp",
-                    )
+                    .build_ptr_to_int(global.as_pointer_value(), self.int_type(*bits), "datatmp")
                     .map_err(|err| Error::other(err.to_string()))
             }
             SemanticExpression::AddressOf { location, bits } => {

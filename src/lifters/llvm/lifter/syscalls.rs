@@ -1,19 +1,15 @@
 use super::LoweringContext;
 use super::helpers::{coerce_int_value_width, render_location, render_trap_kind};
+use crate::Architecture;
 use crate::semantics::{
     SemanticAbiTrap, SemanticCpuKind, SemanticExpression, SemanticLocation, SemanticTrapKind,
 };
-use crate::Architecture;
 use inkwell::values::IntValue;
 use std::io::Error;
 
 impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     pub(super) fn lower_native_trap(&mut self, kind: &SemanticTrapKind) -> Result<(), Error> {
-        match (
-            kind,
-            self.current_semantics_abi.as_ref(),
-            self.architecture,
-        ) {
+        match (kind, self.current_semantics_abi.as_ref(), self.architecture) {
             (SemanticTrapKind::Syscall, Some(abi), Architecture::ARM64)
                 if abi.is_linux_syscall() =>
             {
@@ -225,13 +221,27 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         let (r10_name, r10_bits) = self.trap_argument_name(&syscall_kind, 3)?;
         let (r8_name, r8_bits) = self.trap_argument_name(&syscall_kind, 4)?;
         let (r9_name, r9_bits) = self.trap_argument_name(&syscall_kind, 5)?;
-        let rax = self.load_native_syscall_register_bits(&rax_name, rax_bits)?.into();
-        let rdi = self.load_native_syscall_register_bits(&rdi_name, rdi_bits)?.into();
-        let rsi = self.load_native_syscall_register_bits(&rsi_name, rsi_bits)?.into();
-        let rdx = self.load_native_syscall_register_bits(&rdx_name, rdx_bits)?.into();
-        let r10 = self.load_native_syscall_register_bits(&r10_name, r10_bits)?.into();
-        let r8 = self.load_native_syscall_register_bits(&r8_name, r8_bits)?.into();
-        let r9 = self.load_native_syscall_register_bits(&r9_name, r9_bits)?.into();
+        let rax = self
+            .load_native_syscall_register_bits(&rax_name, rax_bits)?
+            .into();
+        let rdi = self
+            .load_native_syscall_register_bits(&rdi_name, rdi_bits)?
+            .into();
+        let rsi = self
+            .load_native_syscall_register_bits(&rsi_name, rsi_bits)?
+            .into();
+        let rdx = self
+            .load_native_syscall_register_bits(&rdx_name, rdx_bits)?
+            .into();
+        let r10 = self
+            .load_native_syscall_register_bits(&r10_name, r10_bits)?
+            .into();
+        let r8 = self
+            .load_native_syscall_register_bits(&r8_name, r8_bits)?
+            .into();
+        let r9 = self
+            .load_native_syscall_register_bits(&r9_name, r9_bits)?
+            .into();
         let result = self
             .builder
             .build_indirect_call(
@@ -367,13 +377,27 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         let (esi_name, esi_bits) = self.trap_argument_name(&interrupt_kind, 3)?;
         let (edi_name, edi_bits) = self.trap_argument_name(&interrupt_kind, 4)?;
         let (ebp_name, ebp_bits) = self.trap_argument_name(&interrupt_kind, 5)?;
-        let eax = self.load_native_syscall_register_bits(&eax_name, eax_bits)?.into();
-        let ebx = self.load_native_syscall_register_bits(&ebx_name, ebx_bits)?.into();
-        let ecx = self.load_native_syscall_register_bits(&ecx_name, ecx_bits)?.into();
-        let edx = self.load_native_syscall_register_bits(&edx_name, edx_bits)?.into();
-        let esi = self.load_native_syscall_register_bits(&esi_name, esi_bits)?.into();
-        let edi = self.load_native_syscall_register_bits(&edi_name, edi_bits)?.into();
-        let ebp = self.load_native_syscall_register_bits(&ebp_name, ebp_bits)?.into();
+        let eax = self
+            .load_native_syscall_register_bits(&eax_name, eax_bits)?
+            .into();
+        let ebx = self
+            .load_native_syscall_register_bits(&ebx_name, ebx_bits)?
+            .into();
+        let ecx = self
+            .load_native_syscall_register_bits(&ecx_name, ecx_bits)?
+            .into();
+        let edx = self
+            .load_native_syscall_register_bits(&edx_name, edx_bits)?
+            .into();
+        let esi = self
+            .load_native_syscall_register_bits(&esi_name, esi_bits)?
+            .into();
+        let edi = self
+            .load_native_syscall_register_bits(&edi_name, edi_bits)?
+            .into();
+        let ebp = self
+            .load_native_syscall_register_bits(&ebp_name, ebp_bits)?
+            .into();
         let result = self
             .builder
             .build_indirect_call(
@@ -409,8 +433,12 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         let interrupt_kind = SemanticTrapKind::Interrupt;
         let (eax_name, eax_bits) = self.trap_number_name(&interrupt_kind)?;
         let (edx_name, edx_bits) = self.trap_argument_name(&interrupt_kind, 0)?;
-        let eax = self.load_native_syscall_register_bits(&eax_name, eax_bits)?.into();
-        let edx = self.load_native_syscall_register_bits(&edx_name, edx_bits)?.into();
+        let eax = self
+            .load_native_syscall_register_bits(&eax_name, eax_bits)?
+            .into();
+        let edx = self
+            .load_native_syscall_register_bits(&edx_name, edx_bits)?
+            .into();
         let result = self
             .builder
             .build_indirect_call(fn_type, asm, &[eax, edx], "windows_syscall")
@@ -460,13 +488,27 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         let (esi_name, esi_bits) = self.trap_argument_name(&sysenter_kind, 3)?;
         let (edi_name, edi_bits) = self.trap_argument_name(&sysenter_kind, 4)?;
         let (ebp_name, ebp_bits) = self.trap_argument_name(&sysenter_kind, 5)?;
-        let eax = self.load_native_syscall_register_bits(&eax_name, eax_bits)?.into();
-        let ebx = self.load_native_syscall_register_bits(&ebx_name, ebx_bits)?.into();
-        let ecx = self.load_native_syscall_register_bits(&ecx_name, ecx_bits)?.into();
-        let edx = self.load_native_syscall_register_bits(&edx_name, edx_bits)?.into();
-        let esi = self.load_native_syscall_register_bits(&esi_name, esi_bits)?.into();
-        let edi = self.load_native_syscall_register_bits(&edi_name, edi_bits)?.into();
-        let ebp = self.load_native_syscall_register_bits(&ebp_name, ebp_bits)?.into();
+        let eax = self
+            .load_native_syscall_register_bits(&eax_name, eax_bits)?
+            .into();
+        let ebx = self
+            .load_native_syscall_register_bits(&ebx_name, ebx_bits)?
+            .into();
+        let ecx = self
+            .load_native_syscall_register_bits(&ecx_name, ecx_bits)?
+            .into();
+        let edx = self
+            .load_native_syscall_register_bits(&edx_name, edx_bits)?
+            .into();
+        let esi = self
+            .load_native_syscall_register_bits(&esi_name, esi_bits)?
+            .into();
+        let edi = self
+            .load_native_syscall_register_bits(&edi_name, edi_bits)?
+            .into();
+        let ebp = self
+            .load_native_syscall_register_bits(&ebp_name, ebp_bits)?
+            .into();
         let result = self
             .builder
             .build_indirect_call(
@@ -505,9 +547,15 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         let (eax_name, eax_bits) = self.trap_number_name(&sysenter_kind)?;
         let (ecx_name, ecx_bits) = self.trap_argument_name(&sysenter_kind, 0)?;
         let (edx_name, edx_bits) = self.trap_argument_name(&sysenter_kind, 1)?;
-        let eax = self.load_native_syscall_register_bits(&eax_name, eax_bits)?.into();
-        let ecx = self.load_native_syscall_register_bits(&ecx_name, ecx_bits)?.into();
-        let edx = self.load_native_syscall_register_bits(&edx_name, edx_bits)?.into();
+        let eax = self
+            .load_native_syscall_register_bits(&eax_name, eax_bits)?
+            .into();
+        let ecx = self
+            .load_native_syscall_register_bits(&ecx_name, ecx_bits)?
+            .into();
+        let edx = self
+            .load_native_syscall_register_bits(&edx_name, edx_bits)?
+            .into();
         let result = self
             .builder
             .build_indirect_call(fn_type, asm, &[eax, ecx, edx], "windows_sysenter")
@@ -535,7 +583,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             Architecture::UNKNOWN => {
                 return Err(Error::other(
                     "cannot resolve semantic register names for unknown architecture",
-                ))
+                ));
             }
         };
         crate::semantics::cpus::semantic_register_name(cpu_kind, register_name)
@@ -548,7 +596,8 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         index: usize,
     ) -> Result<(String, u16), Error> {
         let trap = self.native_trap_abi(kind)?;
-        let Some(SemanticLocation::Register { name, bits }) = trap.argument_registers.get(index) else {
+        let Some(SemanticLocation::Register { name, bits }) = trap.argument_registers.get(index)
+        else {
             return Err(Error::other(format!(
                 "missing trap argument register {} for {}",
                 index,
@@ -575,7 +624,8 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         index: usize,
     ) -> Result<(String, u16), Error> {
         let trap = self.native_trap_abi(kind)?;
-        let Some(SemanticLocation::Register { name, bits }) = trap.result_registers.get(index) else {
+        let Some(SemanticLocation::Register { name, bits }) = trap.result_registers.get(index)
+        else {
             return Err(Error::other(format!(
                 "missing trap result register {} for {}",
                 index,
@@ -679,8 +729,8 @@ mod tests {
     use crate::lifters::llvm::Lifter;
     use crate::semantics::{
         Semantic, SemanticAbi, SemanticAbiKind, SemanticCpu, SemanticCpuKind, SemanticEffect,
-        SemanticExpression, SemanticLocation, SemanticStatus, SemanticTerminator, Semantics,
-        SemanticTrapKind,
+        SemanticExpression, SemanticLocation, SemanticStatus, SemanticTerminator, SemanticTrapKind,
+        Semantics,
     };
     use crate::{Architecture, Configuration};
 
@@ -716,7 +766,10 @@ mod tests {
         let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(builtin_abi(Architecture::ARM64, SemanticAbiKind::LinuxSyscall)),
+            abi: Some(builtin_abi(
+                Architecture::ARM64,
+                SemanticAbiKind::LinuxSyscall,
+            )),
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
@@ -752,7 +805,10 @@ mod tests {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(builtin_abi(Architecture::ARM64, SemanticAbiKind::LinuxSyscall)));
+        semantics.set_abi(Some(builtin_abi(
+            Architecture::ARM64,
+            SemanticAbiKind::LinuxSyscall,
+        )));
         let abi = builtin_abi(Architecture::ARM64, SemanticAbiKind::LinuxSyscall);
 
         let mut lifter = Lifter::from_architecture(Architecture::ARM64, Configuration::default());
@@ -778,7 +834,10 @@ mod tests {
         let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::LinuxSyscall)),
+            abi: Some(builtin_abi(
+                Architecture::AMD64,
+                SemanticAbiKind::LinuxSyscall,
+            )),
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
@@ -793,7 +852,10 @@ mod tests {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::LinuxSyscall)));
+        semantics.set_abi(Some(builtin_abi(
+            Architecture::AMD64,
+            SemanticAbiKind::LinuxSyscall,
+        )));
         let abi = builtin_abi(Architecture::AMD64, SemanticAbiKind::LinuxSyscall);
 
         let mut lifter = Lifter::from_architecture(Architecture::AMD64, Configuration::default());
@@ -819,13 +881,19 @@ mod tests {
         let semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::LinuxSyscall)),
+            abi: Some(builtin_abi(
+                Architecture::AMD64,
+                SemanticAbiKind::LinuxSyscall,
+            )),
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
                 SemanticEffect::Set {
                     dst: semantic_register_location(Architecture::AMD64, "rax", 64),
-                    expression: SemanticExpression::Const { value: 60, bits: 64 },
+                    expression: SemanticExpression::Const {
+                        value: 60,
+                        bits: 64,
+                    },
                 },
                 SemanticEffect::Set {
                     dst: semantic_register_location(Architecture::AMD64, "rdi", 64),
@@ -863,13 +931,19 @@ mod tests {
         let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::WindowsSyscall)),
+            abi: Some(builtin_abi(
+                Architecture::AMD64,
+                SemanticAbiKind::WindowsSyscall,
+            )),
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
                 SemanticEffect::Set {
                     dst: semantic_register_location(Architecture::AMD64, "rax", 64),
-                    expression: SemanticExpression::Const { value: 0x55, bits: 64 },
+                    expression: SemanticExpression::Const {
+                        value: 0x55,
+                        bits: 64,
+                    },
                 },
                 SemanticEffect::Trap {
                     kind: SemanticTrapKind::Syscall,
@@ -878,7 +952,10 @@ mod tests {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::WindowsSyscall)));
+        semantics.set_abi(Some(builtin_abi(
+            Architecture::AMD64,
+            SemanticAbiKind::WindowsSyscall,
+        )));
         let abi = builtin_abi(Architecture::AMD64, SemanticAbiKind::WindowsSyscall);
 
         let mut lifter = Lifter::from_architecture(Architecture::AMD64, Configuration::default());
@@ -904,7 +981,10 @@ mod tests {
         let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::WindowsSyscall)),
+            abi: Some(builtin_abi(
+                Architecture::AMD64,
+                SemanticAbiKind::WindowsSyscall,
+            )),
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
@@ -920,16 +1000,17 @@ mod tests {
                 },
                 SemanticEffect::Set {
                     dst: semantic_register_location(Architecture::AMD64, "r10", 64),
-                    expression: SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "rcx".to_string(),
-                            bits: 64,
-                        },
-                    )),
+                    expression: SemanticExpression::Read(Box::new(SemanticLocation::Register {
+                        name: "rcx".to_string(),
+                        bits: 64,
+                    })),
                 },
                 SemanticEffect::Set {
                     dst: semantic_register_location(Architecture::AMD64, "rax", 64),
-                    expression: SemanticExpression::Const { value: 0x55, bits: 64 },
+                    expression: SemanticExpression::Const {
+                        value: 0x55,
+                        bits: 64,
+                    },
                 },
                 SemanticEffect::Trap {
                     kind: SemanticTrapKind::Syscall,
@@ -938,7 +1019,10 @@ mod tests {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::WindowsSyscall)));
+        semantics.set_abi(Some(builtin_abi(
+            Architecture::AMD64,
+            SemanticAbiKind::WindowsSyscall,
+        )));
         let abi = builtin_abi(Architecture::AMD64, SemanticAbiKind::WindowsSyscall);
 
         let mut lifter = Lifter::from_architecture(Architecture::AMD64, Configuration::default());
@@ -966,7 +1050,10 @@ mod tests {
         let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::WindowsSyscall)),
+            abi: Some(builtin_abi(
+                Architecture::AMD64,
+                SemanticAbiKind::WindowsSyscall,
+            )),
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
@@ -979,7 +1066,10 @@ mod tests {
                 },
                 SemanticEffect::Set {
                     dst: semantic_register_location(Architecture::AMD64, "rax", 64),
-                    expression: SemanticExpression::Const { value: 0x55, bits: 64 },
+                    expression: SemanticExpression::Const {
+                        value: 0x55,
+                        bits: 64,
+                    },
                 },
                 SemanticEffect::Trap {
                     kind: SemanticTrapKind::Syscall,
@@ -988,7 +1078,10 @@ mod tests {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(builtin_abi(Architecture::AMD64, SemanticAbiKind::WindowsSyscall)));
+        semantics.set_abi(Some(builtin_abi(
+            Architecture::AMD64,
+            SemanticAbiKind::WindowsSyscall,
+        )));
         let abi = builtin_abi(Architecture::AMD64, SemanticAbiKind::WindowsSyscall);
 
         let mut lifter = Lifter::from_architecture(Architecture::AMD64, Configuration::default());
@@ -1014,7 +1107,10 @@ mod tests {
         let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(builtin_abi(Architecture::I386, SemanticAbiKind::LinuxSyscall)),
+            abi: Some(builtin_abi(
+                Architecture::I386,
+                SemanticAbiKind::LinuxSyscall,
+            )),
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
@@ -1029,7 +1125,10 @@ mod tests {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(builtin_abi(Architecture::I386, SemanticAbiKind::LinuxSyscall)));
+        semantics.set_abi(Some(builtin_abi(
+            Architecture::I386,
+            SemanticAbiKind::LinuxSyscall,
+        )));
         let abi = builtin_abi(Architecture::I386, SemanticAbiKind::LinuxSyscall);
 
         let mut lifter = Lifter::from_architecture(Architecture::I386, Configuration::default());
@@ -1055,7 +1154,10 @@ mod tests {
         let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(builtin_abi(Architecture::I386, SemanticAbiKind::WindowsSyscall)),
+            abi: Some(builtin_abi(
+                Architecture::I386,
+                SemanticAbiKind::WindowsSyscall,
+            )),
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
@@ -1073,7 +1175,10 @@ mod tests {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(builtin_abi(Architecture::I386, SemanticAbiKind::WindowsSyscall)));
+        semantics.set_abi(Some(builtin_abi(
+            Architecture::I386,
+            SemanticAbiKind::WindowsSyscall,
+        )));
         let abi = builtin_abi(Architecture::I386, SemanticAbiKind::WindowsSyscall);
 
         let mut lifter = Lifter::from_architecture(Architecture::I386, Configuration::default());
@@ -1099,7 +1204,10 @@ mod tests {
         let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(builtin_abi(Architecture::I386, SemanticAbiKind::LinuxSyscall)),
+            abi: Some(builtin_abi(
+                Architecture::I386,
+                SemanticAbiKind::LinuxSyscall,
+            )),
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
@@ -1116,7 +1224,10 @@ mod tests {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(builtin_abi(Architecture::I386, SemanticAbiKind::LinuxSyscall)));
+        semantics.set_abi(Some(builtin_abi(
+            Architecture::I386,
+            SemanticAbiKind::LinuxSyscall,
+        )));
         let abi = builtin_abi(Architecture::I386, SemanticAbiKind::LinuxSyscall);
 
         let mut lifter = Lifter::from_architecture(Architecture::I386, Configuration::default());
@@ -1142,7 +1253,10 @@ mod tests {
         let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(builtin_abi(Architecture::I386, SemanticAbiKind::WindowsSyscall)),
+            abi: Some(builtin_abi(
+                Architecture::I386,
+                SemanticAbiKind::WindowsSyscall,
+            )),
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
@@ -1162,7 +1276,10 @@ mod tests {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(builtin_abi(Architecture::I386, SemanticAbiKind::WindowsSyscall)));
+        semantics.set_abi(Some(builtin_abi(
+            Architecture::I386,
+            SemanticAbiKind::WindowsSyscall,
+        )));
         let abi = builtin_abi(Architecture::I386, SemanticAbiKind::WindowsSyscall);
 
         let mut lifter = Lifter::from_architecture(Architecture::I386, Configuration::default());
@@ -1188,7 +1305,10 @@ mod tests {
         let mut semantics = Semantic {
             version: 1,
             status: SemanticStatus::Complete,
-            abi: Some(builtin_abi(Architecture::ARM64, SemanticAbiKind::WindowsSyscall)),
+            abi: Some(builtin_abi(
+                Architecture::ARM64,
+                SemanticAbiKind::WindowsSyscall,
+            )),
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
@@ -1210,7 +1330,10 @@ mod tests {
             terminator: SemanticTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(builtin_abi(Architecture::ARM64, SemanticAbiKind::WindowsSyscall)));
+        semantics.set_abi(Some(builtin_abi(
+            Architecture::ARM64,
+            SemanticAbiKind::WindowsSyscall,
+        )));
         let abi = builtin_abi(Architecture::ARM64, SemanticAbiKind::WindowsSyscall);
 
         let mut lifter = Lifter::from_architecture(Architecture::ARM64, Configuration::default());

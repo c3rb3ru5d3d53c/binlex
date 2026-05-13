@@ -103,7 +103,6 @@ impl Semantics {
     }
 }
 
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SemanticJson {
     pub version: u32,
@@ -1250,7 +1249,10 @@ impl SemanticExpression {
 
     pub fn set_location(&mut self, location: SemanticLocation) -> Result<(), &'static str> {
         match self {
-            Self::Read(current) | Self::AddressOf { location: current, .. } => {
+            Self::Read(current)
+            | Self::AddressOf {
+                location: current, ..
+            } => {
                 *current = Box::new(location);
                 Ok(())
             }
@@ -1286,7 +1288,9 @@ impl SemanticExpression {
                 *current = name.into();
                 Ok(())
             }
-            _ => Err("expression name is only valid for function, data_address, and intrinsic expressions"),
+            _ => Err(
+                "expression name is only valid for function, data_address, and intrinsic expressions",
+            ),
         }
     }
 
@@ -1374,10 +1378,7 @@ fn default_expression_for_kind(kind: SemanticExpressionKind, bits: u16) -> Seman
             bits,
         },
         SemanticExpressionKind::AddressOf => SemanticExpression::AddressOf {
-            location: Box::new(default_location_for_kind(
-                SemanticLocationKind::Memory,
-                8,
-            )),
+            location: Box::new(default_location_for_kind(SemanticLocationKind::Memory, 8)),
             bits,
         },
         SemanticExpressionKind::Read => SemanticExpression::Read(Box::new(

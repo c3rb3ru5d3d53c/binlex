@@ -195,8 +195,10 @@ impl ELF {
     }
 
     pub fn image(&self) -> Result<Image, Error> {
-        let pathbuf = PathBuf::from(self.config.mmap.directory.clone())
-            .join(format!("{}.mapped-v2", self.file.sha256_no_config().unwrap()));
+        let pathbuf = PathBuf::from(self.config.mmap.directory.clone()).join(format!(
+            "{}.mapped-v2",
+            self.file.sha256_no_config().unwrap()
+        ));
         let mut tempmap = Image::new(pathbuf, self.config.mmap.cache.enabled)?;
         let image_base = self.imagebase();
         tempmap.set_base(image_base);

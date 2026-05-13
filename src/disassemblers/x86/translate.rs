@@ -34,9 +34,7 @@ use crate::{
         targets as x86_targets,
     },
     genetics::Chromosome,
-    semantics::x86::{
-        InstructionDetailX86, X86MemoryOperandView, X86OperandKind, X86OperandView,
-    },
+    semantics::x86::{InstructionDetailX86, X86MemoryOperandView, X86OperandKind, X86OperandView},
 };
 
 fn leak_register_name(name: String) -> &'static str {

@@ -241,8 +241,11 @@ impl Graph {
     pub fn functions(&self, py: Python) -> Vec<Function> {
         let mut result = Vec::<Function>::new();
         let binding = self.inner.lock().unwrap();
-        let inner_ref: &'static binlex::controlflow::Graph =
-            unsafe { std::mem::transmute::<&binlex::controlflow::Graph, &'static binlex::controlflow::Graph>(&*binding) };
+        let inner_ref: &'static binlex::controlflow::Graph = unsafe {
+            std::mem::transmute::<&binlex::controlflow::Graph, &'static binlex::controlflow::Graph>(
+                &*binding,
+            )
+        };
         for inner_function in inner_ref.functions() {
             let cfg = Graph {
                 inner: Arc::clone(&self.inner),

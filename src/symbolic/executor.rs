@@ -311,7 +311,9 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.step(&semantics_of(semantics), &state).expect("step");
+        let states = executor
+            .step(&semantics_of(semantics), &state)
+            .expect("step");
         assert_eq!(states.len(), 2);
         assert!(
             states
@@ -442,7 +444,7 @@ mod tests {
                     expression: SemanticExpression::Load {
                         space: SemanticAddressSpace::Global,
                         addr: Box::new(SemanticExpression::Const {
-                                    value: 0x1234,
+                            value: 0x1234,
                             bits: 64,
                         }),
                         bits: 32,
@@ -507,7 +509,9 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.step(&semantics_of(semantics), &state).expect("step");
+        let states = executor
+            .step(&semantics_of(semantics), &state)
+            .expect("step");
         let value = states[0]
             .evaluate_register("rax", 8)
             .expect("evaluate register")
@@ -552,7 +556,9 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.step(&semantics_of(semantics), &state).expect("step");
+        let states = executor
+            .step(&semantics_of(semantics), &state)
+            .expect("step");
         let value = states[0]
             .evaluate_register("eax", 32)
             .expect("evaluate register")
@@ -597,7 +603,9 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.step(&semantics_of(semantics), &state).expect("step");
+        let states = executor
+            .step(&semantics_of(semantics), &state)
+            .expect("step");
         let value = states[0]
             .evaluate_register("eax", 32)
             .expect("evaluate register")
@@ -645,7 +653,9 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.step(&semantics_of(semantics), &state).expect("step");
+        let states = executor
+            .step(&semantics_of(semantics), &state)
+            .expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("eax", 32)
@@ -710,7 +720,9 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.step(&semantics_of(semantics), &state).expect("step");
+        let states = executor
+            .step(&semantics_of(semantics), &state)
+            .expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("pc", 32)
@@ -770,7 +782,9 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.step(&semantics_of(semantics), &state).expect("step");
+        let states = executor
+            .step(&semantics_of(semantics), &state)
+            .expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("pc", 8)
@@ -826,7 +840,9 @@ mod tests {
             terminator: SemanticTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let states = executor.step(&semantics_of(semantics), &state).expect("step");
+        let states = executor
+            .step(&semantics_of(semantics), &state)
+            .expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("x0", 64)
@@ -866,7 +882,9 @@ mod tests {
             terminator: SemanticTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let states = executor.step(&semantics_of(semantics), &state).expect("step");
+        let states = executor
+            .step(&semantics_of(semantics), &state)
+            .expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("x0", 64)
@@ -1184,7 +1202,11 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![branch, taken, not_taken]), &state, None)
+            .run(
+                &semantics_many(vec![branch, taken, not_taken]),
+                &state,
+                None,
+            )
             .expect("run");
         assert_eq!(states.len(), 2);
         let targets = states
@@ -1454,7 +1476,14 @@ mod tests {
             .write_memory(0x3000, &0x9000u32.to_le_bytes())
             .expect("write memory");
         let states = executor
-            .run(&Semantics { semantics, data: Vec::new() }, &state, None)
+            .run(
+                &Semantics {
+                    semantics,
+                    data: Vec::new(),
+                },
+                &state,
+                None,
+            )
             .expect("run");
         assert_eq!(states.len(), 1);
         assert_eq!(
@@ -1496,7 +1525,14 @@ mod tests {
             .write_memory(0x3000, &0x9000u64.to_le_bytes())
             .expect("write memory");
         let states = executor
-            .run(&Semantics { semantics, data: Vec::new() }, &state, None)
+            .run(
+                &Semantics {
+                    semantics,
+                    data: Vec::new(),
+                },
+                &state,
+                None,
+            )
             .expect("run");
         assert_eq!(states.len(), 1);
         assert_eq!(
@@ -1534,7 +1570,14 @@ mod tests {
             SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
         );
         let states = executor
-            .run(&Semantics { semantics, data: Vec::new() }, &state, None)
+            .run(
+                &Semantics {
+                    semantics,
+                    data: Vec::new(),
+                },
+                &state,
+                None,
+            )
             .expect("run");
         assert_eq!(states.len(), 1);
         assert_eq!(
@@ -1592,7 +1635,9 @@ mod tests {
             },
             diagnostics: Vec::new(),
         };
-        let states = executor.step(&semantics_of(semantics), &state).expect("step");
+        let states = executor
+            .step(&semantics_of(semantics), &state)
+            .expect("step");
         assert_eq!(
             states[0]
                 .eval_program_counter_u64()
@@ -1754,7 +1799,9 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.step(&semantics_of(semantics), &state).expect("step");
+        let states = executor
+            .step(&semantics_of(semantics), &state)
+            .expect("step");
         let slice = states[0]
             .slice_from_memory(0x3000, 1)
             .expect("slice memory");
@@ -1926,7 +1973,9 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.step(&semantics_of(semantics), &state).expect("step");
+        let states = executor
+            .step(&semantics_of(semantics), &state)
+            .expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("s2", 32)
@@ -2059,7 +2108,9 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.step(&semantics_of(semantics), &state).expect("step");
+        let states = executor
+            .step(&semantics_of(semantics), &state)
+            .expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("x2", 1)
@@ -2105,7 +2156,9 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.step(&semantics_of(semantics), &state).expect("step");
+        let states = executor
+            .step(&semantics_of(semantics), &state)
+            .expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("d1", 64)
@@ -2146,7 +2199,9 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.step(&semantics_of(semantics), &state).expect("step");
+        let states = executor
+            .step(&semantics_of(semantics), &state)
+            .expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("d1", 64)
@@ -2194,7 +2249,9 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.step(&semantics_of(semantics), &state).expect("step");
+        let states = executor
+            .step(&semantics_of(semantics), &state)
+            .expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("d1", 64)
@@ -2238,7 +2295,9 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor.step(&semantics_of(semantics), &state).expect("step");
+        let states = executor
+            .step(&semantics_of(semantics), &state)
+            .expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("x1", 64)
@@ -2341,7 +2400,11 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![to_fp80_left, to_fp80_right, compare]), &state, None)
+            .run(
+                &semantics_many(vec![to_fp80_left, to_fp80_right, compare]),
+                &state,
+                None,
+            )
             .expect("run");
         assert_eq!(
             states[0]

@@ -182,13 +182,12 @@ mod tests {
     use crate::Configuration;
     use crate::controlflow::{Function, Graph};
     use crate::disassemblers::capstone::Disassembler;
-    use crate::semantics::{SemanticAbi, SemanticAbiKind, SemanticCpu, SemanticCpuKind, Semantics};
     use crate::lifters::llvm::Lifter;
     use crate::semantics::{
-        Semantic, SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect,
-        SemanticEncoding, SemanticExpression, SemanticLocation, SemanticStatus,
-        SemanticTerminator,
+        Semantic, SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect, SemanticEncoding,
+        SemanticExpression, SemanticLocation, SemanticStatus, SemanticTerminator,
     };
+    use crate::semantics::{SemanticAbi, SemanticAbiKind, SemanticCpu, SemanticCpuKind, Semantics};
     use std::collections::BTreeMap;
 
     #[test]
@@ -339,7 +338,9 @@ mod tests {
         let function = Function::new(0, &graph).expect("function");
 
         let mut lifter = Lifter::from_architecture(Architecture::ARM64, config);
-        lifter.lift_function(&function, None).expect("lift function");
+        lifter
+            .lift_function(&function, None)
+            .expect("lift function");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -485,10 +486,7 @@ mod tests {
                     name: "eax".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Const {
-                    value: 1,
-                    bits: 32,
-                },
+                expression: SemanticExpression::Const { value: 1, bits: 32 },
             }],
             terminator: SemanticTerminator::Return { expression: None },
             diagnostics: Vec::new(),
@@ -535,10 +533,7 @@ mod tests {
                     name: "eax".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Const {
-                    value: 1,
-                    bits: 32,
-                },
+                expression: SemanticExpression::Const { value: 1, bits: 32 },
             }],
             terminator: SemanticTerminator::Return { expression: None },
             diagnostics: Vec::new(),

@@ -1,17 +1,17 @@
 pub mod abis;
 
-use crate::semantics::abis::{SemanticAbi as PySemanticAbi, extract_abi, register_abi_classes};
+use crate::semantics::abis::{extract_abi, register_abi_classes, SemanticAbi as PySemanticAbi};
 use binlex::semantics::{
     Semantic as InnerSemantic, SemanticAddressSpace as InnerAddressSpace,
     SemanticCpu as InnerSemanticCpu, SemanticCpuAlias as InnerSemanticCpuAlias,
     SemanticCpuAliasWritePolicy as InnerSemanticCpuAliasWritePolicy,
     SemanticCpuEndian as InnerSemanticCpuEndian, SemanticCpuKind as InnerSemanticCpuKind,
     SemanticCpuProgramCounter as InnerSemanticCpuProgramCounter,
-    SemanticCpuRegister as InnerSemanticCpuRegister, SemanticDiagnostic as InnerSemanticDiagnostic,
+    SemanticCpuRegister as InnerSemanticCpuRegister, SemanticData as InnerSemanticData,
+    SemanticDiagnostic as InnerSemanticDiagnostic,
     SemanticDiagnosticKind as InnerSemanticDiagnosticKind, SemanticEffect as InnerSemanticEffect,
     SemanticEffectKind as InnerSemanticEffectKind, SemanticEncoding as InnerSemanticEncoding,
-    SemanticData as InnerSemanticData, SemanticExpression as InnerSemanticExpr,
-    SemanticExpressionKind as InnerSemanticExprKind,
+    SemanticExpression as InnerSemanticExpr, SemanticExpressionKind as InnerSemanticExprKind,
     SemanticFenceKind as InnerFenceKind, SemanticLocation as InnerSemanticLocation,
     SemanticLocationKind as InnerSemanticLocationKind, SemanticMemory as InnerSemanticMemory,
     SemanticMemoryAddressed as InnerSemanticMemoryAddressed,

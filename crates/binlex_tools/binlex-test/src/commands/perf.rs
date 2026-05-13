@@ -239,7 +239,10 @@ fn run_analyze(config: &Configuration, args: &AnalyzeArgs) -> Result<(), Box<dyn
     Ok(())
 }
 
-fn run_lift_functions(config: &Configuration, args: &LiftFunctionsArgs) -> Result<(), Box<dyn Error>> {
+fn run_lift_functions(
+    config: &Configuration,
+    args: &LiftFunctionsArgs,
+) -> Result<(), Box<dyn Error>> {
     let bytes = fs::read(&args.input)?;
     let iterations = normalize_iterations(args.iterations);
     let mut durations = Vec::with_capacity(iterations);

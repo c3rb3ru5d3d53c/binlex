@@ -1,5 +1,5 @@
-use crate::semantics::{SemanticCpu, SemanticLocation, SemanticTrapKind};
 use crate::Architecture;
+use crate::semantics::{SemanticCpu, SemanticLocation, SemanticTrapKind};
 use crate::symbolic::Error;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -118,10 +118,19 @@ impl SemanticAbi {
     pub fn supports_architecture(&self, architecture: Architecture) -> bool {
         matches!(
             (self.cpu.kind(), architecture),
-            (Some(crate::semantics::SemanticCpuKind::I386), Architecture::I386)
-                | (Some(crate::semantics::SemanticCpuKind::Amd64), Architecture::AMD64)
-                | (Some(crate::semantics::SemanticCpuKind::Arm64), Architecture::ARM64)
-                | (Some(crate::semantics::SemanticCpuKind::Cil), Architecture::CIL)
+            (
+                Some(crate::semantics::SemanticCpuKind::I386),
+                Architecture::I386
+            ) | (
+                Some(crate::semantics::SemanticCpuKind::Amd64),
+                Architecture::AMD64
+            ) | (
+                Some(crate::semantics::SemanticCpuKind::Arm64),
+                Architecture::ARM64
+            ) | (
+                Some(crate::semantics::SemanticCpuKind::Cil),
+                Architecture::CIL
+            )
         )
     }
 

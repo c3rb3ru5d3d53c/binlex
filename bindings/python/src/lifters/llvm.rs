@@ -101,11 +101,8 @@ impl BuildState {
     }
 
     fn rebuild(&mut self) -> Result<(), Error> {
-        let mut inner = InnerLifter::new(
-            self.cpu.clone(),
-            self.config.clone(),
-            self.triple.clone(),
-        )?;
+        let mut inner =
+            InnerLifter::new(self.cpu.clone(), self.config.clone(), self.triple.clone())?;
         if let Some(override_def) = self.module_override.clone() {
             match override_def {
                 ModuleOverrideDef::Ir(ir) => inner.set_ir(&ir)?,
@@ -120,8 +117,10 @@ impl BuildState {
                         &self.config,
                         record,
                     );
-                    let instruction =
-                        Instruction::new(*graph.instruction_addresses().iter().next().unwrap(), &graph)?;
+                    let instruction = Instruction::new(
+                        *graph.instruction_addresses().iter().next().unwrap(),
+                        &graph,
+                    )?;
                     inner.lift_instruction(&instruction)?;
                 }
                 ModuleItemDef::Block {
@@ -129,7 +128,8 @@ impl BuildState {
                     records,
                     abi,
                 } => {
-                    let mut graph = Graph::new(architecture_from_cpu(&self.cpu)?, self.config.clone());
+                    let mut graph =
+                        Graph::new(architecture_from_cpu(&self.cpu)?, self.config.clone());
                     for record in records {
                         graph.insert_instruction(record);
                     }
@@ -143,7 +143,8 @@ impl BuildState {
                     abi,
                     name,
                 } => {
-                    let mut graph = Graph::new(architecture_from_cpu(&self.cpu)?, self.config.clone());
+                    let mut graph =
+                        Graph::new(architecture_from_cpu(&self.cpu)?, self.config.clone());
                     for (block_address, records) in blocks {
                         for record in records {
                             graph.insert_instruction(record);
@@ -219,7 +220,10 @@ fn graph_from_instruction_record(
     graph
 }
 
-fn instruction_records_for_block(graph: &Graph, address: u64) -> Result<Vec<InstructionRecord>, Error> {
+fn instruction_records_for_block(
+    graph: &Graph,
+    address: u64,
+) -> Result<Vec<InstructionRecord>, Error> {
     let block = Block::new(address, graph)?;
     Ok(block
         .instructions()
@@ -241,7 +245,11 @@ fn compile_created_function(
         return inner.link_bitcode_module(bitcode, Some(&function.name));
     }
     if let Some(semantics) = &function.body_semantics {
-        return inner.lift_function_semantics_named(semantics, function.abi.as_ref(), &function.name);
+        return inner.lift_function_semantics_named(
+            semantics,
+            function.abi.as_ref(),
+            &function.name,
+        );
     }
 
     let architecture = architecture_from_cpu(cpu)?;
@@ -440,7 +448,10 @@ impl Lifter {
         let record = match instruction.with_inner_instruction(py, |inner| Ok(inner.inner.clone())) {
             Ok(record) => record,
             Err(err) => {
-                Stderr::print_debug(&self.config, format!("llvm lift instruction failed: {}", err));
+                Stderr::print_debug(
+                    &self.config,
+                    format!("llvm lift instruction failed: {}", err),
+                );
                 return false;
             }
         };
@@ -463,7 +474,10 @@ impl Lifter {
             None => None,
         };
         let (records, address) = match block.with_inner_block(py, |inner| {
-            Ok((instruction_records_for_block(inner.cfg, inner.address())?, inner.address()))
+            Ok((
+                instruction_records_for_block(inner.cfg, inner.address())?,
+                inner.address(),
+            ))
         }) {
             Ok(values) => values,
             Err(err) => {
@@ -492,7 +506,10 @@ impl Lifter {
             Some(value) => match extract_abi(value.bind(py)) {
                 Ok(abi) => Some(abi),
                 Err(err) => {
-                    Stderr::print_debug(&self.config, format!("llvm lift function failed: {}", err));
+                    Stderr::print_debug(
+                        &self.config,
+                        format!("llvm lift function failed: {}", err),
+                    );
                     return false;
                 }
             },
@@ -501,7 +518,10 @@ impl Lifter {
         let (blocks, address) = match function.with_inner_function(py, |inner| {
             let mut blocks = Vec::with_capacity(inner.blocks.len());
             for block in inner.blocks.values() {
-                blocks.push((block.address(), instruction_records_for_block(inner.cfg, block.address())?));
+                blocks.push((
+                    block.address(),
+                    instruction_records_for_block(inner.cfg, block.address())?,
+                ));
             }
             Ok((blocks, inner.address()))
         }) {
@@ -534,14 +554,19 @@ impl Lifter {
             Some(value) => match extract_abi(value.bind(py)) {
                 Ok(abi) => Some(abi),
                 Err(err) => {
-                    Stderr::print_debug(&self.config, format!("llvm lift block semantics failed: {}", err));
+                    Stderr::print_debug(
+                        &self.config,
+                        format!("llvm lift block semantics failed: {}", err),
+                    );
                     return false;
                 }
             },
             None => None,
         };
         let mut state = self.state.lock().unwrap();
-        state.items.push(ModuleItemDef::BlockSemantics { semantics, abi });
+        state
+            .items
+            .push(ModuleItemDef::BlockSemantics { semantics, abi });
         state.mark_dirty();
         true
     }
@@ -559,14 +584,21 @@ impl Lifter {
             Some(value) => match extract_abi(value.bind(py)) {
                 Ok(abi) => Some(abi),
                 Err(err) => {
-                    Stderr::print_debug(&self.config, format!("llvm lift function semantics failed: {}", err));
+                    Stderr::print_debug(
+                        &self.config,
+                        format!("llvm lift function semantics failed: {}", err),
+                    );
                     return false;
                 }
             },
             None => None,
         };
         let mut state = self.state.lock().unwrap();
-        state.items.push(ModuleItemDef::FunctionSemantics { semantics, abi, name });
+        state.items.push(ModuleItemDef::FunctionSemantics {
+            semantics,
+            abi,
+            name,
+        });
         state.mark_dirty();
         true
     }
@@ -859,7 +891,10 @@ impl LiftedFunction {
     #[pyo3(signature = (block, name=None), text_signature = "($self, block, name=None)")]
     pub fn lift_block(&self, py: Python<'_>, block: &PyBlock, name: Option<String>) -> bool {
         let (records, address) = match block.with_inner_block(py, |inner| {
-            Ok((instruction_records_for_block(inner.cfg, inner.address())?, inner.address()))
+            Ok((
+                instruction_records_for_block(inner.cfg, inner.address())?,
+                inner.address(),
+            ))
         }) {
             Ok(values) => values,
             Err(err) => {
@@ -950,7 +985,8 @@ impl LiftedFunction {
         if function.raw_ir.is_some() || function.raw_bitcode.is_some() {
             Stderr::print_debug(
                 &state.config,
-                "llvm function semantics append failed: function already has raw llvm body".to_string(),
+                "llvm function semantics append failed: function already has raw llvm body"
+                    .to_string(),
             );
             return false;
         }
@@ -990,7 +1026,10 @@ impl LiftedFunction {
     pub fn optimize_mem2reg(&self) -> bool {
         let mut state = self.state.lock().unwrap();
         if let Err(err) = state.ensure_built() {
-            Stderr::print_debug(&state.config, format!("llvm function mem2reg failed: {}", err));
+            Stderr::print_debug(
+                &state.config,
+                format!("llvm function mem2reg failed: {}", err),
+            );
             return false;
         }
         let Some(ModuleItemDef::CreatedFunction { function }) = state.items.get(self.index) else {
@@ -1002,7 +1041,10 @@ impl LiftedFunction {
                 true
             }
             Err(err) => {
-                Stderr::print_debug(&state.config, format!("llvm function mem2reg failed: {}", err));
+                Stderr::print_debug(
+                    &state.config,
+                    format!("llvm function mem2reg failed: {}", err),
+                );
                 false
             }
         }
@@ -1011,7 +1053,10 @@ impl LiftedFunction {
     pub fn optimize_instcombine(&self) -> bool {
         let mut state = self.state.lock().unwrap();
         if let Err(err) = state.ensure_built() {
-            Stderr::print_debug(&state.config, format!("llvm function instcombine failed: {}", err));
+            Stderr::print_debug(
+                &state.config,
+                format!("llvm function instcombine failed: {}", err),
+            );
             return false;
         }
         let Some(ModuleItemDef::CreatedFunction { function }) = state.items.get(self.index) else {
@@ -1023,7 +1068,10 @@ impl LiftedFunction {
                 true
             }
             Err(err) => {
-                Stderr::print_debug(&state.config, format!("llvm function instcombine failed: {}", err));
+                Stderr::print_debug(
+                    &state.config,
+                    format!("llvm function instcombine failed: {}", err),
+                );
                 false
             }
         }
@@ -1139,7 +1187,10 @@ impl LiftedFunction {
             Ok(lifter) => Some(lifter.bitcode()),
             Err(err) => {
                 let state = self.state.lock().unwrap();
-                Stderr::print_debug(&state.config, format!("llvm function bitcode failed: {}", err));
+                Stderr::print_debug(
+                    &state.config,
+                    format!("llvm function bitcode failed: {}", err),
+                );
                 None
             }
         }
@@ -1151,13 +1202,19 @@ impl LiftedFunction {
                 Ok(bytes) => Some(bytes),
                 Err(err) => {
                     let state = self.state.lock().unwrap();
-                    Stderr::print_debug(&state.config, format!("llvm function object failed: {}", err));
+                    Stderr::print_debug(
+                        &state.config,
+                        format!("llvm function object failed: {}", err),
+                    );
                     None
                 }
             },
             Err(err) => {
                 let state = self.state.lock().unwrap();
-                Stderr::print_debug(&state.config, format!("llvm function object failed: {}", err));
+                Stderr::print_debug(
+                    &state.config,
+                    format!("llvm function object failed: {}", err),
+                );
                 None
             }
         }
@@ -1180,13 +1237,16 @@ impl LiftedFunction {
                     .map(|(name, address)| (name, address as usize))
                     .collect::<BTreeMap<_, _>>();
                 match lifter.jit_function(&name, &links) {
-                Ok(inner) => Some(JittedFunction { inner }),
-                Err(err) => {
-                    let state = self.state.lock().unwrap();
-                    Stderr::print_debug(&state.config, format!("llvm function jit failed: {}", err));
-                    None
+                    Ok(inner) => Some(JittedFunction { inner }),
+                    Err(err) => {
+                        let state = self.state.lock().unwrap();
+                        Stderr::print_debug(
+                            &state.config,
+                            format!("llvm function jit failed: {}", err),
+                        );
+                        None
+                    }
                 }
-            }
             }
             Err(err) => {
                 let state = self.state.lock().unwrap();
@@ -1201,7 +1261,9 @@ impl LiftedFunction {
 impl LiftedBlock {
     pub fn name(&self) -> String {
         let state = self.state.lock().unwrap();
-        let Some(ModuleItemDef::CreatedFunction { function }) = state.items.get(self.function_index) else {
+        let Some(ModuleItemDef::CreatedFunction { function }) =
+            state.items.get(self.function_index)
+        else {
             return String::new();
         };
         match &function.blocks[self.block_index] {

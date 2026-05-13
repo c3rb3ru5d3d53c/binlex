@@ -244,7 +244,9 @@ fn validate_expression(expression: &SemanticExpression) -> Result<(), Error> {
         }
         SemanticExpression::DataAddress { name, .. } => {
             if name.trim().is_empty() {
-                return Err(Error::other("semantic data_address expression has empty name"));
+                return Err(Error::other(
+                    "semantic data_address expression has empty name",
+                ));
             }
         }
         SemanticExpression::AddressOf { location, .. } => validate_location(location)?,

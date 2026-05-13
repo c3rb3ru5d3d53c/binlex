@@ -7,10 +7,9 @@ use crate::Configuration;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::core::Architecture;
 use crate::semantics::{
-    SemanticAbi,
-    SemanticAddressSpace, SemanticDiagnostic, SemanticEffect, SemanticExpression, SemanticJson,
-    SemanticLocation, SemanticOperationBinary, SemanticOperationCast, SemanticOperationCompare,
-    SemanticOperationUnary, SemanticTerminator,
+    SemanticAbi, SemanticAddressSpace, SemanticDiagnostic, SemanticEffect, SemanticExpression,
+    SemanticJson, SemanticLocation, SemanticOperationBinary, SemanticOperationCast,
+    SemanticOperationCompare, SemanticOperationUnary, SemanticTerminator,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -110,7 +109,11 @@ impl Lifter {
         Ok(())
     }
 
-    pub fn lift_block(&mut self, block: &Block<'_>, _abi: Option<&SemanticAbi>) -> Result<(), Error> {
+    pub fn lift_block(
+        &mut self,
+        block: &Block<'_>,
+        _abi: Option<&SemanticAbi>,
+    ) -> Result<(), Error> {
         self.ensure_enabled()?;
         let architecture = block.architecture();
         self.ensure_supported_architecture(architecture)?;

@@ -35,9 +35,12 @@ impl SymbolicExecutor {
                 deps: BTreeSet::new(),
             }),
             SemanticExpression::DataAddress { name, bits } => {
-                let address = state.semantic_data_address(name).ok_or(
-                    Error::UnsupportedExpression("unknown semantic data_address symbol"),
-                )?;
+                let address =
+                    state
+                        .semantic_data_address(name)
+                        .ok_or(Error::UnsupportedExpression(
+                            "unknown semantic data_address symbol",
+                        ))?;
                 Ok(EvaluatedValue {
                     value: state.backend().const_bv(address as u128, *bits)?,
                     deps: BTreeSet::new(),

@@ -1,6 +1,6 @@
 use super::LoweringContext;
-use super::helpers::render_location;
 use super::helpers::coerce_int_value_width;
+use super::helpers::render_location;
 use crate::semantics::SemanticLocation;
 use inkwell::attributes::AttributeLoc;
 use inkwell::values::IntValue;
@@ -201,12 +201,10 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 continue;
             };
             if self.uses_pure_callable_abi()
-                && self.is_callable_abi_boundary_location(
-                    &SemanticLocation::Register {
-                        name: name.clone(),
-                        bits: *bits,
-                    },
-                )
+                && self.is_callable_abi_boundary_location(&SemanticLocation::Register {
+                    name: name.clone(),
+                    bits: *bits,
+                })
             {
                 continue;
             }

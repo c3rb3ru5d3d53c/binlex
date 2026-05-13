@@ -1,6 +1,6 @@
 use super::LoweringContext;
-use super::helpers::{render_location, sanitize_symbol};
 use super::helpers::coerce_int_value_width;
+use super::helpers::{render_location, sanitize_symbol};
 use crate::semantics::SemanticLocation;
 use inkwell::attributes::Attribute;
 use inkwell::types::{AnyType, IntType};

@@ -175,8 +175,12 @@ impl<'a> Disassembler<'a> {
         cfg: &'g mut Graph,
     ) -> Result<Instruction<'g>, Error> {
         match &self.inner {
-            DisassemblerImpl::X86(disassembler) => disassembler.disassemble_instruction(address, cfg),
-            DisassemblerImpl::Arm64(disassembler) => disassembler.disassemble_instruction(address, cfg),
+            DisassemblerImpl::X86(disassembler) => {
+                disassembler.disassemble_instruction(address, cfg)
+            }
+            DisassemblerImpl::Arm64(disassembler) => {
+                disassembler.disassemble_instruction(address, cfg)
+            }
             DisassemblerImpl::Cil(disassembler) => {
                 disassembler.disassemble_instruction(address, metadata_token_addresses, cfg)
             }

@@ -525,11 +525,16 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         let mut args = Vec::<BasicMetadataValueEnum<'ctx>>::new();
         if let Some(abi) = callee_abi.as_ref() {
             let parameter_count = target.count_params() as usize;
-            for (index, location) in abi.function_arguments.iter().take(parameter_count).enumerate() {
+            for (index, location) in abi
+                .function_arguments
+                .iter()
+                .take(parameter_count)
+                .enumerate()
+            {
                 let value = self.read_location(location)?;
-                let parameter = target
-                    .get_nth_param(index as u32)
-                    .ok_or_else(|| Error::other(format!("missing llvm parameter {index} for {name}")))?;
+                let parameter = target.get_nth_param(index as u32).ok_or_else(|| {
+                    Error::other(format!("missing llvm parameter {index} for {name}"))
+                })?;
                 let value = coerce_int_value_width(
                     &self.builder,
                     value,
@@ -555,7 +560,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .map_err(|err| Error::other(err.to_string()))?;
         if let (Some(abi), Some(value)) = (
             callee_abi.as_ref(),
-            call.try_as_basic_value().basic().map(|value| value.into_int_value()),
+            call.try_as_basic_value()
+                .basic()
+                .map(|value| value.into_int_value()),
         ) {
             if let Some(location) = abi.return_locations.first() {
                 let value = coerce_int_value_width(

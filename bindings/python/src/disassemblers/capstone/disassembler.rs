@@ -128,13 +128,12 @@ impl Disassembler {
         let graph_ref = &mut graph.borrow_mut(py);
         let result = self
             .with_inner_disassembler(py, |disassembler| {
-                disassembler.disassemble_instruction_address(
-                    address,
-                    &mut graph_ref.inner.lock().unwrap(),
-                )
+                disassembler
+                    .disassemble_instruction_address(address, &mut graph_ref.inner.lock().unwrap())
             })
             .map_err(|error| Error::other(error.to_string()))?;
-        Instruction::new(result, graph.clone_ref(py)).map_err(|error| Error::other(error.to_string()))
+        Instruction::new(result, graph.clone_ref(py))
+            .map_err(|error| Error::other(error.to_string()))
     }
 
     #[pyo3(text_signature = "($self, address, graph)")]
@@ -147,10 +146,8 @@ impl Disassembler {
         let graph_ref = &mut graph.borrow_mut(py);
         let result = self
             .with_inner_disassembler(py, |disassembler| {
-                disassembler.disassemble_function_address(
-                    address,
-                    &mut graph_ref.inner.lock().unwrap(),
-                )
+                disassembler
+                    .disassemble_function_address(address, &mut graph_ref.inner.lock().unwrap())
             })
             .map_err(|error| Error::other(error.to_string()))?;
         Function::new(result, graph.clone_ref(py)).map_err(|error| Error::other(error.to_string()))
@@ -164,14 +161,10 @@ impl Disassembler {
         graph: Py<Graph>,
     ) -> Result<Block, Error> {
         let graph_ref = &mut graph.borrow_mut(py);
-        self
-            .with_inner_disassembler(py, |disassembler| {
-                disassembler.disassemble_block_address(
-                    address,
-                    &mut graph_ref.inner.lock().unwrap(),
-                )
-            })
-            .map_err(|error| Error::other(error.to_string()))?;
+        self.with_inner_disassembler(py, |disassembler| {
+            disassembler.disassemble_block_address(address, &mut graph_ref.inner.lock().unwrap())
+        })
+        .map_err(|error| Error::other(error.to_string()))?;
         Block::new(address, graph.clone_ref(py)).map_err(|error| Error::other(error.to_string()))
     }
 

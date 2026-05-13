@@ -1,0 +1,11 @@
+[package]
+name = "mlir"
+version.workspace = true
+edition = "2024"
+license = "MIT"
+description = "Static MLIR compatibility layer for binlex"
+build = "build.rs"
+
+[dependencies]
+
+[build-dependencies]

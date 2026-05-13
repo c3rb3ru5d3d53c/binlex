@@ -22,9 +22,9 @@
 
 use crate::Architecture;
 use crate::Configuration;
-use crate::controlflow::{Block, Function, Graph, Instruction as ControlFlowInstruction};
 use crate::controlflow::Instruction as CFGInstruction;
 use crate::controlflow::InstructionDetail;
+use crate::controlflow::{Block, Function, Graph, Instruction as ControlFlowInstruction};
 use crate::disassemblers::cil::Instruction;
 use crate::disassemblers::cil::backends::native;
 use crate::genetics::Chromosome;
@@ -165,7 +165,10 @@ impl<'disassembler> Disassembler<'disassembler> {
             cfg.instructions.insert_invalid(address);
             return Err(Error::new(
                 ErrorKind::InvalidData,
-                format!("0x{:x}: instruction address is out of image bounds", address),
+                format!(
+                    "0x{:x}: instruction address is out of image bounds",
+                    address
+                ),
             ));
         };
 
@@ -350,8 +353,11 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfg: &'a mut Graph,
     ) -> Result<ControlFlowInstruction<'a>, Error> {
         let entry = self.disassemble_instruction_address(address, metadata_token_addresses, cfg)?;
-        cfg.get_instruction(entry)
-            .ok_or_else(|| Error::other(format!("0x{entry:x}: instruction missing after disassembly")))
+        cfg.get_instruction(entry).ok_or_else(|| {
+            Error::other(format!(
+                "0x{entry:x}: instruction missing after disassembly"
+            ))
+        })
     }
 
     pub fn disassemble_block<'a>(
@@ -372,8 +378,9 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfg: &'a mut Graph,
     ) -> Result<Function<'a>, Error> {
         self.disassemble_function_address(address, metadata_token_addresses, cfg)?;
-        cfg.get_function(address)
-            .ok_or_else(|| Error::other(format!("0x{address:x}: function missing after disassembly")))
+        cfg.get_function(address).ok_or_else(|| {
+            Error::other(format!("0x{address:x}: function missing after disassembly"))
+        })
     }
 
     pub fn disassemble<'a>(

@@ -456,7 +456,10 @@ pub fn semantic_register_name(kind: SemanticCpuKind, register_name: &str) -> Opt
 }
 
 fn arm64_semantic_register_name(register_name: &str) -> Option<String> {
-    Some(format!("reg_{}", arm64_semantic_register_id_from_text(register_name)?))
+    Some(format!(
+        "reg_{}",
+        arm64_semantic_register_id_from_text(register_name)?
+    ))
 }
 
 fn arm64_semantic_register_id_from_text(token: &str) -> Option<u16> {

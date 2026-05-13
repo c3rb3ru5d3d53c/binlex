@@ -21,9 +21,7 @@
 // SOFTWARE.
 
 use crate::semantics::arm64::InstructionDetailArm64;
-use crate::semantics::arm64::helpers::{
-    compare, complete, condition_from_suffix, const_u64,
-};
+use crate::semantics::arm64::helpers::{compare, complete, condition_from_suffix, const_u64};
 use crate::semantics::arm64::{Arm64OperandKind, Arm64OperandView};
 use crate::semantics::{
     Semantic, SemanticEffect, SemanticExpression, SemanticLocation, SemanticOperationCompare,

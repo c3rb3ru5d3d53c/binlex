@@ -367,9 +367,9 @@ impl MACHO {
         section_name: &str,
         slice: usize,
     ) -> Option<MachoSection> {
-        self.sections(slice).into_iter().find(|section| {
-            section.segment_name == segment_name && section.name == section_name
-        })
+        self.sections(slice)
+            .into_iter()
+            .find(|section| section.segment_name == segment_name && section.name == section_name)
     }
 
     pub fn virtual_address_to_symbol(

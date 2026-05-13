@@ -22,8 +22,8 @@
 
 use crate::Architecture;
 use crate::Configuration;
-use crate::controlflow::{Block, Function, Graph, Instruction};
 use crate::controlflow::InstructionRecord;
+use crate::controlflow::{Block, Function, Graph, Instruction};
 use crate::disassemblers::x86::classify as x86_classify;
 use crate::disassemblers::x86::pattern::{
     X86PatternOperand, X86PatternOperandKind, displacement_size_bits, instruction_chromosome_mask,
@@ -305,8 +305,11 @@ impl<'a> Disassembler<'a> {
         cfg: &'g mut Graph,
     ) -> Result<Instruction<'g>, Error> {
         let entry = self.disassemble_instruction_address(address, cfg)?;
-        cfg.get_instruction(entry)
-            .ok_or_else(|| Error::other(format!("0x{entry:x}: instruction missing after disassembly")))
+        cfg.get_instruction(entry).ok_or_else(|| {
+            Error::other(format!(
+                "0x{entry:x}: instruction missing after disassembly"
+            ))
+        })
     }
 
     pub fn disassemble_block<'g>(
@@ -325,8 +328,9 @@ impl<'a> Disassembler<'a> {
         cfg: &'g mut Graph,
     ) -> Result<Function<'g>, Error> {
         self.disassemble_function_address(address, cfg)?;
-        cfg.get_function(address)
-            .ok_or_else(|| Error::other(format!("0x{address:x}: function missing after disassembly")))
+        cfg.get_function(address).ok_or_else(|| {
+            Error::other(format!("0x{address:x}: function missing after disassembly"))
+        })
     }
 
     pub fn disassemble(&self, addresses: BTreeSet<u64>, cfg: &mut Graph) -> Result<(), Error> {

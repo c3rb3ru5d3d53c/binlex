@@ -883,7 +883,11 @@ mod tests {
             "the size of the pe file in bytes is incorrect"
         );
         let mapped_image = pe.image().expect("failed to build mapped pe image");
-        assert_eq!(mapped_image.base(), pe.imagebase(), "mapped image base is incorrect");
+        assert_eq!(
+            mapped_image.base(),
+            pe.imagebase(),
+            "mapped image base is incorrect"
+        );
         assert!(
             mapped_image.size().expect("failed to size mapped image") < pe.imagebase(),
             "mapped image should not retain a giant leading sparse gap",

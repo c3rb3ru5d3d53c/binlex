@@ -40,8 +40,8 @@ use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
 use crate::lifters::{LiftedFunction, Lifter, LifterBackend, LifterError};
-use crate::semantics::{SemanticAbi, SemanticCpu};
 use crate::metadata::Attributes;
+use crate::semantics::{SemanticAbi, SemanticCpu};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
@@ -556,11 +556,10 @@ impl<'function> Function<'function> {
 
     fn lifters_json(&self) -> Option<LiftersJson> {
         let llvm = if self.cfg.config.functions.lifters.llvm.enabled {
-            let mut lifter = LlvmLifter::from_architecture(self.architecture(), self.cfg.config.clone());
+            let mut lifter =
+                LlvmLifter::from_architecture(self.architecture(), self.cfg.config.clone());
             lifter.lift_function(self, None).ok()?;
-            Some(LlvmJson {
-                text: lifter.ir(),
-            })
+            Some(LlvmJson { text: lifter.ir() })
         } else {
             None
         };
@@ -571,9 +570,7 @@ impl<'function> Function<'function> {
         {
             let mut lifter = VexLifter::new(self.cfg.config.clone());
             lifter.lift_function(self, None).ok()?;
-            Some(VexJson {
-                text: lifter.ir(),
-            })
+            Some(VexJson { text: lifter.ir() })
         } else {
             None
         };

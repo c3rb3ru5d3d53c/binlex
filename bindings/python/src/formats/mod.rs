@@ -22,8 +22,8 @@
 
 //! Python bindings for binary container and file-format helpers.
 
-pub mod elf;
 pub mod coff;
+pub mod elf;
 pub mod file;
 pub mod image;
 pub mod macho;
@@ -41,8 +41,8 @@ pub use crate::formats::coff::COFF;
 pub use crate::formats::elf::ELF;
 pub use crate::formats::file::File;
 pub use crate::formats::image::Image;
-pub use crate::formats::macho::PyMachoSlice;
 pub use crate::formats::macho::PyMachoSection;
+pub use crate::formats::macho::PyMachoSlice;
 pub use crate::formats::macho::MACHO;
 pub use crate::formats::pe::PE;
 pub use crate::formats::symbol::Symbol;

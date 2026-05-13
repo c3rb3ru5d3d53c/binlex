@@ -1,7 +1,5 @@
 use super::error::{LifterCapability, LifterError};
-use crate::controlflow::{
-    Block, Function, Graph, Instruction, InstructionRecord,
-};
+use crate::controlflow::{Block, Function, Graph, Instruction, InstructionRecord};
 use crate::semantics::{
     Semantic, SemanticAbi, SemanticCpu, SemanticExpression, SemanticTerminator, Semantics,
 };
@@ -443,9 +441,10 @@ impl Lifter {
             state.backend,
             &mut state.inner,
             ModuleItemDef::BlockSemantics {
-            semantics: semantics.clone(),
-            abi: abi.cloned(),
-        })?;
+                semantics: semantics.clone(),
+                abi: abi.cloned(),
+            },
+        )?;
         state.items.push(ModuleItemDef::BlockSemantics {
             semantics: semantics.clone(),
             abi: abi.cloned(),
@@ -699,11 +698,7 @@ impl LiftedFunction {
             .collect()
     }
 
-    pub fn lift_block(
-        &self,
-        block: &Block<'_>,
-        name: Option<&str>,
-    ) -> Result<(), LifterError> {
+    pub fn lift_block(&self, block: &Block<'_>, name: Option<&str>) -> Result<(), LifterError> {
         let mut state = self.state.lock().unwrap();
         #[cfg(not(target_os = "windows"))]
         if state.backend != LifterBackend::Llvm {
@@ -714,9 +709,9 @@ impl LiftedFunction {
             return Err(LifterError::Io(Error::other("lifted function is invalid")));
         };
         if function.body_semantics.is_some() {
-                    return Err(LifterError::Io(Error::other(
-                        "function already has semantic body",
-                    )));
+            return Err(LifterError::Io(Error::other(
+                "function already has semantic body",
+            )));
         }
         if function.raw_ir.is_some() || function.raw_bitcode.is_some() {
             return Err(LifterError::Io(Error::other(
@@ -775,9 +770,7 @@ impl LiftedFunction {
             return Err(LifterError::Io(Error::other("lifted function is invalid")));
         };
         if !function.blocks.is_empty() {
-            return Err(LifterError::Io(Error::other(
-                "function already has blocks",
-            )));
+            return Err(LifterError::Io(Error::other("function already has blocks")));
         }
         if function.raw_ir.is_some() || function.raw_bitcode.is_some() {
             return Err(LifterError::Io(Error::other(
@@ -1016,14 +1009,15 @@ impl JittedFunction {
 impl LiftedBlock {
     pub fn name(&self) -> String {
         let state = self.state.lock().unwrap();
-        let Some(ModuleItemDef::CreatedFunction { function }) = state.items.get(self.function_index)
+        let Some(ModuleItemDef::CreatedFunction { function }) =
+            state.items.get(self.function_index)
         else {
             return String::new();
         };
         match &function.blocks[self.block_index] {
-            CreatedBlockDef::Cfg { name, address, .. } => name
-                .clone()
-                .unwrap_or_else(|| format!("block_{address:x}")),
+            CreatedBlockDef::Cfg { name, address, .. } => {
+                name.clone().unwrap_or_else(|| format!("block_{address:x}"))
+            }
             CreatedBlockDef::Semantics { name, .. } => name
                 .clone()
                 .unwrap_or_else(|| format!("block_{}", self.block_index)),
@@ -1065,7 +1059,10 @@ impl LiftedBlock {
             raw_ir: None,
             raw_bitcode: None,
         };
-        preview_lifter_from_items(&state, vec![ModuleItemDef::CreatedFunction { function: preview }])
+        preview_lifter_from_items(
+            &state,
+            vec![ModuleItemDef::CreatedFunction { function: preview }],
+        )
     }
 }
 
@@ -1103,7 +1100,10 @@ fn block_preview_function_name(
     }
 }
 
-fn instruction_records_for_block(graph: &Graph, address: u64) -> Result<Vec<InstructionRecord>, Error> {
+fn instruction_records_for_block(
+    graph: &Graph,
+    address: u64,
+) -> Result<Vec<InstructionRecord>, Error> {
     let block = Block::new(address, graph)?;
     Ok(block
         .instructions()
@@ -1125,7 +1125,11 @@ fn compile_created_function(
         return inner.link_bitcode_module(bitcode, Some(&function.name));
     }
     if let Some(semantics) = &function.body_semantics {
-        return inner.lift_function_semantics_named(semantics, function.abi.as_ref(), &function.name);
+        return inner.lift_function_semantics_named(
+            semantics,
+            function.abi.as_ref(),
+            &function.name,
+        );
     }
 
     let mut graph = Graph::new(architecture, config.clone());
@@ -1285,11 +1289,11 @@ fn architecture_from_cpu(cpu: &SemanticCpu) -> Result<Architecture, LifterError>
 #[cfg(test)]
 mod tests {
     use super::{Lifter, LifterBackend};
+    use crate::Configuration;
     use crate::semantics::{
         Semantic, SemanticAbi, SemanticAbiKind, SemanticCpu, SemanticCpuKind, SemanticEffect,
         SemanticExpression, SemanticLocation, SemanticStatus, SemanticTerminator, Semantics,
     };
-    use crate::Configuration;
 
     #[test]
     fn default_backend_resolves_to_llvm() {
@@ -1306,10 +1310,9 @@ mod tests {
     #[test]
     fn created_function_builder_replays_named_blocks() {
         let cpu = SemanticCpu::from_kind(SemanticCpuKind::I386).expect("cpu");
-        let abi =
-            SemanticAbi::from_kind(SemanticAbiKind::Stdcall, &cpu).expect("stdcall abi");
-        let lifter = Lifter::new(cpu, Configuration::default(), LifterBackend::Llvm, None)
-            .expect("lifter");
+        let abi = SemanticAbi::from_kind(SemanticAbiKind::Stdcall, &cpu).expect("stdcall abi");
+        let lifter =
+            Lifter::new(cpu, Configuration::default(), LifterBackend::Llvm, None).expect("lifter");
         let function = lifter
             .create_function("add_one", Some(&abi))
             .expect("created function");
@@ -1379,10 +1382,9 @@ mod tests {
     #[test]
     fn created_function_body_semantics_uses_builtin_abi_arguments_for_signature() {
         let cpu = SemanticCpu::from_kind(SemanticCpuKind::I386).expect("cpu");
-        let abi =
-            SemanticAbi::from_kind(SemanticAbiKind::Fastcall, &cpu).expect("fastcall abi");
-        let lifter = Lifter::new(cpu, Configuration::default(), LifterBackend::Llvm, None)
-            .expect("lifter");
+        let abi = SemanticAbi::from_kind(SemanticAbiKind::Fastcall, &cpu).expect("fastcall abi");
+        let lifter =
+            Lifter::new(cpu, Configuration::default(), LifterBackend::Llvm, None).expect("lifter");
         let function = lifter
             .create_function("add_one", Some(&abi))
             .expect("created function");
@@ -1432,10 +1434,9 @@ mod tests {
         let cpu = SemanticCpu::from_kind(SemanticCpuKind::I386).expect("cpu");
         let fastcall =
             SemanticAbi::from_kind(SemanticAbiKind::Fastcall, &cpu).expect("fastcall abi");
-        let stdcall =
-            SemanticAbi::from_kind(SemanticAbiKind::Stdcall, &cpu).expect("stdcall abi");
-        let lifter = Lifter::new(cpu, Configuration::default(), LifterBackend::Llvm, None)
-            .expect("lifter");
+        let stdcall = SemanticAbi::from_kind(SemanticAbiKind::Stdcall, &cpu).expect("stdcall abi");
+        let lifter =
+            Lifter::new(cpu, Configuration::default(), LifterBackend::Llvm, None).expect("lifter");
 
         let add_two = lifter
             .create_function("add_two", Some(&fastcall))

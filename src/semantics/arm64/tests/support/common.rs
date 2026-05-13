@@ -66,7 +66,8 @@ pub(crate) fn lift_instruction_to_llvm(name: &str, bytes: &[u8]) -> String {
     let mut graph = Graph::new(Architecture::ARM64, Configuration::default());
     graph.insert_instruction(instruction);
     let instruction = graph.get_instruction(0).expect("instruction should exist");
-    let mut lifter = Lifter::from_architecture(crate::Architecture::ARM64, Configuration::default());
+    let mut lifter =
+        Lifter::from_architecture(crate::Architecture::ARM64, Configuration::default());
     lifter
         .lift_instruction(&instruction)
         .unwrap_or_else(|error| panic!("{name}: instruction should lift: {error}"));

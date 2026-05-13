@@ -97,7 +97,13 @@ impl<'a> Disassembler<'a> {
     ) -> Result<Self, Error> {
         let image_base = image.base();
         let bytes = image.mmap()?;
-        Self::new_with_image_base(machine, bytes, image_base, executable_address_ranges, config)
+        Self::new_with_image_base(
+            machine,
+            bytes,
+            image_base,
+            executable_address_ranges,
+            config,
+        )
     }
 
     pub fn from_bytes(
@@ -165,8 +171,11 @@ impl<'a> Disassembler<'a> {
         cfg: &'b mut Graph,
     ) -> Result<Instruction<'b>, Error> {
         let entry = self.disassemble_instruction_address(address, cfg)?;
-        cfg.get_instruction(entry)
-            .ok_or_else(|| Error::other(format!("0x{entry:x}: instruction missing after disassembly")))
+        cfg.get_instruction(entry).ok_or_else(|| {
+            Error::other(format!(
+                "0x{entry:x}: instruction missing after disassembly"
+            ))
+        })
     }
 
     pub fn disassemble_instruction_address(
@@ -197,8 +206,9 @@ impl<'a> Disassembler<'a> {
         cfg: &'b mut Graph,
     ) -> Result<Function<'b>, Error> {
         self.disassemble_function_address(address, cfg)?;
-        cfg.get_function(address)
-            .ok_or_else(|| Error::other(format!("0x{address:x}: function missing after disassembly")))
+        cfg.get_function(address).ok_or_else(|| {
+            Error::other(format!("0x{address:x}: function missing after disassembly"))
+        })
     }
 
     pub fn disassemble_function_address(

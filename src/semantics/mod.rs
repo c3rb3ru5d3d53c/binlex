@@ -29,8 +29,7 @@ pub mod x86;
 
 pub use abis::{SemanticAbi, SemanticAbiKind, SemanticAbiTrap};
 pub use cpus::{
-    SemanticCpu, SemanticCpuAlias, SemanticCpuAliasWritePolicy, SemanticCpuEndian,
-    SemanticCpuKind,
+    SemanticCpu, SemanticCpuAlias, SemanticCpuAliasWritePolicy, SemanticCpuEndian, SemanticCpuKind,
     SemanticCpuProgramCounter, SemanticCpuRegister, SemanticMemory, SemanticMemoryAddressed,
     SemanticMemoryIndexed, SemanticMemoryStack,
 };

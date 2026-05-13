@@ -26,9 +26,7 @@ use crate::semantics::arm64::builders::memory::{
     build_store_pair, effective_memory_address, operand_expression, register_location,
     writeback_effect,
 };
-use crate::semantics::arm64::helpers::{
-    binary, bitmask, complete, const_u64, location_bits,
-};
+use crate::semantics::arm64::helpers::{binary, bitmask, complete, const_u64, location_bits};
 use crate::semantics::{
     Semantic, SemanticEffect, SemanticExpression, SemanticOperationBinary, SemanticOperationCast,
     SemanticOperationCompare, SemanticOperationUnary, SemanticTerminator,
