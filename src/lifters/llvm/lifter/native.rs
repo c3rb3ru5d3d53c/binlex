@@ -1,7 +1,7 @@
 use super::LoweringContext;
 use super::helpers::coerce_int_value_width;
 use super::helpers::render_location;
-use crate::semantics::SemanticLocation;
+use crate::ir::lir::LirLocation;
 use inkwell::attributes::AttributeLoc;
 use inkwell::values::IntValue;
 use std::io::Error;
@@ -160,7 +160,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             ("df", 10),
             ("of", 11),
         ] {
-            let key = render_location(&SemanticLocation::Flag {
+            let key = render_location(&LirLocation::Flag {
                 name: flag.to_string(),
                 bits: 1,
             });
@@ -196,12 +196,11 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             if !self.written_locations.contains(key) {
                 continue;
             }
-            let Some(SemanticLocation::Register { name, bits }) = self.slot_locations.get(key)
-            else {
+            let Some(LirLocation::Register { name, bits }) = self.slot_locations.get(key) else {
                 continue;
             };
             if self.uses_pure_callable_abi()
-                && self.is_callable_abi_boundary_location(&SemanticLocation::Register {
+                && self.is_callable_abi_boundary_location(&LirLocation::Register {
                     name: name.clone(),
                     bits: *bits,
                 })
@@ -209,7 +208,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 continue;
             }
             if self
-                .x86_parent_register_alias(&SemanticLocation::Register {
+                .x86_parent_register_alias(&LirLocation::Register {
                     name: name.clone(),
                     bits: *bits,
                 })
@@ -234,7 +233,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 .iter()
                 .any(|flag| {
                     self.written_locations
-                        .contains(&render_location(&SemanticLocation::Flag {
+                        .contains(&render_location(&LirLocation::Flag {
                             name: (*flag).to_string(),
                             bits: 1,
                         }))
@@ -309,9 +308,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
     pub(super) fn x86_parent_register_alias(
         &self,
-        location: &SemanticLocation,
+        location: &LirLocation,
     ) -> Option<(String, u16, u16)> {
-        let SemanticLocation::Register { name, bits } = location else {
+        let LirLocation::Register { name, bits } = location else {
             return None;
         };
         match *bits {

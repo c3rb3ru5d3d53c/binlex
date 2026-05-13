@@ -1,5 +1,5 @@
 use crate::formats::Image;
-use crate::semantics::{SemanticCpu, SemanticData, SemanticEncoding};
+use crate::ir::lir::{LirCpu, LirData, LirEncoding};
 use crate::symbolic::Error;
 use crate::symbolic::backend::z3::{TrackedAst, Z3Backend};
 use crate::symbolic::memory::FlatMemory;
@@ -25,7 +25,7 @@ struct DefinitionNode {
 
 #[derive(Clone)]
 pub struct SymbolicCpuState {
-    cpu: Arc<SemanticCpu>,
+    cpu: Arc<LirCpu>,
     address_bits: u16,
     backend: Z3Backend,
     registers: HashMap<String, SymbolicCell>,
@@ -100,11 +100,11 @@ impl SymbolicCpuState {
         self.cpu.program_counter_name(bits)
     }
 
-    pub fn new(cpu: SemanticCpu) -> Self {
+    pub fn new(cpu: LirCpu) -> Self {
         Self::from_shared_cpu(Arc::new(cpu))
     }
 
-    pub(crate) fn from_shared_cpu(cpu: Arc<SemanticCpu>) -> Self {
+    pub(crate) fn from_shared_cpu(cpu: Arc<LirCpu>) -> Self {
         let address_bits = cpu.address_bits();
         let backend = Z3Backend::new();
         Self {
@@ -131,7 +131,7 @@ impl SymbolicCpuState {
         }
     }
 
-    pub fn cpu(&self) -> &SemanticCpu {
+    pub fn cpu(&self) -> &LirCpu {
         &self.cpu
     }
 
@@ -265,7 +265,7 @@ impl SymbolicCpuState {
         self.backend.is_sat(&self.constraints)
     }
 
-    pub fn load_semantic_data(&mut self, data: &[SemanticData]) -> Result<(), Error> {
+    pub fn load_semantic_data(&mut self, data: &[LirData]) -> Result<(), Error> {
         for item in data {
             if item.name.trim().is_empty() {
                 return Err(Error::UnsupportedExpression(
@@ -816,7 +816,7 @@ impl SymbolicCpuState {
 
     pub(crate) fn define_location(
         &mut self,
-        instruction: Option<&SemanticEncoding>,
+        instruction: Option<&LirEncoding>,
         location: String,
         value: &BV,
         parents: &BTreeSet<u64>,

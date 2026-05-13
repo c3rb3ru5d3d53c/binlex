@@ -2,11 +2,8 @@
 
 use binlex::controlflow::graph::Graph;
 use binlex::controlflow::{Block, Function, InstructionRecord};
+use binlex::ir::lir::{Lir, LirEffect, LirExpression, LirLocation, LirStatus, LirTerminator};
 use binlex::lifters::vex::Lifter;
-use binlex::semantics::{
-    Semantic, SemanticEffect, SemanticExpression, SemanticLocation, SemanticStatus,
-    SemanticTerminator,
-};
 use binlex::{Architecture, Configuration};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -62,20 +59,20 @@ fn instruction(address: u64, bytes: &[u8]) -> InstructionRecord {
         .collect::<Vec<_>>()
         .join("");
     instruction.is_return = bytes == [0xC3];
-    instruction.semantics = Some(Semantic {
+    instruction.semantics = Some(Lir {
         version: 1,
-        status: SemanticStatus::Complete,
+        status: LirStatus::Complete,
         abi: None,
         encoding: None,
         temporaries: Vec::new(),
-        effects: vec![SemanticEffect::Set {
-            dst: SemanticLocation::ProgramCounter { bits: 64 },
-            expression: SemanticExpression::Const {
+        effects: vec![LirEffect::Set {
+            dst: LirLocation::ProgramCounter { bits: 64 },
+            expression: LirExpression::Const {
                 value: address as u128 + bytes.len() as u128,
                 bits: 64,
             },
         }],
-        terminator: SemanticTerminator::Return { expression: None },
+        terminator: LirTerminator::Return { expression: None },
         diagnostics: Vec::new(),
     });
     instruction

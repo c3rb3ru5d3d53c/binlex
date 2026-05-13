@@ -1,12 +1,12 @@
 use crate::controlflow::{Block as PyBlock, Function as PyFunction, Instruction as PyInstruction};
-use crate::semantics::abis::extract_abi;
-use crate::semantics::{SemanticCpu as PySemanticCpu, Semantics as PySemantics};
+use crate::ir::lir::abis::extract_abi;
+use crate::ir::lir::{LirCpu as PySemanticCpu, LirModule as PyLirModule};
 use crate::Configuration;
 use binlex::controlflow::{Block, Function, Graph, Instruction, InstructionRecord};
 use binlex::core::Architecture;
 use binlex::io::Stderr;
+use binlex::ir::lir::{Lir, LirAbi, LirCpuKind, LirModule, LirTerminator};
 use binlex::lifters::llvm::{JittedFunction as InnerJittedFunction, Lifter as InnerLifter};
-use binlex::semantics::{Semantic, SemanticAbi, SemanticCpuKind, SemanticTerminator, Semantics};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 use std::collections::BTreeMap;
@@ -21,21 +21,21 @@ enum ModuleItemDef {
     Block {
         address: u64,
         records: Vec<InstructionRecord>,
-        abi: Option<SemanticAbi>,
+        abi: Option<LirAbi>,
     },
     Function {
         address: u64,
         blocks: Vec<(u64, Vec<InstructionRecord>)>,
-        abi: Option<SemanticAbi>,
+        abi: Option<LirAbi>,
         name: Option<String>,
     },
     BlockSemantics {
-        semantics: Semantics,
-        abi: Option<SemanticAbi>,
+        semantics: LirModule,
+        abi: Option<LirAbi>,
     },
     FunctionSemantics {
-        semantics: Semantics,
-        abi: Option<SemanticAbi>,
+        semantics: LirModule,
+        abi: Option<LirAbi>,
         name: Option<String>,
     },
     CreatedFunction {
@@ -52,8 +52,8 @@ enum ModuleOverrideDef {
 #[derive(Clone)]
 struct CreatedFunctionDef {
     name: String,
-    abi: Option<SemanticAbi>,
-    body_semantics: Option<Semantics>,
+    abi: Option<LirAbi>,
+    body_semantics: Option<LirModule>,
     blocks: Vec<CreatedBlockDef>,
     raw_ir: Option<String>,
     raw_bitcode: Option<Vec<u8>>,
@@ -66,15 +66,15 @@ enum CreatedBlockDef {
         address: u64,
         records: Vec<InstructionRecord>,
     },
-    Semantics {
+    LirModule {
         name: Option<String>,
-        semantics: Semantics,
+        semantics: LirModule,
     },
 }
 
 struct BuildState {
     config: binlex::Configuration,
-    cpu: binlex::semantics::SemanticCpu,
+    cpu: binlex::ir::lir::LirCpu,
     triple: Option<String>,
     inner: InnerLifter,
     module_override: Option<ModuleOverrideDef>,
@@ -84,7 +84,7 @@ struct BuildState {
 
 impl BuildState {
     fn new(
-        cpu: binlex::semantics::SemanticCpu,
+        cpu: binlex::ir::lir::LirCpu,
         config: binlex::Configuration,
         triple: Option<String>,
     ) -> Result<Self, Error> {
@@ -195,12 +195,12 @@ impl BuildState {
     }
 }
 
-fn architecture_from_cpu(cpu: &binlex::semantics::SemanticCpu) -> Result<Architecture, Error> {
+fn architecture_from_cpu(cpu: &binlex::ir::lir::LirCpu) -> Result<Architecture, Error> {
     match cpu.kind() {
-        Some(SemanticCpuKind::I386) => Ok(Architecture::I386),
-        Some(SemanticCpuKind::Amd64) => Ok(Architecture::AMD64),
-        Some(SemanticCpuKind::Arm64) => Ok(Architecture::ARM64),
-        Some(SemanticCpuKind::Cil) => Ok(Architecture::CIL),
+        Some(LirCpuKind::I386) => Ok(Architecture::I386),
+        Some(LirCpuKind::Amd64) => Ok(Architecture::AMD64),
+        Some(LirCpuKind::Arm64) => Ok(Architecture::ARM64),
+        Some(LirCpuKind::Cil) => Ok(Architecture::CIL),
         None => Err(Error::other(
             "llvm builder requires a built-in semantic CPU kind",
         )),
@@ -235,7 +235,7 @@ fn instruction_records_for_block(
 fn compile_created_function(
     inner: &mut InnerLifter,
     config: &binlex::Configuration,
-    cpu: &binlex::semantics::SemanticCpu,
+    cpu: &binlex::ir::lir::LirCpu,
     function: &CreatedFunctionDef,
 ) -> Result<(), Error> {
     if let Some(ir) = &function.raw_ir {
@@ -280,7 +280,7 @@ fn compile_created_function(
                     block_labels.insert(block_address, name.clone());
                 }
             }
-            CreatedBlockDef::Semantics { name, semantics } => {
+            CreatedBlockDef::LirModule { name, semantics } => {
                 let block_address = next_block_base;
                 if entry_address.is_none() {
                     entry_address = Some(block_address);
@@ -321,7 +321,7 @@ fn insert_semantics_block(
     graph: &mut Graph,
     architecture: Architecture,
     block_address: u64,
-    semantics: &[Semantic],
+    semantics: &[Lir],
     next_block_address: Option<u64>,
     config: &binlex::Configuration,
 ) {
@@ -338,10 +338,10 @@ fn insert_semantics_block(
         }
         if index == semantics.len() - 1 {
             match &semantic.terminator {
-                SemanticTerminator::Return { .. } => {
+                LirTerminator::Return { .. } => {
                     record.is_return = true;
                 }
-                SemanticTerminator::Jump { target } => {
+                LirTerminator::Jump { target } => {
                     record.is_jump = true;
                     if let Some(address) = semantic_expression_u64(target) {
                         record.to.insert(address);
@@ -349,7 +349,7 @@ fn insert_semantics_block(
                         record.to.insert(next);
                     }
                 }
-                SemanticTerminator::Branch {
+                LirTerminator::Branch {
                     true_target,
                     false_target,
                     ..
@@ -363,10 +363,10 @@ fn insert_semantics_block(
                         record.to.insert(address);
                     }
                 }
-                SemanticTerminator::Trap => {
+                LirTerminator::Trap => {
                     record.is_trap = true;
                 }
-                SemanticTerminator::Call { does_return, .. } => {
+                LirTerminator::Call { does_return, .. } => {
                     record.is_call = true;
                     if does_return.unwrap_or(true) {
                         if let Some(next) = next_block_address {
@@ -374,13 +374,13 @@ fn insert_semantics_block(
                         }
                     }
                 }
-                SemanticTerminator::FallThrough => {
+                LirTerminator::FallThrough => {
                     if let Some(next) = next_block_address {
                         record.is_jump = true;
                         record.to.insert(next);
                     }
                 }
-                SemanticTerminator::Unreachable => {}
+                LirTerminator::Unreachable => {}
             }
         }
         record.edges = record.successors().len();
@@ -388,9 +388,9 @@ fn insert_semantics_block(
     }
 }
 
-fn semantic_expression_u64(expression: &binlex::semantics::SemanticExpression) -> Option<u64> {
+fn semantic_expression_u64(expression: &binlex::ir::lir::LirExpression) -> Option<u64> {
     match expression {
-        binlex::semantics::SemanticExpression::Const { value, .. } => (*value).try_into().ok(),
+        binlex::ir::lir::LirExpression::Const { value, .. } => (*value).try_into().ok(),
         _ => None,
     }
 }
@@ -398,7 +398,7 @@ fn semantic_expression_u64(expression: &binlex::semantics::SemanticExpression) -
 #[pyclass(unsendable)]
 pub struct Lifter {
     pub config: binlex::Configuration,
-    pub cpu: binlex::semantics::SemanticCpu,
+    pub cpu: binlex::ir::lir::LirCpu,
     state: Arc<Mutex<BuildState>>,
 }
 
@@ -546,7 +546,7 @@ impl Lifter {
     pub fn lift_block_semantics(
         &self,
         py: Python<'_>,
-        semantics: Py<PySemantics>,
+        semantics: Py<PyLirModule>,
         abi: Option<Py<PyAny>>,
     ) -> bool {
         let semantics = semantics.borrow(py).inner.lock().unwrap().clone();
@@ -575,7 +575,7 @@ impl Lifter {
     pub fn lift_function_semantics(
         &self,
         py: Python<'_>,
-        semantics: Py<PySemantics>,
+        semantics: Py<PyLirModule>,
         abi: Option<Py<PyAny>>,
         name: Option<String>,
     ) -> bool {
@@ -937,7 +937,7 @@ impl LiftedFunction {
     pub fn lift_block_semantics(
         &self,
         py: Python<'_>,
-        semantics: Py<PySemantics>,
+        semantics: Py<PyLirModule>,
         name: Option<String>,
     ) -> bool {
         let semantics = semantics.borrow(py).inner.lock().unwrap().clone();
@@ -962,13 +962,13 @@ impl LiftedFunction {
         }
         function
             .blocks
-            .push(CreatedBlockDef::Semantics { name, semantics });
+            .push(CreatedBlockDef::LirModule { name, semantics });
         state.mark_dirty();
         true
     }
 
     #[pyo3(signature = (semantics), text_signature = "($self, semantics)")]
-    pub fn lift_function_semantics(&self, py: Python<'_>, semantics: Py<PySemantics>) -> bool {
+    pub fn lift_function_semantics(&self, py: Python<'_>, semantics: Py<PyLirModule>) -> bool {
         let semantics = semantics.borrow(py).inner.lock().unwrap().clone();
         let mut state = self.state.lock().unwrap();
         let item = state.items.get_mut(self.index);
@@ -1270,7 +1270,7 @@ impl LiftedBlock {
             CreatedBlockDef::Cfg { name, address, .. } => {
                 name.clone().unwrap_or_else(|| format!("block_{address:x}"))
             }
-            CreatedBlockDef::Semantics { name, .. } => name
+            CreatedBlockDef::LirModule { name, .. } => name
                 .clone()
                 .unwrap_or_else(|| format!("block_{}", self.block_index)),
         }
@@ -1389,7 +1389,7 @@ fn block_preview_function_name(
         CreatedBlockDef::Cfg { name, address, .. } => name
             .clone()
             .unwrap_or_else(|| format!("{function_name}_block_{address:x}")),
-        CreatedBlockDef::Semantics { name, .. } => name
+        CreatedBlockDef::LirModule { name, .. } => name
             .clone()
             .unwrap_or_else(|| format!("{function_name}_block_{block_index}")),
     }

@@ -3,7 +3,7 @@
 import binlex
 from binlex.controlflow import Graph
 from binlex.disassemblers import Disassembler
-from binlex.semantics import SemanticCpu, Semantics
+from binlex.ir.lir import LirCpu, LirModule
 from binlex.symbolic import CpuState, Executor
 
 
@@ -27,7 +27,7 @@ function = graph.get_function(0x00)
 
 assert function, 'failed to disassemble function'
 
-cpu = SemanticCpu.i386()
+cpu = LirCpu.i386()
 executor = Executor()
 state = CpuState(cpu)
 
@@ -40,7 +40,7 @@ for block in function.blocks():
         if semantic is None:
             continue
 
-        successors = executor.step(Semantics(semantics=[semantic]), state)
+        successors = executor.step(LirModule(semantics=[semantic]), state)
 
         states = [successor for successor in successors if successor.satisfiable()]
 

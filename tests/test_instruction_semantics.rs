@@ -1,9 +1,7 @@
 use std::collections::BTreeMap;
 
 use binlex::controlflow::{Graph, InstructionRecord};
-use binlex::semantics::{
-    Semantic, SemanticDiagnostic, SemanticDiagnosticKind, SemanticStatus, SemanticTerminator,
-};
+use binlex::ir::lir::{Lir, LirDiagnostic, LirDiagnosticKind, LirStatus, LirTerminator};
 use binlex::{Architecture, Configuration};
 
 fn disassemble_single(name: &str, architecture: Architecture, bytes: &[u8]) -> InstructionRecord {
@@ -51,7 +49,7 @@ fn assert_partial_semantics(name: &str, architecture: Architecture, bytes: &[u8]
 
     assert_eq!(
         semantics.status,
-        SemanticStatus::Partial,
+        LirStatus::Partial,
         "{name}: expected partial semantics, got {:?}",
         semantics.status
     );
@@ -61,17 +59,17 @@ fn assert_partial_semantics(name: &str, architecture: Architecture, bytes: &[u8]
     );
 }
 
-fn partial_semantics(message: &str) -> Semantic {
-    Semantic {
+fn partial_semantics(message: &str) -> Lir {
+    Lir {
         version: 1,
-        status: SemanticStatus::Partial,
+        status: LirStatus::Partial,
         abi: None,
         encoding: None,
         temporaries: Vec::new(),
         effects: Vec::new(),
-        terminator: SemanticTerminator::FallThrough,
-        diagnostics: vec![SemanticDiagnostic {
-            kind: SemanticDiagnosticKind::Named {
+        terminator: LirTerminator::FallThrough,
+        diagnostics: vec![LirDiagnostic {
+            kind: LirDiagnosticKind::Named {
                 name: "test.partial".to_string(),
             },
             message: message.to_string(),
@@ -79,15 +77,15 @@ fn partial_semantics(message: &str) -> Semantic {
     }
 }
 
-fn complete_semantics() -> Semantic {
-    Semantic {
+fn complete_semantics() -> Lir {
+    Lir {
         version: 1,
-        status: SemanticStatus::Complete,
+        status: LirStatus::Complete,
         abi: None,
         encoding: None,
         temporaries: Vec::new(),
         effects: Vec::new(),
-        terminator: SemanticTerminator::FallThrough,
+        terminator: LirTerminator::FallThrough,
         diagnostics: Vec::new(),
     }
 }
@@ -169,7 +167,7 @@ fn graph_merge_prefers_more_complete_instruction_semantics() {
         .clone()
         .expect("merged instruction should keep semantics");
 
-    assert_eq!(merged.status, SemanticStatus::Complete);
+    assert_eq!(merged.status, LirStatus::Complete);
     assert!(merged.diagnostics.is_empty());
 }
 

@@ -1,4 +1,4 @@
-# Semantics
+# LirModule
 
 Binlex semantics are the canonical instruction-meaning layer used between disassembly and lifting.
 
@@ -15,11 +15,11 @@ The important idea is:
 
 ```text
 bytes / decoder / your own source
-  -> Semantic
+  -> Lir
   -> lifters or your own consumers
 ```
 
-Semantics are not tied to one architecture backend. They describe:
+LirModule are not tied to one architecture backend. They describe:
 
 - temporary values
 - reads and writes
@@ -31,7 +31,7 @@ Semantics are not tied to one architecture backend. They describe:
 
 ## Model
 
-The top-level type is `Semantic`.
+The top-level type is `Lir`.
 
 It contains:
 
@@ -44,14 +44,14 @@ It contains:
 
 The main building blocks are:
 
-- `SemanticLocation`
+- `LirLocation`
   - register
   - flag
   - program counter
   - temporary
   - memory
 
-- `SemanticExpression`
+- `LirExpression`
   - constants
   - reads
   - loads
@@ -61,7 +61,7 @@ The main building blocks are:
   - select/extract/concat
   - intrinsics
 
-- `SemanticEffect`
+- `LirEffect`
   - set
   - store
   - fence
@@ -69,7 +69,7 @@ The main building blocks are:
   - intrinsic
   - nop
 
-- `SemanticTerminator`
+- `LirTerminator`
   - fallthrough
   - jump
   - branch
@@ -80,7 +80,7 @@ The main building blocks are:
 
 ## Status And Diagnostics
 
-`SemanticStatus` is:
+`LirStatus` is:
 
 - `Complete`
 - `Partial`
@@ -92,7 +92,7 @@ means:
 - no attached diagnostics
 
 Use `Partial` when you can describe some of the instruction but not all of it. Attach
-`SemanticDiagnostic` values to explain what is missing. That is the preferred way to model
+`LirDiagnostic` values to explain what is missing. That is the preferred way to model
 unsupported or architecture-specific cases without inventing false precision.
 
 Use `Partial` for intrinsic-backed placeholders when the intrinsic is carrying architectural detail
@@ -100,52 +100,52 @@ that is not yet modeled directly in the semantics IR.
 
 ## Rust Usage
 
-Import the semantics types from `binlex::semantics`:
+Import the semantics types from `binlex::ir::lir`:
 
 ```rust
-use binlex::semantics::{
-    Semantic,
-    SemanticEffect,
-    SemanticExpression,
-    SemanticLocation,
-    SemanticOperationBinary,
-    SemanticStatus,
-    SemanticTerminator,
+use binlex::ir::lir::{
+    Lir,
+    LirEffect,
+    LirExpression,
+    LirLocation,
+    LirOperationBinary,
+    LirStatus,
+    LirTerminator,
 };
 ```
 
 ### Example: `eax = eax + 4; ret`
 
 ```rust
-use binlex::semantics::{
-    Semantic,
-    SemanticEffect,
-    SemanticExpression,
-    SemanticLocation,
-    SemanticOperationBinary,
-    SemanticStatus,
-    SemanticTerminator,
+use binlex::ir::lir::{
+    Lir,
+    LirEffect,
+    LirExpression,
+    LirLocation,
+    LirOperationBinary,
+    LirStatus,
+    LirTerminator,
 };
 
-let semantics = Semantic {
+let semantics = Lir {
     version: 1,
-    status: SemanticStatus::Complete,
+    status: LirStatus::Complete,
     temporaries: Vec::new(),
     effects: vec![
-        SemanticEffect::Set {
-            dst: SemanticLocation::Register {
+        LirEffect::Set {
+            dst: LirLocation::Register {
                 name: "eax".to_string(),
                 bits: 32,
             },
-            expression: SemanticExpression::Binary {
-                op: SemanticOperationBinary::Add,
-                left: Box::new(SemanticExpression::Read(Box::new(
-                    SemanticLocation::Register {
+            expression: LirExpression::Binary {
+                op: LirOperationBinary::Add,
+                left: Box::new(LirExpression::Read(Box::new(
+                    LirLocation::Register {
                         name: "eax".to_string(),
                         bits: 32,
                     },
                 ))),
-                right: Box::new(SemanticExpression::Const {
+                right: Box::new(LirExpression::Const {
                     value: 4,
                     bits: 32,
                 }),
@@ -153,7 +153,7 @@ let semantics = Semantic {
             },
         },
     ],
-    terminator: SemanticTerminator::Return { expression: None },
+    terminator: LirTerminator::Return { expression: None },
     diagnostics: Vec::new(),
 };
 ```
@@ -161,35 +161,35 @@ let semantics = Semantic {
 ### Example: explicit memory store
 
 ```rust
-use binlex::semantics::{
-    Semantic,
-    SemanticAddressSpace,
-    SemanticEffect,
-    SemanticExpression,
-    SemanticLocation,
-    SemanticStatus,
-    SemanticTerminator,
+use binlex::ir::lir::{
+    Lir,
+    LirAddressSpace,
+    LirEffect,
+    LirExpression,
+    LirLocation,
+    LirStatus,
+    LirTerminator,
 };
 
-let semantics = Semantic {
+let semantics = Lir {
     version: 1,
-    status: SemanticStatus::Complete,
+    status: LirStatus::Complete,
     temporaries: Vec::new(),
     effects: vec![
-        SemanticEffect::Store {
-            space: SemanticAddressSpace::Stack,
-            addr: SemanticExpression::Read(Box::new(SemanticLocation::Register {
+        LirEffect::Store {
+            space: LirAddressSpace::Stack,
+            addr: LirExpression::Read(Box::new(LirLocation::Register {
                 name: "rsp".to_string(),
                 bits: 64,
             })),
-            expression: SemanticExpression::Read(Box::new(SemanticLocation::Register {
+            expression: LirExpression::Read(Box::new(LirLocation::Register {
                 name: "rax".to_string(),
                 bits: 64,
             })),
             bits: 64,
         },
     ],
-    terminator: SemanticTerminator::FallThrough,
+    terminator: LirTerminator::FallThrough,
     diagnostics: Vec::new(),
 };
 ```
@@ -197,23 +197,23 @@ let semantics = Semantic {
 ### Example: partial semantics
 
 ```rust
-use binlex::semantics::{
-    Semantic,
-    SemanticDiagnostic,
-    SemanticDiagnosticKind,
-    SemanticStatus,
-    SemanticTerminator,
+use binlex::ir::lir::{
+    Lir,
+    LirDiagnostic,
+    LirDiagnosticKind,
+    LirStatus,
+    LirTerminator,
 };
 
-let semantics = Semantic {
+let semantics = Lir {
     version: 1,
-    status: SemanticStatus::Partial,
+    status: LirStatus::Partial,
     temporaries: Vec::new(),
     effects: Vec::new(),
-    terminator: SemanticTerminator::Trap,
+    terminator: LirTerminator::Trap,
     diagnostics: vec![
-        SemanticDiagnostic {
-            kind: SemanticDiagnosticKind::UnsupportedInstruction,
+        LirDiagnostic {
+            kind: LirDiagnosticKind::UnsupportedInstruction,
             message: "instruction not modeled yet".to_string(),
         },
     ],
@@ -222,7 +222,7 @@ let semantics = Semantic {
 
 ### Serializing semantics
 
-Semantics serialize cleanly with Serde:
+LirModule serialize cleanly with Serde:
 
 ```rust
 let json = serde_json::to_string_pretty(&semantics.process())?;
@@ -234,75 +234,75 @@ transport and storage without loss.
 
 ## Python Usage
 
-The Python bindings expose the same model through `binlex.semantics`.
+The Python bindings expose the same model through `binlex.ir.lir`.
 
 ```python
-from binlex.semantics import (
-    Semantic,
-    SemanticDiagnostic,
-    SemanticDiagnosticKind,
-    SemanticEffect,
-    SemanticExpression,
-    SemanticLocation,
-    SemanticOperationBinary,
-    SemanticStatus,
-    SemanticTerminator,
+from binlex.ir.lir import (
+    Lir,
+    LirDiagnostic,
+    LirDiagnosticKind,
+    LirEffect,
+    LirExpression,
+    LirLocation,
+    LirOperationBinary,
+    LirStatus,
+    LirTerminator,
 )
 ```
 
 ### Example: `eax = eax + 4; ret`
 
 ```python
-from binlex.semantics import (
-    Semantic,
-    SemanticEffect,
-    SemanticExpression,
-    SemanticLocation,
-    SemanticOperationBinary,
-    SemanticStatus,
-    SemanticTerminator,
+from binlex.ir.lir import (
+    Lir,
+    LirEffect,
+    LirExpression,
+    LirLocation,
+    LirOperationBinary,
+    LirStatus,
+    LirTerminator,
 )
 
-eax = SemanticLocation.register("eax", 32)
+eax = LirLocation.register("eax", 32)
 
-expr = SemanticExpression.binary(
-    SemanticOperationBinary.Add,
-    SemanticExpression.read(eax),
-    SemanticExpression.const(4, 32),
+expr = LirExpression.binary(
+    LirOperationBinary.Add,
+    LirExpression.read(eax),
+    LirExpression.const(4, 32),
     32,
 )
 
-semantics = Semantic(
+semantics = Lir(
     1,
-    SemanticStatus.Complete,
+    LirStatus.Complete,
     effects=[
-        SemanticEffect.set(eax, expr),
+        LirEffect.set(eax, expr),
     ],
-    terminator=SemanticTerminator.return_(),
+    terminator=LirTerminator.return_(),
 )
 ```
 
 ### Example: partial semantics with diagnostics
 
 ```python
-from binlex.semantics import (
-    Semantic,
-    SemanticDiagnostic,
-    SemanticDiagnosticKind,
-    SemanticStatus,
-    SemanticTerminator,
+from binlex.ir.lir import (
+    Lir,
+    LirDiagnostic,
+    LirDiagnosticKind,
+    LirStatus,
+    LirTerminator,
 )
 
-semantics = Semantic(
+semantics = Lir(
     1,
-    SemanticStatus.Partial,
+    LirStatus.Partial,
     diagnostics=[
-        SemanticDiagnostic(
-            SemanticDiagnosticKind.UnsupportedInstruction,
+        LirDiagnostic(
+            LirDiagnosticKind.UnsupportedInstruction,
             "custom instruction not modeled yet",
         ),
     ],
-    terminator=SemanticTerminator.trap(),
+    terminator=LirTerminator.trap(),
 )
 ```
 
@@ -312,45 +312,45 @@ semantics = Semantic(
 print(semantics.json())
 
 data = semantics.to_dict()
-round_tripped = Semantic.from_dict(data)
+round_tripped = Lir.from_dict(data)
 ```
 
 The Python bindings also expose constructors for the lower-level pieces:
 
-- `SemanticTemporary(...)`
-- `SemanticLocation.register(...)`
-- `SemanticLocation.flag(...)`
-- `SemanticLocation.program_counter(...)`
-- `SemanticLocation.temporary(...)`
-- `SemanticLocation.memory(...)`
-- `SemanticExpression.const(...)`
-- `SemanticExpression.read(...)`
-- `SemanticExpression.load(...)`
-- `SemanticExpression.unary(...)`
-- `SemanticExpression.binary(...)`
-- `SemanticExpression.cast(...)`
-- `SemanticExpression.compare(...)`
-- `SemanticExpression.select(...)`
-- `SemanticExpression.extract(...)`
-- `SemanticExpression.concat(...)`
-- `SemanticExpression.undefined(...)`
-- `SemanticExpression.poison(...)`
-- `SemanticExpression.intrinsic(...)`
-- `SemanticEffect.set(...)`
-- `SemanticEffect.store(...)`
-- `SemanticEffect.fence(...)`
-- `SemanticEffect.trap(...)`
-- `SemanticEffect.intrinsic(...)`
-- `SemanticEffect.nop()`
-- `SemanticTerminator.fallthrough()`
-- `SemanticTerminator.jump(...)`
-- `SemanticTerminator.branch(...)`
-- `SemanticTerminator.call(...)`
-- `SemanticTerminator.return_(...)`
-- `SemanticTerminator.unreachable()`
-- `SemanticTerminator.trap()`
+- `LirTemporary(...)`
+- `LirLocation.register(...)`
+- `LirLocation.flag(...)`
+- `LirLocation.program_counter(...)`
+- `LirLocation.temporary(...)`
+- `LirLocation.memory(...)`
+- `LirExpression.const(...)`
+- `LirExpression.read(...)`
+- `LirExpression.load(...)`
+- `LirExpression.unary(...)`
+- `LirExpression.binary(...)`
+- `LirExpression.cast(...)`
+- `LirExpression.compare(...)`
+- `LirExpression.select(...)`
+- `LirExpression.extract(...)`
+- `LirExpression.concat(...)`
+- `LirExpression.undefined(...)`
+- `LirExpression.poison(...)`
+- `LirExpression.intrinsic(...)`
+- `LirEffect.set(...)`
+- `LirEffect.store(...)`
+- `LirEffect.fence(...)`
+- `LirEffect.trap(...)`
+- `LirEffect.intrinsic(...)`
+- `LirEffect.nop()`
+- `LirTerminator.fallthrough()`
+- `LirTerminator.jump(...)`
+- `LirTerminator.branch(...)`
+- `LirTerminator.call(...)`
+- `LirTerminator.return_(...)`
+- `LirTerminator.unreachable()`
+- `LirTerminator.trap()`
 
-## Using Semantics From Disassembly
+## Using LirModule From Disassembly
 
 Binlex semantics are enabled by default during disassembly.
 
@@ -433,7 +433,7 @@ for function in graph.functions():
 If you want a faster CLI-only or graph-only run, semantics can be disabled:
 
 ```toml
-[binlex.semantics]
+[binlex.ir.lir]
 enabled = false
 ```
 
@@ -451,7 +451,7 @@ enabled = false
 
 If you are building on top of Binlex semantics:
 
-- treat `Semantic` as your canonical source IR
+- treat `Lir` as your canonical source IR
 - use `Partial` plus diagnostics when you cannot model everything
 - keep architecture-specific details in intrinsics or diagnostics instead of forcing them into
   inaccurate generic forms

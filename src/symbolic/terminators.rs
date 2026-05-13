@@ -1,16 +1,16 @@
-use crate::semantics::SemanticTerminator;
+use crate::ir::lir::LirTerminator;
 use crate::symbolic::{Error, SymbolicCpuState, SymbolicExecutor};
 
 impl SymbolicExecutor {
     pub(crate) fn apply_terminator(
         &self,
         mut state: SymbolicCpuState,
-        instruction: Option<&crate::semantics::SemanticEncoding>,
-        terminator: &SemanticTerminator,
+        instruction: Option<&crate::ir::lir::LirEncoding>,
+        terminator: &LirTerminator,
     ) -> Result<Vec<SymbolicCpuState>, Error> {
         match terminator {
-            SemanticTerminator::FallThrough => Ok(vec![state]),
-            SemanticTerminator::Jump { target } => {
+            LirTerminator::FallThrough => Ok(vec![state]),
+            LirTerminator::Jump { target } => {
                 let target = self.eval_expression(&mut state, target, false)?;
                 let target = self.concretize_if_dependency_free(&state, target)?;
                 let target_value = self.coerce_address(&mut state, &target.value)?;
@@ -23,7 +23,7 @@ impl SymbolicExecutor {
                 state.set_program_counter(target_value, def_id);
                 Ok(vec![state])
             }
-            SemanticTerminator::Branch {
+            LirTerminator::Branch {
                 condition,
                 true_target,
                 false_target,
@@ -62,7 +62,7 @@ impl SymbolicExecutor {
 
                 Ok(vec![taken, not_taken])
             }
-            SemanticTerminator::Return { expression } => {
+            LirTerminator::Return { expression } => {
                 if let Some(expression) = expression {
                     let target = self.eval_expression(&mut state, expression, false)?;
                     let target = self.concretize_if_dependency_free(&state, target)?;
@@ -77,8 +77,8 @@ impl SymbolicExecutor {
                 }
                 Ok(vec![state])
             }
-            SemanticTerminator::Trap | SemanticTerminator::Unreachable => Ok(Vec::new()),
-            SemanticTerminator::Call { target, .. } => {
+            LirTerminator::Trap | LirTerminator::Unreachable => Ok(Vec::new()),
+            LirTerminator::Call { target, .. } => {
                 let target = self.eval_expression(&mut state, target, false)?;
                 let target = self.concretize_if_dependency_free(&state, target)?;
                 let target_value = self.coerce_address(&mut state, &target.value)?;

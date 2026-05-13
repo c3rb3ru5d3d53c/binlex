@@ -1,6 +1,6 @@
-use crate::semantics::{
-    SemanticExpression, SemanticLocation, SemanticOperationBinary, SemanticOperationCast,
-    SemanticOperationCompare, SemanticOperationUnary,
+use crate::ir::lir::{
+    LirExpression, LirLocation, LirOperationBinary, LirOperationCast, LirOperationCompare,
+    LirOperationUnary,
 };
 use crate::symbolic::{Error, SymbolicCpuState, SymbolicExecutor};
 use std::collections::BTreeSet;
@@ -22,19 +22,19 @@ impl SymbolicExecutor {
     pub(crate) fn eval_expression(
         &self,
         state: &mut SymbolicCpuState,
-        expression: &SemanticExpression,
+        expression: &LirExpression,
         expected_float: bool,
     ) -> Result<EvaluatedValue, Error> {
         match expression {
-            SemanticExpression::Const { value, bits } => Ok(EvaluatedValue {
+            LirExpression::Const { value, bits } => Ok(EvaluatedValue {
                 value: state.backend().const_bv(*value, *bits)?,
                 deps: BTreeSet::new(),
             }),
-            SemanticExpression::Function { bits, .. } => Ok(EvaluatedValue {
+            LirExpression::Function { bits, .. } => Ok(EvaluatedValue {
                 value: state.backend().const_bv(0, *bits)?,
                 deps: BTreeSet::new(),
             }),
-            SemanticExpression::DataAddress { name, bits } => {
+            LirExpression::DataAddress { name, bits } => {
                 let address =
                     state
                         .semantic_data_address(name)
@@ -46,12 +46,12 @@ impl SymbolicExecutor {
                     deps: BTreeSet::new(),
                 })
             }
-            SemanticExpression::AddressOf { bits, .. } => Ok(EvaluatedValue {
+            LirExpression::AddressOf { bits, .. } => Ok(EvaluatedValue {
                 value: state.backend().const_bv(0, *bits)?,
                 deps: BTreeSet::new(),
             }),
-            SemanticExpression::Read(location) => self.read_location(state, location),
-            SemanticExpression::Load { addr, bits, .. } => {
+            LirExpression::Read(location) => self.read_location(state, location),
+            LirExpression::Load { addr, bits, .. } => {
                 let address = self.eval_expression(state, addr, false)?;
                 let address_value = self.coerce_address(state, &address.value)?;
                 let (value, mut deps) =
@@ -74,18 +74,18 @@ impl SymbolicExecutor {
                 }
                 Ok(EvaluatedValue { value, deps })
             }
-            SemanticExpression::Null { bits } => Ok(EvaluatedValue {
+            LirExpression::Null { bits } => Ok(EvaluatedValue {
                 value: state.backend().const_bv(0, *bits)?,
                 deps: BTreeSet::new(),
             }),
-            SemanticExpression::Allocate { kind, bits } => {
+            LirExpression::Allocate { kind, bits } => {
                 let cell = state.allocate_reference(kind, *bits)?;
                 Ok(EvaluatedValue {
                     value: cell.value,
                     deps: cell.def_id.into_iter().collect(),
                 })
             }
-            SemanticExpression::ReadProperty {
+            LirExpression::ReadProperty {
                 reference,
                 name,
                 bits,
@@ -102,7 +102,7 @@ impl SymbolicExecutor {
                     deps,
                 })
             }
-            SemanticExpression::ReadElement {
+            LirExpression::ReadElement {
                 reference,
                 index,
                 bits,
@@ -125,7 +125,7 @@ impl SymbolicExecutor {
                     deps,
                 })
             }
-            SemanticExpression::Unary { op, arg, bits } => {
+            LirExpression::Unary { op, arg, bits } => {
                 let arg_expression = arg.as_ref();
                 let arg = self.eval_expression(state, arg_expression, expected_float)?;
                 let value = state.backend().coerce_bv_width(&arg.value, *bits)?;
@@ -141,7 +141,7 @@ impl SymbolicExecutor {
                     deps: arg.deps,
                 })
             }
-            SemanticExpression::Binary {
+            LirExpression::Binary {
                 op,
                 left,
                 right,
@@ -149,10 +149,10 @@ impl SymbolicExecutor {
             } => {
                 let binary_is_float = matches!(
                     op,
-                    SemanticOperationBinary::FAdd
-                        | SemanticOperationBinary::FSub
-                        | SemanticOperationBinary::FMul
-                        | SemanticOperationBinary::FDiv
+                    LirOperationBinary::FAdd
+                        | LirOperationBinary::FSub
+                        | LirOperationBinary::FMul
+                        | LirOperationBinary::FDiv
                 );
                 let left = self.eval_expression(state, left, binary_is_float)?;
                 let right = self.eval_expression(state, right, binary_is_float)?;
@@ -165,13 +165,13 @@ impl SymbolicExecutor {
                     deps,
                 })
             }
-            SemanticExpression::Cast { op, arg, bits } => {
+            LirExpression::Cast { op, arg, bits } => {
                 let cast_arg_is_float = matches!(
                     op,
-                    SemanticOperationCast::FloatToInt
-                        | SemanticOperationCast::FloatToUInt
-                        | SemanticOperationCast::FloatExtend
-                        | SemanticOperationCast::FloatTruncate
+                    LirOperationCast::FloatToInt
+                        | LirOperationCast::FloatToUInt
+                        | LirOperationCast::FloatExtend
+                        | LirOperationCast::FloatTruncate
                 );
                 let arg = self.eval_expression(state, arg, cast_arg_is_float)?;
                 Ok(EvaluatedValue {
@@ -179,7 +179,7 @@ impl SymbolicExecutor {
                     deps: arg.deps,
                 })
             }
-            SemanticExpression::Compare {
+            LirExpression::Compare {
                 op,
                 left,
                 right,
@@ -187,20 +187,20 @@ impl SymbolicExecutor {
             } => {
                 let compare_is_float = matches!(
                     op,
-                    SemanticOperationCompare::Ordered
-                        | SemanticOperationCompare::Unordered
-                        | SemanticOperationCompare::Oeq
-                        | SemanticOperationCompare::One
-                        | SemanticOperationCompare::Olt
-                        | SemanticOperationCompare::Ole
-                        | SemanticOperationCompare::Ogt
-                        | SemanticOperationCompare::Oge
-                        | SemanticOperationCompare::Ueq
-                        | SemanticOperationCompare::Une
-                        | SemanticOperationCompare::UltFp
-                        | SemanticOperationCompare::UleFp
-                        | SemanticOperationCompare::UgtFp
-                        | SemanticOperationCompare::UgeFp
+                    LirOperationCompare::Ordered
+                        | LirOperationCompare::Unordered
+                        | LirOperationCompare::Oeq
+                        | LirOperationCompare::One
+                        | LirOperationCompare::Olt
+                        | LirOperationCompare::Ole
+                        | LirOperationCompare::Ogt
+                        | LirOperationCompare::Oge
+                        | LirOperationCompare::Ueq
+                        | LirOperationCompare::Une
+                        | LirOperationCompare::UltFp
+                        | LirOperationCompare::UleFp
+                        | LirOperationCompare::UgtFp
+                        | LirOperationCompare::UgeFp
                 );
                 let left = self.eval_expression(state, left, compare_is_float)?;
                 let right = self.eval_expression(state, right, compare_is_float)?;
@@ -215,7 +215,7 @@ impl SymbolicExecutor {
                     deps,
                 })
             }
-            SemanticExpression::Select {
+            LirExpression::Select {
                 condition,
                 when_true,
                 when_false,
@@ -234,14 +234,14 @@ impl SymbolicExecutor {
                     deps,
                 })
             }
-            SemanticExpression::Extract { arg, lsb, bits } => {
+            LirExpression::Extract { arg, lsb, bits } => {
                 let arg = self.eval_expression(state, arg, expected_float)?;
                 Ok(EvaluatedValue {
                     value: arg.value.extract((*lsb + *bits - 1) as u32, *lsb as u32),
                     deps: arg.deps,
                 })
             }
-            SemanticExpression::Concat { parts, bits } => {
+            LirExpression::Concat { parts, bits } => {
                 let mut parts = parts.iter();
                 let first = parts
                     .next()
@@ -257,21 +257,21 @@ impl SymbolicExecutor {
                     deps: value.deps,
                 })
             }
-            SemanticExpression::Undefined { bits } => {
+            LirExpression::Undefined { bits } => {
                 let cell = state.fresh_value("undefined", *bits)?;
                 Ok(EvaluatedValue {
                     value: cell.value,
                     deps: cell.def_id.into_iter().collect(),
                 })
             }
-            SemanticExpression::Poison { bits } => {
+            LirExpression::Poison { bits } => {
                 let cell = state.fresh_value("poison", *bits)?;
                 Ok(EvaluatedValue {
                     value: cell.value,
                     deps: cell.def_id.into_iter().collect(),
                 })
             }
-            SemanticExpression::Intrinsic { name, args, bits } => {
+            LirExpression::Intrinsic { name, args, bits } => {
                 let mut deps = BTreeSet::new();
                 for arg in args {
                     deps.extend(self.eval_expression(state, arg, false)?.deps);
@@ -287,7 +287,7 @@ impl SymbolicExecutor {
     pub(crate) fn eval_condition(
         &self,
         state: &mut SymbolicCpuState,
-        expression: &SemanticExpression,
+        expression: &LirExpression,
     ) -> Result<EvaluatedCondition, Error> {
         let value = self.eval_expression(state, expression, false)?;
         Ok(EvaluatedCondition {
@@ -299,31 +299,27 @@ impl SymbolicExecutor {
     fn eval_unary(
         &self,
         state: &mut SymbolicCpuState,
-        op: SemanticOperationUnary,
+        op: LirOperationUnary,
         arg: BV,
-        arg_expression: &SemanticExpression,
+        arg_expression: &LirExpression,
         bits: u16,
         expected_float: bool,
     ) -> Result<BV, Error> {
         match op {
-            SemanticOperationUnary::Not => Ok(arg.bvnot()),
-            SemanticOperationUnary::Neg => {
+            LirOperationUnary::Not => Ok(arg.bvnot()),
+            LirOperationUnary::Neg => {
                 if expected_float || self.expression_is_probably_float(arg_expression) {
                     self.eval_fp_neg(state, arg)
                 } else {
                     Ok(arg.bvneg())
                 }
             }
-            SemanticOperationUnary::BitReverse => self.bit_reverse(state, &arg, bits),
-            SemanticOperationUnary::ByteSwap => self.byte_swap(state, &arg, bits),
-            SemanticOperationUnary::CountLeadingZeros => {
-                self.count_leading_zeros(state, &arg, bits)
-            }
-            SemanticOperationUnary::CountTrailingZeros => {
-                self.count_trailing_zeros(state, &arg, bits)
-            }
-            SemanticOperationUnary::PopCount => self.popcount(state, &arg, bits),
-            SemanticOperationUnary::Abs => {
+            LirOperationUnary::BitReverse => self.bit_reverse(state, &arg, bits),
+            LirOperationUnary::ByteSwap => self.byte_swap(state, &arg, bits),
+            LirOperationUnary::CountLeadingZeros => self.count_leading_zeros(state, &arg, bits),
+            LirOperationUnary::CountTrailingZeros => self.count_trailing_zeros(state, &arg, bits),
+            LirOperationUnary::PopCount => self.popcount(state, &arg, bits),
+            LirOperationUnary::Abs => {
                 if expected_float || self.expression_is_probably_float(arg_expression) {
                     self.eval_fp_abs(state, arg)
                 } else {
@@ -332,91 +328,91 @@ impl SymbolicExecutor {
                     Ok(negative.ite(&arg.bvneg(), &arg))
                 }
             }
-            SemanticOperationUnary::Sqrt => self.eval_fp_sqrt(state, arg),
+            LirOperationUnary::Sqrt => self.eval_fp_sqrt(state, arg),
         }
     }
 
     fn eval_binary(
         &self,
         state: &SymbolicCpuState,
-        op: SemanticOperationBinary,
+        op: LirOperationBinary,
         left: BV,
         right: BV,
     ) -> Result<BV, Error> {
         match op {
-            SemanticOperationBinary::Add => Ok(left.bvadd(&right)),
-            SemanticOperationBinary::AddWithCarry => Ok(left.bvadd(&right)),
-            SemanticOperationBinary::Sub => Ok(left.bvsub(&right)),
-            SemanticOperationBinary::SubWithBorrow => Ok(left.bvsub(&right)),
-            SemanticOperationBinary::Mul => Ok(left.bvmul(&right)),
-            SemanticOperationBinary::FAdd
-            | SemanticOperationBinary::FSub
-            | SemanticOperationBinary::FMul
-            | SemanticOperationBinary::FDiv => self.eval_fp_binary(state, op, left, right),
-            SemanticOperationBinary::UMulHigh => self.unsigned_mul_high(&left, &right),
-            SemanticOperationBinary::SMulHigh => self.signed_mul_high(&left, &right),
-            SemanticOperationBinary::UDiv => Ok(left.bvudiv(&right)),
-            SemanticOperationBinary::SDiv => Ok(left.bvsdiv(&right)),
-            SemanticOperationBinary::URem => Ok(left.bvurem(&right)),
-            SemanticOperationBinary::SRem => Ok(left.bvsrem(&right)),
-            SemanticOperationBinary::And => Ok(left.bvand(&right)),
-            SemanticOperationBinary::Or => Ok(left.bvor(&right)),
-            SemanticOperationBinary::Xor => Ok(left.bvxor(&right)),
-            SemanticOperationBinary::Shl => Ok(left.bvshl(&right)),
-            SemanticOperationBinary::LShr => Ok(left.bvlshr(&right)),
-            SemanticOperationBinary::AShr => Ok(left.bvashr(&right)),
-            SemanticOperationBinary::RotateLeft => Ok(left.bvrotl(&right)),
-            SemanticOperationBinary::RotateRight => Ok(left.bvrotr(&right)),
-            SemanticOperationBinary::MinUnsigned => Ok(left.bvule(&right).ite(&left, &right)),
-            SemanticOperationBinary::MinSigned => Ok(left.bvsle(&right).ite(&left, &right)),
-            SemanticOperationBinary::MaxUnsigned => Ok(left.bvuge(&right).ite(&left, &right)),
-            SemanticOperationBinary::MaxSigned => Ok(left.bvsge(&right).ite(&left, &right)),
+            LirOperationBinary::Add => Ok(left.bvadd(&right)),
+            LirOperationBinary::AddWithCarry => Ok(left.bvadd(&right)),
+            LirOperationBinary::Sub => Ok(left.bvsub(&right)),
+            LirOperationBinary::SubWithBorrow => Ok(left.bvsub(&right)),
+            LirOperationBinary::Mul => Ok(left.bvmul(&right)),
+            LirOperationBinary::FAdd
+            | LirOperationBinary::FSub
+            | LirOperationBinary::FMul
+            | LirOperationBinary::FDiv => self.eval_fp_binary(state, op, left, right),
+            LirOperationBinary::UMulHigh => self.unsigned_mul_high(&left, &right),
+            LirOperationBinary::SMulHigh => self.signed_mul_high(&left, &right),
+            LirOperationBinary::UDiv => Ok(left.bvudiv(&right)),
+            LirOperationBinary::SDiv => Ok(left.bvsdiv(&right)),
+            LirOperationBinary::URem => Ok(left.bvurem(&right)),
+            LirOperationBinary::SRem => Ok(left.bvsrem(&right)),
+            LirOperationBinary::And => Ok(left.bvand(&right)),
+            LirOperationBinary::Or => Ok(left.bvor(&right)),
+            LirOperationBinary::Xor => Ok(left.bvxor(&right)),
+            LirOperationBinary::Shl => Ok(left.bvshl(&right)),
+            LirOperationBinary::LShr => Ok(left.bvlshr(&right)),
+            LirOperationBinary::AShr => Ok(left.bvashr(&right)),
+            LirOperationBinary::RotateLeft => Ok(left.bvrotl(&right)),
+            LirOperationBinary::RotateRight => Ok(left.bvrotr(&right)),
+            LirOperationBinary::MinUnsigned => Ok(left.bvule(&right).ite(&left, &right)),
+            LirOperationBinary::MinSigned => Ok(left.bvsle(&right).ite(&left, &right)),
+            LirOperationBinary::MaxUnsigned => Ok(left.bvuge(&right).ite(&left, &right)),
+            LirOperationBinary::MaxSigned => Ok(left.bvsge(&right).ite(&left, &right)),
         }
     }
 
     fn eval_cast(
         &self,
         state: &mut SymbolicCpuState,
-        op: SemanticOperationCast,
+        op: LirOperationCast,
         arg: BV,
         bits: u16,
     ) -> Result<BV, Error> {
         let current = arg.get_size() as u16;
         match op {
-            SemanticOperationCast::ZeroExtend => {
+            LirOperationCast::ZeroExtend => {
                 if current >= bits {
                     state.backend().coerce_bv_width(&arg, bits)
                 } else {
                     Ok(arg.zero_ext((bits - current) as u32))
                 }
             }
-            SemanticOperationCast::SignExtend => {
+            LirOperationCast::SignExtend => {
                 if current >= bits {
                     state.backend().coerce_bv_width(&arg, bits)
                 } else {
                     Ok(arg.sign_ext((bits - current) as u32))
                 }
             }
-            SemanticOperationCast::Truncate | SemanticOperationCast::Bitcast => {
+            LirOperationCast::Truncate | LirOperationCast::Bitcast => {
                 state.backend().coerce_bv_width(&arg, bits)
             }
-            SemanticOperationCast::IntToFloat => {
+            LirOperationCast::IntToFloat => {
                 let value = state.backend().signed_bv_to_float(&arg, bits)?;
                 Ok(state.backend().float_to_ieee_bv(&value))
             }
-            SemanticOperationCast::UIntToFloat => {
+            LirOperationCast::UIntToFloat => {
                 let value = state.backend().unsigned_bv_to_float(&arg, bits)?;
                 Ok(state.backend().float_to_ieee_bv(&value))
             }
-            SemanticOperationCast::FloatToInt => {
+            LirOperationCast::FloatToInt => {
                 let value = state.backend().float_from_ieee_bv(&arg)?;
                 Ok(state.backend().float_to_signed_bv(&value, bits))
             }
-            SemanticOperationCast::FloatToUInt => {
+            LirOperationCast::FloatToUInt => {
                 let value = state.backend().float_from_ieee_bv(&arg)?;
                 Ok(state.backend().float_to_unsigned_bv(&value, bits))
             }
-            SemanticOperationCast::FloatExtend | SemanticOperationCast::FloatTruncate => {
+            LirOperationCast::FloatExtend | LirOperationCast::FloatTruncate => {
                 let value = state.backend().float_from_ieee_bv(&arg)?;
                 let value = state.backend().float_cast(&value, bits)?;
                 Ok(state.backend().float_to_ieee_bv(&value))
@@ -427,35 +423,35 @@ impl SymbolicExecutor {
     fn eval_compare(
         &self,
         state: &SymbolicCpuState,
-        op: SemanticOperationCompare,
+        op: LirOperationCompare,
         left: BV,
         right: BV,
     ) -> Result<Bool, Error> {
         match op {
-            SemanticOperationCompare::Eq => Ok(left.eq(&right)),
-            SemanticOperationCompare::Ne => Ok(left.eq(&right).not()),
-            SemanticOperationCompare::Ult => Ok(left.bvult(&right)),
-            SemanticOperationCompare::Ule => Ok(left.bvule(&right)),
-            SemanticOperationCompare::Ugt => Ok(left.bvugt(&right)),
-            SemanticOperationCompare::Uge => Ok(left.bvuge(&right)),
-            SemanticOperationCompare::Slt => Ok(left.bvslt(&right)),
-            SemanticOperationCompare::Sle => Ok(left.bvsle(&right)),
-            SemanticOperationCompare::Sgt => Ok(left.bvsgt(&right)),
-            SemanticOperationCompare::Sge => Ok(left.bvsge(&right)),
-            SemanticOperationCompare::Ueq
-            | SemanticOperationCompare::Une
-            | SemanticOperationCompare::Ordered
-            | SemanticOperationCompare::Unordered
-            | SemanticOperationCompare::Oeq
-            | SemanticOperationCompare::One
-            | SemanticOperationCompare::Olt
-            | SemanticOperationCompare::Ole
-            | SemanticOperationCompare::Ogt
-            | SemanticOperationCompare::Oge
-            | SemanticOperationCompare::UltFp
-            | SemanticOperationCompare::UleFp
-            | SemanticOperationCompare::UgtFp
-            | SemanticOperationCompare::UgeFp => self.eval_fp_compare(state, op, left, right),
+            LirOperationCompare::Eq => Ok(left.eq(&right)),
+            LirOperationCompare::Ne => Ok(left.eq(&right).not()),
+            LirOperationCompare::Ult => Ok(left.bvult(&right)),
+            LirOperationCompare::Ule => Ok(left.bvule(&right)),
+            LirOperationCompare::Ugt => Ok(left.bvugt(&right)),
+            LirOperationCompare::Uge => Ok(left.bvuge(&right)),
+            LirOperationCompare::Slt => Ok(left.bvslt(&right)),
+            LirOperationCompare::Sle => Ok(left.bvsle(&right)),
+            LirOperationCompare::Sgt => Ok(left.bvsgt(&right)),
+            LirOperationCompare::Sge => Ok(left.bvsge(&right)),
+            LirOperationCompare::Ueq
+            | LirOperationCompare::Une
+            | LirOperationCompare::Ordered
+            | LirOperationCompare::Unordered
+            | LirOperationCompare::Oeq
+            | LirOperationCompare::One
+            | LirOperationCompare::Olt
+            | LirOperationCompare::Ole
+            | LirOperationCompare::Ogt
+            | LirOperationCompare::Oge
+            | LirOperationCompare::UltFp
+            | LirOperationCompare::UleFp
+            | LirOperationCompare::UgtFp
+            | LirOperationCompare::UgeFp => self.eval_fp_compare(state, op, left, right),
         }
     }
 
@@ -584,51 +580,51 @@ impl SymbolicExecutor {
         Ok(state.backend().float_to_ieee_bv(&value.sqrt()))
     }
 
-    fn expression_is_probably_float(&self, expression: &SemanticExpression) -> bool {
+    fn expression_is_probably_float(&self, expression: &LirExpression) -> bool {
         match expression {
-            SemanticExpression::Const { bits, .. } => matches!(*bits, 32 | 64),
-            SemanticExpression::Function { .. } => false,
-            SemanticExpression::DataAddress { .. } => false,
-            SemanticExpression::AddressOf { .. } => false,
-            SemanticExpression::Read(location) => self.location_is_probably_float(location),
-            SemanticExpression::Load { bits, .. } => matches!(*bits, 32 | 64),
-            SemanticExpression::Unary { op, arg, .. } => match op {
-                SemanticOperationUnary::Sqrt | SemanticOperationUnary::Abs => true,
-                SemanticOperationUnary::Neg => self.expression_is_probably_float(arg),
+            LirExpression::Const { bits, .. } => matches!(*bits, 32 | 64),
+            LirExpression::Function { .. } => false,
+            LirExpression::DataAddress { .. } => false,
+            LirExpression::AddressOf { .. } => false,
+            LirExpression::Read(location) => self.location_is_probably_float(location),
+            LirExpression::Load { bits, .. } => matches!(*bits, 32 | 64),
+            LirExpression::Unary { op, arg, .. } => match op {
+                LirOperationUnary::Sqrt | LirOperationUnary::Abs => true,
+                LirOperationUnary::Neg => self.expression_is_probably_float(arg),
                 _ => false,
             },
-            SemanticExpression::Binary { op, .. } => matches!(
+            LirExpression::Binary { op, .. } => matches!(
                 op,
-                SemanticOperationBinary::FAdd
-                    | SemanticOperationBinary::FSub
-                    | SemanticOperationBinary::FMul
-                    | SemanticOperationBinary::FDiv
+                LirOperationBinary::FAdd
+                    | LirOperationBinary::FSub
+                    | LirOperationBinary::FMul
+                    | LirOperationBinary::FDiv
             ),
-            SemanticExpression::Cast { op, .. } => matches!(
+            LirExpression::Cast { op, .. } => matches!(
                 op,
-                SemanticOperationCast::IntToFloat
-                    | SemanticOperationCast::UIntToFloat
-                    | SemanticOperationCast::FloatExtend
-                    | SemanticOperationCast::FloatTruncate
+                LirOperationCast::IntToFloat
+                    | LirOperationCast::UIntToFloat
+                    | LirOperationCast::FloatExtend
+                    | LirOperationCast::FloatTruncate
             ),
-            SemanticExpression::Compare { op, .. } => matches!(
+            LirExpression::Compare { op, .. } => matches!(
                 op,
-                SemanticOperationCompare::Ordered
-                    | SemanticOperationCompare::Unordered
-                    | SemanticOperationCompare::Oeq
-                    | SemanticOperationCompare::One
-                    | SemanticOperationCompare::Olt
-                    | SemanticOperationCompare::Ole
-                    | SemanticOperationCompare::Ogt
-                    | SemanticOperationCompare::Oge
-                    | SemanticOperationCompare::Ueq
-                    | SemanticOperationCompare::Une
-                    | SemanticOperationCompare::UltFp
-                    | SemanticOperationCompare::UleFp
-                    | SemanticOperationCompare::UgtFp
-                    | SemanticOperationCompare::UgeFp
+                LirOperationCompare::Ordered
+                    | LirOperationCompare::Unordered
+                    | LirOperationCompare::Oeq
+                    | LirOperationCompare::One
+                    | LirOperationCompare::Olt
+                    | LirOperationCompare::Ole
+                    | LirOperationCompare::Ogt
+                    | LirOperationCompare::Oge
+                    | LirOperationCompare::Ueq
+                    | LirOperationCompare::Une
+                    | LirOperationCompare::UltFp
+                    | LirOperationCompare::UleFp
+                    | LirOperationCompare::UgtFp
+                    | LirOperationCompare::UgeFp
             ),
-            SemanticExpression::Select {
+            LirExpression::Select {
                 when_true,
                 when_false,
                 ..
@@ -636,23 +632,23 @@ impl SymbolicExecutor {
                 self.expression_is_probably_float(when_true)
                     || self.expression_is_probably_float(when_false)
             }
-            SemanticExpression::Extract { arg, .. } => self.expression_is_probably_float(arg),
-            SemanticExpression::Concat { parts, .. } => parts
+            LirExpression::Extract { arg, .. } => self.expression_is_probably_float(arg),
+            LirExpression::Concat { parts, .. } => parts
                 .iter()
                 .any(|part| self.expression_is_probably_float(part)),
-            SemanticExpression::Undefined { .. }
-            | SemanticExpression::Poison { .. }
-            | SemanticExpression::Intrinsic { .. }
-            | SemanticExpression::Null { .. }
-            | SemanticExpression::Allocate { .. }
-            | SemanticExpression::ReadProperty { .. }
-            | SemanticExpression::ReadElement { .. } => false,
+            LirExpression::Undefined { .. }
+            | LirExpression::Poison { .. }
+            | LirExpression::Intrinsic { .. }
+            | LirExpression::Null { .. }
+            | LirExpression::Allocate { .. }
+            | LirExpression::ReadProperty { .. }
+            | LirExpression::ReadElement { .. } => false,
         }
     }
 
-    pub(crate) fn location_is_probably_float(&self, location: &SemanticLocation) -> bool {
+    pub(crate) fn location_is_probably_float(&self, location: &LirLocation) -> bool {
         match location {
-            SemanticLocation::Register { name, bits } => {
+            LirLocation::Register { name, bits } => {
                 if !matches!(*bits, 32 | 64 | 80 | 128 | 256 | 512) {
                     return false;
                 }
@@ -664,9 +660,9 @@ impl SymbolicExecutor {
                     || lowered.starts_with("x87_st")
                     || lowered.starts_with("st(")
             }
-            SemanticLocation::Memory { .. }
-            | SemanticLocation::IndexedMemory { .. }
-            | SemanticLocation::StackMemory { .. } => false,
+            LirLocation::Memory { .. }
+            | LirLocation::IndexedMemory { .. }
+            | LirLocation::StackMemory { .. } => false,
             _ => false,
         }
     }
@@ -690,7 +686,7 @@ impl SymbolicExecutor {
     fn eval_fp_binary(
         &self,
         state: &SymbolicCpuState,
-        op: SemanticOperationBinary,
+        op: LirOperationBinary,
         left: BV,
         right: BV,
     ) -> Result<BV, Error> {
@@ -698,10 +694,10 @@ impl SymbolicExecutor {
         let right = state.backend().float_from_ieee_bv(&right)?;
         let rounding = RoundingMode::round_nearest_ties_to_even();
         let value = match op {
-            SemanticOperationBinary::FAdd => left.add_with_rounding_mode(&right, &rounding),
-            SemanticOperationBinary::FSub => left.sub_with_rounding_mode(&right, &rounding),
-            SemanticOperationBinary::FMul => left.mul_with_rounding_mode(&right, &rounding),
-            SemanticOperationBinary::FDiv => left.div_with_rounding_mode(&right, &rounding),
+            LirOperationBinary::FAdd => left.add_with_rounding_mode(&right, &rounding),
+            LirOperationBinary::FSub => left.sub_with_rounding_mode(&right, &rounding),
+            LirOperationBinary::FMul => left.mul_with_rounding_mode(&right, &rounding),
+            LirOperationBinary::FDiv => left.div_with_rounding_mode(&right, &rounding),
             _ => return Err(Error::UnsupportedExpression("binary op")),
         };
         Ok(state.backend().float_to_ieee_bv(&value))
@@ -710,7 +706,7 @@ impl SymbolicExecutor {
     fn eval_fp_compare(
         &self,
         state: &SymbolicCpuState,
-        op: SemanticOperationCompare,
+        op: LirOperationCompare,
         left: BV,
         right: BV,
     ) -> Result<Bool, Error> {
@@ -724,20 +720,20 @@ impl SymbolicExecutor {
         let gt = left.gt(&right);
         let ge = left.ge(&right);
         match op {
-            SemanticOperationCompare::Ordered => Ok(ordered),
-            SemanticOperationCompare::Unordered => Ok(unordered),
-            SemanticOperationCompare::Oeq => Ok(Bool::and(&[ordered, eq])),
-            SemanticOperationCompare::One => Ok(Bool::and(&[ordered, eq.not()])),
-            SemanticOperationCompare::Olt => Ok(Bool::and(&[ordered, lt])),
-            SemanticOperationCompare::Ole => Ok(Bool::and(&[ordered, le])),
-            SemanticOperationCompare::Ogt => Ok(Bool::and(&[ordered, gt])),
-            SemanticOperationCompare::Oge => Ok(Bool::and(&[ordered, ge])),
-            SemanticOperationCompare::Ueq => Ok(Bool::or(&[unordered, eq])),
-            SemanticOperationCompare::Une => Ok(Bool::or(&[unordered, eq.not()])),
-            SemanticOperationCompare::UltFp => Ok(Bool::or(&[unordered, lt])),
-            SemanticOperationCompare::UleFp => Ok(Bool::or(&[unordered, le])),
-            SemanticOperationCompare::UgtFp => Ok(Bool::or(&[unordered, gt])),
-            SemanticOperationCompare::UgeFp => Ok(Bool::or(&[unordered, ge])),
+            LirOperationCompare::Ordered => Ok(ordered),
+            LirOperationCompare::Unordered => Ok(unordered),
+            LirOperationCompare::Oeq => Ok(Bool::and(&[ordered, eq])),
+            LirOperationCompare::One => Ok(Bool::and(&[ordered, eq.not()])),
+            LirOperationCompare::Olt => Ok(Bool::and(&[ordered, lt])),
+            LirOperationCompare::Ole => Ok(Bool::and(&[ordered, le])),
+            LirOperationCompare::Ogt => Ok(Bool::and(&[ordered, gt])),
+            LirOperationCompare::Oge => Ok(Bool::and(&[ordered, ge])),
+            LirOperationCompare::Ueq => Ok(Bool::or(&[unordered, eq])),
+            LirOperationCompare::Une => Ok(Bool::or(&[unordered, eq.not()])),
+            LirOperationCompare::UltFp => Ok(Bool::or(&[unordered, lt])),
+            LirOperationCompare::UleFp => Ok(Bool::or(&[unordered, le])),
+            LirOperationCompare::UgtFp => Ok(Bool::or(&[unordered, gt])),
+            LirOperationCompare::UgeFp => Ok(Bool::or(&[unordered, ge])),
             _ => Err(Error::UnsupportedExpression("compare op")),
         }
     }
@@ -746,7 +742,7 @@ impl SymbolicExecutor {
         &self,
         state: &mut SymbolicCpuState,
         name: &str,
-        args: &[SemanticExpression],
+        args: &[LirExpression],
         bits: u16,
     ) -> Result<BV, Error> {
         if let Some(value) = self.eval_x87_intrinsic_expression(state, name, args, bits)? {

@@ -20,11 +20,11 @@ Lifters operate on Binlex controlflow objects:
 - `Block`
 - `Function`
 
-The source of meaning is instruction semantics. The source of structure is the controlflow hierarchy.
+The source of meaning is LIR bindings. The source of structure is the controlflow hierarchy.
 
 That means:
 
-- instruction lifting uses instruction semantics
+- instruction lifting uses LIR bindings
 - block lifting uses ordered block instructions
 - function lifting uses the function’s blocks and controlflow structure
 

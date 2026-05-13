@@ -29,7 +29,7 @@ use crate::disassemblers::cil::Instruction;
 use crate::disassemblers::cil::backends::native;
 use crate::genetics::Chromosome;
 use crate::io::Stderr;
-use crate::semantics::cil::InstructionDetailCil;
+use crate::ir::lir::cil::InstructionDetailCil;
 use rayon::ThreadPoolBuilder;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::{BTreeMap, BTreeSet};

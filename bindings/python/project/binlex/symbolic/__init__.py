@@ -6,14 +6,14 @@ from binlex_bindings.binlex.symbolic import Slice
 from binlex_bindings.binlex.symbolic import SliceInstruction
 from binlex_bindings.binlex.symbolic import SliceNode
 
-from binlex.semantics import SemanticCpu
+from binlex.ir.lir import LirCpu
 
 
 class CpuState:
     """Symbolic state for a specific semantic CPU model."""
 
     def __init__(self, cpu):
-        if isinstance(cpu, SemanticCpu):
+        if isinstance(cpu, LirCpu):
             cpu = cpu._inner
         self._inner = _CpuStateBinding(cpu)
 

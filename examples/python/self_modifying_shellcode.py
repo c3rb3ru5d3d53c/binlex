@@ -4,7 +4,7 @@ from binlex import Architecture, Configuration
 from binlex.assemblers import Assembler
 from binlex.controlflow import Graph
 from binlex.disassemblers import Disassembler
-from binlex.semantics import SemanticCpu, SemanticStatus, Semantics
+from binlex.ir.lir import LirCpu, LirModule, LirStatus
 from binlex.symbolic import CpuState, Executor
 
 
@@ -75,17 +75,17 @@ tail_instructions = disassembler.disassemble_block(tail_address, graph).instruct
 payload_address = tail_instructions[-1].address() + len(tail_instructions[-1].bytes())
 instructions.extend(tail_instructions)
 
-semantics = Semantics()
+semantics = LirModule()
 for instruction in instructions:
     semantic = instruction.semantic()
     assert semantic is not None
-    assert semantic.status() == SemanticStatus.Complete
+    assert semantic.status() == LirStatus.Complete
     semantics.append_semantic(semantic)
 
 executor = Executor()
 executor.set_breakpoint(payload_address)
 
-state = CpuState(SemanticCpu.amd64())
+state = CpuState(LirCpu.amd64())
 state.map_memory(0, len(image_bytes))
 state.write_memory(0, image_bytes)
 state.set_register("rip", 64, 0)

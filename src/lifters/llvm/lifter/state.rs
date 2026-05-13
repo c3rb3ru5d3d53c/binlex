@@ -1,7 +1,7 @@
 use super::LoweringContext;
 use super::helpers::coerce_int_value_width;
 use super::helpers::{render_location, sanitize_symbol};
-use crate::semantics::SemanticLocation;
+use crate::ir::lir::LirLocation;
 use inkwell::attributes::Attribute;
 use inkwell::types::{AnyType, IntType};
 use inkwell::values::{IntValue, PointerValue};
@@ -10,20 +10,20 @@ use std::io::Error;
 impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     pub(super) fn slot_for_location(
         &mut self,
-        location: &SemanticLocation,
+        location: &LirLocation,
     ) -> Result<PointerValue<'ctx>, Error> {
         let key = render_location(location);
         if let Some(slot) = self.slots.get(&key) {
             return Ok(*slot);
         }
-        if let SemanticLocation::StackMemory { .. } = location {
+        if let LirLocation::StackMemory { .. } = location {
             let slot = self.stack_memory_slot(location)?;
             self.slots.insert(key.clone(), slot);
             self.slot_locations.insert(key, location.clone());
             return Ok(slot);
         }
         if let Some((parent_name, parent_bits, _)) = self.x86_parent_register_alias(location) {
-            let parent = SemanticLocation::Register {
+            let parent = LirLocation::Register {
                 name: parent_name,
                 bits: parent_bits,
             };
@@ -46,10 +46,10 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
     pub(super) fn pointer_for_location(
         &mut self,
-        location: &SemanticLocation,
+        location: &LirLocation,
     ) -> Result<PointerValue<'ctx>, Error> {
         match location {
-            SemanticLocation::StackMemory { .. } => self.stack_memory_slot(location),
+            LirLocation::StackMemory { .. } => self.stack_memory_slot(location),
             _ => self.slot_for_location(location),
         }
     }
@@ -60,7 +60,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         bits: u16,
         value: IntValue<'ctx>,
     ) -> Result<(), Error> {
-        let location = SemanticLocation::Register {
+        let location = LirLocation::Register {
             name: name.to_string(),
             bits,
         };
@@ -68,7 +68,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         else {
             return Ok(());
         };
-        let parent = SemanticLocation::Register {
+        let parent = LirLocation::Register {
             name: parent_name,
             bits: parent_bits,
         };
@@ -122,15 +122,15 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         Ok(())
     }
 
-    fn initial_location_value(&self, location: &SemanticLocation) -> Result<IntValue<'ctx>, Error> {
+    fn initial_location_value(&self, location: &LirLocation) -> Result<IntValue<'ctx>, Error> {
         // Lowered functions do not inherit ambient host machine state by default.
         // The only callable boundary state we model is what the user passes
         // explicitly through the selected ABI, which is bound separately via
         // `bind_function_arguments()`.
         match location {
-            SemanticLocation::Register { bits, .. } => Ok(self.int_type(*bits).const_zero()),
-            SemanticLocation::Flag { bits, .. } => Ok(self.int_type(*bits).const_zero()),
-            SemanticLocation::ProgramCounter { bits } => Ok(self.int_type(*bits).const_zero()),
+            LirLocation::Register { bits, .. } => Ok(self.int_type(*bits).const_zero()),
+            LirLocation::Flag { bits, .. } => Ok(self.int_type(*bits).const_zero()),
+            LirLocation::ProgramCounter { bits } => Ok(self.int_type(*bits).const_zero()),
             _ => Ok(self.location_type(location).const_zero()),
         }
     }
@@ -176,11 +176,8 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .map_err(|err| Error::other(err.to_string()))
     }
 
-    fn stack_memory_slot(
-        &mut self,
-        location: &SemanticLocation,
-    ) -> Result<PointerValue<'ctx>, Error> {
-        let SemanticLocation::StackMemory { name, offset, bits } = location else {
+    fn stack_memory_slot(&mut self, location: &LirLocation) -> Result<PointerValue<'ctx>, Error> {
+        let LirLocation::StackMemory { name, offset, bits } = location else {
             unreachable!();
         };
         let base = if let Some(base) = self.stack_regions.get(name) {

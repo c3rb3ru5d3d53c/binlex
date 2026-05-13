@@ -1515,7 +1515,7 @@ impl ConfigLiftersLLVM {
         match inner.lifters.llvm.mode {
             binlex::lifters::llvm::Mode::Reconstruct => "reconstruct",
             binlex::lifters::llvm::Mode::Intrinsic => "intrinsic",
-            binlex::lifters::llvm::Mode::Semantic => "semantic",
+            binlex::lifters::llvm::Mode::Lir => "semantic",
         }
         .to_string()
     }
@@ -1526,7 +1526,7 @@ impl ConfigLiftersLLVM {
         inner.lifters.llvm.mode = match value.as_str() {
             "reconstruct" => binlex::lifters::llvm::Mode::Reconstruct,
             "intrinsic" => binlex::lifters::llvm::Mode::Intrinsic,
-            "semantic" => binlex::lifters::llvm::Mode::Semantic,
+            "semantic" => binlex::lifters::llvm::Mode::Lir,
             _ => {
                 return Err(PyRuntimeError::new_err(format!(
                     "invalid llvm mode: {value}"

@@ -1,4 +1,4 @@
-use crate::semantics::{Semantic, SemanticStatus, SemanticTerminator, Semantics};
+use crate::ir::lir::{Lir, LirModule, LirStatus, LirTerminator};
 use crate::symbolic::Error;
 use crate::symbolic::SymbolicCpuState;
 use std::collections::{BTreeSet, HashMap};
@@ -51,7 +51,7 @@ impl SymbolicExecutor {
 
     pub fn step(
         &self,
-        semantics: &Semantics,
+        semantics: &LirModule,
         state: &SymbolicCpuState,
     ) -> Result<Vec<SymbolicCpuState>, Error> {
         if semantics.semantics.is_empty() {
@@ -64,7 +64,7 @@ impl SymbolicExecutor {
 
     pub fn run(
         &self,
-        semantics: &Semantics,
+        semantics: &LirModule,
         state: &SymbolicCpuState,
         steps: Option<usize>,
     ) -> Result<Vec<SymbolicCpuState>, Error> {
@@ -137,7 +137,7 @@ impl SymbolicExecutor {
 
     fn resolve_successor_index(
         &self,
-        semantics: &[&Semantic],
+        semantics: &[&Lir],
         address_to_index: &HashMap<u64, usize>,
         current_index: usize,
         previous_pc: Option<u64>,
@@ -150,7 +150,7 @@ impl SymbolicExecutor {
         let follow_concrete_target = |address: u64| address_to_index.get(&address).copied();
 
         match &current.terminator {
-            SemanticTerminator::FallThrough => {
+            LirTerminator::FallThrough => {
                 if current_pc != previous_pc {
                     if let Some(address) = current_pc {
                         return Ok(follow_concrete_target(address));
@@ -158,24 +158,24 @@ impl SymbolicExecutor {
                 }
                 Ok(sequential_next)
             }
-            SemanticTerminator::Return { expression } => {
+            LirTerminator::Return { expression } => {
                 if expression.is_none() {
                     return Ok(None);
                 }
                 Ok(current_pc.and_then(follow_concrete_target))
             }
-            SemanticTerminator::Jump { .. }
-            | SemanticTerminator::Branch { .. }
-            | SemanticTerminator::Call { .. } => Ok(current_pc.and_then(follow_concrete_target)),
-            SemanticTerminator::Trap | SemanticTerminator::Unreachable => Ok(None),
+            LirTerminator::Jump { .. }
+            | LirTerminator::Branch { .. }
+            | LirTerminator::Call { .. } => Ok(current_pc.and_then(follow_concrete_target)),
+            LirTerminator::Trap | LirTerminator::Unreachable => Ok(None),
         }
     }
 
     fn prepare_state_and_semantics(
         &self,
-        semantics: Semantics,
+        semantics: LirModule,
         state: &SymbolicCpuState,
-    ) -> Result<(Semantics, SymbolicCpuState, HashMap<u64, usize>, usize), Error> {
+    ) -> Result<(LirModule, SymbolicCpuState, HashMap<u64, usize>, usize), Error> {
         let mut working_state = state.clone();
         working_state.load_semantic_data(&semantics.data)?;
         let mut address_to_index = HashMap::new();
@@ -193,12 +193,12 @@ impl SymbolicExecutor {
 
     fn step_instruction(
         &self,
-        semantics: &Semantic,
+        semantics: &Lir,
         state: &SymbolicCpuState,
     ) -> Result<Vec<SymbolicCpuState>, Error> {
-        if !matches!(semantics.status, SemanticStatus::Complete) {
+        if !matches!(semantics.status, LirStatus::Complete) {
             return Err(Error::UnsupportedExpression(
-                "partial instruction semantics are not executable",
+                "partial LIR bindings are not executable",
             ));
         }
         let mut working = state.clone();
@@ -219,16 +219,15 @@ mod tests {
     use crate::controlflow::Graph;
     use crate::disassemblers::capstone::Disassembler;
     use crate::formats::Image;
-    use crate::semantics::{
-        Semantic, SemanticAddressSpace, SemanticCpu, SemanticData, SemanticEffect,
-        SemanticEncoding, SemanticExpression, SemanticLocation, SemanticOperationBinary,
-        SemanticOperationCast, SemanticOperationCompare, SemanticOperationUnary, SemanticStatus,
-        SemanticTerminator, Semantics,
+    use crate::ir::lir::{
+        Lir, LirAddressSpace, LirCpu, LirData, LirEffect, LirEncoding, LirExpression, LirLocation,
+        LirModule, LirOperationBinary, LirOperationCast, LirOperationCompare, LirOperationUnary,
+        LirStatus, LirTerminator,
     };
     use std::collections::{BTreeMap, BTreeSet};
     use std::io::Cursor;
 
-    fn assembled_semantics(architecture: Architecture, assembly: &str) -> Vec<Semantic> {
+    fn assembled_semantics(architecture: Architecture, assembly: &str) -> Vec<Lir> {
         let config = Configuration::default();
         let assembler = Assembler::new(architecture, config.clone(), AssemblerBackend::Default)
             .expect("assembler");
@@ -247,24 +246,19 @@ mod tests {
         instructions.sort_by_key(|instruction| instruction.address);
         instructions
             .into_iter()
-            .map(|instruction| {
-                instruction
-                    .semantics
-                    .clone()
-                    .expect("instruction semantics")
-            })
+            .map(|instruction| instruction.semantics.clone().expect("LIR bindings"))
             .collect()
     }
 
-    fn semantics_of(semantic: Semantic) -> Semantics {
-        Semantics {
+    fn semantics_of(semantic: Lir) -> LirModule {
+        LirModule {
             semantics: vec![semantic],
             data: Vec::new(),
         }
     }
 
-    fn semantics_many(semantics: Vec<Semantic>) -> Semantics {
-        Semantics {
+    fn semantics_many(semantics: Vec<Lir>) -> LirModule {
+        LirModule {
             semantics,
             data: Vec::new(),
         }
@@ -273,37 +267,34 @@ mod tests {
     #[test]
     fn symbolic_branch_forks() {
         let executor = SymbolicExecutor::new();
-        let mut state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
-        );
+        let mut state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         state
             .symbolize_register("x0", 64, Some("input_x0"))
             .expect("symbolize register");
 
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
             effects: Vec::new(),
-            terminator: SemanticTerminator::Branch {
-                condition: SemanticExpression::Compare {
-                    op: SemanticOperationCompare::Eq,
-                    left: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "x0".to_string(),
-                            bits: 64,
-                        },
-                    ))),
-                    right: Box::new(SemanticExpression::Const { value: 0, bits: 64 }),
+            terminator: LirTerminator::Branch {
+                condition: LirExpression::Compare {
+                    op: LirOperationCompare::Eq,
+                    left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "x0".to_string(),
+                        bits: 64,
+                    }))),
+                    right: Box::new(LirExpression::Const { value: 0, bits: 64 }),
                     bits: 1,
                 },
-                true_target: SemanticExpression::Const {
+                true_target: LirExpression::Const {
                     value: 0x1000,
                     bits: 64,
                 },
-                false_target: SemanticExpression::Const {
+                false_target: LirExpression::Const {
                     value: 0x2000,
                     bits: 64,
                 },
@@ -336,38 +327,35 @@ mod tests {
     #[test]
     fn symbolic_semantics_data_supports_step_and_run() {
         let executor = SymbolicExecutor::new();
-        let mut state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
-        );
+        let mut state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
         state.set_register("rdi", 64, 2).expect("set register");
 
-        let body = Semantic {
+        let body = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "rax".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Cast {
-                    op: SemanticOperationCast::ZeroExtend,
-                    arg: Box::new(SemanticExpression::Load {
-                        space: SemanticAddressSpace::Global,
-                        addr: Box::new(SemanticExpression::Binary {
-                            op: SemanticOperationBinary::Add,
-                            left: Box::new(SemanticExpression::DataAddress {
+                expression: LirExpression::Cast {
+                    op: LirOperationCast::ZeroExtend,
+                    arg: Box::new(LirExpression::Load {
+                        space: LirAddressSpace::Global,
+                        addr: Box::new(LirExpression::Binary {
+                            op: LirOperationBinary::Add,
+                            left: Box::new(LirExpression::DataAddress {
                                 name: "digits".to_string(),
                                 bits: 64,
                             }),
-                            right: Box::new(SemanticExpression::Read(Box::new(
-                                SemanticLocation::Register {
-                                    name: "rdi".to_string(),
-                                    bits: 64,
-                                },
-                            ))),
+                            right: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                                name: "rdi".to_string(),
+                                bits: 64,
+                            }))),
                             bits: 64,
                         }),
                         bits: 8,
@@ -375,12 +363,12 @@ mod tests {
                     bits: 64,
                 },
             }],
-            terminator: SemanticTerminator::Return { expression: None },
+            terminator: LirTerminator::Return { expression: None },
             diagnostics: Vec::new(),
         };
-        let semantics = Semantics {
+        let semantics = LirModule {
             semantics: vec![body],
-            data: vec![SemanticData {
+            data: vec![LirData {
                 name: "digits".to_string(),
                 bytes: b"0123456789".to_vec(),
             }],
@@ -408,7 +396,7 @@ mod tests {
     #[test]
     fn symbolic_map_image_reads_global_bytes_without_preload_copy() {
         let executor = SymbolicExecutor::new();
-        let state_cpu = SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu");
+        let state_cpu = LirCpu::from_architecture(Architecture::AMD64).expect("cpu");
         let mut state = SymbolicCpuState::new(state_cpu);
 
         let temp_path = std::env::temp_dir().join(format!(
@@ -429,28 +417,28 @@ mod tests {
 
         state.map_image(&image);
 
-        let semantics = Semantics {
-            semantics: vec![Semantic {
+        let semantics = LirModule {
+            semantics: vec![Lir {
                 version: 1,
-                status: SemanticStatus::Complete,
+                status: LirStatus::Complete,
                 abi: None,
                 encoding: None,
                 temporaries: Vec::new(),
-                effects: vec![SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
+                effects: vec![LirEffect::Set {
+                    dst: LirLocation::Register {
                         name: "rax".to_string(),
                         bits: 32,
                     },
-                    expression: SemanticExpression::Load {
-                        space: SemanticAddressSpace::Global,
-                        addr: Box::new(SemanticExpression::Const {
+                    expression: LirExpression::Load {
+                        space: LirAddressSpace::Global,
+                        addr: Box::new(LirExpression::Const {
                             value: 0x1234,
                             bits: 64,
                         }),
                         bits: 32,
                     },
                 }],
-                terminator: SemanticTerminator::Return { expression: None },
+                terminator: LirTerminator::Return { expression: None },
                 diagnostics: Vec::new(),
             }],
             data: Vec::new(),
@@ -467,37 +455,36 @@ mod tests {
     #[test]
     fn symbolic_memory_store_then_load() {
         let executor = SymbolicExecutor::new();
-        let state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
-        );
+        let state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
 
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
-                SemanticEffect::Store {
-                    space: crate::semantics::SemanticAddressSpace::Default,
-                    addr: SemanticExpression::Const {
+                LirEffect::Store {
+                    space: crate::ir::lir::LirAddressSpace::Default,
+                    addr: LirExpression::Const {
                         value: 0x3000,
                         bits: 64,
                     },
-                    expression: SemanticExpression::Const {
+                    expression: LirExpression::Const {
                         value: 0x41,
                         bits: 8,
                     },
                     bits: 8,
                 },
-                SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
+                LirEffect::Set {
+                    dst: LirLocation::Register {
                         name: "rax".to_string(),
                         bits: 8,
                     },
-                    expression: SemanticExpression::Load {
-                        space: crate::semantics::SemanticAddressSpace::Default,
-                        addr: Box::new(SemanticExpression::Const {
+                    expression: LirExpression::Load {
+                        space: crate::ir::lir::LirAddressSpace::Default,
+                        addr: Box::new(LirExpression::Const {
                             value: 0x3000,
                             bits: 64,
                         }),
@@ -505,7 +492,7 @@ mod tests {
                     },
                 },
             ],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -523,36 +510,36 @@ mod tests {
     fn symbolic_indexed_memory_store_then_read() {
         let executor = SymbolicExecutor::new();
         let state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
 
-        let location = SemanticLocation::IndexedMemory {
+        let location = LirLocation::IndexedMemory {
             name: "locals".to_string(),
-            index: Box::new(SemanticExpression::Const { value: 2, bits: 32 }),
+            index: Box::new(LirExpression::Const { value: 2, bits: 32 }),
             bits: 32,
         };
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
-                SemanticEffect::Set {
+                LirEffect::Set {
                     dst: location.clone(),
-                    expression: SemanticExpression::Const {
+                    expression: LirExpression::Const {
                         value: 0x41424344,
                         bits: 32,
                     },
                 },
-                SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
+                LirEffect::Set {
+                    dst: LirLocation::Register {
                         name: "eax".to_string(),
                         bits: 32,
                     },
-                    expression: SemanticExpression::Read(Box::new(location)),
+                    expression: LirExpression::Read(Box::new(location)),
                 },
             ],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -570,36 +557,36 @@ mod tests {
     fn symbolic_stack_memory_store_then_read() {
         let executor = SymbolicExecutor::new();
         let state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
 
-        let location = SemanticLocation::StackMemory {
+        let location = LirLocation::StackMemory {
             name: "value_stack".to_string(),
             offset: 0,
             bits: 32,
         };
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
-                SemanticEffect::Set {
+                LirEffect::Set {
                     dst: location.clone(),
-                    expression: SemanticExpression::Const {
+                    expression: LirExpression::Const {
                         value: 0x11223344,
                         bits: 32,
                     },
                 },
-                SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
+                LirEffect::Set {
+                    dst: LirLocation::Register {
                         name: "eax".to_string(),
                         bits: 32,
                     },
-                    expression: SemanticExpression::Read(Box::new(location)),
+                    expression: LirExpression::Read(Box::new(location)),
                 },
             ],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -617,39 +604,39 @@ mod tests {
     fn symbolic_stack_push_and_pop_execute() {
         let executor = SymbolicExecutor::new();
         let state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
 
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
-                SemanticEffect::Push {
+                LirEffect::Push {
                     stack: "value_stack".to_string(),
-                    expression: SemanticExpression::Const { value: 1, bits: 32 },
+                    expression: LirExpression::Const { value: 1, bits: 32 },
                 },
-                SemanticEffect::Push {
+                LirEffect::Push {
                     stack: "value_stack".to_string(),
-                    expression: SemanticExpression::Const { value: 2, bits: 32 },
+                    expression: LirExpression::Const { value: 2, bits: 32 },
                 },
-                SemanticEffect::Pop {
+                LirEffect::Pop {
                     stack: "value_stack".to_string(),
-                    dst: SemanticLocation::Register {
+                    dst: LirLocation::Register {
                         name: "eax".to_string(),
                         bits: 32,
                     },
                 },
-                SemanticEffect::Pop {
+                LirEffect::Pop {
                     stack: "value_stack".to_string(),
-                    dst: SemanticLocation::Register {
+                    dst: LirLocation::Register {
                         name: "ebx".to_string(),
                         bits: 32,
                     },
                 },
             ],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -676,47 +663,47 @@ mod tests {
     fn symbolic_reference_property_write_then_read() {
         let executor = SymbolicExecutor::new();
         let state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::CIL).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::CIL).expect("cpu"));
 
-        let object = SemanticExpression::Allocate {
+        let object = LirExpression::Allocate {
             kind: "object".to_string(),
             bits: 64,
         };
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
-                SemanticEffect::Set {
-                    dst: SemanticLocation::Temporary { id: 0, bits: 64 },
+                LirEffect::Set {
+                    dst: LirLocation::Temporary { id: 0, bits: 64 },
                     expression: object,
                 },
-                SemanticEffect::WriteProperty {
-                    reference: SemanticExpression::Read(Box::new(SemanticLocation::Temporary {
+                LirEffect::WriteProperty {
+                    reference: LirExpression::Read(Box::new(LirLocation::Temporary {
                         id: 0,
                         bits: 64,
                     })),
                     name: "length".to_string(),
-                    expression: SemanticExpression::Const { value: 7, bits: 32 },
+                    expression: LirExpression::Const { value: 7, bits: 32 },
                     bits: 32,
                 },
-                SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
+                LirEffect::Set {
+                    dst: LirLocation::Register {
                         name: "pc".to_string(),
                         bits: 32,
                     },
-                    expression: SemanticExpression::ReadProperty {
-                        reference: Box::new(SemanticExpression::Read(Box::new(
-                            SemanticLocation::Temporary { id: 0, bits: 64 },
+                    expression: LirExpression::ReadProperty {
+                        reference: Box::new(LirExpression::Read(Box::new(
+                            LirLocation::Temporary { id: 0, bits: 64 },
                         ))),
                         name: "length".to_string(),
                         bits: 32,
                     },
                 },
             ],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -736,49 +723,49 @@ mod tests {
     fn symbolic_reference_element_write_then_read() {
         let executor = SymbolicExecutor::new();
         let state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::CIL).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::CIL).expect("cpu"));
 
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
-                SemanticEffect::Set {
-                    dst: SemanticLocation::Temporary { id: 0, bits: 64 },
-                    expression: SemanticExpression::Allocate {
+                LirEffect::Set {
+                    dst: LirLocation::Temporary { id: 0, bits: 64 },
+                    expression: LirExpression::Allocate {
                         kind: "array".to_string(),
                         bits: 64,
                     },
                 },
-                SemanticEffect::WriteElement {
-                    reference: SemanticExpression::Read(Box::new(SemanticLocation::Temporary {
+                LirEffect::WriteElement {
+                    reference: LirExpression::Read(Box::new(LirLocation::Temporary {
                         id: 0,
                         bits: 64,
                     })),
-                    index: SemanticExpression::Const { value: 3, bits: 32 },
-                    expression: SemanticExpression::Const {
+                    index: LirExpression::Const { value: 3, bits: 32 },
+                    expression: LirExpression::Const {
                         value: 0x55,
                         bits: 8,
                     },
                     bits: 8,
                 },
-                SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
+                LirEffect::Set {
+                    dst: LirLocation::Register {
                         name: "pc".to_string(),
                         bits: 8,
                     },
-                    expression: SemanticExpression::ReadElement {
-                        reference: Box::new(SemanticExpression::Read(Box::new(
-                            SemanticLocation::Temporary { id: 0, bits: 64 },
+                    expression: LirExpression::ReadElement {
+                        reference: Box::new(LirExpression::Read(Box::new(
+                            LirLocation::Temporary { id: 0, bits: 64 },
                         ))),
-                        index: Box::new(SemanticExpression::Const { value: 3, bits: 32 }),
+                        index: Box::new(LirExpression::Const { value: 3, bits: 32 }),
                         bits: 8,
                     },
                 },
             ],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -796,9 +783,8 @@ mod tests {
 
     #[test]
     fn symbolic_state_read_memory_returns_concrete_bytes() {
-        let mut state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
-        );
+        let mut state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
         state.map_memory(0x5000, 4);
         state
             .write_memory(0x5000, &[0x44, 0x33, 0x22, 0x11])
@@ -814,30 +800,29 @@ mod tests {
     #[test]
     fn symbolic_unary_popcount_executes() {
         let executor = SymbolicExecutor::new();
-        let state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
-        );
-        let semantics = Semantic {
+        let state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x0".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Unary {
-                    op: SemanticOperationUnary::PopCount,
-                    arg: Box::new(SemanticExpression::Const {
+                expression: LirExpression::Unary {
+                    op: LirOperationUnary::PopCount,
+                    arg: Box::new(LirExpression::Const {
                         value: 0b1011,
                         bits: 64,
                     }),
                     bits: 64,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
         let states = executor
@@ -855,31 +840,30 @@ mod tests {
     #[test]
     fn symbolic_mul_high_executes() {
         let executor = SymbolicExecutor::new();
-        let state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
-        );
-        let semantics = Semantic {
+        let state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x0".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Binary {
-                    op: SemanticOperationBinary::UMulHigh,
-                    left: Box::new(SemanticExpression::Const {
+                expression: LirExpression::Binary {
+                    op: LirOperationBinary::UMulHigh,
+                    left: Box::new(LirExpression::Const {
                         value: u64::MAX as u128,
                         bits: 64,
                     }),
-                    right: Box::new(SemanticExpression::Const { value: 2, bits: 64 }),
+                    right: Box::new(LirExpression::Const { value: 2, bits: 64 }),
                     bits: 64,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
         let states = executor
@@ -897,17 +881,16 @@ mod tests {
     #[test]
     fn partial_semantics_are_rejected() {
         let executor = SymbolicExecutor::new();
-        let state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
-        );
-        let semantics = Semantic {
+        let state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Partial,
+            status: LirStatus::Partial,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
             effects: Vec::new(),
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
         assert!(executor.step(&semantics_of(semantics), &state).is_err());
@@ -916,50 +899,47 @@ mod tests {
     #[test]
     fn symbolic_trace_run_executes() {
         let executor = SymbolicExecutor::new();
-        let state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
-        );
-        let first = Semantic {
+        let state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
+        let first = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "rax".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Const { value: 7, bits: 64 },
+                expression: LirExpression::Const { value: 7, bits: 64 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let second = Semantic {
+        let second = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "rbx".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Binary {
-                    op: SemanticOperationBinary::Add,
-                    left: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "rax".to_string(),
-                            bits: 64,
-                        },
-                    ))),
-                    right: Box::new(SemanticExpression::Const { value: 5, bits: 64 }),
+                expression: LirExpression::Binary {
+                    op: LirOperationBinary::Add,
+                    left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "rax".to_string(),
+                        bits: 64,
+                    }))),
+                    right: Box::new(LirExpression::Const { value: 5, bits: 64 }),
                     bits: 64,
                 },
             }],
-            terminator: SemanticTerminator::Jump {
-                target: SemanticExpression::Const {
+            terminator: LirTerminator::Jump {
+                target: LirExpression::Const {
                     value: 0x401000,
                     bits: 64,
                 },
@@ -990,12 +970,12 @@ mod tests {
     fn symbolic_run_follows_concrete_control_flow() {
         let executor = SymbolicExecutor::new();
         let state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
-        let setup = Semantic {
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+        let setup = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
-            encoding: Some(SemanticEncoding {
+            encoding: Some(LirEncoding {
                 architecture: "i386".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov ecx, 3".to_string(),
@@ -1003,21 +983,21 @@ mod tests {
                 bytes: vec![0xb9, 0x03, 0x00, 0x00, 0x00],
             }),
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "ecx".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Const { value: 3, bits: 32 },
+                expression: LirExpression::Const { value: 3, bits: 32 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let loop_body = Semantic {
+        let loop_body = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
-            encoding: Some(SemanticEncoding {
+            encoding: Some(LirEncoding {
                 architecture: "i386".to_string(),
                 mnemonic: "dec".to_string(),
                 disassembly: "dec ecx".to_string(),
@@ -1025,51 +1005,47 @@ mod tests {
                 bytes: vec![0x49],
             }),
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "ecx".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Binary {
-                    op: SemanticOperationBinary::Sub,
-                    left: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "ecx".to_string(),
-                            bits: 32,
-                        },
-                    ))),
-                    right: Box::new(SemanticExpression::Const { value: 1, bits: 32 }),
+                expression: LirExpression::Binary {
+                    op: LirOperationBinary::Sub,
+                    left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "ecx".to_string(),
+                        bits: 32,
+                    }))),
+                    right: Box::new(LirExpression::Const { value: 1, bits: 32 }),
                     bits: 32,
                 },
             }],
-            terminator: SemanticTerminator::Branch {
-                condition: SemanticExpression::Compare {
-                    op: SemanticOperationCompare::Eq,
-                    left: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "ecx".to_string(),
-                            bits: 32,
-                        },
-                    ))),
-                    right: Box::new(SemanticExpression::Const { value: 0, bits: 32 }),
+            terminator: LirTerminator::Branch {
+                condition: LirExpression::Compare {
+                    op: LirOperationCompare::Eq,
+                    left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "ecx".to_string(),
+                        bits: 32,
+                    }))),
+                    right: Box::new(LirExpression::Const { value: 0, bits: 32 }),
                     bits: 1,
                 },
-                true_target: SemanticExpression::Const {
+                true_target: LirExpression::Const {
                     value: 0x1006,
                     bits: 32,
                 },
-                false_target: SemanticExpression::Const {
+                false_target: LirExpression::Const {
                     value: 0x1005,
                     bits: 32,
                 },
             },
             diagnostics: Vec::new(),
         };
-        let exit = Semantic {
+        let exit = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
-            encoding: Some(SemanticEncoding {
+            encoding: Some(LirEncoding {
                 architecture: "i386".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov eax, 0x41".to_string(),
@@ -1077,17 +1053,17 @@ mod tests {
                 bytes: vec![0xb8, 0x41, 0x00, 0x00, 0x00],
             }),
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "eax".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Const {
+                expression: LirExpression::Const {
                     value: 0x41,
                     bits: 32,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -1115,16 +1091,16 @@ mod tests {
     fn symbolic_run_stops_at_non_concrete_control_flow() {
         let executor = SymbolicExecutor::new();
         let mut state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state
             .symbolize_register("eax", 32, Some("input_eax"))
             .expect("symbolize register");
 
-        let branch = Semantic {
+        let branch = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
-            encoding: Some(SemanticEncoding {
+            encoding: Some(LirEncoding {
                 architecture: "i386".to_string(),
                 mnemonic: "jne".to_string(),
                 disassembly: "jne 0x1005".to_string(),
@@ -1133,34 +1109,32 @@ mod tests {
             }),
             temporaries: Vec::new(),
             effects: Vec::new(),
-            terminator: SemanticTerminator::Branch {
-                condition: SemanticExpression::Compare {
-                    op: SemanticOperationCompare::Eq,
-                    left: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "eax".to_string(),
-                            bits: 32,
-                        },
-                    ))),
-                    right: Box::new(SemanticExpression::Const { value: 0, bits: 32 }),
+            terminator: LirTerminator::Branch {
+                condition: LirExpression::Compare {
+                    op: LirOperationCompare::Eq,
+                    left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "eax".to_string(),
+                        bits: 32,
+                    }))),
+                    right: Box::new(LirExpression::Const { value: 0, bits: 32 }),
                     bits: 1,
                 },
-                true_target: SemanticExpression::Const {
+                true_target: LirExpression::Const {
                     value: 0x1002,
                     bits: 32,
                 },
-                false_target: SemanticExpression::Const {
+                false_target: LirExpression::Const {
                     value: 0x1005,
                     bits: 32,
                 },
             },
             diagnostics: Vec::new(),
         };
-        let taken = Semantic {
+        let taken = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
-            encoding: Some(SemanticEncoding {
+            encoding: Some(LirEncoding {
                 architecture: "i386".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov ebx, 1".to_string(),
@@ -1168,21 +1142,21 @@ mod tests {
                 bytes: vec![0xbb, 0x01, 0x00, 0x00, 0x00],
             }),
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "ebx".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Const { value: 1, bits: 32 },
+                expression: LirExpression::Const { value: 1, bits: 32 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let not_taken = Semantic {
+        let not_taken = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
-            encoding: Some(SemanticEncoding {
+            encoding: Some(LirEncoding {
                 architecture: "i386".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov ebx, 2".to_string(),
@@ -1190,14 +1164,14 @@ mod tests {
                 bytes: vec![0xbb, 0x02, 0x00, 0x00, 0x00],
             }),
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "ebx".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Const { value: 2, bits: 32 },
+                expression: LirExpression::Const { value: 2, bits: 32 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -1231,14 +1205,13 @@ mod tests {
     #[test]
     fn symbolic_run_honors_step_budget() {
         let executor = SymbolicExecutor::new();
-        let state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
-        );
-        let first = Semantic {
+        let state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
+        let first = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
-            encoding: Some(SemanticEncoding {
+            encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov rax, 7".to_string(),
@@ -1246,21 +1219,21 @@ mod tests {
                 bytes: vec![0x48, 0xc7, 0xc0, 0x07, 0x00, 0x00, 0x00],
             }),
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "rax".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Const { value: 7, bits: 64 },
+                expression: LirExpression::Const { value: 7, bits: 64 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let second = Semantic {
+        let second = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
-            encoding: Some(SemanticEncoding {
+            encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov rbx, 9".to_string(),
@@ -1268,14 +1241,14 @@ mod tests {
                 bytes: vec![0x48, 0xc7, 0xc3, 0x09, 0x00, 0x00, 0x00],
             }),
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "rbx".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Const { value: 9, bits: 64 },
+                expression: LirExpression::Const { value: 9, bits: 64 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -1302,14 +1275,13 @@ mod tests {
     fn symbolic_run_stops_at_breakpoint_before_execution() {
         let mut executor = SymbolicExecutor::new();
         executor.set_breakpoint(0x401001);
-        let state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
-        );
-        let first = Semantic {
+        let state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
+        let first = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
-            encoding: Some(SemanticEncoding {
+            encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov rax, 7".to_string(),
@@ -1317,21 +1289,21 @@ mod tests {
                 bytes: vec![0x48, 0xc7, 0xc0, 0x07, 0x00, 0x00, 0x00],
             }),
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "rax".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Const { value: 7, bits: 64 },
+                expression: LirExpression::Const { value: 7, bits: 64 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let second = Semantic {
+        let second = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
-            encoding: Some(SemanticEncoding {
+            encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov rbx, 9".to_string(),
@@ -1339,14 +1311,14 @@ mod tests {
                 bytes: vec![0x48, 0xc7, 0xc3, 0x09, 0x00, 0x00, 0x00],
             }),
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "rbx".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Const { value: 9, bits: 64 },
+                expression: LirExpression::Const { value: 9, bits: 64 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -1380,14 +1352,13 @@ mod tests {
     fn symbolic_run_stops_at_hook_before_execution() {
         let mut executor = SymbolicExecutor::new();
         executor.add_hook(0x401001);
-        let state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
-        );
-        let first = Semantic {
+        let state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
+        let first = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
-            encoding: Some(SemanticEncoding {
+            encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov rax, 7".to_string(),
@@ -1395,21 +1366,21 @@ mod tests {
                 bytes: vec![0x48, 0xc7, 0xc0, 0x07, 0x00, 0x00, 0x00],
             }),
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "rax".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Const { value: 7, bits: 64 },
+                expression: LirExpression::Const { value: 7, bits: 64 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let second = Semantic {
+        let second = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
-            encoding: Some(SemanticEncoding {
+            encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov rbx, 9".to_string(),
@@ -1417,14 +1388,14 @@ mod tests {
                 bytes: vec![0x48, 0xc7, 0xc3, 0x09, 0x00, 0x00, 0x00],
             }),
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "rbx".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Const { value: 9, bits: 64 },
+                expression: LirExpression::Const { value: 9, bits: 64 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -1469,7 +1440,7 @@ mod tests {
         );
         let executor = SymbolicExecutor::new();
         let mut state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("esp", 32, 0x3000).expect("set register");
         state.map_memory(0x2000, 0x2000);
         state
@@ -1477,7 +1448,7 @@ mod tests {
             .expect("write memory");
         let states = executor
             .run(
-                &Semantics {
+                &LirModule {
                     semantics,
                     data: Vec::new(),
                 },
@@ -1516,9 +1487,8 @@ mod tests {
             ",
         );
         let executor = SymbolicExecutor::new();
-        let mut state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
-        );
+        let mut state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
         state.set_register("rsp", 64, 0x3000).expect("set register");
         state.map_memory(0x2000, 0x2000);
         state
@@ -1526,7 +1496,7 @@ mod tests {
             .expect("write memory");
         let states = executor
             .run(
-                &Semantics {
+                &LirModule {
                     semantics,
                     data: Vec::new(),
                 },
@@ -1566,12 +1536,11 @@ mod tests {
         );
         let mut executor = SymbolicExecutor::new();
         executor.set_breakpoint(0x4);
-        let state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
-        );
+        let state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         let states = executor
             .run(
-                &Semantics {
+                &LirModule {
                     semantics,
                     data: Vec::new(),
                 },
@@ -1597,9 +1566,8 @@ mod tests {
 
     #[test]
     fn symbolic_memory_u64_eval_executes() {
-        let mut state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
-        );
+        let mut state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
         state
             .write_memory(0x5000, &[0x44, 0x33, 0x22, 0x11])
             .expect("write memory");
@@ -1615,18 +1583,17 @@ mod tests {
     #[test]
     fn symbolic_call_sets_program_counter() {
         let executor = SymbolicExecutor::new();
-        let state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
-        );
-        let semantics = Semantic {
+        let state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
             effects: Vec::new(),
-            terminator: SemanticTerminator::Call {
-                target: SemanticExpression::Const {
+            terminator: LirTerminator::Call {
+                target: LirExpression::Const {
                     value: 0x1000,
                     bits: 64,
                 },
@@ -1650,19 +1617,18 @@ mod tests {
     #[test]
     fn slice_from_register_returns_dependency_chain() {
         let executor = SymbolicExecutor::new();
-        let mut state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
-        );
+        let mut state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
         state
             .symbolize_memory(0x1000, 1, Some("input"))
             .expect("symbolize memory");
         state.set_register("rdi", 64, 0x1000).expect("set register");
 
-        let first = Semantic {
+        let first = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
-            encoding: Some(SemanticEncoding {
+            encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "movzx".to_string(),
                 disassembly: "movzx eax, byte ptr [rdi]".to_string(),
@@ -1670,30 +1636,28 @@ mod tests {
                 bytes: vec![0x0f, 0xb6, 0x07],
             }),
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "eax".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Load {
-                    space: crate::semantics::SemanticAddressSpace::Default,
-                    addr: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "rdi".to_string(),
-                            bits: 64,
-                        },
-                    ))),
+                expression: LirExpression::Load {
+                    space: crate::ir::lir::LirAddressSpace::Default,
+                    addr: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "rdi".to_string(),
+                        bits: 64,
+                    }))),
                     bits: 8,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let second = Semantic {
+        let second = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
-            encoding: Some(SemanticEncoding {
+            encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "sub".to_string(),
                 disassembly: "sub eax, 1".to_string(),
@@ -1701,31 +1665,29 @@ mod tests {
                 bytes: vec![0x83, 0xe8, 0x01],
             }),
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "eax".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Binary {
-                    op: SemanticOperationBinary::Sub,
-                    left: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "eax".to_string(),
-                            bits: 32,
-                        },
-                    ))),
-                    right: Box::new(SemanticExpression::Const { value: 1, bits: 32 }),
+                expression: LirExpression::Binary {
+                    op: LirOperationBinary::Sub,
+                    left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "eax".to_string(),
+                        bits: 32,
+                    }))),
+                    right: Box::new(LirExpression::Const { value: 1, bits: 32 }),
                     bits: 32,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let third = Semantic {
+        let third = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
-            encoding: Some(SemanticEncoding {
+            encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov ecx, eax".to_string(),
@@ -1733,17 +1695,17 @@ mod tests {
                 bytes: vec![0x89, 0xc1],
             }),
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "ecx".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Read(Box::new(SemanticLocation::Register {
+                expression: LirExpression::Read(Box::new(LirLocation::Register {
                     name: "eax".to_string(),
                     bits: 32,
                 })),
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -1764,18 +1726,17 @@ mod tests {
     #[test]
     fn slice_from_memory_returns_store_dependency() {
         let executor = SymbolicExecutor::new();
-        let mut state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
-        );
+        let mut state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
         state
             .symbolize_register("al", 8, Some("input_al"))
             .expect("symbolize register");
 
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
-            encoding: Some(SemanticEncoding {
+            encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov byte ptr [0x3000], al".to_string(),
@@ -1783,19 +1744,19 @@ mod tests {
                 bytes: vec![0x88, 0x05, 0x00, 0x30, 0x00, 0x00],
             }),
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Store {
-                space: crate::semantics::SemanticAddressSpace::Default,
-                addr: SemanticExpression::Const {
+            effects: vec![LirEffect::Store {
+                space: crate::ir::lir::LirAddressSpace::Default,
+                addr: LirExpression::Const {
                     value: 0x3000,
                     bits: 64,
                 },
-                expression: SemanticExpression::Read(Box::new(SemanticLocation::Register {
+                expression: LirExpression::Read(Box::new(LirLocation::Register {
                     name: "al".to_string(),
                     bits: 8,
                 })),
                 bits: 8,
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -1814,19 +1775,18 @@ mod tests {
     #[test]
     fn slice_from_register_preserves_x86_subregister_dependencies() {
         let executor = SymbolicExecutor::new();
-        let mut state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::AMD64).expect("cpu"),
-        );
+        let mut state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
         state
             .symbolize_memory(0x1000, 1, Some("input"))
             .expect("symbolize memory");
         state.set_register("rdi", 64, 0x1000).expect("set register");
 
-        let first = Semantic {
+        let first = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
-            encoding: Some(SemanticEncoding {
+            encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "movzx".to_string(),
                 disassembly: "movzx eax, byte ptr [rdi]".to_string(),
@@ -1834,30 +1794,28 @@ mod tests {
                 bytes: vec![0x0f, 0xb6, 0x07],
             }),
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "eax".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Load {
-                    space: crate::semantics::SemanticAddressSpace::Default,
-                    addr: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "rdi".to_string(),
-                            bits: 64,
-                        },
-                    ))),
+                expression: LirExpression::Load {
+                    space: crate::ir::lir::LirAddressSpace::Default,
+                    addr: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "rdi".to_string(),
+                        bits: 64,
+                    }))),
                     bits: 8,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let second = Semantic {
+        let second = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
-            encoding: Some(SemanticEncoding {
+            encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "movsx".to_string(),
                 disassembly: "movsx eax, al".to_string(),
@@ -1865,30 +1823,28 @@ mod tests {
                 bytes: vec![0x0f, 0xbe, 0xc0],
             }),
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "eax".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Cast {
-                    op: crate::semantics::SemanticOperationCast::SignExtend,
-                    arg: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "al".to_string(),
-                            bits: 8,
-                        },
-                    ))),
+                expression: LirExpression::Cast {
+                    op: crate::ir::lir::LirOperationCast::SignExtend,
+                    arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "al".to_string(),
+                        bits: 8,
+                    }))),
                     bits: 32,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let third = Semantic {
+        let third = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
-            encoding: Some(SemanticEncoding {
+            encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "mov".to_string(),
                 disassembly: "mov ecx, eax".to_string(),
@@ -1896,17 +1852,17 @@ mod tests {
                 bytes: vec![0x89, 0xc1],
             }),
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "ecx".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Read(Box::new(SemanticLocation::Register {
+                expression: LirExpression::Read(Box::new(LirLocation::Register {
                     name: "eax".to_string(),
                     bits: 32,
                 })),
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -1931,9 +1887,8 @@ mod tests {
     #[test]
     fn symbolic_fp_add32_executes() {
         let executor = SymbolicExecutor::new();
-        let mut state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
-        );
+        let mut state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         state
             .set_register("s0", 32, 1.5f32.to_bits() as u64)
             .expect("set register");
@@ -1941,35 +1896,31 @@ mod tests {
             .set_register("s1", 32, 2.25f32.to_bits() as u64)
             .expect("set register");
 
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "s2".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Binary {
-                    op: SemanticOperationBinary::FAdd,
-                    left: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "s0".to_string(),
-                            bits: 32,
-                        },
-                    ))),
-                    right: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "s1".to_string(),
-                            bits: 32,
-                        },
-                    ))),
+                expression: LirExpression::Binary {
+                    op: LirOperationBinary::FAdd,
+                    left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "s0".to_string(),
+                        bits: 32,
+                    }))),
+                    right: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "s1".to_string(),
+                        bits: 32,
+                    }))),
                     bits: 32,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -1988,59 +1939,54 @@ mod tests {
     #[test]
     fn symbolic_fp_casts_execute() {
         let executor = SymbolicExecutor::new();
-        let mut state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
-        );
+        let mut state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         state.set_register("x0", 64, 42).expect("set register");
 
-        let to_float = Semantic {
+        let to_float = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "d0".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Cast {
-                    op: SemanticOperationCast::IntToFloat,
-                    arg: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "x0".to_string(),
-                            bits: 64,
-                        },
-                    ))),
+                expression: LirExpression::Cast {
+                    op: LirOperationCast::IntToFloat,
+                    arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "x0".to_string(),
+                        bits: 64,
+                    }))),
                     bits: 64,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let from_float = Semantic {
+        let from_float = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x1".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Cast {
-                    op: SemanticOperationCast::FloatToInt,
-                    arg: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "d0".to_string(),
-                            bits: 64,
-                        },
-                    ))),
+                expression: LirExpression::Cast {
+                    op: LirOperationCast::FloatToInt,
+                    arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "d0".to_string(),
+                        bits: 64,
+                    }))),
                     bits: 64,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -2066,9 +2012,8 @@ mod tests {
     #[test]
     fn symbolic_fp_unordered_compare_executes() {
         let executor = SymbolicExecutor::new();
-        let mut state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
-        );
+        let mut state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         state
             .set_register("d0", 64, f64::NAN.to_bits())
             .expect("set register");
@@ -2076,35 +2021,31 @@ mod tests {
             .set_register("d1", 64, 1.0f64.to_bits())
             .expect("set register");
 
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x2".to_string(),
                     bits: 1,
                 },
-                expression: SemanticExpression::Compare {
-                    op: SemanticOperationCompare::Unordered,
-                    left: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "d0".to_string(),
-                            bits: 64,
-                        },
-                    ))),
-                    right: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "d1".to_string(),
-                            bits: 64,
-                        },
-                    ))),
+                expression: LirExpression::Compare {
+                    op: LirOperationCompare::Unordered,
+                    left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "d0".to_string(),
+                        bits: 64,
+                    }))),
+                    right: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "d1".to_string(),
+                        bits: 64,
+                    }))),
                     bits: 1,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -2123,36 +2064,33 @@ mod tests {
     #[test]
     fn symbolic_fp_neg_executes() {
         let executor = SymbolicExecutor::new();
-        let mut state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
-        );
+        let mut state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         state
             .set_register("d0", 64, 3.5f64.to_bits())
             .expect("set register");
 
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "d1".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Unary {
-                    op: SemanticOperationUnary::Neg,
-                    arg: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "d0".to_string(),
-                            bits: 64,
-                        },
-                    ))),
+                expression: LirExpression::Unary {
+                    op: LirOperationUnary::Neg,
+                    arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "d0".to_string(),
+                        bits: 64,
+                    }))),
                     bits: 64,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -2171,31 +2109,30 @@ mod tests {
     #[test]
     fn symbolic_fp_neg_of_const_executes() {
         let executor = SymbolicExecutor::new();
-        let state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
-        );
+        let state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
 
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "d1".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Unary {
-                    op: SemanticOperationUnary::Neg,
-                    arg: Box::new(SemanticExpression::Const {
+                expression: LirExpression::Unary {
+                    op: LirOperationUnary::Neg,
+                    arg: Box::new(LirExpression::Const {
                         value: 3.5f64.to_bits() as u128,
                         bits: 64,
                     }),
                     bits: 64,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -2214,29 +2151,28 @@ mod tests {
     #[test]
     fn symbolic_fp_neg_of_memory_load_executes() {
         let executor = SymbolicExecutor::new();
-        let mut state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
-        );
+        let mut state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         state
             .write_memory(0x8000, &3.5f64.to_bits().to_le_bytes())
             .expect("write memory");
 
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "d1".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Unary {
-                    op: SemanticOperationUnary::Neg,
-                    arg: Box::new(SemanticExpression::Load {
-                        space: crate::semantics::SemanticAddressSpace::Default,
-                        addr: Box::new(SemanticExpression::Const {
+                expression: LirExpression::Unary {
+                    op: LirOperationUnary::Neg,
+                    arg: Box::new(LirExpression::Load {
+                        space: crate::ir::lir::LirAddressSpace::Default,
+                        addr: Box::new(LirExpression::Const {
                             value: 0x8000,
                             bits: 64,
                         }),
@@ -2245,7 +2181,7 @@ mod tests {
                     bits: 64,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -2264,34 +2200,31 @@ mod tests {
     #[test]
     fn symbolic_integer_neg_still_executes() {
         let executor = SymbolicExecutor::new();
-        let mut state = SymbolicCpuState::new(
-            SemanticCpu::from_architecture(Architecture::ARM64).expect("cpu"),
-        );
+        let mut state =
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         state.set_register("x0", 64, 7).expect("set register");
 
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x1".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Unary {
-                    op: SemanticOperationUnary::Neg,
-                    arg: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "x0".to_string(),
-                            bits: 64,
-                        },
-                    ))),
+                expression: LirExpression::Unary {
+                    op: LirOperationUnary::Neg,
+                    arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "x0".to_string(),
+                        bits: 64,
+                    }))),
                     bits: 64,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -2311,91 +2244,83 @@ mod tests {
     fn symbolic_float80_compare_executes() {
         let executor = SymbolicExecutor::new();
         let mut state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 1).expect("set register");
         state.set_register("ebx", 32, 2).expect("set register");
 
-        let to_fp80_left = Semantic {
+        let to_fp80_left = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
                     bits: 80,
                 },
-                expression: SemanticExpression::Cast {
-                    op: SemanticOperationCast::IntToFloat,
-                    arg: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "eax".to_string(),
-                            bits: 32,
-                        },
-                    ))),
+                expression: LirExpression::Cast {
+                    op: LirOperationCast::IntToFloat,
+                    arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "eax".to_string(),
+                        bits: 32,
+                    }))),
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let to_fp80_right = Semantic {
+        let to_fp80_right = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x87_st1".to_string(),
                     bits: 80,
                 },
-                expression: SemanticExpression::Cast {
-                    op: SemanticOperationCast::IntToFloat,
-                    arg: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "ebx".to_string(),
-                            bits: 32,
-                        },
-                    ))),
+                expression: LirExpression::Cast {
+                    op: LirOperationCast::IntToFloat,
+                    arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "ebx".to_string(),
+                        bits: 32,
+                    }))),
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let compare = Semantic {
+        let compare = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "ecx".to_string(),
                     bits: 1,
                 },
-                expression: SemanticExpression::Compare {
-                    op: SemanticOperationCompare::Olt,
-                    left: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "x87_st0".to_string(),
-                            bits: 80,
-                        },
-                    ))),
-                    right: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "x87_st1".to_string(),
-                            bits: 80,
-                        },
-                    ))),
+                expression: LirExpression::Compare {
+                    op: LirOperationCompare::Olt,
+                    left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "x87_st0".to_string(),
+                        bits: 80,
+                    }))),
+                    right: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "x87_st1".to_string(),
+                        bits: 80,
+                    }))),
                     bits: 1,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -2419,58 +2344,54 @@ mod tests {
     fn symbolic_float80_truncate_to_f64_executes() {
         let executor = SymbolicExecutor::new();
         let mut state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 42).expect("set register");
 
-        let to_fp80 = Semantic {
+        let to_fp80 = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
                     bits: 80,
                 },
-                expression: SemanticExpression::Cast {
-                    op: SemanticOperationCast::IntToFloat,
-                    arg: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "eax".to_string(),
-                            bits: 32,
-                        },
-                    ))),
+                expression: LirExpression::Cast {
+                    op: LirOperationCast::IntToFloat,
+                    arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "eax".to_string(),
+                        bits: 32,
+                    }))),
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let truncate = Semantic {
+        let truncate = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "xmm0".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Cast {
-                    op: SemanticOperationCast::FloatTruncate,
-                    arg: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "x87_st0".to_string(),
-                            bits: 80,
-                        },
-                    ))),
+                expression: LirExpression::Cast {
+                    op: LirOperationCast::FloatTruncate,
+                    arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "x87_st0".to_string(),
+                        bits: 80,
+                    }))),
                     bits: 64,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -2490,81 +2411,77 @@ mod tests {
     fn symbolic_x87_const_add_store_executes() {
         let executor = SymbolicExecutor::new();
         let mut state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 7).expect("set register");
         state.set_register("ebx", 32, 2).expect("set register");
 
-        let lhs = Semantic {
+        let lhs = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
                     bits: 80,
                 },
-                expression: SemanticExpression::Cast {
-                    op: SemanticOperationCast::IntToFloat,
-                    arg: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "eax".to_string(),
-                            bits: 32,
-                        },
-                    ))),
+                expression: LirExpression::Cast {
+                    op: LirOperationCast::IntToFloat,
+                    arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "eax".to_string(),
+                        bits: 32,
+                    }))),
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let rhs = Semantic {
+        let rhs = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x87_st1".to_string(),
                     bits: 80,
                 },
-                expression: SemanticExpression::Cast {
-                    op: SemanticOperationCast::IntToFloat,
-                    arg: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "ebx".to_string(),
-                            bits: 32,
-                        },
-                    ))),
+                expression: LirExpression::Cast {
+                    op: LirOperationCast::IntToFloat,
+                    arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "ebx".to_string(),
+                        bits: 32,
+                    }))),
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let add = Semantic {
+        let add = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
                     bits: 80,
                 },
-                expression: SemanticExpression::Intrinsic {
+                expression: LirExpression::Intrinsic {
                     name: "x86.x87.add".to_string(),
                     args: vec![
-                        SemanticExpression::Read(Box::new(SemanticLocation::Register {
+                        LirExpression::Read(Box::new(LirLocation::Register {
                             name: "x87_st0".to_string(),
                             bits: 80,
                         })),
-                        SemanticExpression::Read(Box::new(SemanticLocation::Register {
+                        LirExpression::Read(Box::new(LirLocation::Register {
                             name: "x87_st1".to_string(),
                             bits: 80,
                         })),
@@ -2572,33 +2489,31 @@ mod tests {
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let store = Semantic {
+        let store = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "xmm0".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Intrinsic {
+                expression: LirExpression::Intrinsic {
                     name: "x86.x87.store_f64".to_string(),
-                    args: vec![SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "x87_st0".to_string(),
-                            bits: 80,
-                        },
-                    ))],
+                    args: vec![LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "x87_st0".to_string(),
+                        bits: 80,
+                    }))],
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -2618,27 +2533,27 @@ mod tests {
     fn symbolic_x87_load_f32_executes() {
         let executor = SymbolicExecutor::new();
         let mut state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state
             .write_memory(0x9000, &3.25f32.to_bits().to_le_bytes())
             .expect("write memory");
 
-        let load = Semantic {
+        let load = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
                     bits: 80,
                 },
-                expression: SemanticExpression::Intrinsic {
+                expression: LirExpression::Intrinsic {
                     name: "x86.x87.load_f32".to_string(),
-                    args: vec![SemanticExpression::Load {
-                        space: crate::semantics::SemanticAddressSpace::Default,
-                        addr: Box::new(SemanticExpression::Const {
+                    args: vec![LirExpression::Load {
+                        space: crate::ir::lir::LirAddressSpace::Default,
+                        addr: Box::new(LirExpression::Const {
                             value: 0x9000,
                             bits: 32,
                         }),
@@ -2647,33 +2562,31 @@ mod tests {
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let store = Semantic {
+        let store = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "xmm0".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Intrinsic {
+                expression: LirExpression::Intrinsic {
                     name: "x86.x87.store_f64".to_string(),
-                    args: vec![SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "x87_st0".to_string(),
-                            bits: 80,
-                        },
-                    ))],
+                    args: vec![LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "x87_st0".to_string(),
+                        bits: 80,
+                    }))],
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -2693,50 +2606,48 @@ mod tests {
     fn symbolic_x87_store_i32_executes() {
         let executor = SymbolicExecutor::new();
         let state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
 
-        let load = Semantic {
+        let load = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
                     bits: 80,
                 },
-                expression: SemanticExpression::Intrinsic {
+                expression: LirExpression::Intrinsic {
                     name: "x86.x87.const_pi".to_string(),
                     args: Vec::new(),
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let store = Semantic {
+        let store = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Store {
-                space: crate::semantics::SemanticAddressSpace::Default,
-                addr: SemanticExpression::Const {
+            effects: vec![LirEffect::Store {
+                space: crate::ir::lir::LirAddressSpace::Default,
+                addr: LirExpression::Const {
                     value: 0xA000,
                     bits: 32,
                 },
-                expression: SemanticExpression::Extract {
-                    arg: Box::new(SemanticExpression::Intrinsic {
+                expression: LirExpression::Extract {
+                    arg: Box::new(LirExpression::Intrinsic {
                         name: "x86.x87.store_i32".to_string(),
-                        args: vec![SemanticExpression::Read(Box::new(
-                            SemanticLocation::Register {
-                                name: "x87_st0".to_string(),
-                                bits: 80,
-                            },
-                        ))],
+                        args: vec![LirExpression::Read(Box::new(LirLocation::Register {
+                            name: "x87_st0".to_string(),
+                            bits: 80,
+                        }))],
                         bits: 80,
                     }),
                     lsb: 0,
@@ -2744,7 +2655,7 @@ mod tests {
                 },
                 bits: 32,
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -2764,72 +2675,68 @@ mod tests {
     fn symbolic_x87_store_i32_trunc_executes() {
         let executor = SymbolicExecutor::new();
         let mut state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 7).expect("set register");
         state.set_register("ebx", 32, 2).expect("set register");
 
-        let to_fp80 = Semantic {
+        let to_fp80 = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
                     bits: 80,
                 },
-                expression: SemanticExpression::Cast {
-                    op: SemanticOperationCast::IntToFloat,
-                    arg: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "eax".to_string(),
-                            bits: 32,
-                        },
-                    ))),
+                expression: LirExpression::Cast {
+                    op: LirOperationCast::IntToFloat,
+                    arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "eax".to_string(),
+                        bits: 32,
+                    }))),
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let divide = Semantic {
+        let divide = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
-                SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
+                LirEffect::Set {
+                    dst: LirLocation::Register {
                         name: "x87_st1".to_string(),
                         bits: 80,
                     },
-                    expression: SemanticExpression::Cast {
-                        op: SemanticOperationCast::IntToFloat,
-                        arg: Box::new(SemanticExpression::Read(Box::new(
-                            SemanticLocation::Register {
-                                name: "ebx".to_string(),
-                                bits: 32,
-                            },
-                        ))),
+                    expression: LirExpression::Cast {
+                        op: LirOperationCast::IntToFloat,
+                        arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                            name: "ebx".to_string(),
+                            bits: 32,
+                        }))),
                         bits: 80,
                     },
                 },
-                SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
+                LirEffect::Set {
+                    dst: LirLocation::Register {
                         name: "x87_st0".to_string(),
                         bits: 80,
                     },
-                    expression: SemanticExpression::Intrinsic {
+                    expression: LirExpression::Intrinsic {
                         name: "x86.x87.div".to_string(),
                         args: vec![
-                            SemanticExpression::Read(Box::new(SemanticLocation::Register {
+                            LirExpression::Read(Box::new(LirLocation::Register {
                                 name: "x87_st0".to_string(),
                                 bits: 80,
                             })),
-                            SemanticExpression::Read(Box::new(SemanticLocation::Register {
+                            LirExpression::Read(Box::new(LirLocation::Register {
                                 name: "x87_st1".to_string(),
                                 bits: 80,
                             })),
@@ -2838,31 +2745,29 @@ mod tests {
                     },
                 },
             ],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let store = Semantic {
+        let store = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Store {
-                space: crate::semantics::SemanticAddressSpace::Default,
-                addr: SemanticExpression::Const {
+            effects: vec![LirEffect::Store {
+                space: crate::ir::lir::LirAddressSpace::Default,
+                addr: LirExpression::Const {
                     value: 0xA100,
                     bits: 32,
                 },
-                expression: SemanticExpression::Extract {
-                    arg: Box::new(SemanticExpression::Intrinsic {
+                expression: LirExpression::Extract {
+                    arg: Box::new(LirExpression::Intrinsic {
                         name: "x86.x87.store_i32_trunc".to_string(),
-                        args: vec![SemanticExpression::Read(Box::new(
-                            SemanticLocation::Register {
-                                name: "x87_st0".to_string(),
-                                bits: 80,
-                            },
-                        ))],
+                        args: vec![LirExpression::Read(Box::new(LirLocation::Register {
+                            name: "x87_st0".to_string(),
+                            bits: 80,
+                        }))],
                         bits: 80,
                     }),
                     lsb: 0,
@@ -2870,7 +2775,7 @@ mod tests {
                 },
                 bits: 32,
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -2890,71 +2795,67 @@ mod tests {
     fn symbolic_x87_xam_negative_zero_executes() {
         let executor = SymbolicExecutor::new();
         let mut state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state
             .set_register("xmm0", 64, (-0.0f64).to_bits())
             .expect("set register");
 
-        let load = Semantic {
+        let load = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
                     bits: 80,
                 },
-                expression: SemanticExpression::Cast {
-                    op: SemanticOperationCast::FloatExtend,
-                    arg: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "xmm0".to_string(),
-                            bits: 64,
-                        },
-                    ))),
+                expression: LirExpression::Cast {
+                    op: LirOperationCast::FloatExtend,
+                    arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "xmm0".to_string(),
+                        bits: 64,
+                    }))),
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Intrinsic {
+            effects: vec![LirEffect::Intrinsic {
                 name: "x86.x87.xam".to_string(),
-                args: vec![SemanticExpression::Read(Box::new(
-                    SemanticLocation::Register {
-                        name: "x87_st0".to_string(),
-                        bits: 80,
-                    },
-                ))],
+                args: vec![LirExpression::Read(Box::new(LirLocation::Register {
+                    name: "x87_st0".to_string(),
+                    bits: 80,
+                }))],
                 outputs: vec![
-                    SemanticLocation::Register {
+                    LirLocation::Register {
                         name: "c0".to_string(),
                         bits: 1,
                     },
-                    SemanticLocation::Register {
+                    LirLocation::Register {
                         name: "c1".to_string(),
                         bits: 1,
                     },
-                    SemanticLocation::Register {
+                    LirLocation::Register {
                         name: "c2".to_string(),
                         bits: 1,
                     },
-                    SemanticLocation::Register {
+                    LirLocation::Register {
                         name: "c3".to_string(),
                         bits: 1,
                     },
                 ],
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -2995,71 +2896,67 @@ mod tests {
     fn symbolic_x87_xam_infinity_executes() {
         let executor = SymbolicExecutor::new();
         let mut state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state
             .set_register("xmm0", 64, f64::INFINITY.to_bits())
             .expect("set register");
 
-        let load = Semantic {
+        let load = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
                     bits: 80,
                 },
-                expression: SemanticExpression::Cast {
-                    op: SemanticOperationCast::FloatExtend,
-                    arg: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "xmm0".to_string(),
-                            bits: 64,
-                        },
-                    ))),
+                expression: LirExpression::Cast {
+                    op: LirOperationCast::FloatExtend,
+                    arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "xmm0".to_string(),
+                        bits: 64,
+                    }))),
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Intrinsic {
+            effects: vec![LirEffect::Intrinsic {
                 name: "x86.x87.xam".to_string(),
-                args: vec![SemanticExpression::Read(Box::new(
-                    SemanticLocation::Register {
-                        name: "x87_st0".to_string(),
-                        bits: 80,
-                    },
-                ))],
+                args: vec![LirExpression::Read(Box::new(LirLocation::Register {
+                    name: "x87_st0".to_string(),
+                    bits: 80,
+                }))],
                 outputs: vec![
-                    SemanticLocation::Register {
+                    LirLocation::Register {
                         name: "c0".to_string(),
                         bits: 1,
                     },
-                    SemanticLocation::Register {
+                    LirLocation::Register {
                         name: "c1".to_string(),
                         bits: 1,
                     },
-                    SemanticLocation::Register {
+                    LirLocation::Register {
                         name: "c2".to_string(),
                         bits: 1,
                     },
-                    SemanticLocation::Register {
+                    LirLocation::Register {
                         name: "c3".to_string(),
                         bits: 1,
                     },
                 ],
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -3100,86 +2997,80 @@ mod tests {
     fn symbolic_x87_sin_executes() {
         let executor = SymbolicExecutor::new();
         let mut state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state
             .set_register("xmm0", 64, 0.0f64.to_bits())
             .expect("set register");
 
-        let load = Semantic {
+        let load = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
                     bits: 80,
                 },
-                expression: SemanticExpression::Cast {
-                    op: SemanticOperationCast::FloatExtend,
-                    arg: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "xmm0".to_string(),
-                            bits: 64,
-                        },
-                    ))),
+                expression: LirExpression::Cast {
+                    op: LirOperationCast::FloatExtend,
+                    arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "xmm0".to_string(),
+                        bits: 64,
+                    }))),
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let sin = Semantic {
+        let sin = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
                     bits: 80,
                 },
-                expression: SemanticExpression::Intrinsic {
+                expression: LirExpression::Intrinsic {
                     name: "x86.x87.sin".to_string(),
-                    args: vec![SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "x87_st0".to_string(),
-                            bits: 80,
-                        },
-                    ))],
+                    args: vec![LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "x87_st0".to_string(),
+                        bits: 80,
+                    }))],
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let store = Semantic {
+        let store = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "xmm1".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Intrinsic {
+                expression: LirExpression::Intrinsic {
                     name: "x86.x87.store_f64".to_string(),
-                    args: vec![SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "x87_st0".to_string(),
-                            bits: 80,
-                        },
-                    ))],
+                    args: vec![LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "x87_st0".to_string(),
+                        bits: 80,
+                    }))],
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -3197,86 +3088,80 @@ mod tests {
     fn symbolic_x87_cos_executes() {
         let executor = SymbolicExecutor::new();
         let mut state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state
             .set_register("xmm0", 64, 0.0f64.to_bits())
             .expect("set register");
 
-        let load = Semantic {
+        let load = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
                     bits: 80,
                 },
-                expression: SemanticExpression::Cast {
-                    op: SemanticOperationCast::FloatExtend,
-                    arg: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "xmm0".to_string(),
-                            bits: 64,
-                        },
-                    ))),
+                expression: LirExpression::Cast {
+                    op: LirOperationCast::FloatExtend,
+                    arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "xmm0".to_string(),
+                        bits: 64,
+                    }))),
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let cos = Semantic {
+        let cos = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
                     bits: 80,
                 },
-                expression: SemanticExpression::Intrinsic {
+                expression: LirExpression::Intrinsic {
                     name: "x86.x87.cos".to_string(),
-                    args: vec![SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "x87_st0".to_string(),
-                            bits: 80,
-                        },
-                    ))],
+                    args: vec![LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "x87_st0".to_string(),
+                        bits: 80,
+                    }))],
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let store = Semantic {
+        let store = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "xmm1".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Intrinsic {
+                expression: LirExpression::Intrinsic {
                     name: "x86.x87.store_f64".to_string(),
-                    args: vec![SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "x87_st0".to_string(),
-                            bits: 80,
-                        },
-                    ))],
+                    args: vec![LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "x87_st0".to_string(),
+                        bits: 80,
+                    }))],
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -3296,72 +3181,68 @@ mod tests {
     fn symbolic_x87_atan2_executes() {
         let executor = SymbolicExecutor::new();
         let mut state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 1).expect("set register");
 
-        let lhs = Semantic {
+        let lhs = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
-                SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
+                LirEffect::Set {
+                    dst: LirLocation::Register {
                         name: "x87_st0".to_string(),
                         bits: 80,
                     },
-                    expression: SemanticExpression::Cast {
-                        op: SemanticOperationCast::IntToFloat,
-                        arg: Box::new(SemanticExpression::Read(Box::new(
-                            SemanticLocation::Register {
-                                name: "eax".to_string(),
-                                bits: 32,
-                            },
-                        ))),
+                    expression: LirExpression::Cast {
+                        op: LirOperationCast::IntToFloat,
+                        arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                            name: "eax".to_string(),
+                            bits: 32,
+                        }))),
                         bits: 80,
                     },
                 },
-                SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
+                LirEffect::Set {
+                    dst: LirLocation::Register {
                         name: "x87_st1".to_string(),
                         bits: 80,
                     },
-                    expression: SemanticExpression::Cast {
-                        op: SemanticOperationCast::IntToFloat,
-                        arg: Box::new(SemanticExpression::Read(Box::new(
-                            SemanticLocation::Register {
-                                name: "eax".to_string(),
-                                bits: 32,
-                            },
-                        ))),
+                    expression: LirExpression::Cast {
+                        op: LirOperationCast::IntToFloat,
+                        arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                            name: "eax".to_string(),
+                            bits: 32,
+                        }))),
                         bits: 80,
                     },
                 },
             ],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let atan2 = Semantic {
+        let atan2 = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x87_st1".to_string(),
                     bits: 80,
                 },
-                expression: SemanticExpression::Intrinsic {
+                expression: LirExpression::Intrinsic {
                     name: "x86.x87.atan2".to_string(),
                     args: vec![
-                        SemanticExpression::Read(Box::new(SemanticLocation::Register {
+                        LirExpression::Read(Box::new(LirLocation::Register {
                             name: "x87_st1".to_string(),
                             bits: 80,
                         })),
-                        SemanticExpression::Read(Box::new(SemanticLocation::Register {
+                        LirExpression::Read(Box::new(LirLocation::Register {
                             name: "x87_st0".to_string(),
                             bits: 80,
                         })),
@@ -3369,33 +3250,31 @@ mod tests {
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let store = Semantic {
+        let store = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "xmm1".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Intrinsic {
+                expression: LirExpression::Intrinsic {
                     name: "x86.x87.store_f64".to_string(),
-                    args: vec![SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "x87_st1".to_string(),
-                            bits: 80,
-                        },
-                    ))],
+                    args: vec![LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "x87_st1".to_string(),
+                        bits: 80,
+                    }))],
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -3415,73 +3294,69 @@ mod tests {
     fn symbolic_x87_scale_executes() {
         let executor = SymbolicExecutor::new();
         let mut state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 3).expect("set register");
         state.set_register("ebx", 32, 2).expect("set register");
 
-        let load = Semantic {
+        let load = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
             effects: vec![
-                SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
+                LirEffect::Set {
+                    dst: LirLocation::Register {
                         name: "x87_st0".to_string(),
                         bits: 80,
                     },
-                    expression: SemanticExpression::Cast {
-                        op: SemanticOperationCast::IntToFloat,
-                        arg: Box::new(SemanticExpression::Read(Box::new(
-                            SemanticLocation::Register {
-                                name: "eax".to_string(),
-                                bits: 32,
-                            },
-                        ))),
+                    expression: LirExpression::Cast {
+                        op: LirOperationCast::IntToFloat,
+                        arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                            name: "eax".to_string(),
+                            bits: 32,
+                        }))),
                         bits: 80,
                     },
                 },
-                SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
+                LirEffect::Set {
+                    dst: LirLocation::Register {
                         name: "x87_st1".to_string(),
                         bits: 80,
                     },
-                    expression: SemanticExpression::Cast {
-                        op: SemanticOperationCast::IntToFloat,
-                        arg: Box::new(SemanticExpression::Read(Box::new(
-                            SemanticLocation::Register {
-                                name: "ebx".to_string(),
-                                bits: 32,
-                            },
-                        ))),
+                    expression: LirExpression::Cast {
+                        op: LirOperationCast::IntToFloat,
+                        arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                            name: "ebx".to_string(),
+                            bits: 32,
+                        }))),
                         bits: 80,
                     },
                 },
             ],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let scale = Semantic {
+        let scale = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
                     bits: 80,
                 },
-                expression: SemanticExpression::Intrinsic {
+                expression: LirExpression::Intrinsic {
                     name: "x86.x87.scale".to_string(),
                     args: vec![
-                        SemanticExpression::Read(Box::new(SemanticLocation::Register {
+                        LirExpression::Read(Box::new(LirLocation::Register {
                             name: "x87_st0".to_string(),
                             bits: 80,
                         })),
-                        SemanticExpression::Read(Box::new(SemanticLocation::Register {
+                        LirExpression::Read(Box::new(LirLocation::Register {
                             name: "x87_st1".to_string(),
                             bits: 80,
                         })),
@@ -3489,33 +3364,31 @@ mod tests {
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let store = Semantic {
+        let store = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "xmm1".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Intrinsic {
+                expression: LirExpression::Intrinsic {
                     name: "x86.x87.store_f64".to_string(),
-                    args: vec![SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "x87_st0".to_string(),
-                            bits: 80,
-                        },
-                    ))],
+                    args: vec![LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "x87_st0".to_string(),
+                        bits: 80,
+                    }))],
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -3535,84 +3408,78 @@ mod tests {
     fn symbolic_x87_f2xm1_executes() {
         let executor = SymbolicExecutor::new();
         let mut state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 1).expect("set register");
 
-        let load = Semantic {
+        let load = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
                     bits: 80,
                 },
-                expression: SemanticExpression::Cast {
-                    op: SemanticOperationCast::IntToFloat,
-                    arg: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "eax".to_string(),
-                            bits: 32,
-                        },
-                    ))),
+                expression: LirExpression::Cast {
+                    op: LirOperationCast::IntToFloat,
+                    arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "eax".to_string(),
+                        bits: 32,
+                    }))),
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let op = Semantic {
+        let op = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
                     bits: 80,
                 },
-                expression: SemanticExpression::Intrinsic {
+                expression: LirExpression::Intrinsic {
                     name: "x86.x87.f2xm1".to_string(),
-                    args: vec![SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "x87_st0".to_string(),
-                            bits: 80,
-                        },
-                    ))],
+                    args: vec![LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "x87_st0".to_string(),
+                        bits: 80,
+                    }))],
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let store = Semantic {
+        let store = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "xmm1".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Intrinsic {
+                expression: LirExpression::Intrinsic {
                     name: "x86.x87.store_f64".to_string(),
-                    args: vec![SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "x87_st0".to_string(),
-                            bits: 80,
-                        },
-                    ))],
+                    args: vec![LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "x87_st0".to_string(),
+                        bits: 80,
+                    }))],
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -3632,55 +3499,53 @@ mod tests {
     fn symbolic_x87_load_bcd_executes() {
         let executor = SymbolicExecutor::new();
         let state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
 
-        let load = Semantic {
+        let load = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
                     bits: 80,
                 },
-                expression: SemanticExpression::Intrinsic {
+                expression: LirExpression::Intrinsic {
                     name: "x86.x87.load_bcd".to_string(),
-                    args: vec![SemanticExpression::Const {
+                    args: vec![LirExpression::Const {
                         value: 0x80000001234567890123,
                         bits: 80,
                     }],
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let store = Semantic {
+        let store = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "xmm1".to_string(),
                     bits: 64,
                 },
-                expression: SemanticExpression::Intrinsic {
+                expression: LirExpression::Intrinsic {
                     name: "x86.x87.store_f64".to_string(),
-                    args: vec![SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "x87_st0".to_string(),
-                            bits: 80,
-                        },
-                    ))],
+                    args: vec![LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "x87_st0".to_string(),
+                        bits: 80,
+                    }))],
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
@@ -3700,60 +3565,56 @@ mod tests {
     fn symbolic_x87_store_bcd_executes() {
         let executor = SymbolicExecutor::new();
         let mut state =
-            SymbolicCpuState::new(SemanticCpu::from_architecture(Architecture::I386).expect("cpu"));
+            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 42).expect("set register");
 
-        let load = Semantic {
+        let load = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
                     bits: 80,
                 },
-                expression: SemanticExpression::Cast {
-                    op: SemanticOperationCast::IntToFloat,
-                    arg: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "eax".to_string(),
-                            bits: 32,
-                        },
-                    ))),
+                expression: LirExpression::Cast {
+                    op: LirOperationCast::IntToFloat,
+                    arg: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "eax".to_string(),
+                        bits: 32,
+                    }))),
                     bits: 80,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
-        let store = Semantic {
+        let store = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Store {
-                space: crate::semantics::SemanticAddressSpace::Default,
-                addr: SemanticExpression::Const {
+            effects: vec![LirEffect::Store {
+                space: crate::ir::lir::LirAddressSpace::Default,
+                addr: LirExpression::Const {
                     value: 0xA200,
                     bits: 32,
                 },
-                expression: SemanticExpression::Intrinsic {
+                expression: LirExpression::Intrinsic {
                     name: "x86.x87.store_bcd".to_string(),
-                    args: vec![SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "x87_st0".to_string(),
-                            bits: 80,
-                        },
-                    ))],
+                    args: vec![LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "x87_st0".to_string(),
+                        bits: 80,
+                    }))],
                     bits: 80,
                 },
                 bits: 80,
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 

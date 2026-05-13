@@ -1,5 +1,5 @@
 use crate::formats::Image as PyImage;
-use crate::semantics::{SemanticCpu as PySemanticCpu, Semantics as PySemantics};
+use crate::ir::lir::{LirCpu as PySemanticCpu, LirModule as PyLirModule};
 use pyo3::exceptions::{PyRuntimeError, PyTypeError};
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes, PyModule};
@@ -97,7 +97,7 @@ fn wrap_state(
     )
 }
 
-fn collect_semantics(py: Python<'_>, semantics: Py<PySemantics>) -> ::binlex::semantics::Semantics {
+fn collect_semantics(py: Python<'_>, semantics: Py<PyLirModule>) -> ::binlex::ir::lir::LirModule {
     semantics.borrow(py).inner.lock().unwrap().clone()
 }
 
@@ -116,7 +116,7 @@ impl SymbolicExecutor {
     pub fn step(
         &self,
         py: Python<'_>,
-        semantics: Py<PySemantics>,
+        semantics: Py<PyLirModule>,
         state: PyRef<'_, SymbolicCpuState>,
     ) -> PyResult<Vec<Py<SymbolicCpuState>>> {
         let semantics = collect_semantics(py, semantics);
@@ -138,7 +138,7 @@ impl SymbolicExecutor {
     pub fn run(
         &self,
         py: Python<'_>,
-        semantics: Py<PySemantics>,
+        semantics: Py<PyLirModule>,
         state: PyRef<'_, SymbolicCpuState>,
         steps: Option<usize>,
     ) -> PyResult<Vec<Py<SymbolicCpuState>>> {

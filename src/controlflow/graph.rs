@@ -26,8 +26,8 @@ use crate::controlflow::Block;
 use crate::controlflow::Function;
 use crate::controlflow::Instruction;
 use crate::controlflow::InstructionRecord;
+use crate::ir::lir::Lir;
 use crate::processor::{ProcessorOutputs, ProcessorTarget};
-use crate::semantics::Semantic;
 use crossbeam::queue::SegQueue;
 use crossbeam_skiplist::SkipMap;
 use crossbeam_skiplist::SkipSet;
@@ -713,10 +713,7 @@ impl Graph {
         existing
     }
 
-    fn merge_instruction_semantics(
-        existing: Option<Semantic>,
-        incoming: Option<Semantic>,
-    ) -> Option<Semantic> {
+    fn merge_instruction_semantics(existing: Option<Lir>, incoming: Option<Lir>) -> Option<Lir> {
         match (existing, incoming) {
             (None, None) => None,
             (Some(semantics), None) => Some(semantics),

@@ -1,6 +1,6 @@
 use super::LoweringContext;
 use super::helpers::render_location;
-use crate::semantics::SemanticLocation;
+use crate::ir::lir::LirLocation;
 use inkwell::values::IntValue;
 use std::io::Error;
 
@@ -71,7 +71,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         let return_type = self.int_type(return_bits);
         if let Some(abi) = &self.abi {
             for location in &abi.return_locations {
-                let SemanticLocation::Register { bits, .. } = location else {
+                let LirLocation::Register { bits, .. } = location else {
                     continue;
                 };
                 let key = render_location(location);

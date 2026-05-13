@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from binlex import Configuration
     from binlex.controlflow import Block, Function, Instruction
-    from binlex.semantics import SemanticAbi, SemanticCpu, Semantics
+    from binlex.ir.lir import LirAbi, LirCpu, LirModule
     from .llvm import LiftedFunction
 
 _LAZY_SUBMODULES = {"llvm", "vex"}
@@ -36,7 +36,7 @@ class Lifter:
 
     def __init__(
         self,
-        cpu: SemanticCpu,
+        cpu: LirCpu,
         configuration: Configuration,
         backend: LifterBackend = LifterBackend.DEFAULT,
         triple: str | None = None,
@@ -68,7 +68,7 @@ class Lifter:
         return self._resolved_backend
 
     @property
-    def cpu(self) -> SemanticCpu:
+    def cpu(self) -> LirCpu:
         return self._cpu
 
     @property
@@ -80,28 +80,28 @@ class Lifter:
             return self
         return None
 
-    def lift_block(self, block: Block, abi: SemanticAbi | None = None) -> Lifter | None:
+    def lift_block(self, block: Block, abi: LirAbi | None = None) -> Lifter | None:
         if self._inner.lift_block(block, abi):
             return self
         return None
 
-    def lift_function(self, function: Function, abi: SemanticAbi | None = None) -> Lifter | None:
+    def lift_function(self, function: Function, abi: LirAbi | None = None) -> Lifter | None:
         if self._inner.lift_function(function, abi):
             return self
         return None
 
     def lift_block_semantics(
         self,
-        semantics: Semantics,
-        abi: SemanticAbi | None = None,
+        semantics: LirModule,
+        abi: LirAbi | None = None,
     ) -> Lifter | None:
         self._require_backend(LifterBackend.LLVM, "lift_block_semantics")
         return self._inner.lift_block_semantics(semantics, abi)
 
     def lift_function_semantics(
         self,
-        semantics: Semantics,
-        abi: SemanticAbi | None = None,
+        semantics: LirModule,
+        abi: LirAbi | None = None,
         name: str | None = None,
     ) -> Lifter | None:
         self._require_backend(LifterBackend.LLVM, "lift_function_semantics")
@@ -110,7 +110,7 @@ class Lifter:
     def create_function(
         self,
         name: str,
-        abi: SemanticAbi | None = None,
+        abi: LirAbi | None = None,
     ) -> LiftedFunction:
         self._require_backend(LifterBackend.LLVM, "create_function")
         return self._inner.create_function(name, abi)

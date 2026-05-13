@@ -37,13 +37,13 @@ from binlex_bindings.binlex.controlflow.instruction import OperandKind as Operan
 
 from binlex.core.architecture import _coerce_architecture
 from binlex.hashing import MinHash32, SHA256, SSDeep, TLSH
-from binlex.semantics import SemanticCpu, _cpu_kind_from_architecture
+from binlex.ir.lir import LirCpu, _cpu_kind_from_architecture
 
 EntityKind = _EntityKindBinding
 
 
 def _cpu_for_architecture(architecture):
-    return SemanticCpu.from_kind(_cpu_kind_from_architecture(architecture))
+    return LirCpu.from_kind(_cpu_kind_from_architecture(architecture))
 
 
 class Instruction:

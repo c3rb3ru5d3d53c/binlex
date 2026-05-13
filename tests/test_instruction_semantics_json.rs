@@ -1,8 +1,5 @@
 use binlex::controlflow::InstructionRecord;
-use binlex::semantics::{
-    Semantic, SemanticEffect, SemanticExpression, SemanticLocation, SemanticStatus,
-    SemanticTerminator,
-};
+use binlex::ir::lir::{Lir, LirEffect, LirExpression, LirLocation, LirStatus, LirTerminator};
 use binlex::{Architecture, Configuration};
 use serde_json::to_value;
 
@@ -11,20 +8,20 @@ fn instruction_with_semantics(config: Configuration) -> InstructionRecord {
     instruction.bytes = vec![0x31, 0xC0];
     instruction.chromosome_mask = vec![0x00, 0x00];
     instruction.pattern = "31c0".to_string();
-    instruction.semantics = Some(Semantic {
+    instruction.semantics = Some(Lir {
         version: 1,
-        status: SemanticStatus::Complete,
+        status: LirStatus::Complete,
         abi: None,
         encoding: None,
         temporaries: Vec::new(),
-        effects: vec![SemanticEffect::Set {
-            dst: SemanticLocation::Register {
+        effects: vec![LirEffect::Set {
+            dst: LirLocation::Register {
                 name: "eax".to_string(),
                 bits: 32,
             },
-            expression: SemanticExpression::Const { value: 0, bits: 32 },
+            expression: LirExpression::Const { value: 0, bits: 32 },
         }],
-        terminator: SemanticTerminator::FallThrough,
+        terminator: LirTerminator::FallThrough,
         diagnostics: Vec::new(),
     });
     instruction

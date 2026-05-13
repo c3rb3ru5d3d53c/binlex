@@ -3,7 +3,7 @@
 from binlex import Architecture, Configuration
 from binlex.controlflow import Graph
 from binlex.assemblers import Assembler
-from binlex.semantics import SemanticAbi, SemanticCpu
+from binlex.ir.lir import LirAbi, LirCpu
 from binlex.disassemblers import Disassembler
 from binlex.formats import ELF
 
@@ -38,7 +38,7 @@ graph = Graph(Architecture.I386, configuration)
 
 disassembler = Disassembler(Architecture.I386, data, {0: len(data)}, configuration)
 
-cpu = SemanticCpu.i386()
+cpu = LirCpu.i386()
 
 function = disassembler.disassemble_function(0x00, graph)
 print("Polymorphic Shellcode")
@@ -47,7 +47,7 @@ for block in function.blocks():
         print(f"{hex(instruction.address())}: {instruction.disassembly()}")
 
 
-llvm = function.lift(abi=SemanticAbi.stdcall(cpu))
+llvm = function.lift(abi=LirAbi.stdcall(cpu))
 
 assert llvm
 

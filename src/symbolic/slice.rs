@@ -1,4 +1,4 @@
-use crate::semantics::SemanticEncoding;
+use crate::ir::lir::LirEncoding;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SliceInstruction {
@@ -10,7 +10,7 @@ pub struct SliceInstruction {
 }
 
 impl SliceInstruction {
-    pub(crate) fn from_encoding(encoding: &SemanticEncoding) -> Self {
+    pub(crate) fn from_encoding(encoding: &LirEncoding) -> Self {
         Self {
             architecture: encoding.architecture.clone(),
             mnemonic: encoding.mnemonic.clone(),

@@ -10,11 +10,11 @@ from . import embeddings
 from . import genetics
 from . import hashing
 from . import hex, math
+from . import ir
 from . import indexing
 from . import databases
 from . import metadata
 from . import rules
-from . import semantics
 from . import symbolic
 from . import util
 from binlex.core import Magic
@@ -36,13 +36,13 @@ __all__ = [
     "genetics",
     "hashing",
     "hex",
+    "ir",
     "indexing",
     "databases",
     "lifters",
     "math",
     "metadata",
     "rules",
-    "semantics",
     "symbolic",
     "storage",
     "util",

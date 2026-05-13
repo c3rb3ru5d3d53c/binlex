@@ -1,12 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use binlex::controlflow::{Block, Function, Graph, Instruction};
-use binlex::lifters::llvm::Lifter;
-use binlex::semantics::{
-    Semantic, SemanticAbi, SemanticAbiKind, SemanticCpu, SemanticCpuKind, SemanticDiagnosticKind,
-    SemanticEffect, SemanticExpression, SemanticLocation, SemanticOperationBinary, SemanticStatus,
-    SemanticTerminator, Semantics,
+use binlex::ir::lir::{
+    Lir, LirAbi, LirAbiKind, LirCpu, LirCpuKind, LirDiagnosticKind, LirEffect, LirExpression,
+    LirLocation, LirModule, LirOperationBinary, LirStatus, LirTerminator,
 };
+use binlex::lifters::llvm::Lifter;
 use binlex::{Architecture, Configuration};
 
 fn disassemble_graph(architecture: Architecture, bytes: &[u8]) -> Graph {
@@ -64,30 +63,28 @@ fn build_fastcall_semantic_function_graph() -> Graph {
     instruction.bytes = vec![0x8d, 0x41, 0x01, 0xc3];
     instruction.pattern = "8d4101c3".to_string();
     instruction.is_return = true;
-    instruction.semantics = Some(Semantic {
+    instruction.semantics = Some(Lir {
         version: 1,
-        status: SemanticStatus::Complete,
+        status: LirStatus::Complete,
         abi: None,
         encoding: None,
         temporaries: Vec::new(),
-        effects: vec![SemanticEffect::Set {
-            dst: SemanticLocation::Register {
+        effects: vec![LirEffect::Set {
+            dst: LirLocation::Register {
                 name: "eax".to_string(),
                 bits: 32,
             },
-            expression: SemanticExpression::Binary {
-                op: SemanticOperationBinary::Add,
-                left: Box::new(SemanticExpression::Read(Box::new(
-                    SemanticLocation::Register {
-                        name: "ecx".to_string(),
-                        bits: 32,
-                    },
-                ))),
-                right: Box::new(SemanticExpression::Const { value: 1, bits: 32 }),
+            expression: LirExpression::Binary {
+                op: LirOperationBinary::Add,
+                left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                    name: "ecx".to_string(),
+                    bits: 32,
+                }))),
+                right: Box::new(LirExpression::Const { value: 1, bits: 32 }),
                 bits: 32,
             },
         }],
-        terminator: SemanticTerminator::Return { expression: None },
+        terminator: LirTerminator::Return { expression: None },
         diagnostics: Vec::new(),
     });
     graph.insert_instruction(instruction);
@@ -166,7 +163,7 @@ fn verify_instruction_and_block_lifts(graph: &Graph) {
     }
 }
 
-fn assert_all_instruction_semantics_status(graph: &Graph, status: SemanticStatus) {
+fn assert_all_instruction_semantics_status(graph: &Graph, status: LirStatus) {
     let instructions = graph.instructions();
     assert!(
         !instructions.is_empty(),
@@ -287,13 +284,9 @@ fn llvm_lifter_handles_noncontiguous_functions() {
 fn llvm_lift_function_explicit_abi_controls_return_shape_without_embedded_semantics() {
     let graph = build_noncontiguous_function_graph();
     let function = Function::new(0x1000, &graph).expect("function");
-    let cpu = binlex::semantics::SemanticCpu::from_kind(binlex::semantics::SemanticCpuKind::I386)
-        .expect("cpu");
-    let abi = binlex::semantics::SemanticAbi::from_kind(
-        binlex::semantics::SemanticAbiKind::Stdcall,
-        &cpu,
-    )
-    .expect("abi");
+    let cpu = binlex::ir::lir::LirCpu::from_kind(binlex::ir::lir::LirCpuKind::I386).expect("cpu");
+    let abi = binlex::ir::lir::LirAbi::from_kind(binlex::ir::lir::LirAbiKind::Stdcall, &cpu)
+        .expect("abi");
 
     let mut lifter = Lifter::from_architecture(function.architecture(), Configuration::default());
     lifter
@@ -311,8 +304,8 @@ fn llvm_lift_function_explicit_abi_controls_return_shape_without_embedded_semant
 fn llvm_lift_function_uses_builtin_abi_arguments_for_signature() {
     let graph = build_fastcall_semantic_function_graph();
     let function = Function::new(0x1000, &graph).expect("function");
-    let cpu = SemanticCpu::from_kind(SemanticCpuKind::I386).expect("cpu");
-    let abi = SemanticAbi::from_kind(SemanticAbiKind::Fastcall, &cpu).expect("abi");
+    let cpu = LirCpu::from_kind(LirCpuKind::I386).expect("cpu");
+    let abi = LirAbi::from_kind(LirAbiKind::Fastcall, &cpu).expect("abi");
 
     let mut lifter = Lifter::from_architecture(function.architecture(), Configuration::default());
     lifter
@@ -347,33 +340,31 @@ fn llvm_lift_function_does_not_infer_callable_abi_without_override() {
 
 #[test]
 fn llvm_lift_function_semantics_uses_explicit_abi_without_native_sync_epilogue() {
-    let cpu = SemanticCpu::from_kind(SemanticCpuKind::I386).expect("cpu");
-    let abi = SemanticAbi::from_kind(SemanticAbiKind::Fastcall, &cpu).expect("abi");
-    let semantics = Semantics {
-        semantics: vec![Semantic {
+    let cpu = LirCpu::from_kind(LirCpuKind::I386).expect("cpu");
+    let abi = LirAbi::from_kind(LirAbiKind::Fastcall, &cpu).expect("abi");
+    let semantics = LirModule {
+        semantics: vec![Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "eax".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Binary {
-                    op: SemanticOperationBinary::Add,
-                    left: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "ecx".to_string(),
-                            bits: 32,
-                        },
-                    ))),
-                    right: Box::new(SemanticExpression::Const { value: 1, bits: 32 }),
+                expression: LirExpression::Binary {
+                    op: LirOperationBinary::Add,
+                    left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "ecx".to_string(),
+                        bits: 32,
+                    }))),
+                    right: Box::new(LirExpression::Const { value: 1, bits: 32 }),
                     bits: 32,
                 },
             }],
-            terminator: SemanticTerminator::Return { expression: None },
+            terminator: LirTerminator::Return { expression: None },
             diagnostics: Vec::new(),
         }],
         data: Vec::new(),
@@ -843,7 +834,7 @@ fn llvm_lifter_handles_loop_family_instructions() {
     );
 
     verify_all_entity_lifts(&graph);
-    assert_all_instruction_semantics_status(&graph, SemanticStatus::Complete);
+    assert_all_instruction_semantics_status(&graph, LirStatus::Complete);
 }
 
 #[test]
@@ -859,7 +850,7 @@ fn llvm_lifter_handles_extended_counter_control_flow_completely() {
     );
 
     verify_all_entity_lifts(&graph);
-    assert_all_instruction_semantics_status(&graph, SemanticStatus::Complete);
+    assert_all_instruction_semantics_status(&graph, LirStatus::Complete);
 }
 
 #[test]
@@ -1407,12 +1398,12 @@ fn llvm_lifter_preserves_unsupported_instruction_fallback() {
         .semantics
         .as_ref()
         .expect("unsupported instruction should still have fallback semantics");
-    assert_eq!(semantics.status, binlex::semantics::SemanticStatus::Partial);
+    assert_eq!(semantics.status, binlex::ir::lir::LirStatus::Partial);
     assert!(
         semantics
             .diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.kind == SemanticDiagnosticKind::UnsupportedInstruction)
+            .any(|diagnostic| diagnostic.kind == LirDiagnosticKind::UnsupportedInstruction)
     );
 
     let mut instruction_lifter =
@@ -1581,7 +1572,7 @@ fn llvm_supported_semantics_cases_are_complete() {
             });
             assert_eq!(
                 semantics.status,
-                SemanticStatus::Complete,
+                LirStatus::Complete,
                 "{name}: instruction 0x{:x} is not complete",
                 instruction.address
             );
@@ -1607,7 +1598,7 @@ fn llvm_accuracy_gated_semantics_cases_remain_partial() {
             if expected.contains(&instruction.address) {
                 assert_eq!(
                     semantics.status,
-                    SemanticStatus::Partial,
+                    LirStatus::Partial,
                     "{name}: instruction 0x{:x} should remain partial",
                     instruction.address
                 );
@@ -1619,7 +1610,7 @@ fn llvm_accuracy_gated_semantics_cases_remain_partial() {
             } else {
                 assert_eq!(
                     semantics.status,
-                    SemanticStatus::Complete,
+                    LirStatus::Complete,
                     "{name}: instruction 0x{:x} should stay complete",
                     instruction.address
                 );

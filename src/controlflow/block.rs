@@ -36,12 +36,12 @@ use crate::hashing::SHA256;
 use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
 use crate::hex;
+use crate::ir::lir::{LirAbi, LirCpu};
 use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
 #[cfg(not(target_os = "windows"))]
 use crate::lifters::vex::{Lifter as VexLifter, VexJson};
 use crate::lifters::{Lifter, LifterBackend, LifterError};
 use crate::metadata::Attributes;
-use crate::semantics::{SemanticAbi, SemanticCpu};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use serde_json::Value;
@@ -531,10 +531,10 @@ impl<'block> Block<'block> {
     pub fn lift_with(
         &self,
         backend: LifterBackend,
-        abi: Option<&SemanticAbi>,
+        abi: Option<&LirAbi>,
         triple: Option<String>,
     ) -> Result<Lifter, LifterError> {
-        let cpu = SemanticCpu::from_architecture(self.architecture())
+        let cpu = LirCpu::from_architecture(self.architecture())
             .map_err(|error| LifterError::Io(Error::other(error.to_string())))?;
         let lifter = Lifter::new(cpu, self.cfg.config.clone(), backend, triple)?;
         lifter.lift_block(self, abi)?;

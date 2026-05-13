@@ -4,7 +4,7 @@ from binlex import Architecture
 from binlex.config import Configuration
 from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
-from binlex.semantics import SemanticCpu, Semantics
+from binlex.ir.lir import LirCpu, LirModule
 from binlex.symbolic import CpuState, Executor
 
 
@@ -62,7 +62,7 @@ def main():
     disassembler.disassemble_function(0, graph)
     function = graph.functions()[0]
 
-    cpu = SemanticCpu.amd64()
+    cpu = LirCpu.amd64()
     executor = Executor()
     state = CpuState(cpu)
 
@@ -93,7 +93,7 @@ def main():
 
             state.set_register("rip", 64, pc)
 
-            states = executor.step(Semantics(semantics=[semantic]), state)
+            states = executor.step(LirModule(semantics=[semantic]), state)
 
             if len(states) == 1:
                 state = states[0]

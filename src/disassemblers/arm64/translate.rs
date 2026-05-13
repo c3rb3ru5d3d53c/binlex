@@ -38,8 +38,8 @@ use crate::{
         targets as arm64_targets,
     },
     genetics::Chromosome,
-    semantics::arm64::operand::Arm64ShiftKind,
-    semantics::arm64::{
+    ir::lir::arm64::operand::Arm64ShiftKind,
+    ir::lir::arm64::{
         Arm64MemoryOperandView, Arm64OperandKind, Arm64OperandView, InstructionDetailArm64,
     },
 };

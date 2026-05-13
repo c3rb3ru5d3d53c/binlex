@@ -5,7 +5,7 @@ from binlex import Configuration
 from binlex.assemblers import Assembler
 from binlex.controlflow import Graph
 from binlex.disassemblers import Disassembler
-from binlex.semantics import SemanticCpu, Semantics
+from binlex.ir.lir import LirCpu, LirModule
 from binlex.symbolic import CpuState, Executor
 
 assembly = """
@@ -53,13 +53,13 @@ function = graph.get_function(0)
 
 assert function, "failed"
 
-cpu = SemanticCpu.i386()
+cpu = LirCpu.i386()
 executor = Executor()
 state = CpuState(cpu)
 state.set_register("esp", 32, stack_base)
 state.map_memory(stack_base - stack_size, stack_size)
 
-semantics = Semantics(semantics=[
+semantics = LirModule(semantics=[
     semantics
     for block in function.blocks()
     for instruction in block.instructions()

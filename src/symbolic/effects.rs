@@ -1,4 +1,4 @@
-use crate::semantics::{SemanticEffect, SemanticExpression, SemanticLocation};
+use crate::ir::lir::{LirEffect, LirExpression, LirLocation};
 use crate::symbolic::{Error, SymbolicCpuState, SymbolicExecutor};
 use z3::ast::{Ast, BV, Bool};
 
@@ -57,17 +57,17 @@ impl SymbolicExecutor {
     pub(crate) fn apply_effect(
         &self,
         state: &mut SymbolicCpuState,
-        instruction: Option<&crate::semantics::SemanticEncoding>,
-        effect: &SemanticEffect,
+        instruction: Option<&crate::ir::lir::LirEncoding>,
+        effect: &LirEffect,
     ) -> Result<(), Error> {
         match effect {
-            SemanticEffect::Set { dst, expression } => {
+            LirEffect::Set { dst, expression } => {
                 let value =
                     self.eval_expression(state, expression, self.location_is_probably_float(dst))?;
                 let value = self.concretize_if_dependency_free(state, value)?;
                 self.write_location(state, instruction, dst, value)
             }
-            SemanticEffect::Store {
+            LirEffect::Store {
                 addr,
                 expression,
                 bits,
@@ -98,7 +98,7 @@ impl SymbolicExecutor {
                     def_id,
                 )
             }
-            SemanticEffect::MemorySet {
+            LirEffect::MemorySet {
                 addr,
                 value,
                 count,
@@ -114,7 +114,7 @@ impl SymbolicExecutor {
                 *element_bits,
                 decrement,
             ),
-            SemanticEffect::MemoryCopy {
+            LirEffect::MemoryCopy {
                 src_addr,
                 dst_addr,
                 count,
@@ -130,7 +130,7 @@ impl SymbolicExecutor {
                 *element_bits,
                 decrement,
             ),
-            SemanticEffect::AtomicCmpXchg {
+            LirEffect::AtomicCmpXchg {
                 addr,
                 expected,
                 desired,
@@ -146,7 +146,7 @@ impl SymbolicExecutor {
                 *bits,
                 observed,
             ),
-            SemanticEffect::WriteProperty {
+            LirEffect::WriteProperty {
                 reference,
                 name,
                 expression,
@@ -172,7 +172,7 @@ impl SymbolicExecutor {
                 state.set_reference_property_value(reference_key, name.clone(), coerced, def_id);
                 Ok(())
             }
-            SemanticEffect::WriteElement {
+            LirEffect::WriteElement {
                 reference,
                 index,
                 expression,
@@ -203,7 +203,7 @@ impl SymbolicExecutor {
                 state.set_reference_element_value(reference_key, index_key, coerced, def_id);
                 Ok(())
             }
-            SemanticEffect::Push { stack, expression } => {
+            LirEffect::Push { stack, expression } => {
                 let value = self.eval_expression(state, expression, false)?;
                 let value = self.concretize_if_dependency_free(state, value)?;
                 let def_id = state.define_location(
@@ -215,7 +215,7 @@ impl SymbolicExecutor {
                 state.push_stack_memory_value(stack, value.value, def_id);
                 Ok(())
             }
-            SemanticEffect::Pop { stack, dst } => {
+            LirEffect::Pop { stack, dst } => {
                 let bits = dst.bits();
                 let cell = state.pop_stack_memory_value(stack, bits)?;
                 self.write_location(
@@ -228,10 +228,10 @@ impl SymbolicExecutor {
                     },
                 )
             }
-            SemanticEffect::Nop => Ok(()),
-            SemanticEffect::Fence { .. } => Err(Error::UnsupportedEffect("fence")),
-            SemanticEffect::Trap { .. } => Err(Error::UnsupportedEffect("trap")),
-            SemanticEffect::Intrinsic {
+            LirEffect::Nop => Ok(()),
+            LirEffect::Fence { .. } => Err(Error::UnsupportedEffect("fence")),
+            LirEffect::Trap { .. } => Err(Error::UnsupportedEffect("trap")),
+            LirEffect::Intrinsic {
                 name,
                 args,
                 outputs,
@@ -242,12 +242,12 @@ impl SymbolicExecutor {
     fn apply_memory_set(
         &self,
         state: &mut SymbolicCpuState,
-        instruction: Option<&crate::semantics::SemanticEncoding>,
-        addr: &SemanticExpression,
-        value: &SemanticExpression,
-        count: &SemanticExpression,
+        instruction: Option<&crate::ir::lir::LirEncoding>,
+        addr: &LirExpression,
+        value: &LirExpression,
+        count: &LirExpression,
         element_bits: u16,
-        decrement: &SemanticExpression,
+        decrement: &LirExpression,
     ) -> Result<(), Error> {
         let base_address = self.eval_expression(state, addr, false)?;
         let base_address_value = self.coerce_address(state, &base_address.value)?;
@@ -304,12 +304,12 @@ impl SymbolicExecutor {
     fn apply_memory_copy(
         &self,
         state: &mut SymbolicCpuState,
-        instruction: Option<&crate::semantics::SemanticEncoding>,
-        src_addr: &SemanticExpression,
-        dst_addr: &SemanticExpression,
-        count: &SemanticExpression,
+        instruction: Option<&crate::ir::lir::LirEncoding>,
+        src_addr: &LirExpression,
+        dst_addr: &LirExpression,
+        count: &LirExpression,
         element_bits: u16,
-        decrement: &SemanticExpression,
+        decrement: &LirExpression,
     ) -> Result<(), Error> {
         let src_base = self.eval_expression(state, src_addr, false)?;
         let src_base_value = self.coerce_address(state, &src_base.value)?;
@@ -371,12 +371,12 @@ impl SymbolicExecutor {
     fn apply_atomic_cmpxchg(
         &self,
         state: &mut SymbolicCpuState,
-        instruction: Option<&crate::semantics::SemanticEncoding>,
-        addr: &SemanticExpression,
-        expected: &SemanticExpression,
-        desired: &SemanticExpression,
+        instruction: Option<&crate::ir::lir::LirEncoding>,
+        addr: &LirExpression,
+        expected: &LirExpression,
+        desired: &LirExpression,
         bits: u16,
-        observed: &SemanticLocation,
+        observed: &LirLocation,
     ) -> Result<(), Error> {
         let address = self.eval_expression(state, addr, false)?;
         let address_value = self.coerce_address(state, &address.value)?;
@@ -429,38 +429,38 @@ impl SymbolicExecutor {
     pub(crate) fn read_location(
         &self,
         state: &mut SymbolicCpuState,
-        location: &SemanticLocation,
+        location: &LirLocation,
     ) -> Result<crate::symbolic::expressions::EvaluatedValue, Error> {
         match location {
-            SemanticLocation::Register { name, bits } => {
+            LirLocation::Register { name, bits } => {
                 let cell = state.get_or_create_register(name, *bits)?;
                 Ok(crate::symbolic::expressions::EvaluatedValue {
                     value: cell.value,
                     deps: cell.def_id.into_iter().collect(),
                 })
             }
-            SemanticLocation::Flag { name, bits } => {
+            LirLocation::Flag { name, bits } => {
                 let cell = state.get_or_create_flag(name, *bits)?;
                 Ok(crate::symbolic::expressions::EvaluatedValue {
                     value: cell.value,
                     deps: cell.def_id.into_iter().collect(),
                 })
             }
-            SemanticLocation::ProgramCounter { bits } => {
+            LirLocation::ProgramCounter { bits } => {
                 let cell = state.get_or_create_program_counter(*bits)?;
                 Ok(crate::symbolic::expressions::EvaluatedValue {
                     value: cell.value,
                     deps: cell.def_id.into_iter().collect(),
                 })
             }
-            SemanticLocation::Temporary { id, bits } => {
+            LirLocation::Temporary { id, bits } => {
                 let cell = state.get_or_create_temporary(*id, *bits)?;
                 Ok(crate::symbolic::expressions::EvaluatedValue {
                     value: cell.value,
                     deps: cell.def_id.into_iter().collect(),
                 })
             }
-            SemanticLocation::Memory { addr, bits, .. } => {
+            LirLocation::Memory { addr, bits, .. } => {
                 let address = self.eval_expression(state, addr, false)?;
                 let address_value = self.coerce_address(state, &address.value)?;
                 let (value, mut deps) =
@@ -483,7 +483,7 @@ impl SymbolicExecutor {
                 }
                 Ok(crate::symbolic::expressions::EvaluatedValue { value, deps })
             }
-            SemanticLocation::IndexedMemory { name, index, bits } => {
+            LirLocation::IndexedMemory { name, index, bits } => {
                 let index = self.eval_expression(state, index, false)?;
                 let key = self.indexed_memory_key(&index.value);
                 let cell = state.get_or_create_indexed_memory(name, &key, *bits)?;
@@ -499,7 +499,7 @@ impl SymbolicExecutor {
                     deps,
                 })
             }
-            SemanticLocation::StackMemory { name, offset, bits } => {
+            LirLocation::StackMemory { name, offset, bits } => {
                 let cell = state.get_or_create_stack_memory(name, *offset, *bits)?;
                 Ok(crate::symbolic::expressions::EvaluatedValue {
                     value: cell.value,
@@ -512,12 +512,12 @@ impl SymbolicExecutor {
     pub(crate) fn write_location(
         &self,
         state: &mut SymbolicCpuState,
-        instruction: Option<&crate::semantics::SemanticEncoding>,
-        location: &SemanticLocation,
+        instruction: Option<&crate::ir::lir::LirEncoding>,
+        location: &LirLocation,
         value: crate::symbolic::expressions::EvaluatedValue,
     ) -> Result<(), Error> {
         match location {
-            SemanticLocation::Register { name, bits } => {
+            LirLocation::Register { name, bits } => {
                 let coerced = state.backend().coerce_bv_width(&value.value, *bits)?;
                 let def_id = state.define_location(
                     instruction,
@@ -528,7 +528,7 @@ impl SymbolicExecutor {
                 state.set_register_value(name, coerced, def_id);
                 Ok(())
             }
-            SemanticLocation::Flag { name, bits } => {
+            LirLocation::Flag { name, bits } => {
                 let coerced = state.backend().coerce_bv_width(&value.value, *bits)?;
                 let def_id = state.define_location(
                     instruction,
@@ -539,7 +539,7 @@ impl SymbolicExecutor {
                 state.set_flag_value(name, coerced, def_id);
                 Ok(())
             }
-            SemanticLocation::ProgramCounter { bits } => {
+            LirLocation::ProgramCounter { bits } => {
                 let coerced = state.backend().coerce_bv_width(&value.value, *bits)?;
                 let def_id = state.define_location(
                     instruction,
@@ -550,7 +550,7 @@ impl SymbolicExecutor {
                 state.set_program_counter(coerced, def_id);
                 Ok(())
             }
-            SemanticLocation::Temporary { id, bits } => {
+            LirLocation::Temporary { id, bits } => {
                 let coerced = state.backend().coerce_bv_width(&value.value, *bits)?;
                 let def_id = state.define_location(
                     instruction,
@@ -561,7 +561,7 @@ impl SymbolicExecutor {
                 state.set_temporary_value(*id, coerced, def_id);
                 Ok(())
             }
-            SemanticLocation::Memory { addr, bits, .. } => {
+            LirLocation::Memory { addr, bits, .. } => {
                 let address = self.eval_expression(state, addr, false)?;
                 let address_value = self.coerce_address(state, &address.value)?;
                 let coerced = state.backend().coerce_bv_width(&value.value, *bits)?;
@@ -586,7 +586,7 @@ impl SymbolicExecutor {
                     def_id,
                 )
             }
-            SemanticLocation::IndexedMemory { name, index, bits } => {
+            LirLocation::IndexedMemory { name, index, bits } => {
                 let index = self.eval_expression(state, index, false)?;
                 let key = self.indexed_memory_key(&index.value);
                 let coerced = state.backend().coerce_bv_width(&value.value, *bits)?;
@@ -605,7 +605,7 @@ impl SymbolicExecutor {
                 state.set_indexed_memory_value(name, key, coerced, def_id);
                 Ok(())
             }
-            SemanticLocation::StackMemory { name, offset, bits } => {
+            LirLocation::StackMemory { name, offset, bits } => {
                 let coerced = state.backend().coerce_bv_width(&value.value, *bits)?;
                 let def_id = state.define_location(
                     instruction,

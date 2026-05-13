@@ -1,6 +1,6 @@
 use super::LoweringContext;
 use super::helpers::coerce_int_value_width;
-use crate::semantics::{SemanticAddressSpace, SemanticExpression};
+use crate::ir::lir::{LirAddressSpace, LirExpression};
 use inkwell::IntPredicate;
 use inkwell::values::{IntValue, PointerValue};
 use std::io::Error;
@@ -8,15 +8,13 @@ use std::io::Error;
 impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     pub(super) fn try_direct_load(
         &mut self,
-        space: &SemanticAddressSpace,
-        addr: &SemanticExpression,
+        space: &LirAddressSpace,
+        addr: &LirExpression,
         bits: u16,
     ) -> Result<Option<IntValue<'ctx>>, Error> {
         if !matches!(
             space,
-            SemanticAddressSpace::Default
-                | SemanticAddressSpace::Stack
-                | SemanticAddressSpace::Global
+            LirAddressSpace::Default | LirAddressSpace::Stack | LirAddressSpace::Global
         ) {
             return Ok(None);
         }
@@ -31,15 +29,12 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
     pub(super) fn try_direct_store(
         &mut self,
-        space: &SemanticAddressSpace,
-        addr: &SemanticExpression,
-        expression: &SemanticExpression,
+        space: &LirAddressSpace,
+        addr: &LirExpression,
+        expression: &LirExpression,
         bits: u16,
     ) -> Result<Option<()>, Error> {
-        if !matches!(
-            space,
-            SemanticAddressSpace::Default | SemanticAddressSpace::Stack
-        ) {
+        if !matches!(space, LirAddressSpace::Default | LirAddressSpace::Stack) {
             return Ok(None);
         }
         let ptr = self.direct_pointer_from_expression(addr)?;
@@ -59,14 +54,14 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
     pub(super) fn try_direct_memory_set(
         &mut self,
-        space: &SemanticAddressSpace,
-        addr: &SemanticExpression,
-        value: &SemanticExpression,
-        count: &SemanticExpression,
+        space: &LirAddressSpace,
+        addr: &LirExpression,
+        value: &LirExpression,
+        count: &LirExpression,
         element_bits: u16,
-        decrement: &SemanticExpression,
+        decrement: &LirExpression,
     ) -> Result<bool, Error> {
-        if !matches!(space, SemanticAddressSpace::Default) {
+        if !matches!(space, LirAddressSpace::Default) {
             return Ok(false);
         }
 
@@ -116,16 +111,16 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
     pub(super) fn try_direct_memory_copy(
         &mut self,
-        src_space: &SemanticAddressSpace,
-        src_addr: &SemanticExpression,
-        dst_space: &SemanticAddressSpace,
-        dst_addr: &SemanticExpression,
-        count: &SemanticExpression,
+        src_space: &LirAddressSpace,
+        src_addr: &LirExpression,
+        dst_space: &LirAddressSpace,
+        dst_addr: &LirExpression,
+        count: &LirExpression,
         element_bits: u16,
-        decrement: &SemanticExpression,
+        decrement: &LirExpression,
     ) -> Result<bool, Error> {
-        if !matches!(src_space, SemanticAddressSpace::Default)
-            || !matches!(dst_space, SemanticAddressSpace::Default)
+        if !matches!(src_space, LirAddressSpace::Default)
+            || !matches!(dst_space, LirAddressSpace::Default)
         {
             return Ok(false);
         }
@@ -323,7 +318,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
     fn direct_pointer_from_expression(
         &mut self,
-        expression: &SemanticExpression,
+        expression: &LirExpression,
     ) -> Result<PointerValue<'ctx>, Error> {
         let address = self.lower_expression(expression)?;
         let pointer_int_type = self.pointer_int_type();

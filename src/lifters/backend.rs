@@ -1,8 +1,6 @@
 use super::error::{LifterCapability, LifterError};
 use crate::controlflow::{Block, Function, Graph, Instruction, InstructionRecord};
-use crate::semantics::{
-    Semantic, SemanticAbi, SemanticCpu, SemanticExpression, SemanticTerminator, Semantics,
-};
+use crate::ir::lir::{Lir, LirAbi, LirCpu, LirExpression, LirModule, LirTerminator};
 use crate::{Architecture, Configuration};
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
@@ -37,12 +35,12 @@ enum ResolvedLifterBackend {
 #[derive(Clone)]
 enum ModuleItemDef {
     BlockSemantics {
-        semantics: Semantics,
-        abi: Option<SemanticAbi>,
+        semantics: LirModule,
+        abi: Option<LirAbi>,
     },
     FunctionSemantics {
-        semantics: Semantics,
-        abi: Option<SemanticAbi>,
+        semantics: LirModule,
+        abi: Option<LirAbi>,
         name: Option<String>,
     },
     CreatedFunction {
@@ -59,8 +57,8 @@ enum ModuleOverrideDef {
 #[derive(Clone)]
 struct CreatedFunctionDef {
     name: String,
-    abi: Option<SemanticAbi>,
-    body_semantics: Option<Semantics>,
+    abi: Option<LirAbi>,
+    body_semantics: Option<LirModule>,
     blocks: Vec<CreatedBlockDef>,
     raw_ir: Option<String>,
     raw_bitcode: Option<Vec<u8>>,
@@ -73,14 +71,14 @@ enum CreatedBlockDef {
         address: u64,
         records: Vec<InstructionRecord>,
     },
-    Semantics {
+    LirModule {
         name: Option<String>,
-        semantics: Semantics,
+        semantics: LirModule,
     },
 }
 
 struct BuildState {
-    cpu: SemanticCpu,
+    cpu: LirCpu,
     architecture: Architecture,
     triple: Option<String>,
     config: Configuration,
@@ -115,7 +113,7 @@ pub struct JittedFunction {
 
 impl BuildState {
     fn new(
-        cpu: SemanticCpu,
+        cpu: LirCpu,
         config: Configuration,
         backend: LifterBackend,
         triple: Option<String>,
@@ -146,7 +144,7 @@ impl BuildState {
     }
 
     fn new_inner(
-        cpu: &SemanticCpu,
+        cpu: &LirCpu,
         config: &Configuration,
         _architecture: Architecture,
         backend: LifterBackend,
@@ -297,13 +295,13 @@ impl Lifter {
         config: Configuration,
         backend: LifterBackend,
     ) -> Result<Self, LifterError> {
-        let cpu = SemanticCpu::from_architecture(architecture)
+        let cpu = LirCpu::from_architecture(architecture)
             .map_err(|error| LifterError::Io(Error::other(error.to_string())))?;
         Self::new(cpu, config, backend, None)
     }
 
     pub fn new(
-        cpu: SemanticCpu,
+        cpu: LirCpu,
         config: Configuration,
         backend: LifterBackend,
         triple: Option<String>,
@@ -318,7 +316,7 @@ impl Lifter {
         self.state.lock().unwrap().backend
     }
 
-    pub fn cpu(&self) -> SemanticCpu {
+    pub fn cpu(&self) -> LirCpu {
         self.state.lock().unwrap().cpu.clone()
     }
 
@@ -355,11 +353,7 @@ impl Lifter {
         Ok(())
     }
 
-    pub fn lift_block(
-        &self,
-        block: &Block<'_>,
-        abi: Option<&SemanticAbi>,
-    ) -> Result<(), LifterError> {
+    pub fn lift_block(&self, block: &Block<'_>, abi: Option<&LirAbi>) -> Result<(), LifterError> {
         let mut state = self.state.lock().unwrap();
         #[cfg(not(target_os = "windows"))]
         if state.backend != LifterBackend::Llvm {
@@ -387,7 +381,7 @@ impl Lifter {
     pub fn lift_function(
         &self,
         function: &Function<'_>,
-        abi: Option<&SemanticAbi>,
+        abi: Option<&LirAbi>,
     ) -> Result<(), LifterError> {
         self.lift_function_named(function, abi, None)
     }
@@ -395,7 +389,7 @@ impl Lifter {
     pub fn lift_function_named(
         &self,
         function: &Function<'_>,
-        abi: Option<&SemanticAbi>,
+        abi: Option<&LirAbi>,
         name: Option<&str>,
     ) -> Result<(), LifterError> {
         let mut state = self.state.lock().unwrap();
@@ -430,8 +424,8 @@ impl Lifter {
 
     pub fn lift_block_semantics(
         &self,
-        semantics: &Semantics,
-        abi: Option<&SemanticAbi>,
+        semantics: &LirModule,
+        abi: Option<&LirAbi>,
     ) -> Result<(), LifterError> {
         let mut state = self.state.lock().unwrap();
         state.ensure_built()?;
@@ -455,16 +449,16 @@ impl Lifter {
 
     pub fn lift_function_semantics(
         &self,
-        semantics: &Semantics,
-        abi: Option<&SemanticAbi>,
+        semantics: &LirModule,
+        abi: Option<&LirAbi>,
     ) -> Result<(), LifterError> {
         self.lift_function_semantics_named(semantics, abi, None)
     }
 
     pub fn lift_function_semantics_named(
         &self,
-        semantics: &Semantics,
-        abi: Option<&SemanticAbi>,
+        semantics: &LirModule,
+        abi: Option<&LirAbi>,
         name: Option<&str>,
     ) -> Result<(), LifterError> {
         let mut state = self.state.lock().unwrap();
@@ -489,7 +483,7 @@ impl Lifter {
     pub fn create_function(
         &self,
         name: impl Into<String>,
-        abi: Option<&SemanticAbi>,
+        abi: Option<&LirAbi>,
     ) -> Result<LiftedFunction, LifterError> {
         let mut state = self.state.lock().unwrap();
         #[cfg(not(target_os = "windows"))]
@@ -729,7 +723,7 @@ impl LiftedFunction {
 
     pub fn lift_block_semantics(
         &self,
-        semantics: &Semantics,
+        semantics: &LirModule,
         name: Option<&str>,
     ) -> Result<(), LifterError> {
         let mut state = self.state.lock().unwrap();
@@ -751,7 +745,7 @@ impl LiftedFunction {
                 "function already has raw llvm body",
             )));
         }
-        function.blocks.push(CreatedBlockDef::Semantics {
+        function.blocks.push(CreatedBlockDef::LirModule {
             name: name.map(str::to_string),
             semantics: semantics.clone(),
         });
@@ -759,7 +753,7 @@ impl LiftedFunction {
         Ok(())
     }
 
-    pub fn lift_function_semantics(&self, semantics: &Semantics) -> Result<(), LifterError> {
+    pub fn lift_function_semantics(&self, semantics: &LirModule) -> Result<(), LifterError> {
         let mut state = self.state.lock().unwrap();
         #[cfg(not(target_os = "windows"))]
         if state.backend != LifterBackend::Llvm {
@@ -1018,7 +1012,7 @@ impl LiftedBlock {
             CreatedBlockDef::Cfg { name, address, .. } => {
                 name.clone().unwrap_or_else(|| format!("block_{address:x}"))
             }
-            CreatedBlockDef::Semantics { name, .. } => name
+            CreatedBlockDef::LirModule { name, .. } => name
                 .clone()
                 .unwrap_or_else(|| format!("block_{}", self.block_index)),
         }
@@ -1094,7 +1088,7 @@ fn block_preview_function_name(
         CreatedBlockDef::Cfg { name, address, .. } => name
             .clone()
             .unwrap_or_else(|| format!("{function_name}_block_{address:x}")),
-        CreatedBlockDef::Semantics { name, .. } => name
+        CreatedBlockDef::LirModule { name, .. } => name
             .clone()
             .unwrap_or_else(|| format!("{function_name}_block_{block_index}")),
     }
@@ -1159,7 +1153,7 @@ fn compile_created_function(
                     block_labels.insert(block_address, name.clone());
                 }
             }
-            CreatedBlockDef::Semantics { name, semantics } => {
+            CreatedBlockDef::LirModule { name, semantics } => {
                 let block_address = next_block_base;
                 if entry_address.is_none() {
                     entry_address = Some(block_address);
@@ -1200,7 +1194,7 @@ fn insert_semantics_block(
     graph: &mut Graph,
     architecture: Architecture,
     block_address: u64,
-    semantics: &[Semantic],
+    semantics: &[Lir],
     next_block_address: Option<u64>,
     config: &Configuration,
 ) {
@@ -1217,10 +1211,10 @@ fn insert_semantics_block(
         }
         if index == semantics.len() - 1 {
             match &semantic.terminator {
-                SemanticTerminator::Return { .. } => {
+                LirTerminator::Return { .. } => {
                     record.is_return = true;
                 }
-                SemanticTerminator::Jump { target } => {
+                LirTerminator::Jump { target } => {
                     record.is_jump = true;
                     if let Some(address) = semantic_expression_u64(target) {
                         record.to.insert(address);
@@ -1228,7 +1222,7 @@ fn insert_semantics_block(
                         record.to.insert(next);
                     }
                 }
-                SemanticTerminator::Branch {
+                LirTerminator::Branch {
                     true_target,
                     false_target,
                     ..
@@ -1242,10 +1236,10 @@ fn insert_semantics_block(
                         record.to.insert(address);
                     }
                 }
-                SemanticTerminator::Trap => {
+                LirTerminator::Trap => {
                     record.is_trap = true;
                 }
-                SemanticTerminator::Call { does_return, .. } => {
+                LirTerminator::Call { does_return, .. } => {
                     record.is_call = true;
                     if does_return.unwrap_or(true) {
                         if let Some(next) = next_block_address {
@@ -1253,13 +1247,13 @@ fn insert_semantics_block(
                         }
                     }
                 }
-                SemanticTerminator::FallThrough => {
+                LirTerminator::FallThrough => {
                     if let Some(next) = next_block_address {
                         record.is_jump = true;
                         record.to.insert(next);
                     }
                 }
-                SemanticTerminator::Unreachable => {}
+                LirTerminator::Unreachable => {}
             }
         }
         record.edges = record.successors().len();
@@ -1267,19 +1261,19 @@ fn insert_semantics_block(
     }
 }
 
-fn semantic_expression_u64(expression: &SemanticExpression) -> Option<u64> {
+fn semantic_expression_u64(expression: &LirExpression) -> Option<u64> {
     match expression {
-        SemanticExpression::Const { value, .. } => (*value).try_into().ok(),
+        LirExpression::Const { value, .. } => (*value).try_into().ok(),
         _ => None,
     }
 }
 
-fn architecture_from_cpu(cpu: &SemanticCpu) -> Result<Architecture, LifterError> {
+fn architecture_from_cpu(cpu: &LirCpu) -> Result<Architecture, LifterError> {
     match cpu.kind() {
-        Some(crate::semantics::SemanticCpuKind::I386) => Ok(Architecture::I386),
-        Some(crate::semantics::SemanticCpuKind::Amd64) => Ok(Architecture::AMD64),
-        Some(crate::semantics::SemanticCpuKind::Arm64) => Ok(Architecture::ARM64),
-        Some(crate::semantics::SemanticCpuKind::Cil) => Ok(Architecture::CIL),
+        Some(crate::ir::lir::LirCpuKind::I386) => Ok(Architecture::I386),
+        Some(crate::ir::lir::LirCpuKind::Amd64) => Ok(Architecture::AMD64),
+        Some(crate::ir::lir::LirCpuKind::Arm64) => Ok(Architecture::ARM64),
+        Some(crate::ir::lir::LirCpuKind::Cil) => Ok(Architecture::CIL),
         None => Err(LifterError::Io(Error::other(
             "lifter backend requires a built-in semantic CPU kind",
         ))),
@@ -1290,15 +1284,15 @@ fn architecture_from_cpu(cpu: &SemanticCpu) -> Result<Architecture, LifterError>
 mod tests {
     use super::{Lifter, LifterBackend};
     use crate::Configuration;
-    use crate::semantics::{
-        Semantic, SemanticAbi, SemanticAbiKind, SemanticCpu, SemanticCpuKind, SemanticEffect,
-        SemanticExpression, SemanticLocation, SemanticStatus, SemanticTerminator, Semantics,
+    use crate::ir::lir::{
+        Lir, LirAbi, LirAbiKind, LirCpu, LirCpuKind, LirEffect, LirExpression, LirLocation,
+        LirModule, LirStatus, LirTerminator,
     };
 
     #[test]
     fn default_backend_resolves_to_llvm() {
         let lifter = Lifter::new(
-            SemanticCpu::from_kind(SemanticCpuKind::Amd64).expect("cpu"),
+            LirCpu::from_kind(LirCpuKind::Amd64).expect("cpu"),
             Configuration::default(),
             LifterBackend::Default,
             None,
@@ -1309,44 +1303,44 @@ mod tests {
 
     #[test]
     fn created_function_builder_replays_named_blocks() {
-        let cpu = SemanticCpu::from_kind(SemanticCpuKind::I386).expect("cpu");
-        let abi = SemanticAbi::from_kind(SemanticAbiKind::Stdcall, &cpu).expect("stdcall abi");
+        let cpu = LirCpu::from_kind(LirCpuKind::I386).expect("cpu");
+        let abi = LirAbi::from_kind(LirAbiKind::Stdcall, &cpu).expect("stdcall abi");
         let lifter =
             Lifter::new(cpu, Configuration::default(), LifterBackend::Llvm, None).expect("lifter");
         let function = lifter
             .create_function("add_one", Some(&abi))
             .expect("created function");
 
-        let entry = Semantic {
+        let entry = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "eax".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Const { value: 1, bits: 32 },
+                expression: LirExpression::Const { value: 1, bits: 32 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let exit = Semantic {
+        let exit = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
             effects: Vec::new(),
-            terminator: SemanticTerminator::Return { expression: None },
+            terminator: LirTerminator::Return { expression: None },
             diagnostics: Vec::new(),
         };
 
         function
             .lift_block_semantics(
-                &Semantics {
+                &LirModule {
                     semantics: vec![entry],
                     data: Vec::new(),
                 },
@@ -1355,7 +1349,7 @@ mod tests {
             .expect("entry block");
         function
             .lift_block_semantics(
-                &Semantics {
+                &LirModule {
                     semantics: vec![exit],
                     data: Vec::new(),
                 },
@@ -1381,43 +1375,41 @@ mod tests {
 
     #[test]
     fn created_function_body_semantics_uses_builtin_abi_arguments_for_signature() {
-        let cpu = SemanticCpu::from_kind(SemanticCpuKind::I386).expect("cpu");
-        let abi = SemanticAbi::from_kind(SemanticAbiKind::Fastcall, &cpu).expect("fastcall abi");
+        let cpu = LirCpu::from_kind(LirCpuKind::I386).expect("cpu");
+        let abi = LirAbi::from_kind(LirAbiKind::Fastcall, &cpu).expect("fastcall abi");
         let lifter =
             Lifter::new(cpu, Configuration::default(), LifterBackend::Llvm, None).expect("lifter");
         let function = lifter
             .create_function("add_one", Some(&abi))
             .expect("created function");
 
-        let body = Semantic {
+        let body = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "eax".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Binary {
-                    op: crate::semantics::SemanticOperationBinary::Add,
-                    left: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "ecx".to_string(),
-                            bits: 32,
-                        },
-                    ))),
-                    right: Box::new(SemanticExpression::Const { value: 1, bits: 32 }),
+                expression: LirExpression::Binary {
+                    op: crate::ir::lir::LirOperationBinary::Add,
+                    left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "ecx".to_string(),
+                        bits: 32,
+                    }))),
+                    right: Box::new(LirExpression::Const { value: 1, bits: 32 }),
                     bits: 32,
                 },
             }],
-            terminator: SemanticTerminator::Return { expression: None },
+            terminator: LirTerminator::Return { expression: None },
             diagnostics: Vec::new(),
         };
 
         function
-            .lift_function_semantics(&Semantics {
+            .lift_function_semantics(&LirModule {
                 semantics: vec![body],
                 data: Vec::new(),
             })
@@ -1431,10 +1423,9 @@ mod tests {
 
     #[test]
     fn created_functions_support_direct_semantic_calls() {
-        let cpu = SemanticCpu::from_kind(SemanticCpuKind::I386).expect("cpu");
-        let fastcall =
-            SemanticAbi::from_kind(SemanticAbiKind::Fastcall, &cpu).expect("fastcall abi");
-        let stdcall = SemanticAbi::from_kind(SemanticAbiKind::Stdcall, &cpu).expect("stdcall abi");
+        let cpu = LirCpu::from_kind(LirCpuKind::I386).expect("cpu");
+        let fastcall = LirAbi::from_kind(LirAbiKind::Fastcall, &cpu).expect("fastcall abi");
+        let stdcall = LirAbi::from_kind(LirAbiKind::Stdcall, &cpu).expect("stdcall abi");
         let lifter =
             Lifter::new(cpu, Configuration::default(), LifterBackend::Llvm, None).expect("lifter");
 
@@ -1442,36 +1433,32 @@ mod tests {
             .create_function("add_two", Some(&fastcall))
             .expect("created function");
         add_two
-            .lift_function_semantics(&Semantics {
-                semantics: vec![Semantic {
+            .lift_function_semantics(&LirModule {
+                semantics: vec![Lir {
                     version: 1,
-                    status: SemanticStatus::Complete,
+                    status: LirStatus::Complete,
                     abi: None,
                     encoding: None,
                     temporaries: Vec::new(),
-                    effects: vec![SemanticEffect::Set {
-                        dst: SemanticLocation::Register {
+                    effects: vec![LirEffect::Set {
+                        dst: LirLocation::Register {
                             name: "eax".to_string(),
                             bits: 32,
                         },
-                        expression: SemanticExpression::Binary {
-                            op: crate::semantics::SemanticOperationBinary::Add,
-                            left: Box::new(SemanticExpression::Read(Box::new(
-                                SemanticLocation::Register {
-                                    name: "ecx".to_string(),
-                                    bits: 32,
-                                },
-                            ))),
-                            right: Box::new(SemanticExpression::Read(Box::new(
-                                SemanticLocation::Register {
-                                    name: "edx".to_string(),
-                                    bits: 32,
-                                },
-                            ))),
+                        expression: LirExpression::Binary {
+                            op: crate::ir::lir::LirOperationBinary::Add,
+                            left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                                name: "ecx".to_string(),
+                                bits: 32,
+                            }))),
+                            right: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                                name: "edx".to_string(),
+                                bits: 32,
+                            }))),
                             bits: 32,
                         },
                     }],
-                    terminator: SemanticTerminator::Return { expression: None },
+                    terminator: LirTerminator::Return { expression: None },
                     diagnostics: Vec::new(),
                 }],
                 data: Vec::new(),
@@ -1481,32 +1468,32 @@ mod tests {
         let main = lifter
             .create_function("main", Some(&stdcall))
             .expect("created function");
-        main.lift_function_semantics(&Semantics {
+        main.lift_function_semantics(&LirModule {
             semantics: vec![
-                Semantic {
+                Lir {
                     version: 1,
-                    status: SemanticStatus::Complete,
+                    status: LirStatus::Complete,
                     abi: None,
                     encoding: None,
                     temporaries: Vec::new(),
                     effects: vec![
-                        SemanticEffect::Set {
-                            dst: SemanticLocation::Register {
+                        LirEffect::Set {
+                            dst: LirLocation::Register {
                                 name: "ecx".to_string(),
                                 bits: 32,
                             },
-                            expression: SemanticExpression::Const { value: 1, bits: 32 },
+                            expression: LirExpression::Const { value: 1, bits: 32 },
                         },
-                        SemanticEffect::Set {
-                            dst: SemanticLocation::Register {
+                        LirEffect::Set {
+                            dst: LirLocation::Register {
                                 name: "edx".to_string(),
                                 bits: 32,
                             },
-                            expression: SemanticExpression::Const { value: 1, bits: 32 },
+                            expression: LirExpression::Const { value: 1, bits: 32 },
                         },
                     ],
-                    terminator: SemanticTerminator::Call {
-                        target: SemanticExpression::Function {
+                    terminator: LirTerminator::Call {
+                        target: LirExpression::Function {
                             name: "add_two".to_string(),
                             bits: 32,
                         },
@@ -1515,14 +1502,14 @@ mod tests {
                     },
                     diagnostics: Vec::new(),
                 },
-                Semantic {
+                Lir {
                     version: 1,
-                    status: SemanticStatus::Complete,
+                    status: LirStatus::Complete,
                     abi: None,
                     encoding: None,
                     temporaries: Vec::new(),
                     effects: Vec::new(),
-                    terminator: SemanticTerminator::Return { expression: None },
+                    terminator: LirTerminator::Return { expression: None },
                     diagnostics: Vec::new(),
                 },
             ],
@@ -1546,7 +1533,7 @@ mod tests {
     #[test]
     fn vex_reports_unsupported_llvm_capabilities() {
         let lifter = Lifter::new(
-            SemanticCpu::from_kind(SemanticCpuKind::Amd64).expect("cpu"),
+            LirCpu::from_kind(LirCpuKind::Amd64).expect("cpu"),
             Configuration::default(),
             LifterBackend::Vex,
             None,

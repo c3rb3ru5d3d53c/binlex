@@ -1,6 +1,6 @@
 use super::LoweringContext;
 use super::helpers::sanitize_symbol;
-use crate::semantics::SemanticEncoding;
+use crate::ir::lir::LirEncoding;
 use inkwell::module::Linkage;
 use inkwell::types::{BasicMetadataTypeEnum, IntType};
 use inkwell::values::{FunctionValue, PointerValue};
@@ -9,10 +9,7 @@ use std::io::Error;
 pub(super) const MAX_ENCODING_BYTES: usize = 16;
 
 impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
-    pub(super) fn emit_instruction_encoding(
-        &self,
-        encoding: &SemanticEncoding,
-    ) -> Result<(), Error> {
+    pub(super) fn emit_instruction_encoding(&self, encoding: &LirEncoding) -> Result<(), Error> {
         if encoding.bytes.len() > MAX_ENCODING_BYTES {
             return Err(Error::other(format!(
                 "instruction encoding byte length {} exceeds max supported {}",
@@ -36,10 +33,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         Ok(())
     }
 
-    fn encoding_payload_global(
-        &self,
-        encoding: &SemanticEncoding,
-    ) -> Result<PointerValue<'ctx>, Error> {
+    fn encoding_payload_global(&self, encoding: &LirEncoding) -> Result<PointerValue<'ctx>, Error> {
         let ptr_ty = self.context.ptr_type(inkwell::AddressSpace::default());
         let byte_array_ty = self.context.i8_type().array_type(MAX_ENCODING_BYTES as u32);
         let encoding_ty = self.context.struct_type(
@@ -182,22 +176,22 @@ mod tests {
     use crate::Configuration;
     use crate::controlflow::{Function, Graph};
     use crate::disassemblers::capstone::Disassembler;
-    use crate::lifters::llvm::Lifter;
-    use crate::semantics::{
-        Semantic, SemanticDiagnostic, SemanticDiagnosticKind, SemanticEffect, SemanticEncoding,
-        SemanticExpression, SemanticLocation, SemanticStatus, SemanticTerminator,
+    use crate::ir::lir::{
+        Lir, LirDiagnostic, LirDiagnosticKind, LirEffect, LirEncoding, LirExpression, LirLocation,
+        LirStatus, LirTerminator,
     };
-    use crate::semantics::{SemanticAbi, SemanticAbiKind, SemanticCpu, SemanticCpuKind, Semantics};
+    use crate::ir::lir::{LirAbi, LirAbiKind, LirCpu, LirCpuKind, LirModule};
+    use crate::lifters::llvm::Lifter;
     use std::collections::BTreeMap;
 
     #[test]
     fn lowers_instruction_encoding_payload_into_llvm_ir() {
         let mut lifter = Lifter::from_architecture(Architecture::ARM64, Configuration::default());
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Partial,
+            status: LirStatus::Partial,
             abi: None,
-            encoding: Some(SemanticEncoding {
+            encoding: Some(LirEncoding {
                 architecture: "arm64".to_string(),
                 mnemonic: "ld4".to_string(),
                 disassembly: "ld4 {v0.16b, v1.16b, v2.16b, v3.16b}, [x3]".to_string(),
@@ -206,16 +200,16 @@ mod tests {
             }),
             temporaries: Vec::new(),
             effects: Vec::new(),
-            terminator: SemanticTerminator::FallThrough,
-            diagnostics: vec![SemanticDiagnostic {
-                kind: SemanticDiagnosticKind::UnsupportedInstruction,
+            terminator: LirTerminator::FallThrough,
+            diagnostics: vec![LirDiagnostic {
+                kind: LirDiagnosticKind::UnsupportedInstruction,
                 message: "arm64 encoding passthrough".to_string(),
             }],
         };
 
         lifter
             .lift_function_semantics(
-                &Semantics {
+                &LirModule {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },
@@ -235,11 +229,11 @@ mod tests {
     #[test]
     fn omits_instruction_encoding_for_complete_semantics() {
         let mut lifter = Lifter::from_architecture(Architecture::AMD64, Configuration::default());
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
-            encoding: Some(SemanticEncoding {
+            encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
                 mnemonic: "xor".to_string(),
                 disassembly: "xor al, 0x4d".to_string(),
@@ -248,13 +242,13 @@ mod tests {
             }),
             temporaries: Vec::new(),
             effects: Vec::new(),
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
         lifter
             .lift_function_semantics(
-                &Semantics {
+                &LirModule {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },
@@ -270,39 +264,37 @@ mod tests {
 
     #[test]
     fn builtin_fastcall_function_arguments_become_llvm_parameters() {
-        let cpu = SemanticCpu::from_kind(SemanticCpuKind::I386).expect("cpu");
-        let abi = SemanticAbi::from_kind(SemanticAbiKind::Fastcall, &cpu).expect("abi");
-        let semantics = Semantic {
+        let cpu = LirCpu::from_kind(LirCpuKind::I386).expect("cpu");
+        let abi = LirAbi::from_kind(LirAbiKind::Fastcall, &cpu).expect("abi");
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "eax".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Binary {
-                    op: crate::semantics::SemanticOperationBinary::Add,
-                    left: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "ecx".to_string(),
-                            bits: 32,
-                        },
-                    ))),
-                    right: Box::new(SemanticExpression::Const { value: 1, bits: 32 }),
+                expression: LirExpression::Binary {
+                    op: crate::ir::lir::LirOperationBinary::Add,
+                    left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "ecx".to_string(),
+                        bits: 32,
+                    }))),
+                    right: Box::new(LirExpression::Const { value: 1, bits: 32 }),
                     bits: 32,
                 },
             }],
-            terminator: SemanticTerminator::Return { expression: None },
+            terminator: LirTerminator::Return { expression: None },
             diagnostics: Vec::new(),
         };
 
         let mut lifter = Lifter::new(cpu, Configuration::default(), None).expect("lifter");
         lifter
             .lift_function_semantics(
-                &Semantics {
+                &LirModule {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },
@@ -352,20 +344,20 @@ mod tests {
     #[test]
     fn arm64_sysv_abi_lifted_function_returns_i64() {
         let config = Configuration::default();
-        let mut semantics = Semantic {
+        let mut semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
             effects: Vec::new(),
-            terminator: SemanticTerminator::Return { expression: None },
+            terminator: LirTerminator::Return { expression: None },
             diagnostics: Vec::new(),
         };
         semantics.set_abi(Some(
-            SemanticAbi::from_kind(
-                SemanticAbiKind::SysV,
-                &SemanticCpu::from_kind(SemanticCpuKind::Arm64).expect("cpu"),
+            LirAbi::from_kind(
+                LirAbiKind::SysV,
+                &LirCpu::from_kind(LirCpuKind::Arm64).expect("cpu"),
             )
             .expect("abi"),
         ));
@@ -374,7 +366,7 @@ mod tests {
         let mut lifter = Lifter::from_architecture(Architecture::ARM64, config);
         lifter
             .lift_function_semantics(
-                &Semantics {
+                &LirModule {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },
@@ -393,20 +385,20 @@ mod tests {
     #[test]
     fn amd64_windows64_abi_lifted_function_returns_i64() {
         let config = Configuration::default();
-        let mut semantics = Semantic {
+        let mut semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
             effects: Vec::new(),
-            terminator: SemanticTerminator::Return { expression: None },
+            terminator: LirTerminator::Return { expression: None },
             diagnostics: Vec::new(),
         };
         semantics.set_abi(Some(
-            SemanticAbi::from_kind(
-                SemanticAbiKind::Windows64,
-                &SemanticCpu::from_kind(SemanticCpuKind::Amd64).expect("cpu"),
+            LirAbi::from_kind(
+                LirAbiKind::Windows64,
+                &LirCpu::from_kind(LirCpuKind::Amd64).expect("cpu"),
             )
             .expect("abi"),
         ));
@@ -415,7 +407,7 @@ mod tests {
         let mut lifter = Lifter::from_architecture(Architecture::AMD64, config);
         lifter
             .lift_function_semantics(
-                &Semantics {
+                &LirModule {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },
@@ -434,20 +426,20 @@ mod tests {
     #[test]
     fn i386_stdcall_abi_lifted_function_returns_i32() {
         let config = Configuration::default();
-        let mut semantics = Semantic {
+        let mut semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
             effects: Vec::new(),
-            terminator: SemanticTerminator::Return { expression: None },
+            terminator: LirTerminator::Return { expression: None },
             diagnostics: Vec::new(),
         };
         semantics.set_abi(Some(
-            SemanticAbi::from_kind(
-                SemanticAbiKind::Stdcall,
-                &SemanticCpu::from_kind(SemanticCpuKind::I386).expect("cpu"),
+            LirAbi::from_kind(
+                LirAbiKind::Stdcall,
+                &LirCpu::from_kind(LirCpuKind::I386).expect("cpu"),
             )
             .expect("abi"),
         ));
@@ -456,7 +448,7 @@ mod tests {
         let mut lifter = Lifter::from_architecture(Architecture::I386, config);
         lifter
             .lift_function_semantics(
-                &Semantics {
+                &LirModule {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },
@@ -475,26 +467,26 @@ mod tests {
     #[test]
     fn i386_stdcall_return_reads_eax_value() {
         let config = Configuration::default();
-        let mut semantics = Semantic {
+        let mut semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "eax".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Const { value: 1, bits: 32 },
+                expression: LirExpression::Const { value: 1, bits: 32 },
             }],
-            terminator: SemanticTerminator::Return { expression: None },
+            terminator: LirTerminator::Return { expression: None },
             diagnostics: Vec::new(),
         };
         semantics.set_abi(Some(
-            SemanticAbi::from_kind(
-                SemanticAbiKind::Stdcall,
-                &SemanticCpu::from_kind(SemanticCpuKind::I386).expect("cpu"),
+            LirAbi::from_kind(
+                LirAbiKind::Stdcall,
+                &LirCpu::from_kind(LirCpuKind::I386).expect("cpu"),
             )
             .expect("abi"),
         ));
@@ -503,7 +495,7 @@ mod tests {
         let mut lifter = Lifter::from_architecture(Architecture::I386, config);
         lifter
             .lift_function_semantics(
-                &Semantics {
+                &LirModule {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },
@@ -522,29 +514,29 @@ mod tests {
     #[test]
     fn explicit_function_semantics_abi_controls_return_shape() {
         let config = Configuration::default();
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "eax".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Const { value: 1, bits: 32 },
+                expression: LirExpression::Const { value: 1, bits: 32 },
             }],
-            terminator: SemanticTerminator::Return { expression: None },
+            terminator: LirTerminator::Return { expression: None },
             diagnostics: Vec::new(),
         };
-        let cpu = SemanticCpu::from_kind(SemanticCpuKind::I386).expect("cpu");
-        let abi = SemanticAbi::from_kind(SemanticAbiKind::Stdcall, &cpu).expect("abi");
+        let cpu = LirCpu::from_kind(LirCpuKind::I386).expect("cpu");
+        let abi = LirAbi::from_kind(LirAbiKind::Stdcall, &cpu).expect("abi");
 
         let mut lifter = Lifter::from_architecture(Architecture::I386, config);
         lifter
             .lift_function_semantics(
-                &Semantics {
+                &LirModule {
                     semantics: vec![semantics],
                     data: Vec::new(),
                 },

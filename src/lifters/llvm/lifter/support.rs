@@ -1,6 +1,6 @@
 use super::LoweringContext;
 use crate::Architecture;
-use crate::semantics::{SemanticExpression, SemanticLocation};
+use crate::ir::lir::{LirExpression, LirLocation};
 use inkwell::IntPredicate;
 use inkwell::basic_block::BasicBlock;
 use inkwell::types::{FloatType, IntType};
@@ -67,15 +67,15 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         }
     }
 
-    pub(super) fn location_type(&self, location: &SemanticLocation) -> IntType<'ctx> {
+    pub(super) fn location_type(&self, location: &LirLocation) -> IntType<'ctx> {
         self.int_type(match location {
-            SemanticLocation::Register { bits, .. } => *bits,
-            SemanticLocation::Flag { bits, .. } => *bits,
-            SemanticLocation::ProgramCounter { bits } => *bits,
-            SemanticLocation::Temporary { bits, .. } => *bits,
-            SemanticLocation::Memory { bits, .. }
-            | SemanticLocation::IndexedMemory { bits, .. }
-            | SemanticLocation::StackMemory { bits, .. } => *bits,
+            LirLocation::Register { bits, .. } => *bits,
+            LirLocation::Flag { bits, .. } => *bits,
+            LirLocation::ProgramCounter { bits } => *bits,
+            LirLocation::Temporary { bits, .. } => *bits,
+            LirLocation::Memory { bits, .. }
+            | LirLocation::IndexedMemory { bits, .. }
+            | LirLocation::StackMemory { bits, .. } => *bits,
         })
     }
 
@@ -110,11 +110,11 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
     pub(super) fn resolve_block_target(
         &self,
-        expression: &SemanticExpression,
+        expression: &LirExpression,
         block_map: &HashMap<u64, BasicBlock<'ctx>>,
     ) -> Option<BasicBlock<'ctx>> {
         let address = match expression {
-            SemanticExpression::Const { value, .. } => u64::try_from(*value).ok()?,
+            LirExpression::Const { value, .. } => u64::try_from(*value).ok()?,
             _ => return None,
         };
         block_map.get(&address).copied()

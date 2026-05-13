@@ -1,4 +1,4 @@
-use crate::semantics::{SemanticExpression, SemanticLocation};
+use crate::ir::lir::{LirExpression, LirLocation};
 use crate::symbolic::{Error, SymbolicCpuState, SymbolicExecutor};
 use z3::ast::{Ast, BV, Bool, RoundingMode};
 
@@ -7,7 +7,7 @@ impl SymbolicExecutor {
         &self,
         state: &mut SymbolicCpuState,
         name: &str,
-        args: &[SemanticExpression],
+        args: &[LirExpression],
         bits: u16,
     ) -> Result<Option<BV>, Error> {
         if let Some(constant) = name.strip_prefix("x86.x87.const_") {
@@ -283,10 +283,10 @@ impl SymbolicExecutor {
     pub(crate) fn apply_intrinsic_effect(
         &self,
         state: &mut SymbolicCpuState,
-        instruction: Option<&crate::semantics::SemanticEncoding>,
+        instruction: Option<&crate::ir::lir::LirEncoding>,
         name: &str,
-        args: &[SemanticExpression],
-        outputs: &[SemanticLocation],
+        args: &[LirExpression],
+        outputs: &[LirLocation],
     ) -> Result<(), Error> {
         if name == "x86.x87.xam" {
             return self.apply_x87_xam_effect(state, instruction, args, outputs);
@@ -297,9 +297,9 @@ impl SymbolicExecutor {
     fn apply_x87_xam_effect(
         &self,
         state: &mut SymbolicCpuState,
-        instruction: Option<&crate::semantics::SemanticEncoding>,
-        args: &[SemanticExpression],
-        outputs: &[SemanticLocation],
+        instruction: Option<&crate::ir::lir::LirEncoding>,
+        args: &[LirExpression],
+        outputs: &[LirLocation],
     ) -> Result<(), Error> {
         let [arg] = args else {
             return Err(Error::UnsupportedEffect("x87 xam arity"));

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Callable, Optional
 
 from binlex.formats import Image
-from binlex.semantics import SemanticCpu, Semantics
+from binlex.ir.lir import LirCpu, LirModule
 
 
 class SliceInstruction:
@@ -28,7 +28,7 @@ class Slice:
 
 
 class CpuState:
-    def __init__(self, cpu: SemanticCpu) -> None: ...
+    def __init__(self, cpu: LirCpu) -> None: ...
     def symbolize_register(self, name: str, bits: int, symbol: Optional[str] = None) -> None: ...
     def set_register(self, name: str, bits: int, value: int) -> None: ...
     def symbolic_register(self, name: str, bits: int) -> Optional[str]: ...
@@ -50,10 +50,10 @@ class CpuState:
 
 class Executor:
     def __init__(self) -> None: ...
-    def step(self, semantics: Semantics, state: CpuState) -> list[CpuState]: ...
+    def step(self, semantics: LirModule, state: CpuState) -> list[CpuState]: ...
     def run(
         self,
-        semantics: Semantics,
+        semantics: LirModule,
         state: CpuState,
         steps: Optional[int] = None,
     ) -> list[CpuState]: ...

@@ -1,58 +1,58 @@
-use crate::semantics::{
-    Semantic, SemanticEffect, SemanticExpression, SemanticLocation, SemanticTemporary,
-    SemanticTerminator, normalize_instruction_semantics, validate_instruction_semantics,
+use crate::ir::lir::{
+    Lir, LirEffect, LirExpression, LirLocation, LirTemporary, LirTerminator,
+    normalize_instruction_lir, validate_instruction_lir,
 };
 use std::collections::{HashMap, HashSet};
 use std::io::Error;
 
-fn expression_bits(expression: &SemanticExpression) -> u16 {
+fn expression_bits(expression: &LirExpression) -> u16 {
     match expression {
-        SemanticExpression::Const { bits, .. }
-        | SemanticExpression::Function { bits, .. }
-        | SemanticExpression::DataAddress { bits, .. }
-        | SemanticExpression::AddressOf { bits, .. }
-        | SemanticExpression::Load { bits, .. }
-        | SemanticExpression::Unary { bits, .. }
-        | SemanticExpression::Binary { bits, .. }
-        | SemanticExpression::Cast { bits, .. }
-        | SemanticExpression::Compare { bits, .. }
-        | SemanticExpression::Select { bits, .. }
-        | SemanticExpression::Extract { bits, .. }
-        | SemanticExpression::Concat { bits, .. }
-        | SemanticExpression::Undefined { bits }
-        | SemanticExpression::Poison { bits }
-        | SemanticExpression::Intrinsic { bits, .. }
-        | SemanticExpression::Null { bits }
-        | SemanticExpression::Allocate { bits, .. }
-        | SemanticExpression::ReadProperty { bits, .. }
-        | SemanticExpression::ReadElement { bits, .. } => *bits,
-        SemanticExpression::Read(location) => match location.as_ref() {
-            crate::semantics::SemanticLocation::Register { bits, .. }
-            | crate::semantics::SemanticLocation::Flag { bits, .. }
-            | crate::semantics::SemanticLocation::ProgramCounter { bits }
-            | crate::semantics::SemanticLocation::Temporary { bits, .. }
-            | crate::semantics::SemanticLocation::Memory { bits, .. }
-            | crate::semantics::SemanticLocation::IndexedMemory { bits, .. }
-            | crate::semantics::SemanticLocation::StackMemory { bits, .. } => *bits,
+        LirExpression::Const { bits, .. }
+        | LirExpression::Function { bits, .. }
+        | LirExpression::DataAddress { bits, .. }
+        | LirExpression::AddressOf { bits, .. }
+        | LirExpression::Load { bits, .. }
+        | LirExpression::Unary { bits, .. }
+        | LirExpression::Binary { bits, .. }
+        | LirExpression::Cast { bits, .. }
+        | LirExpression::Compare { bits, .. }
+        | LirExpression::Select { bits, .. }
+        | LirExpression::Extract { bits, .. }
+        | LirExpression::Concat { bits, .. }
+        | LirExpression::Undefined { bits }
+        | LirExpression::Poison { bits }
+        | LirExpression::Intrinsic { bits, .. }
+        | LirExpression::Null { bits }
+        | LirExpression::Allocate { bits, .. }
+        | LirExpression::ReadProperty { bits, .. }
+        | LirExpression::ReadElement { bits, .. } => *bits,
+        LirExpression::Read(location) => match location.as_ref() {
+            crate::ir::lir::LirLocation::Register { bits, .. }
+            | crate::ir::lir::LirLocation::Flag { bits, .. }
+            | crate::ir::lir::LirLocation::ProgramCounter { bits }
+            | crate::ir::lir::LirLocation::Temporary { bits, .. }
+            | crate::ir::lir::LirLocation::Memory { bits, .. }
+            | crate::ir::lir::LirLocation::IndexedMemory { bits, .. }
+            | crate::ir::lir::LirLocation::StackMemory { bits, .. } => *bits,
         },
     }
 }
 
-fn coerce_expression_width(expression: SemanticExpression, bits: u16) -> SemanticExpression {
+fn coerce_expression_width(expression: LirExpression, bits: u16) -> LirExpression {
     let current_bits = expression_bits(&expression);
     if current_bits == bits {
         return expression;
     }
 
     if current_bits < bits {
-        SemanticExpression::Cast {
-            op: crate::semantics::SemanticOperationCast::ZeroExtend,
+        LirExpression::Cast {
+            op: crate::ir::lir::LirOperationCast::ZeroExtend,
             arg: Box::new(expression),
             bits,
         }
     } else {
-        SemanticExpression::Cast {
-            op: crate::semantics::SemanticOperationCast::Truncate,
+        LirExpression::Cast {
+            op: crate::ir::lir::LirOperationCast::Truncate,
             arg: Box::new(expression),
             bits,
         }
@@ -60,36 +60,31 @@ fn coerce_expression_width(expression: SemanticExpression, bits: u16) -> Semanti
 }
 
 fn normalize_shift_binary(
-    op: crate::semantics::SemanticOperationBinary,
-    left: SemanticExpression,
-    right: SemanticExpression,
+    op: crate::ir::lir::LirOperationBinary,
+    left: LirExpression,
+    right: LirExpression,
     bits: u16,
-) -> (SemanticExpression, SemanticExpression) {
+) -> (LirExpression, LirExpression) {
     match op {
-        crate::semantics::SemanticOperationBinary::Shl
-        | crate::semantics::SemanticOperationBinary::LShr
-        | crate::semantics::SemanticOperationBinary::AShr => {
-            (left, coerce_expression_width(right, bits))
-        }
+        crate::ir::lir::LirOperationBinary::Shl
+        | crate::ir::lir::LirOperationBinary::LShr
+        | crate::ir::lir::LirOperationBinary::AShr => (left, coerce_expression_width(right, bits)),
         _ => (left, right),
     }
 }
 
 fn normalize_binary(
-    op: crate::semantics::SemanticOperationBinary,
-    left: SemanticExpression,
-    right: SemanticExpression,
+    op: crate::ir::lir::LirOperationBinary,
+    left: LirExpression,
+    right: LirExpression,
     bits: u16,
-) -> (SemanticExpression, SemanticExpression) {
+) -> (LirExpression, LirExpression) {
     let left = coerce_expression_width(left, bits);
     let right = coerce_expression_width(right, bits);
     normalize_shift_binary(op, left, right, bits)
 }
 
-fn normalize_compare(
-    left: SemanticExpression,
-    right: SemanticExpression,
-) -> (SemanticExpression, SemanticExpression) {
+fn normalize_compare(left: LirExpression, right: LirExpression) -> (LirExpression, LirExpression) {
     let left_bits = expression_bits(&left);
     let right_bits = expression_bits(&right);
     if left_bits == right_bits {
@@ -97,18 +92,18 @@ fn normalize_compare(
     }
 
     match (&left, &right) {
-        (SemanticExpression::Const { .. }, _) => (coerce_expression_width(left, right_bits), right),
-        (_, SemanticExpression::Const { .. }) => (left, coerce_expression_width(right, left_bits)),
+        (LirExpression::Const { .. }, _) => (coerce_expression_width(left, right_bits), right),
+        (_, LirExpression::Const { .. }) => (left, coerce_expression_width(right, left_bits)),
         _ => (left, coerce_expression_width(right, left_bits)),
     }
 }
 
-pub fn prepare_instruction_semantics(semantics: &Semantic) -> Result<Semantic, Error> {
-    validate_instruction_semantics(semantics)?;
-    let normalized = normalize_instruction_semantics(semantics);
+pub fn prepare_instruction_semantics(semantics: &Lir) -> Result<Lir, Error> {
+    validate_instruction_lir(semantics)?;
+    let normalized = normalize_instruction_lir(semantics);
     let (temporaries, snapshot_effects, effects, snapshots, load_snapshots) =
         snapshot_written_locations(&normalized);
-    Ok(Semantic {
+    Ok(Lir {
         version: normalized.version,
         status: normalized.status,
         abi: normalized.abi,
@@ -129,51 +124,51 @@ pub fn prepare_instruction_semantics(semantics: &Semantic) -> Result<Semantic, E
 }
 
 fn snapshot_written_locations(
-    semantics: &Semantic,
+    semantics: &Lir,
 ) -> (
-    Vec<SemanticTemporary>,
-    Vec<SemanticEffect>,
-    Vec<SemanticEffect>,
-    HashMap<SemanticLocation, SemanticLocation>,
-    HashMap<SemanticExpression, SemanticLocation>,
+    Vec<LirTemporary>,
+    Vec<LirEffect>,
+    Vec<LirEffect>,
+    HashMap<LirLocation, LirLocation>,
+    HashMap<LirExpression, LirLocation>,
 ) {
     let mut temporaries = semantics.temporaries.clone();
-    let mut snapshots = HashMap::<SemanticLocation, SemanticLocation>::new();
-    let mut load_snapshots = HashMap::<SemanticExpression, SemanticLocation>::new();
+    let mut snapshots = HashMap::<LirLocation, LirLocation>::new();
+    let mut load_snapshots = HashMap::<LirExpression, LirLocation>::new();
     let read_locations = collect_read_locations(semantics);
     let read_loads = collect_read_loads(semantics);
     let written_loads = collect_written_loads(semantics);
     let mut next_temp_id = temporaries.iter().map(|temp| temp.id).max().unwrap_or(0);
-    let mut snapshot_effects = Vec::<SemanticEffect>::new();
+    let mut snapshot_effects = Vec::<LirEffect>::new();
 
     for effect in &semantics.effects {
-        if let SemanticEffect::Set { dst, .. } = effect {
+        if let LirEffect::Set { dst, .. } = effect {
             let should_snapshot = matches!(
                 dst,
-                SemanticLocation::Register { .. }
-                    | SemanticLocation::Flag { .. }
-                    | SemanticLocation::ProgramCounter { .. }
+                LirLocation::Register { .. }
+                    | LirLocation::Flag { .. }
+                    | LirLocation::ProgramCounter { .. }
             ) && read_locations.contains(dst);
             if should_snapshot && !snapshots.contains_key(dst) {
                 next_temp_id += 1;
                 let bits = match dst {
-                    SemanticLocation::Register { bits, .. } => *bits,
-                    SemanticLocation::Flag { bits, .. } => *bits,
-                    SemanticLocation::ProgramCounter { bits } => *bits,
+                    LirLocation::Register { bits, .. } => *bits,
+                    LirLocation::Flag { bits, .. } => *bits,
+                    LirLocation::ProgramCounter { bits } => *bits,
                     _ => 0,
                 };
-                let temp = SemanticLocation::Temporary {
+                let temp = LirLocation::Temporary {
                     id: next_temp_id,
                     bits,
                 };
-                temporaries.push(SemanticTemporary {
+                temporaries.push(LirTemporary {
                     id: next_temp_id,
                     bits,
                     name: Some(format!("snapshot_{}", snapshots.len())),
                 });
-                snapshot_effects.push(SemanticEffect::Set {
+                snapshot_effects.push(LirEffect::Set {
                     dst: temp.clone(),
-                    expression: SemanticExpression::Read(Box::new(dst.clone())),
+                    expression: LirExpression::Read(Box::new(dst.clone())),
                 });
                 snapshots.insert(dst.clone(), temp);
             }
@@ -184,19 +179,19 @@ fn snapshot_written_locations(
         if written_loads.contains(&load) && !load_snapshots.contains_key(&load) {
             next_temp_id += 1;
             let bits = match &load {
-                SemanticExpression::Load { bits, .. } => *bits,
+                LirExpression::Load { bits, .. } => *bits,
                 _ => continue,
             };
-            let temp = SemanticLocation::Temporary {
+            let temp = LirLocation::Temporary {
                 id: next_temp_id,
                 bits,
             };
-            temporaries.push(SemanticTemporary {
+            temporaries.push(LirTemporary {
                 id: next_temp_id,
                 bits,
                 name: Some(format!("load_snapshot_{}", load_snapshots.len())),
             });
-            snapshot_effects.push(SemanticEffect::Set {
+            snapshot_effects.push(LirEffect::Set {
                 dst: temp.clone(),
                 expression: load.clone(),
             });
@@ -213,7 +208,7 @@ fn snapshot_written_locations(
     )
 }
 
-fn collect_read_locations(semantics: &Semantic) -> HashSet<SemanticLocation> {
+fn collect_read_locations(semantics: &Lir) -> HashSet<LirLocation> {
     let mut reads = HashSet::new();
     for effect in &semantics.effects {
         collect_effect_reads(effect, &mut reads);
@@ -222,7 +217,7 @@ fn collect_read_locations(semantics: &Semantic) -> HashSet<SemanticLocation> {
     reads
 }
 
-fn collect_read_loads(semantics: &Semantic) -> HashSet<SemanticExpression> {
+fn collect_read_loads(semantics: &Lir) -> HashSet<LirExpression> {
     let mut reads = HashSet::new();
     for effect in &semantics.effects {
         collect_effect_loads(effect, &mut reads);
@@ -231,54 +226,54 @@ fn collect_read_loads(semantics: &Semantic) -> HashSet<SemanticExpression> {
     reads
 }
 
-fn collect_written_loads(semantics: &Semantic) -> HashSet<SemanticExpression> {
+fn collect_written_loads(semantics: &Lir) -> HashSet<LirExpression> {
     let mut writes = HashSet::new();
     for effect in &semantics.effects {
         match effect {
-            SemanticEffect::Set { dst, .. } => {
-                if let SemanticLocation::Memory { space, addr, bits } = dst {
-                    writes.insert(SemanticExpression::Load {
+            LirEffect::Set { dst, .. } => {
+                if let LirLocation::Memory { space, addr, bits } = dst {
+                    writes.insert(LirExpression::Load {
                         space: space.clone(),
                         addr: addr.clone(),
                         bits: *bits,
                     });
                 }
             }
-            SemanticEffect::Store {
+            LirEffect::Store {
                 space, addr, bits, ..
             } => {
-                writes.insert(SemanticExpression::Load {
+                writes.insert(LirExpression::Load {
                     space: space.clone(),
                     addr: Box::new(addr.clone()),
                     bits: *bits,
                 });
             }
-            SemanticEffect::AtomicCmpXchg {
+            LirEffect::AtomicCmpXchg {
                 space, addr, bits, ..
             } => {
-                writes.insert(SemanticExpression::Load {
+                writes.insert(LirExpression::Load {
                     space: space.clone(),
                     addr: Box::new(addr.clone()),
                     bits: *bits,
                 });
             }
-            SemanticEffect::Push { .. } | SemanticEffect::Pop { .. } => {}
+            LirEffect::Push { .. } | LirEffect::Pop { .. } => {}
             _ => {}
         }
     }
     writes
 }
 
-fn collect_effect_reads(effect: &SemanticEffect, reads: &mut HashSet<SemanticLocation>) {
+fn collect_effect_reads(effect: &LirEffect, reads: &mut HashSet<LirLocation>) {
     match effect {
-        SemanticEffect::Set { expression, .. } => collect_expression_reads(expression, reads),
-        SemanticEffect::Store {
+        LirEffect::Set { expression, .. } => collect_expression_reads(expression, reads),
+        LirEffect::Store {
             addr, expression, ..
         } => {
             collect_expression_reads(addr, reads);
             collect_expression_reads(expression, reads);
         }
-        SemanticEffect::MemorySet {
+        LirEffect::MemorySet {
             addr,
             value,
             count,
@@ -290,7 +285,7 @@ fn collect_effect_reads(effect: &SemanticEffect, reads: &mut HashSet<SemanticLoc
             collect_expression_reads(count, reads);
             collect_expression_reads(decrement, reads);
         }
-        SemanticEffect::MemoryCopy {
+        LirEffect::MemoryCopy {
             src_addr,
             dst_addr,
             count,
@@ -302,7 +297,7 @@ fn collect_effect_reads(effect: &SemanticEffect, reads: &mut HashSet<SemanticLoc
             collect_expression_reads(count, reads);
             collect_expression_reads(decrement, reads);
         }
-        SemanticEffect::AtomicCmpXchg {
+        LirEffect::AtomicCmpXchg {
             addr,
             expected,
             desired,
@@ -312,7 +307,7 @@ fn collect_effect_reads(effect: &SemanticEffect, reads: &mut HashSet<SemanticLoc
             collect_expression_reads(expected, reads);
             collect_expression_reads(desired, reads);
         }
-        SemanticEffect::WriteProperty {
+        LirEffect::WriteProperty {
             reference,
             expression,
             ..
@@ -320,7 +315,7 @@ fn collect_effect_reads(effect: &SemanticEffect, reads: &mut HashSet<SemanticLoc
             collect_expression_reads(reference, reads);
             collect_expression_reads(expression, reads);
         }
-        SemanticEffect::WriteElement {
+        LirEffect::WriteElement {
             reference,
             index,
             expression,
@@ -330,27 +325,27 @@ fn collect_effect_reads(effect: &SemanticEffect, reads: &mut HashSet<SemanticLoc
             collect_expression_reads(index, reads);
             collect_expression_reads(expression, reads);
         }
-        SemanticEffect::Push { expression, .. } => collect_expression_reads(expression, reads),
-        SemanticEffect::Pop { .. } => {}
-        SemanticEffect::Intrinsic { args, .. } => {
+        LirEffect::Push { expression, .. } => collect_expression_reads(expression, reads),
+        LirEffect::Pop { .. } => {}
+        LirEffect::Intrinsic { args, .. } => {
             for arg in args {
                 collect_expression_reads(arg, reads);
             }
         }
-        SemanticEffect::Fence { .. } | SemanticEffect::Trap { .. } | SemanticEffect::Nop => {}
+        LirEffect::Fence { .. } | LirEffect::Trap { .. } | LirEffect::Nop => {}
     }
 }
 
-fn collect_effect_loads(effect: &SemanticEffect, reads: &mut HashSet<SemanticExpression>) {
+fn collect_effect_loads(effect: &LirEffect, reads: &mut HashSet<LirExpression>) {
     match effect {
-        SemanticEffect::Set { expression, .. } => collect_expression_loads(expression, reads),
-        SemanticEffect::Store {
+        LirEffect::Set { expression, .. } => collect_expression_loads(expression, reads),
+        LirEffect::Store {
             addr, expression, ..
         } => {
             collect_expression_loads(addr, reads);
             collect_expression_loads(expression, reads);
         }
-        SemanticEffect::MemorySet {
+        LirEffect::MemorySet {
             addr,
             value,
             count,
@@ -362,7 +357,7 @@ fn collect_effect_loads(effect: &SemanticEffect, reads: &mut HashSet<SemanticExp
             collect_expression_loads(count, reads);
             collect_expression_loads(decrement, reads);
         }
-        SemanticEffect::MemoryCopy {
+        LirEffect::MemoryCopy {
             src_addr,
             dst_addr,
             count,
@@ -374,7 +369,7 @@ fn collect_effect_loads(effect: &SemanticEffect, reads: &mut HashSet<SemanticExp
             collect_expression_loads(count, reads);
             collect_expression_loads(decrement, reads);
         }
-        SemanticEffect::AtomicCmpXchg {
+        LirEffect::AtomicCmpXchg {
             addr,
             expected,
             desired,
@@ -384,7 +379,7 @@ fn collect_effect_loads(effect: &SemanticEffect, reads: &mut HashSet<SemanticExp
             collect_expression_loads(expected, reads);
             collect_expression_loads(desired, reads);
         }
-        SemanticEffect::WriteProperty {
+        LirEffect::WriteProperty {
             reference,
             expression,
             ..
@@ -392,7 +387,7 @@ fn collect_effect_loads(effect: &SemanticEffect, reads: &mut HashSet<SemanticExp
             collect_expression_loads(reference, reads);
             collect_expression_loads(expression, reads);
         }
-        SemanticEffect::WriteElement {
+        LirEffect::WriteElement {
             reference,
             index,
             expression,
@@ -402,24 +397,21 @@ fn collect_effect_loads(effect: &SemanticEffect, reads: &mut HashSet<SemanticExp
             collect_expression_loads(index, reads);
             collect_expression_loads(expression, reads);
         }
-        SemanticEffect::Push { expression, .. } => collect_expression_loads(expression, reads),
-        SemanticEffect::Pop { .. } => {}
-        SemanticEffect::Intrinsic { args, .. } => {
+        LirEffect::Push { expression, .. } => collect_expression_loads(expression, reads),
+        LirEffect::Pop { .. } => {}
+        LirEffect::Intrinsic { args, .. } => {
             for arg in args {
                 collect_expression_loads(arg, reads);
             }
         }
-        SemanticEffect::Fence { .. } | SemanticEffect::Trap { .. } | SemanticEffect::Nop => {}
+        LirEffect::Fence { .. } | LirEffect::Trap { .. } | LirEffect::Nop => {}
     }
 }
 
-fn collect_terminator_reads(
-    terminator: &SemanticTerminator,
-    reads: &mut HashSet<SemanticLocation>,
-) {
+fn collect_terminator_reads(terminator: &LirTerminator, reads: &mut HashSet<LirLocation>) {
     match terminator {
-        SemanticTerminator::Jump { target } => collect_expression_reads(target, reads),
-        SemanticTerminator::Branch {
+        LirTerminator::Jump { target } => collect_expression_reads(target, reads),
+        LirTerminator::Branch {
             condition,
             true_target,
             false_target,
@@ -428,7 +420,7 @@ fn collect_terminator_reads(
             collect_expression_reads(true_target, reads);
             collect_expression_reads(false_target, reads);
         }
-        SemanticTerminator::Call {
+        LirTerminator::Call {
             target,
             return_target,
             ..
@@ -438,24 +430,19 @@ fn collect_terminator_reads(
                 collect_expression_reads(return_target, reads);
             }
         }
-        SemanticTerminator::Return { expression } => {
+        LirTerminator::Return { expression } => {
             if let Some(expression) = expression {
                 collect_expression_reads(expression, reads);
             }
         }
-        SemanticTerminator::FallThrough
-        | SemanticTerminator::Unreachable
-        | SemanticTerminator::Trap => {}
+        LirTerminator::FallThrough | LirTerminator::Unreachable | LirTerminator::Trap => {}
     }
 }
 
-fn collect_terminator_loads(
-    terminator: &SemanticTerminator,
-    reads: &mut HashSet<SemanticExpression>,
-) {
+fn collect_terminator_loads(terminator: &LirTerminator, reads: &mut HashSet<LirExpression>) {
     match terminator {
-        SemanticTerminator::Jump { target } => collect_expression_loads(target, reads),
-        SemanticTerminator::Branch {
+        LirTerminator::Jump { target } => collect_expression_loads(target, reads),
+        LirTerminator::Branch {
             condition,
             true_target,
             false_target,
@@ -464,7 +451,7 @@ fn collect_terminator_loads(
             collect_expression_loads(true_target, reads);
             collect_expression_loads(false_target, reads);
         }
-        SemanticTerminator::Call {
+        LirTerminator::Call {
             target,
             return_target,
             ..
@@ -474,39 +461,34 @@ fn collect_terminator_loads(
                 collect_expression_loads(return_target, reads);
             }
         }
-        SemanticTerminator::Return { expression } => {
+        LirTerminator::Return { expression } => {
             if let Some(expression) = expression {
                 collect_expression_loads(expression, reads);
             }
         }
-        SemanticTerminator::FallThrough
-        | SemanticTerminator::Unreachable
-        | SemanticTerminator::Trap => {}
+        LirTerminator::FallThrough | LirTerminator::Unreachable | LirTerminator::Trap => {}
     }
 }
 
-fn collect_expression_reads(
-    expression: &SemanticExpression,
-    reads: &mut HashSet<SemanticLocation>,
-) {
+fn collect_expression_reads(expression: &LirExpression, reads: &mut HashSet<LirLocation>) {
     match expression {
-        SemanticExpression::Function { .. } => {}
-        SemanticExpression::DataAddress { .. } => {}
-        SemanticExpression::AddressOf { .. } => {}
-        SemanticExpression::Read(location) => {
+        LirExpression::Function { .. } => {}
+        LirExpression::DataAddress { .. } => {}
+        LirExpression::AddressOf { .. } => {}
+        LirExpression::Read(location) => {
             reads.insert(location.as_ref().clone());
         }
-        SemanticExpression::Load { addr, .. } => collect_expression_reads(addr, reads),
-        SemanticExpression::Unary { arg, .. } => collect_expression_reads(arg, reads),
-        SemanticExpression::Binary { left, right, .. } => {
+        LirExpression::Load { addr, .. } => collect_expression_reads(addr, reads),
+        LirExpression::Unary { arg, .. } => collect_expression_reads(arg, reads),
+        LirExpression::Binary { left, right, .. } => {
             collect_expression_reads(left, reads);
             collect_expression_reads(right, reads);
         }
-        SemanticExpression::Compare { left, right, .. } => {
+        LirExpression::Compare { left, right, .. } => {
             collect_expression_reads(left, reads);
             collect_expression_reads(right, reads);
         }
-        SemanticExpression::Select {
+        LirExpression::Select {
             condition,
             when_true,
             when_false,
@@ -516,71 +498,63 @@ fn collect_expression_reads(
             collect_expression_reads(when_true, reads);
             collect_expression_reads(when_false, reads);
         }
-        SemanticExpression::Cast { arg, .. } | SemanticExpression::Extract { arg, .. } => {
+        LirExpression::Cast { arg, .. } | LirExpression::Extract { arg, .. } => {
             collect_expression_reads(arg, reads)
         }
-        SemanticExpression::ReadProperty { reference, .. } => {
-            collect_expression_reads(reference, reads)
-        }
-        SemanticExpression::ReadElement {
+        LirExpression::ReadProperty { reference, .. } => collect_expression_reads(reference, reads),
+        LirExpression::ReadElement {
             reference, index, ..
         } => {
             collect_expression_reads(reference, reads);
             collect_expression_reads(index, reads);
         }
-        SemanticExpression::Concat { parts, .. } => {
+        LirExpression::Concat { parts, .. } => {
             for part in parts {
                 collect_expression_reads(part, reads);
             }
         }
-        SemanticExpression::Intrinsic { args, .. } => {
+        LirExpression::Intrinsic { args, .. } => {
             for arg in args {
                 collect_expression_reads(arg, reads);
             }
         }
-        SemanticExpression::Const { .. }
-        | SemanticExpression::Undefined { .. }
-        | SemanticExpression::Poison { .. }
-        | SemanticExpression::Null { .. }
-        | SemanticExpression::Allocate { .. } => {}
+        LirExpression::Const { .. }
+        | LirExpression::Undefined { .. }
+        | LirExpression::Poison { .. }
+        | LirExpression::Null { .. }
+        | LirExpression::Allocate { .. } => {}
     }
 }
 
-fn collect_expression_loads(
-    expression: &SemanticExpression,
-    reads: &mut HashSet<SemanticExpression>,
-) {
+fn collect_expression_loads(expression: &LirExpression, reads: &mut HashSet<LirExpression>) {
     match expression {
-        SemanticExpression::Read(_) => {}
-        SemanticExpression::Function { .. } => {}
-        SemanticExpression::DataAddress { .. } => {}
-        SemanticExpression::AddressOf { .. } => {}
-        SemanticExpression::Load { space, addr, bits } => {
-            reads.insert(SemanticExpression::Load {
+        LirExpression::Read(_) => {}
+        LirExpression::Function { .. } => {}
+        LirExpression::DataAddress { .. } => {}
+        LirExpression::AddressOf { .. } => {}
+        LirExpression::Load { space, addr, bits } => {
+            reads.insert(LirExpression::Load {
                 space: space.clone(),
                 addr: Box::new((**addr).clone()),
                 bits: *bits,
             });
             collect_expression_loads(addr, reads);
         }
-        SemanticExpression::Unary { arg, .. }
-        | SemanticExpression::Cast { arg, .. }
-        | SemanticExpression::Extract { arg, .. } => collect_expression_loads(arg, reads),
-        SemanticExpression::ReadProperty { reference, .. } => {
-            collect_expression_loads(reference, reads)
-        }
-        SemanticExpression::ReadElement {
+        LirExpression::Unary { arg, .. }
+        | LirExpression::Cast { arg, .. }
+        | LirExpression::Extract { arg, .. } => collect_expression_loads(arg, reads),
+        LirExpression::ReadProperty { reference, .. } => collect_expression_loads(reference, reads),
+        LirExpression::ReadElement {
             reference, index, ..
         } => {
             collect_expression_loads(reference, reads);
             collect_expression_loads(index, reads);
         }
-        SemanticExpression::Binary { left, right, .. }
-        | SemanticExpression::Compare { left, right, .. } => {
+        LirExpression::Binary { left, right, .. } | LirExpression::Compare { left, right, .. } => {
             collect_expression_loads(left, reads);
             collect_expression_loads(right, reads);
         }
-        SemanticExpression::Select {
+        LirExpression::Select {
             condition,
             when_true,
             when_false,
@@ -590,32 +564,32 @@ fn collect_expression_loads(
             collect_expression_loads(when_true, reads);
             collect_expression_loads(when_false, reads);
         }
-        SemanticExpression::Concat { parts, .. } => {
+        LirExpression::Concat { parts, .. } => {
             for part in parts {
                 collect_expression_loads(part, reads);
             }
         }
-        SemanticExpression::Intrinsic { args, .. } => {
+        LirExpression::Intrinsic { args, .. } => {
             for arg in args {
                 collect_expression_loads(arg, reads);
             }
         }
-        SemanticExpression::Const { .. }
-        | SemanticExpression::Undefined { .. }
-        | SemanticExpression::Poison { .. }
-        | SemanticExpression::Null { .. }
-        | SemanticExpression::Allocate { .. } => {}
+        LirExpression::Const { .. }
+        | LirExpression::Undefined { .. }
+        | LirExpression::Poison { .. }
+        | LirExpression::Null { .. }
+        | LirExpression::Allocate { .. } => {}
     }
 }
 
 fn prepare_effect(
-    effect: &SemanticEffect,
-    snapshots: &HashMap<SemanticLocation, SemanticLocation>,
-    load_snapshots: &HashMap<SemanticExpression, SemanticLocation>,
-) -> SemanticEffect {
+    effect: &LirEffect,
+    snapshots: &HashMap<LirLocation, LirLocation>,
+    load_snapshots: &HashMap<LirExpression, LirLocation>,
+) -> LirEffect {
     match effect {
-        SemanticEffect::Set { dst, expression } => match dst {
-            crate::semantics::SemanticLocation::Memory { bits, .. } => SemanticEffect::Set {
+        LirEffect::Set { dst, expression } => match dst {
+            crate::ir::lir::LirLocation::Memory { bits, .. } => LirEffect::Set {
                 dst: dst.clone(),
                 expression: prepare_expression(
                     &coerce_expression_width(expression.clone(), *bits),
@@ -623,17 +597,17 @@ fn prepare_effect(
                     load_snapshots,
                 ),
             },
-            _ => SemanticEffect::Set {
+            _ => LirEffect::Set {
                 dst: dst.clone(),
                 expression: prepare_expression(expression, snapshots, load_snapshots),
             },
         },
-        SemanticEffect::Store {
+        LirEffect::Store {
             space,
             addr,
             expression,
             bits,
-        } => SemanticEffect::Store {
+        } => LirEffect::Store {
             space: space.clone(),
             addr: prepare_expression(addr, snapshots, load_snapshots),
             expression: prepare_expression(
@@ -643,14 +617,14 @@ fn prepare_effect(
             ),
             bits: *bits,
         },
-        SemanticEffect::MemorySet {
+        LirEffect::MemorySet {
             space,
             addr,
             value,
             count,
             element_bits,
             decrement,
-        } => SemanticEffect::MemorySet {
+        } => LirEffect::MemorySet {
             space: space.clone(),
             addr: prepare_expression(addr, snapshots, load_snapshots),
             value: prepare_expression(
@@ -662,7 +636,7 @@ fn prepare_effect(
             element_bits: *element_bits,
             decrement: prepare_expression(decrement, snapshots, load_snapshots),
         },
-        SemanticEffect::MemoryCopy {
+        LirEffect::MemoryCopy {
             src_space,
             src_addr,
             dst_space,
@@ -670,7 +644,7 @@ fn prepare_effect(
             count,
             element_bits,
             decrement,
-        } => SemanticEffect::MemoryCopy {
+        } => LirEffect::MemoryCopy {
             src_space: src_space.clone(),
             src_addr: prepare_expression(src_addr, snapshots, load_snapshots),
             dst_space: dst_space.clone(),
@@ -679,14 +653,14 @@ fn prepare_effect(
             element_bits: *element_bits,
             decrement: prepare_expression(decrement, snapshots, load_snapshots),
         },
-        SemanticEffect::AtomicCmpXchg {
+        LirEffect::AtomicCmpXchg {
             space,
             addr,
             expected,
             desired,
             bits,
             observed,
-        } => SemanticEffect::AtomicCmpXchg {
+        } => LirEffect::AtomicCmpXchg {
             space: space.clone(),
             addr: prepare_expression(addr, snapshots, load_snapshots),
             expected: prepare_expression(
@@ -702,12 +676,12 @@ fn prepare_effect(
             bits: *bits,
             observed: observed.clone(),
         },
-        SemanticEffect::WriteProperty {
+        LirEffect::WriteProperty {
             reference,
             name,
             expression,
             bits,
-        } => SemanticEffect::WriteProperty {
+        } => LirEffect::WriteProperty {
             reference: prepare_expression(reference, snapshots, load_snapshots),
             name: name.clone(),
             expression: prepare_expression(
@@ -717,12 +691,12 @@ fn prepare_effect(
             ),
             bits: *bits,
         },
-        SemanticEffect::WriteElement {
+        LirEffect::WriteElement {
             reference,
             index,
             expression,
             bits,
-        } => SemanticEffect::WriteElement {
+        } => LirEffect::WriteElement {
             reference: prepare_expression(reference, snapshots, load_snapshots),
             index: prepare_expression(index, snapshots, load_snapshots),
             expression: prepare_expression(
@@ -732,21 +706,21 @@ fn prepare_effect(
             ),
             bits: *bits,
         },
-        SemanticEffect::Push { stack, expression } => SemanticEffect::Push {
+        LirEffect::Push { stack, expression } => LirEffect::Push {
             stack: stack.clone(),
             expression: prepare_expression(expression, snapshots, load_snapshots),
         },
-        SemanticEffect::Pop { stack, dst } => SemanticEffect::Pop {
+        LirEffect::Pop { stack, dst } => LirEffect::Pop {
             stack: stack.clone(),
             dst: dst.clone(),
         },
-        SemanticEffect::Fence { kind } => SemanticEffect::Fence { kind: kind.clone() },
-        SemanticEffect::Trap { kind } => SemanticEffect::Trap { kind: kind.clone() },
-        SemanticEffect::Intrinsic {
+        LirEffect::Fence { kind } => LirEffect::Fence { kind: kind.clone() },
+        LirEffect::Trap { kind } => LirEffect::Trap { kind: kind.clone() },
+        LirEffect::Intrinsic {
             name,
             args,
             outputs,
-        } => SemanticEffect::Intrinsic {
+        } => LirEffect::Intrinsic {
             name: name.clone(),
             args: args
                 .iter()
@@ -754,123 +728,123 @@ fn prepare_effect(
                 .collect(),
             outputs: outputs.clone(),
         },
-        SemanticEffect::Nop => SemanticEffect::Nop,
+        LirEffect::Nop => LirEffect::Nop,
     }
 }
 
 fn prepare_terminator(
-    terminator: &SemanticTerminator,
-    snapshots: &HashMap<SemanticLocation, SemanticLocation>,
-    load_snapshots: &HashMap<SemanticExpression, SemanticLocation>,
-) -> SemanticTerminator {
+    terminator: &LirTerminator,
+    snapshots: &HashMap<LirLocation, LirLocation>,
+    load_snapshots: &HashMap<LirExpression, LirLocation>,
+) -> LirTerminator {
     match terminator {
-        SemanticTerminator::FallThrough => SemanticTerminator::FallThrough,
-        SemanticTerminator::Jump { target } => SemanticTerminator::Jump {
+        LirTerminator::FallThrough => LirTerminator::FallThrough,
+        LirTerminator::Jump { target } => LirTerminator::Jump {
             target: prepare_expression(target, snapshots, load_snapshots),
         },
-        SemanticTerminator::Branch {
+        LirTerminator::Branch {
             condition,
             true_target,
             false_target,
-        } => SemanticTerminator::Branch {
+        } => LirTerminator::Branch {
             condition: prepare_expression(condition, snapshots, load_snapshots),
             true_target: prepare_expression(true_target, snapshots, load_snapshots),
             false_target: prepare_expression(false_target, snapshots, load_snapshots),
         },
-        SemanticTerminator::Call {
+        LirTerminator::Call {
             target,
             return_target,
             does_return,
-        } => SemanticTerminator::Call {
+        } => LirTerminator::Call {
             target: prepare_expression(target, snapshots, load_snapshots),
             return_target: return_target
                 .as_ref()
                 .map(|expression| prepare_expression(expression, snapshots, load_snapshots)),
             does_return: *does_return,
         },
-        SemanticTerminator::Return { expression } => SemanticTerminator::Return {
+        LirTerminator::Return { expression } => LirTerminator::Return {
             expression: expression
                 .as_ref()
                 .map(|expression| prepare_expression(expression, snapshots, load_snapshots)),
         },
-        SemanticTerminator::Unreachable => SemanticTerminator::Unreachable,
-        SemanticTerminator::Trap => SemanticTerminator::Trap,
+        LirTerminator::Unreachable => LirTerminator::Unreachable,
+        LirTerminator::Trap => LirTerminator::Trap,
     }
 }
 
 fn prepare_location(
-    location: &SemanticLocation,
-    snapshots: &HashMap<SemanticLocation, SemanticLocation>,
-    load_snapshots: &HashMap<SemanticExpression, SemanticLocation>,
-) -> SemanticLocation {
+    location: &LirLocation,
+    snapshots: &HashMap<LirLocation, LirLocation>,
+    load_snapshots: &HashMap<LirExpression, LirLocation>,
+) -> LirLocation {
     if let Some(snapshot) = snapshots.get(location) {
         return snapshot.clone();
     }
     match location {
-        SemanticLocation::Memory { space, addr, bits } => SemanticLocation::Memory {
+        LirLocation::Memory { space, addr, bits } => LirLocation::Memory {
             space: space.clone(),
             addr: Box::new(prepare_expression(addr, snapshots, load_snapshots)),
             bits: *bits,
         },
-        SemanticLocation::IndexedMemory { name, index, bits } => SemanticLocation::IndexedMemory {
+        LirLocation::IndexedMemory { name, index, bits } => LirLocation::IndexedMemory {
             name: name.clone(),
             index: Box::new(prepare_expression(index, snapshots, load_snapshots)),
             bits: *bits,
         },
-        SemanticLocation::Register { .. }
-        | SemanticLocation::Flag { .. }
-        | SemanticLocation::ProgramCounter { .. }
-        | SemanticLocation::Temporary { .. }
-        | SemanticLocation::StackMemory { .. } => location.clone(),
+        LirLocation::Register { .. }
+        | LirLocation::Flag { .. }
+        | LirLocation::ProgramCounter { .. }
+        | LirLocation::Temporary { .. }
+        | LirLocation::StackMemory { .. } => location.clone(),
     }
 }
 
 fn prepare_expression(
-    expression: &SemanticExpression,
-    snapshots: &HashMap<SemanticLocation, SemanticLocation>,
-    load_snapshots: &HashMap<SemanticExpression, SemanticLocation>,
-) -> SemanticExpression {
+    expression: &LirExpression,
+    snapshots: &HashMap<LirLocation, LirLocation>,
+    load_snapshots: &HashMap<LirExpression, LirLocation>,
+) -> LirExpression {
     match expression {
-        SemanticExpression::Const { value, bits } => SemanticExpression::Const {
+        LirExpression::Const { value, bits } => LirExpression::Const {
             value: *value,
             bits: *bits,
         },
-        SemanticExpression::Function { name, bits } => SemanticExpression::Function {
+        LirExpression::Function { name, bits } => LirExpression::Function {
             name: name.clone(),
             bits: *bits,
         },
-        SemanticExpression::DataAddress { name, bits } => SemanticExpression::DataAddress {
+        LirExpression::DataAddress { name, bits } => LirExpression::DataAddress {
             name: name.clone(),
             bits: *bits,
         },
-        SemanticExpression::AddressOf { location, bits } => SemanticExpression::AddressOf {
+        LirExpression::AddressOf { location, bits } => LirExpression::AddressOf {
             location: Box::new(prepare_location(location, snapshots, load_snapshots)),
             bits: *bits,
         },
-        SemanticExpression::Read(location) => SemanticExpression::Read(Box::new(
+        LirExpression::Read(location) => LirExpression::Read(Box::new(
             snapshots
                 .get(location.as_ref())
                 .cloned()
                 .unwrap_or_else(|| location.as_ref().clone()),
         )),
-        SemanticExpression::Load { space, addr, bits } => {
-            let prepared = SemanticExpression::Load {
+        LirExpression::Load { space, addr, bits } => {
+            let prepared = LirExpression::Load {
                 space: space.clone(),
                 addr: Box::new(prepare_expression(addr, snapshots, load_snapshots)),
                 bits: *bits,
             };
             if let Some(snapshot) = load_snapshots.get(&prepared) {
-                SemanticExpression::Read(Box::new(snapshot.clone()))
+                LirExpression::Read(Box::new(snapshot.clone()))
             } else {
                 prepared
             }
         }
-        SemanticExpression::Unary { op, arg, bits } => SemanticExpression::Unary {
+        LirExpression::Unary { op, arg, bits } => LirExpression::Unary {
             op: *op,
             arg: Box::new(prepare_expression(arg, snapshots, load_snapshots)),
             bits: *bits,
         },
-        SemanticExpression::Binary {
+        LirExpression::Binary {
             op,
             left,
             right,
@@ -879,19 +853,19 @@ fn prepare_expression(
             let left = prepare_expression(left, snapshots, load_snapshots);
             let right = prepare_expression(right, snapshots, load_snapshots);
             let (left, right) = normalize_binary(*op, left, right, *bits);
-            SemanticExpression::Binary {
+            LirExpression::Binary {
                 op: *op,
                 left: Box::new(left),
                 right: Box::new(right),
                 bits: *bits,
             }
         }
-        SemanticExpression::Cast { op, arg, bits } => SemanticExpression::Cast {
+        LirExpression::Cast { op, arg, bits } => LirExpression::Cast {
             op: *op,
             arg: Box::new(prepare_expression(arg, snapshots, load_snapshots)),
             bits: *bits,
         },
-        SemanticExpression::Compare {
+        LirExpression::Compare {
             op,
             left,
             right,
@@ -900,39 +874,39 @@ fn prepare_expression(
             let left = prepare_expression(left, snapshots, load_snapshots);
             let right = prepare_expression(right, snapshots, load_snapshots);
             let (left, right) = normalize_compare(left, right);
-            SemanticExpression::Compare {
+            LirExpression::Compare {
                 op: *op,
                 left: Box::new(left),
                 right: Box::new(right),
                 bits: *bits,
             }
         }
-        SemanticExpression::Select {
+        LirExpression::Select {
             condition,
             when_true,
             when_false,
             bits,
-        } => SemanticExpression::Select {
+        } => LirExpression::Select {
             condition: Box::new(prepare_expression(condition, snapshots, load_snapshots)),
             when_true: Box::new(prepare_expression(when_true, snapshots, load_snapshots)),
             when_false: Box::new(prepare_expression(when_false, snapshots, load_snapshots)),
             bits: *bits,
         },
-        SemanticExpression::Extract { arg, lsb, bits } => SemanticExpression::Extract {
+        LirExpression::Extract { arg, lsb, bits } => LirExpression::Extract {
             arg: Box::new(prepare_expression(arg, snapshots, load_snapshots)),
             lsb: *lsb,
             bits: *bits,
         },
-        SemanticExpression::Concat { parts, bits } => SemanticExpression::Concat {
+        LirExpression::Concat { parts, bits } => LirExpression::Concat {
             parts: parts
                 .iter()
                 .map(|expression| prepare_expression(expression, snapshots, load_snapshots))
                 .collect(),
             bits: *bits,
         },
-        SemanticExpression::Undefined { bits } => SemanticExpression::Undefined { bits: *bits },
-        SemanticExpression::Poison { bits } => SemanticExpression::Poison { bits: *bits },
-        SemanticExpression::Intrinsic { name, args, bits } => SemanticExpression::Intrinsic {
+        LirExpression::Undefined { bits } => LirExpression::Undefined { bits: *bits },
+        LirExpression::Poison { bits } => LirExpression::Poison { bits: *bits },
+        LirExpression::Intrinsic { name, args, bits } => LirExpression::Intrinsic {
             name: name.clone(),
             args: args
                 .iter()
@@ -940,25 +914,25 @@ fn prepare_expression(
                 .collect(),
             bits: *bits,
         },
-        SemanticExpression::Null { bits } => SemanticExpression::Null { bits: *bits },
-        SemanticExpression::Allocate { kind, bits } => SemanticExpression::Allocate {
+        LirExpression::Null { bits } => LirExpression::Null { bits: *bits },
+        LirExpression::Allocate { kind, bits } => LirExpression::Allocate {
             kind: kind.clone(),
             bits: *bits,
         },
-        SemanticExpression::ReadProperty {
+        LirExpression::ReadProperty {
             reference,
             name,
             bits,
-        } => SemanticExpression::ReadProperty {
+        } => LirExpression::ReadProperty {
             reference: Box::new(prepare_expression(reference, snapshots, load_snapshots)),
             name: name.clone(),
             bits: *bits,
         },
-        SemanticExpression::ReadElement {
+        LirExpression::ReadElement {
             reference,
             index,
             bits,
-        } => SemanticExpression::ReadElement {
+        } => LirExpression::ReadElement {
             reference: Box::new(prepare_expression(reference, snapshots, load_snapshots)),
             index: Box::new(prepare_expression(index, snapshots, load_snapshots)),
             bits: *bits,
@@ -969,36 +943,36 @@ fn prepare_expression(
 #[cfg(test)]
 mod tests {
     use super::prepare_instruction_semantics;
-    use crate::semantics::{
-        Semantic, SemanticAddressSpace, SemanticEffect, SemanticExpression, SemanticLocation,
-        SemanticOperationBinary, SemanticStatus, SemanticTerminator,
+    use crate::ir::lir::{
+        Lir, LirAddressSpace, LirEffect, LirExpression, LirLocation, LirOperationBinary, LirStatus,
+        LirTerminator,
     };
 
     #[test]
     fn coerces_store_expression_to_destination_width() {
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Store {
-                space: SemanticAddressSpace::Default,
-                addr: SemanticExpression::Const { value: 0, bits: 64 },
-                expression: SemanticExpression::Read(Box::new(SemanticLocation::Register {
+            effects: vec![LirEffect::Store {
+                space: LirAddressSpace::Default,
+                addr: LirExpression::Const { value: 0, bits: 64 },
+                expression: LirExpression::Read(Box::new(LirLocation::Register {
                     name: "wide".to_string(),
                     bits: 128,
                 })),
                 bits: 64,
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
         let prepared = prepare_instruction_semantics(&semantics).expect("prepare");
         match &prepared.effects[0] {
-            SemanticEffect::Store { expression, .. } => match expression {
-                SemanticExpression::Cast { bits, .. } => assert_eq!(*bits, 64),
+            LirEffect::Store { expression, .. } => match expression {
+                LirExpression::Cast { bits, .. } => assert_eq!(*bits, 64),
                 other => panic!("expected cast, got {:?}", other),
             },
             other => panic!("unexpected effect: {:?}", other),
@@ -1007,33 +981,33 @@ mod tests {
 
     #[test]
     fn widens_shift_amount_to_operation_width() {
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "dst".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Binary {
-                    op: SemanticOperationBinary::LShr,
-                    left: Box::new(SemanticExpression::Const { value: 7, bits: 32 }),
-                    right: Box::new(SemanticExpression::Const { value: 3, bits: 5 }),
+                expression: LirExpression::Binary {
+                    op: LirOperationBinary::LShr,
+                    left: Box::new(LirExpression::Const { value: 7, bits: 32 }),
+                    right: Box::new(LirExpression::Const { value: 3, bits: 5 }),
                     bits: 32,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
         let prepared = prepare_instruction_semantics(&semantics).expect("prepare");
         match &prepared.effects[0] {
-            SemanticEffect::Set { expression, .. } => match expression {
-                SemanticExpression::Binary { right, .. } => match right.as_ref() {
-                    SemanticExpression::Cast { bits, .. } => assert_eq!(*bits, 32),
+            LirEffect::Set { expression, .. } => match expression {
+                LirExpression::Binary { right, .. } => match right.as_ref() {
+                    LirExpression::Cast { bits, .. } => assert_eq!(*bits, 32),
                     other => panic!("expected cast, got {:?}", other),
                 },
                 other => panic!("expected binary, got {:?}", other),
@@ -1044,33 +1018,33 @@ mod tests {
 
     #[test]
     fn truncates_mismatched_binary_operand_to_expression_width() {
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Register {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
                     name: "dst".to_string(),
                     bits: 32,
                 },
-                expression: SemanticExpression::Binary {
-                    op: SemanticOperationBinary::Xor,
-                    left: Box::new(SemanticExpression::Const { value: 7, bits: 32 }),
-                    right: Box::new(SemanticExpression::Const { value: 1, bits: 64 }),
+                expression: LirExpression::Binary {
+                    op: LirOperationBinary::Xor,
+                    left: Box::new(LirExpression::Const { value: 7, bits: 32 }),
+                    right: Box::new(LirExpression::Const { value: 1, bits: 64 }),
                     bits: 32,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
         let prepared = prepare_instruction_semantics(&semantics).expect("prepare");
         match &prepared.effects[0] {
-            SemanticEffect::Set { expression, .. } => match expression {
-                SemanticExpression::Binary { right, .. } => match right.as_ref() {
-                    SemanticExpression::Cast { bits, .. } => assert_eq!(*bits, 32),
+            LirEffect::Set { expression, .. } => match expression {
+                LirExpression::Binary { right, .. } => match right.as_ref() {
+                    LirExpression::Cast { bits, .. } => assert_eq!(*bits, 32),
                     other => panic!("expected cast, got {:?}", other),
                 },
                 other => panic!("expected binary, got {:?}", other),
@@ -1081,41 +1055,39 @@ mod tests {
 
     #[test]
     fn truncates_mismatched_compare_constant_to_operand_width() {
-        let semantics = Semantic {
+        let semantics = Lir {
             version: 1,
-            status: SemanticStatus::Complete,
+            status: LirStatus::Complete,
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
-            effects: vec![SemanticEffect::Set {
-                dst: SemanticLocation::Flag {
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Flag {
                     name: "z".to_string(),
                     bits: 1,
                 },
-                expression: SemanticExpression::Compare {
-                    op: crate::semantics::SemanticOperationCompare::Uge,
-                    left: Box::new(SemanticExpression::Read(Box::new(
-                        SemanticLocation::Register {
-                            name: "dst".to_string(),
-                            bits: 32,
-                        },
-                    ))),
-                    right: Box::new(SemanticExpression::Const {
+                expression: LirExpression::Compare {
+                    op: crate::ir::lir::LirOperationCompare::Uge,
+                    left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "dst".to_string(),
+                        bits: 32,
+                    }))),
+                    right: Box::new(LirExpression::Const {
                         value: 40,
                         bits: 64,
                     }),
                     bits: 1,
                 },
             }],
-            terminator: SemanticTerminator::FallThrough,
+            terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
 
         let prepared = prepare_instruction_semantics(&semantics).expect("prepare");
         match &prepared.effects[0] {
-            SemanticEffect::Set { expression, .. } => match expression {
-                SemanticExpression::Compare { right, .. } => match right.as_ref() {
-                    SemanticExpression::Cast { bits, .. } => assert_eq!(*bits, 32),
+            LirEffect::Set { expression, .. } => match expression {
+                LirExpression::Compare { right, .. } => match right.as_ref() {
+                    LirExpression::Cast { bits, .. } => assert_eq!(*bits, 32),
                     other => panic!("expected cast, got {:?}", other),
                 },
                 other => panic!("expected compare, got {:?}", other),

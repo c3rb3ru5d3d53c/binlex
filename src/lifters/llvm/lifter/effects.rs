@@ -3,25 +3,22 @@ use super::helpers::{
     coerce_int_value_width, render_address_space, render_fence_kind, render_location,
     render_trap_kind, sanitize_symbol,
 };
-use crate::semantics::{
-    Semantic, SemanticAddressSpace, SemanticEffect, SemanticExpression, SemanticLocation,
-    SemanticTerminator,
-};
+use crate::ir::lir::{Lir, LirAddressSpace, LirEffect, LirExpression, LirLocation, LirTerminator};
 use inkwell::values::BasicMetadataValueEnum;
 use std::io::Error;
 
 impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
-    pub(super) fn lower_semantics(&mut self, semantics: &Semantic) -> Result<(), Error> {
+    pub(super) fn lower_semantics(&mut self, semantics: &Lir) -> Result<(), Error> {
         for effect in &semantics.effects {
             self.lower_effect(effect)?;
         }
         self.lower_terminator(&semantics.terminator)
     }
 
-    fn lower_effect(&mut self, effect: &SemanticEffect) -> Result<(), Error> {
+    fn lower_effect(&mut self, effect: &LirEffect) -> Result<(), Error> {
         match effect {
-            SemanticEffect::Set { dst, expression } => match dst {
-                SemanticLocation::Memory { space, addr, bits } => {
+            LirEffect::Set { dst, expression } => match dst {
+                LirLocation::Memory { space, addr, bits } => {
                     self.emit_store(space, addr, expression, *bits)?;
                 }
                 _ => {
@@ -38,18 +35,18 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                         .build_store(slot, value)
                         .map_err(|err| Error::other(err.to_string()))?;
                     self.written_locations.insert(render_location(dst));
-                    if let SemanticLocation::Register { name, bits } = dst {
+                    if let LirLocation::Register { name, bits } = dst {
                         self.merge_partial_register_write(name, *bits, value)?;
                     }
                 }
             },
-            SemanticEffect::Store {
+            LirEffect::Store {
                 space,
                 addr,
                 expression,
                 bits,
             } => self.emit_store(space, addr, expression, *bits)?,
-            SemanticEffect::MemorySet {
+            LirEffect::MemorySet {
                 space,
                 addr,
                 value,
@@ -106,7 +103,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     )
                     .map_err(|err| Error::other(err.to_string()))?;
             }
-            SemanticEffect::MemoryCopy {
+            LirEffect::MemoryCopy {
                 src_space,
                 src_addr,
                 dst_space,
@@ -173,7 +170,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     )
                     .map_err(|err| Error::other(err.to_string()))?;
             }
-            SemanticEffect::AtomicCmpXchg {
+            LirEffect::AtomicCmpXchg {
                 space,
                 addr,
                 expected,
@@ -219,7 +216,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .build_store(slot, observed_value)
                     .map_err(|err| Error::other(err.to_string()))?;
             }
-            SemanticEffect::WriteProperty {
+            LirEffect::WriteProperty {
                 reference,
                 name,
                 expression,
@@ -249,7 +246,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .build_call(helper, &[reference.into(), value.into()], "")
                     .map_err(|err| Error::other(err.to_string()))?;
             }
-            SemanticEffect::WriteElement {
+            LirEffect::WriteElement {
                 reference,
                 index,
                 expression,
@@ -281,7 +278,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .build_call(helper, &[reference.into(), index.into(), value.into()], "")
                     .map_err(|err| Error::other(err.to_string()))?;
             }
-            SemanticEffect::Push { stack, expression } => {
+            LirEffect::Push { stack, expression } => {
                 let helper_name = format!("binlex_effect_push_{}", sanitize_symbol(stack));
                 self.record_semantic_lowering(
                     "effect_helper",
@@ -294,7 +291,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .build_call(helper, &[value.into()], "")
                     .map_err(|err| Error::other(err.to_string()))?;
             }
-            SemanticEffect::Pop { stack, dst } => {
+            LirEffect::Pop { stack, dst } => {
                 let bits = dst.bits();
                 let helper_name = format!("binlex_effect_pop_{}_{}", sanitize_symbol(stack), bits);
                 self.record_semantic_lowering(
@@ -309,7 +306,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .build_store(slot, value)
                     .map_err(|err| Error::other(err.to_string()))?;
             }
-            SemanticEffect::Fence { kind } => {
+            LirEffect::Fence { kind } => {
                 let helper_name = format!("binlex_fence_{}", render_fence_kind(kind));
                 self.record_semantic_lowering(
                     "effect_helper",
@@ -320,7 +317,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .build_call(helper, &[], "")
                     .map_err(|err| Error::other(err.to_string()))?;
             }
-            SemanticEffect::Trap { kind } => {
+            LirEffect::Trap { kind } => {
                 if self
                     .current_semantics_abi
                     .as_ref()
@@ -338,7 +335,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .build_call(helper, &[], "")
                     .map_err(|err| Error::other(err.to_string()))?;
             }
-            SemanticEffect::Intrinsic { name, args, .. } => {
+            LirEffect::Intrinsic { name, args, .. } => {
                 let helper_name = format!("binlex_effect_{}", sanitize_symbol(name));
                 self.record_semantic_lowering(
                     "effect_intrinsic",
@@ -350,28 +347,28 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .build_call(helper, &args, "")
                     .map_err(|err| Error::other(err.to_string()))?;
             }
-            SemanticEffect::Nop => {}
+            LirEffect::Nop => {}
         }
         Ok(())
     }
 
-    fn lower_terminator(&mut self, terminator: &SemanticTerminator) -> Result<(), Error> {
+    fn lower_terminator(&mut self, terminator: &LirTerminator) -> Result<(), Error> {
         if self
             .current_semantics_abi
             .as_ref()
             .is_some_and(|abi| abi.is_native_syscall())
-            && matches!(terminator, SemanticTerminator::Trap)
+            && matches!(terminator, LirTerminator::Trap)
         {
             return Ok(());
         }
         if !self.emit_terminator_helpers {
             match terminator {
-                SemanticTerminator::Return { expression } => {
+                LirTerminator::Return { expression } => {
                     if let Some(adjust) = expression.as_ref().and_then(Self::const_return_adjust) {
                         self.native_return_adjust = Some(adjust);
                     }
                 }
-                SemanticTerminator::Unreachable => {
+                LirTerminator::Unreachable => {
                     self.builder
                         .build_unreachable()
                         .map_err(|err| Error::other(err.to_string()))?;
@@ -382,8 +379,8 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         }
 
         match terminator {
-            SemanticTerminator::FallThrough => {}
-            SemanticTerminator::Jump { target } => {
+            LirTerminator::FallThrough => {}
+            LirTerminator::Jump { target } => {
                 self.record_semantic_lowering("terminator_helper", "Jump helper=binlex_term_jump");
                 let helper = self.declare_void_helper(
                     "binlex_term_jump",
@@ -396,7 +393,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .build_call(helper, &[target.into()], "")
                     .map_err(|err| Error::other(err.to_string()))?;
             }
-            SemanticTerminator::Branch {
+            LirTerminator::Branch {
                 condition,
                 true_target,
                 false_target,
@@ -428,12 +425,12 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     )
                     .map_err(|err| Error::other(err.to_string()))?;
             }
-            SemanticTerminator::Call {
+            LirTerminator::Call {
                 target,
                 return_target,
                 does_return,
             } => {
-                if let SemanticExpression::Function { name, .. } = target {
+                if let LirExpression::Function { name, .. } = target {
                     return self.lower_direct_function_call(
                         name,
                         return_target.as_ref(),
@@ -476,7 +473,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     )
                     .map_err(|err| Error::other(err.to_string()))?;
             }
-            SemanticTerminator::Return { expression } => {
+            LirTerminator::Return { expression } => {
                 if let Some(adjust) = expression.as_ref().and_then(Self::const_return_adjust) {
                     self.native_return_adjust = Some(adjust);
                 } else if let Some(expression) = expression {
@@ -495,12 +492,12 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                         .map_err(|err| Error::other(err.to_string()))?;
                 }
             }
-            SemanticTerminator::Unreachable => {
+            LirTerminator::Unreachable => {
                 self.builder
                     .build_unreachable()
                     .map_err(|err| Error::other(err.to_string()))?;
             }
-            SemanticTerminator::Trap => {
+            LirTerminator::Trap => {
                 self.record_semantic_lowering("terminator_helper", "Trap helper=binlex_term_trap");
                 let helper = self.declare_void_helper("binlex_term_trap", &[], false);
                 self.builder
@@ -514,7 +511,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     fn lower_direct_function_call(
         &mut self,
         name: &str,
-        return_target: Option<&SemanticExpression>,
+        return_target: Option<&LirExpression>,
         does_return: bool,
     ) -> Result<(), Error> {
         let target = self
@@ -577,7 +574,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .build_store(slot, value)
                     .map_err(|err| Error::other(err.to_string()))?;
                 self.written_locations.insert(render_location(location));
-                if let SemanticLocation::Register { name, bits } = location {
+                if let LirLocation::Register { name, bits } = location {
                     self.merge_partial_register_write(name, *bits, value)?;
                 }
             }
@@ -595,9 +592,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
     pub(super) fn emit_store(
         &mut self,
-        space: &SemanticAddressSpace,
-        addr: &SemanticExpression,
-        expression: &SemanticExpression,
+        space: &LirAddressSpace,
+        addr: &LirExpression,
+        expression: &LirExpression,
         bits: u16,
     ) -> Result<(), Error> {
         if let Some(()) = self.try_direct_store(space, addr, expression, bits)? {

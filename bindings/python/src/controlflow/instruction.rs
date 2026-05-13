@@ -27,7 +27,7 @@ use crate::controlflow::Function;
 use crate::controlflow::Graph;
 use crate::controlflow::Reference;
 use crate::genetics::Chromosome;
-use crate::semantics::Semantic as PySemantic;
+use crate::ir::lir::Lir as PyLir;
 use crate::Architecture;
 use crate::Configuration;
 use binlex::controlflow::EntityKind as InnerEntityKind;
@@ -501,14 +501,14 @@ impl InstructionJsonDeserializer {
         Ok(py_dict.into())
     }
 
-    pub fn semantic(&self, py: Python<'_>) -> PyResult<Option<Py<PySemantic>>> {
+    pub fn semantic(&self, py: Python<'_>) -> PyResult<Option<Py<PyLir>>> {
         let binding = self.inner.lock().unwrap();
         let Some(semantics) = binding.semantics.as_ref() else {
             return Ok(None);
         };
         Ok(Some(Py::new(
             py,
-            PySemantic::from_inner(semantics.clone().into_semantics()),
+            PyLir::from_inner(semantics.clone().into_semantics()),
         )?))
     }
 
@@ -749,21 +749,18 @@ impl Instruction {
 
     #[pyo3(text_signature = "($self)")]
     /// Return the canonical semantics attached to this instruction, if present.
-    pub fn semantic(&self, py: Python) -> PyResult<Option<Py<PySemantic>>> {
+    pub fn semantic(&self, py: Python) -> PyResult<Option<Py<PyLir>>> {
         self.with_inner_instruction(py, |instruction| {
             let Some(semantics) = instruction.semantics.as_ref() else {
                 return Ok(None);
             };
-            Ok(Some(Py::new(
-                py,
-                PySemantic::from_inner(semantics.clone()),
-            )?))
+            Ok(Some(Py::new(py, PyLir::from_inner(semantics.clone()))?))
         })
     }
 
     #[pyo3(text_signature = "($self, semantics)")]
     /// Replace the canonical semantics attached to this instruction and persist it in the CFG.
-    pub fn set_semantics(&self, py: Python<'_>, semantics: Py<PySemantic>) -> PyResult<()> {
+    pub fn set_semantics(&self, py: Python<'_>, semantics: Py<PyLir>) -> PyResult<()> {
         let replacement = semantics.borrow(py).inner.lock().unwrap().clone();
         let mut updated = self.with_inner_instruction(py, |instruction| Ok(instruction.clone()))?;
         updated.set_semantics(replacement);

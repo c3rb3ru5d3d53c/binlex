@@ -17,7 +17,7 @@ pub enum Mode {
     #[default]
     Reconstruct,
     Intrinsic,
-    Semantic,
+    Lir,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

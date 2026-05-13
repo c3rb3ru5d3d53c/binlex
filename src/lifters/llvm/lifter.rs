@@ -3,13 +3,13 @@ use crate::Architecture;
 use crate::Configuration;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::io::Stderr;
+use crate::ir::lir::{
+    Lir, LirAbi, LirCpu, LirCpuKind, LirData, LirEffect, LirExpression, LirLocation, LirModule,
+    LirTerminator,
+};
 use crate::lifters::llvm::optimizers::Optimizers;
 use crate::lifters::llvm::prepare::prepare_instruction_semantics;
 use crate::lifters::llvm::verify::verify_module;
-use crate::semantics::{
-    Semantic, SemanticAbi, SemanticCpu, SemanticCpuKind, SemanticData, SemanticEffect,
-    SemanticExpression, SemanticLocation, SemanticTerminator, Semantics,
-};
 use inkwell::OptimizationLevel;
 use inkwell::attributes::AttributeLoc;
 use inkwell::basic_block::BasicBlock;
@@ -49,9 +49,9 @@ pub struct Lifter {
     context: &'static Context,
     module: Module<'static>,
     emitted: BTreeSet<String>,
-    function_abis: HashMap<String, SemanticAbi>,
+    function_abis: HashMap<String, LirAbi>,
     data_symbols: HashMap<String, Vec<u8>>,
-    cpu: SemanticCpu,
+    cpu: LirCpu,
     architecture: Architecture,
     triple: String,
 }
@@ -96,16 +96,16 @@ struct LoweringContext<'ctx, 'm> {
     current_instruction_address: Option<u64>,
     lowering_summary: BTreeMap<(String, String), LoweringSummaryEntry>,
     slots: HashMap<String, PointerValue<'ctx>>,
-    slot_locations: HashMap<String, SemanticLocation>,
+    slot_locations: HashMap<String, LirLocation>,
     stack_regions: HashMap<String, PointerValue<'ctx>>,
     written_locations: BTreeSet<String>,
     native_return_adjust: Option<u16>,
     cached_flags_register: RefCell<Option<IntValue<'ctx>>>,
     emit_terminator_helpers: bool,
-    abi: Option<SemanticAbi>,
-    current_semantics_abi: Option<SemanticAbi>,
-    function_arguments: Vec<SemanticLocation>,
-    known_function_abis: HashMap<String, SemanticAbi>,
+    abi: Option<LirAbi>,
+    current_semantics_abi: Option<LirAbi>,
+    function_arguments: Vec<LirLocation>,
+    known_function_abis: HashMap<String, LirAbi>,
     stack_layouts: HashMap<String, u32>,
 }
 
@@ -120,16 +120,12 @@ static LLVM_AARCH64_INIT: Once = Once::new();
 static LLVM_DATA_LAYOUTS: OnceLock<Mutex<HashMap<String, String>>> = OnceLock::new();
 
 impl Lifter {
-    pub fn new(
-        cpu: SemanticCpu,
-        config: Configuration,
-        triple: Option<String>,
-    ) -> Result<Self, Error> {
+    pub fn new(cpu: LirCpu, config: Configuration, triple: Option<String>) -> Result<Self, Error> {
         let architecture = match cpu.kind() {
-            Some(SemanticCpuKind::I386) => Architecture::I386,
-            Some(SemanticCpuKind::Amd64) => Architecture::AMD64,
-            Some(SemanticCpuKind::Arm64) => Architecture::ARM64,
-            Some(SemanticCpuKind::Cil) => Architecture::CIL,
+            Some(LirCpuKind::I386) => Architecture::I386,
+            Some(LirCpuKind::Amd64) => Architecture::AMD64,
+            Some(LirCpuKind::Arm64) => Architecture::ARM64,
+            Some(LirCpuKind::Cil) => Architecture::CIL,
             None => {
                 return Err(Error::other(
                     "llvm lifter requires a built-in semantic CPU kind",
@@ -156,7 +152,7 @@ impl Lifter {
     }
 
     pub fn from_architecture(architecture: Architecture, config: Configuration) -> Self {
-        let cpu = SemanticCpu::from_architecture(architecture).expect("builtin cpu");
+        let cpu = LirCpu::from_architecture(architecture).expect("builtin cpu");
         Self::new(cpu, config, None).expect("llvm lifter")
     }
 
@@ -183,11 +179,7 @@ impl Lifter {
         Ok(())
     }
 
-    pub fn lift_block(
-        &mut self,
-        block: &Block<'_>,
-        abi: Option<&SemanticAbi>,
-    ) -> Result<(), Error> {
+    pub fn lift_block(&mut self, block: &Block<'_>, abi: Option<&LirAbi>) -> Result<(), Error> {
         if self.architecture != block.architecture() {
             return Err(Error::other(format!(
                 "llvm lift block architecture mismatch: lifter={} block={}",
@@ -225,7 +217,7 @@ impl Lifter {
     pub fn lift_function(
         &mut self,
         function: &Function<'_>,
-        abi: Option<&SemanticAbi>,
+        abi: Option<&LirAbi>,
     ) -> Result<(), Error> {
         let name = format!("function_{:x}", function.address());
         self.lift_function_named(function, abi, &name, None)
@@ -234,7 +226,7 @@ impl Lifter {
     pub fn lift_function_named(
         &mut self,
         function: &Function<'_>,
-        abi: Option<&SemanticAbi>,
+        abi: Option<&LirAbi>,
         name: &str,
         block_names: Option<&BTreeMap<u64, String>>,
     ) -> Result<(), Error> {
@@ -265,8 +257,8 @@ impl Lifter {
 
     pub fn lift_block_semantics(
         &mut self,
-        semantics: &Semantics,
-        abi: Option<&SemanticAbi>,
+        semantics: &LirModule,
+        abi: Option<&LirAbi>,
     ) -> Result<(), Error> {
         self.bind_architecture()?;
         self.declare_semantics_data(&semantics.data)?;
@@ -290,8 +282,8 @@ impl Lifter {
 
     pub fn lift_function_semantics(
         &mut self,
-        semantics: &Semantics,
-        abi: Option<&SemanticAbi>,
+        semantics: &LirModule,
+        abi: Option<&LirAbi>,
     ) -> Result<(), Error> {
         let name = self.next_emitted_name("semantic_function");
         self.lift_function_semantics_named(semantics, abi, &name)
@@ -299,8 +291,8 @@ impl Lifter {
 
     pub fn lift_function_semantics_named(
         &mut self,
-        semantics: &Semantics,
-        abi: Option<&SemanticAbi>,
+        semantics: &LirModule,
+        abi: Option<&LirAbi>,
         name: &str,
     ) -> Result<(), Error> {
         self.bind_architecture()?;
@@ -549,10 +541,7 @@ impl Lifter {
         verify_module(&self.module)
     }
 
-    fn resolve_override_abi(
-        &self,
-        abi: Option<&SemanticAbi>,
-    ) -> Result<Option<SemanticAbi>, Error> {
+    fn resolve_override_abi(&self, abi: Option<&LirAbi>) -> Result<Option<LirAbi>, Error> {
         let Some(abi) = abi else {
             return Ok(None);
         };
@@ -566,7 +555,7 @@ impl Lifter {
         }
     }
 
-    fn resolve_semantics_abi(&self, semantics: &[Semantic]) -> Option<SemanticAbi> {
+    fn resolve_semantics_abi(&self, semantics: &[Lir]) -> Option<LirAbi> {
         semantics.iter().find_map(|semantic| {
             semantic
                 .abi
@@ -604,8 +593,8 @@ impl Lifter {
     fn add_function_for_lift(
         &mut self,
         name: &str,
-        abi: Option<SemanticAbi>,
-        function_arguments: &[SemanticLocation],
+        abi: Option<LirAbi>,
+        function_arguments: &[LirLocation],
     ) -> FunctionValue<'static> {
         if let Some(function) = self.module.get_function(name) {
             if let Some(abi) = abi {
@@ -651,8 +640,8 @@ impl Lifter {
     fn lowering_context(
         &self,
         function: FunctionValue<'static>,
-        abi: Option<SemanticAbi>,
-        function_arguments: Vec<SemanticLocation>,
+        abi: Option<LirAbi>,
+        function_arguments: Vec<LirLocation>,
         stack_layouts: HashMap<String, u32>,
     ) -> Result<LoweringContext<'static, '_>, Error> {
         let builder = self.context.create_builder();
@@ -742,7 +731,7 @@ impl Lifter {
         })
     }
 
-    fn declare_semantics_data(&mut self, data: &[SemanticData]) -> Result<(), Error> {
+    fn declare_semantics_data(&mut self, data: &[LirData]) -> Result<(), Error> {
         for item in data {
             if item.name.trim().is_empty() {
                 return Err(Error::other("semantic data item has empty name"));
@@ -859,9 +848,9 @@ impl Lifter {
 
     fn active_function_arguments_for_semantics(
         &self,
-        semantics: &[Semantic],
-        abi: Option<&SemanticAbi>,
-    ) -> Vec<SemanticLocation> {
+        semantics: &[Lir],
+        abi: Option<&LirAbi>,
+    ) -> Vec<LirLocation> {
         let Some(abi) = abi else {
             return Vec::new();
         };
@@ -874,8 +863,8 @@ impl Lifter {
 
     fn collect_stack_layouts_for_semantics(
         &self,
-        semantics: &[Semantic],
-        abi: Option<&SemanticAbi>,
+        semantics: &[Lir],
+        abi: Option<&LirAbi>,
     ) -> HashMap<String, u32> {
         let mut layouts = HashMap::new();
         for semantic in semantics {
@@ -890,8 +879,8 @@ impl Lifter {
     fn active_function_arguments_for_block(
         &self,
         block: &Block<'_>,
-        abi: Option<&SemanticAbi>,
-    ) -> Vec<SemanticLocation> {
+        abi: Option<&LirAbi>,
+    ) -> Vec<LirLocation> {
         let Some(abi) = abi else {
             return Vec::new();
         };
@@ -914,7 +903,7 @@ impl Lifter {
     fn collect_stack_layouts_for_block(
         &self,
         block: &Block<'_>,
-        abi: Option<&SemanticAbi>,
+        abi: Option<&LirAbi>,
     ) -> HashMap<String, u32> {
         let mut layouts = HashMap::new();
         for instruction_address in block.instruction_addresses() {
@@ -950,8 +939,8 @@ impl Lifter {
     fn active_function_arguments_for_function(
         &self,
         blocks: &[(Block<'_>, Vec<u64>)],
-        abi: Option<&SemanticAbi>,
-    ) -> Vec<SemanticLocation> {
+        abi: Option<&LirAbi>,
+    ) -> Vec<LirLocation> {
         let Some(abi) = abi else {
             return Vec::new();
         };
@@ -976,7 +965,7 @@ impl Lifter {
     fn collect_stack_layouts_for_function(
         &self,
         blocks: &[(Block<'_>, Vec<u64>)],
-        abi: Option<&SemanticAbi>,
+        abi: Option<&LirAbi>,
     ) -> HashMap<String, u32> {
         let mut layouts = HashMap::new();
         for (block, instruction_addresses) in blocks {
@@ -1191,49 +1180,45 @@ impl Lifter {
 mod jit_tests {
     use super::Lifter;
     use crate::Configuration;
-    use crate::semantics::{
-        Semantic, SemanticAbi, SemanticCpu, SemanticEffect, SemanticExpression, SemanticLocation,
-        SemanticOperationBinary, SemanticStatus, SemanticTerminator, Semantics,
+    use crate::ir::lir::{
+        Lir, LirAbi, LirCpu, LirEffect, LirExpression, LirLocation, LirModule, LirOperationBinary,
+        LirStatus, LirTerminator,
     };
     use std::collections::BTreeMap;
 
     #[cfg(all(target_arch = "x86_64", not(target_os = "windows")))]
     #[test]
     fn jit_function_executes_amd64_add_two() {
-        let cpu = SemanticCpu::amd64().expect("cpu");
-        let abi = SemanticAbi::sysv(&cpu).expect("sysv abi");
+        let cpu = LirCpu::amd64().expect("cpu");
+        let abi = LirAbi::sysv(&cpu).expect("sysv abi");
         let mut lifter = Lifter::new(cpu, Configuration::default(), None).expect("lifter");
 
-        let semantics = Semantics {
-            semantics: vec![Semantic {
+        let semantics = LirModule {
+            semantics: vec![Lir {
                 version: 1,
-                status: SemanticStatus::Complete,
+                status: LirStatus::Complete,
                 abi: None,
                 encoding: None,
                 temporaries: Vec::new(),
-                effects: vec![SemanticEffect::Set {
-                    dst: SemanticLocation::Register {
+                effects: vec![LirEffect::Set {
+                    dst: LirLocation::Register {
                         name: "rax".to_string(),
                         bits: 64,
                     },
-                    expression: SemanticExpression::Binary {
-                        op: SemanticOperationBinary::Add,
-                        left: Box::new(SemanticExpression::Read(Box::new(
-                            SemanticLocation::Register {
-                                name: "rdi".to_string(),
-                                bits: 64,
-                            },
-                        ))),
-                        right: Box::new(SemanticExpression::Read(Box::new(
-                            SemanticLocation::Register {
-                                name: "rsi".to_string(),
-                                bits: 64,
-                            },
-                        ))),
+                    expression: LirExpression::Binary {
+                        op: LirOperationBinary::Add,
+                        left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                            name: "rdi".to_string(),
+                            bits: 64,
+                        }))),
+                        right: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                            name: "rsi".to_string(),
+                            bits: 64,
+                        }))),
                         bits: 64,
                     },
                 }],
-                terminator: SemanticTerminator::Return { expression: None },
+                terminator: LirTerminator::Return { expression: None },
                 diagnostics: Vec::new(),
             }],
             data: Vec::new(),
@@ -1276,9 +1261,9 @@ impl JittedFunction {
 }
 
 fn active_function_arguments(
-    read_locations: &std::collections::HashSet<SemanticLocation>,
-    abi: &SemanticAbi,
-) -> Vec<SemanticLocation> {
+    read_locations: &std::collections::HashSet<LirLocation>,
+    abi: &LirAbi,
+) -> Vec<LirLocation> {
     let mut highest_used = None;
     for (index, location) in abi.function_arguments.iter().enumerate() {
         if read_locations
@@ -1293,7 +1278,7 @@ fn active_function_arguments(
         .unwrap_or_default()
 }
 
-fn location_matches_abi_argument(read: &SemanticLocation, argument: &SemanticLocation) -> bool {
+fn location_matches_abi_argument(read: &LirLocation, argument: &LirLocation) -> bool {
     if read == argument {
         return true;
     }
@@ -1306,8 +1291,8 @@ fn location_matches_abi_argument(read: &SemanticLocation, argument: &SemanticLoc
     }
 }
 
-fn x86_argument_register_alias(location: &SemanticLocation) -> Option<(String, u16)> {
-    let SemanticLocation::Register { name, bits } = location else {
+fn x86_argument_register_alias(location: &LirLocation) -> Option<(String, u16)> {
+    let LirLocation::Register { name, bits } = location else {
         return None;
     };
     match (*bits, name.as_str()) {
@@ -1319,7 +1304,7 @@ fn x86_argument_register_alias(location: &SemanticLocation) -> Option<(String, u
     }
 }
 
-fn collect_abi_stack_layouts(abi: &SemanticAbi, layouts: &mut HashMap<String, u32>) {
+fn collect_abi_stack_layouts(abi: &LirAbi, layouts: &mut HashMap<String, u32>) {
     for location in &abi.function_arguments {
         collect_stack_layout_for_location(location, layouts);
     }
@@ -1343,8 +1328,8 @@ fn collect_abi_stack_layouts(abi: &SemanticAbi, layouts: &mut HashMap<String, u3
 }
 
 fn collect_semantic_read_locations(
-    semantics: &Semantic,
-    reads: &mut std::collections::HashSet<SemanticLocation>,
+    semantics: &Lir,
+    reads: &mut std::collections::HashSet<LirLocation>,
 ) {
     for effect in &semantics.effects {
         collect_effect_read_locations(effect, reads);
@@ -1352,7 +1337,7 @@ fn collect_semantic_read_locations(
     collect_terminator_read_locations(&semantics.terminator, reads);
 }
 
-fn collect_semantic_stack_layouts(semantics: &Semantic, layouts: &mut HashMap<String, u32>) {
+fn collect_semantic_stack_layouts(semantics: &Lir, layouts: &mut HashMap<String, u32>) {
     for temporary in &semantics.temporaries {
         let _ = temporary;
     }
@@ -1363,20 +1348,18 @@ fn collect_semantic_stack_layouts(semantics: &Semantic, layouts: &mut HashMap<St
 }
 
 fn collect_effect_read_locations(
-    effect: &SemanticEffect,
-    reads: &mut std::collections::HashSet<SemanticLocation>,
+    effect: &LirEffect,
+    reads: &mut std::collections::HashSet<LirLocation>,
 ) {
     match effect {
-        SemanticEffect::Set { expression, .. } => {
-            collect_expression_read_locations(expression, reads)
-        }
-        SemanticEffect::Store {
+        LirEffect::Set { expression, .. } => collect_expression_read_locations(expression, reads),
+        LirEffect::Store {
             addr, expression, ..
         } => {
             collect_expression_read_locations(addr, reads);
             collect_expression_read_locations(expression, reads);
         }
-        SemanticEffect::MemorySet {
+        LirEffect::MemorySet {
             addr,
             value,
             count,
@@ -1388,7 +1371,7 @@ fn collect_effect_read_locations(
             collect_expression_read_locations(count, reads);
             collect_expression_read_locations(decrement, reads);
         }
-        SemanticEffect::MemoryCopy {
+        LirEffect::MemoryCopy {
             src_addr,
             dst_addr,
             count,
@@ -1400,7 +1383,7 @@ fn collect_effect_read_locations(
             collect_expression_read_locations(count, reads);
             collect_expression_read_locations(decrement, reads);
         }
-        SemanticEffect::AtomicCmpXchg {
+        LirEffect::AtomicCmpXchg {
             addr,
             expected,
             desired,
@@ -1410,7 +1393,7 @@ fn collect_effect_read_locations(
             collect_expression_read_locations(expected, reads);
             collect_expression_read_locations(desired, reads);
         }
-        SemanticEffect::WriteProperty {
+        LirEffect::WriteProperty {
             reference,
             expression,
             ..
@@ -1418,7 +1401,7 @@ fn collect_effect_read_locations(
             collect_expression_read_locations(reference, reads);
             collect_expression_read_locations(expression, reads);
         }
-        SemanticEffect::WriteElement {
+        LirEffect::WriteElement {
             reference,
             index,
             expression,
@@ -1428,34 +1411,32 @@ fn collect_effect_read_locations(
             collect_expression_read_locations(index, reads);
             collect_expression_read_locations(expression, reads);
         }
-        SemanticEffect::Push { expression, .. } => {
-            collect_expression_read_locations(expression, reads)
-        }
-        SemanticEffect::Intrinsic { args, .. } => {
+        LirEffect::Push { expression, .. } => collect_expression_read_locations(expression, reads),
+        LirEffect::Intrinsic { args, .. } => {
             for arg in args {
                 collect_expression_read_locations(arg, reads);
             }
         }
-        SemanticEffect::Pop { .. }
-        | SemanticEffect::Fence { .. }
-        | SemanticEffect::Trap { .. }
-        | SemanticEffect::Nop => {}
+        LirEffect::Pop { .. }
+        | LirEffect::Fence { .. }
+        | LirEffect::Trap { .. }
+        | LirEffect::Nop => {}
     }
 }
 
-fn collect_effect_stack_layouts(effect: &SemanticEffect, layouts: &mut HashMap<String, u32>) {
+fn collect_effect_stack_layouts(effect: &LirEffect, layouts: &mut HashMap<String, u32>) {
     match effect {
-        SemanticEffect::Set { dst, expression } => {
+        LirEffect::Set { dst, expression } => {
             collect_stack_layout_for_location(dst, layouts);
             collect_expression_stack_layouts(expression, layouts);
         }
-        SemanticEffect::Store {
+        LirEffect::Store {
             addr, expression, ..
         } => {
             collect_expression_stack_layouts(addr, layouts);
             collect_expression_stack_layouts(expression, layouts);
         }
-        SemanticEffect::MemorySet {
+        LirEffect::MemorySet {
             addr,
             value,
             count,
@@ -1467,7 +1448,7 @@ fn collect_effect_stack_layouts(effect: &SemanticEffect, layouts: &mut HashMap<S
             collect_expression_stack_layouts(count, layouts);
             collect_expression_stack_layouts(decrement, layouts);
         }
-        SemanticEffect::MemoryCopy {
+        LirEffect::MemoryCopy {
             src_addr,
             dst_addr,
             count,
@@ -1479,7 +1460,7 @@ fn collect_effect_stack_layouts(effect: &SemanticEffect, layouts: &mut HashMap<S
             collect_expression_stack_layouts(count, layouts);
             collect_expression_stack_layouts(decrement, layouts);
         }
-        SemanticEffect::AtomicCmpXchg {
+        LirEffect::AtomicCmpXchg {
             addr,
             expected,
             desired,
@@ -1491,7 +1472,7 @@ fn collect_effect_stack_layouts(effect: &SemanticEffect, layouts: &mut HashMap<S
             collect_expression_stack_layouts(desired, layouts);
             collect_stack_layout_for_location(observed, layouts);
         }
-        SemanticEffect::WriteProperty {
+        LirEffect::WriteProperty {
             reference,
             expression,
             ..
@@ -1499,7 +1480,7 @@ fn collect_effect_stack_layouts(effect: &SemanticEffect, layouts: &mut HashMap<S
             collect_expression_stack_layouts(reference, layouts);
             collect_expression_stack_layouts(expression, layouts);
         }
-        SemanticEffect::WriteElement {
+        LirEffect::WriteElement {
             reference,
             index,
             expression,
@@ -1509,11 +1490,9 @@ fn collect_effect_stack_layouts(effect: &SemanticEffect, layouts: &mut HashMap<S
             collect_expression_stack_layouts(index, layouts);
             collect_expression_stack_layouts(expression, layouts);
         }
-        SemanticEffect::Push { expression, .. } => {
-            collect_expression_stack_layouts(expression, layouts)
-        }
-        SemanticEffect::Pop { dst, .. } => collect_stack_layout_for_location(dst, layouts),
-        SemanticEffect::Intrinsic { args, outputs, .. } => {
+        LirEffect::Push { expression, .. } => collect_expression_stack_layouts(expression, layouts),
+        LirEffect::Pop { dst, .. } => collect_stack_layout_for_location(dst, layouts),
+        LirEffect::Intrinsic { args, outputs, .. } => {
             for arg in args {
                 collect_expression_stack_layouts(arg, layouts);
             }
@@ -1521,17 +1500,17 @@ fn collect_effect_stack_layouts(effect: &SemanticEffect, layouts: &mut HashMap<S
                 collect_stack_layout_for_location(output, layouts);
             }
         }
-        SemanticEffect::Fence { .. } | SemanticEffect::Trap { .. } | SemanticEffect::Nop => {}
+        LirEffect::Fence { .. } | LirEffect::Trap { .. } | LirEffect::Nop => {}
     }
 }
 
 fn collect_terminator_read_locations(
-    terminator: &SemanticTerminator,
-    reads: &mut std::collections::HashSet<SemanticLocation>,
+    terminator: &LirTerminator,
+    reads: &mut std::collections::HashSet<LirLocation>,
 ) {
     match terminator {
-        SemanticTerminator::Jump { target } => collect_expression_read_locations(target, reads),
-        SemanticTerminator::Branch {
+        LirTerminator::Jump { target } => collect_expression_read_locations(target, reads),
+        LirTerminator::Branch {
             condition,
             true_target,
             false_target,
@@ -1540,7 +1519,7 @@ fn collect_terminator_read_locations(
             collect_expression_read_locations(true_target, reads);
             collect_expression_read_locations(false_target, reads);
         }
-        SemanticTerminator::Call {
+        LirTerminator::Call {
             target,
             return_target,
             ..
@@ -1550,24 +1529,22 @@ fn collect_terminator_read_locations(
                 collect_expression_read_locations(return_target, reads);
             }
         }
-        SemanticTerminator::Return { expression } => {
+        LirTerminator::Return { expression } => {
             if let Some(expression) = expression {
                 collect_expression_read_locations(expression, reads);
             }
         }
-        SemanticTerminator::FallThrough
-        | SemanticTerminator::Trap
-        | SemanticTerminator::Unreachable => {}
+        LirTerminator::FallThrough | LirTerminator::Trap | LirTerminator::Unreachable => {}
     }
 }
 
 fn collect_terminator_stack_layouts(
-    terminator: &SemanticTerminator,
+    terminator: &LirTerminator,
     layouts: &mut HashMap<String, u32>,
 ) {
     match terminator {
-        SemanticTerminator::Jump { target } => collect_expression_stack_layouts(target, layouts),
-        SemanticTerminator::Branch {
+        LirTerminator::Jump { target } => collect_expression_stack_layouts(target, layouts),
+        LirTerminator::Branch {
             condition,
             true_target,
             false_target,
@@ -1576,7 +1553,7 @@ fn collect_terminator_stack_layouts(
             collect_expression_stack_layouts(true_target, layouts);
             collect_expression_stack_layouts(false_target, layouts);
         }
-        SemanticTerminator::Call {
+        LirTerminator::Call {
             target,
             return_target,
             ..
@@ -1586,59 +1563,54 @@ fn collect_terminator_stack_layouts(
                 collect_expression_stack_layouts(return_target, layouts);
             }
         }
-        SemanticTerminator::Return { expression } => {
+        LirTerminator::Return { expression } => {
             if let Some(expression) = expression {
                 collect_expression_stack_layouts(expression, layouts);
             }
         }
-        SemanticTerminator::FallThrough
-        | SemanticTerminator::Trap
-        | SemanticTerminator::Unreachable => {}
+        LirTerminator::FallThrough | LirTerminator::Trap | LirTerminator::Unreachable => {}
     }
 }
 
 fn collect_expression_read_locations(
-    expression: &SemanticExpression,
-    reads: &mut std::collections::HashSet<SemanticLocation>,
+    expression: &LirExpression,
+    reads: &mut std::collections::HashSet<LirLocation>,
 ) {
     match expression {
-        SemanticExpression::DataAddress { .. } => {}
-        SemanticExpression::AddressOf { .. } => {}
-        SemanticExpression::Read(location) => {
+        LirExpression::DataAddress { .. } => {}
+        LirExpression::AddressOf { .. } => {}
+        LirExpression::Read(location) => {
             reads.insert(location.as_ref().clone());
             match location.as_ref() {
-                SemanticLocation::Memory { addr, .. } => {
-                    collect_expression_read_locations(addr, reads)
-                }
-                SemanticLocation::IndexedMemory { index, .. } => {
+                LirLocation::Memory { addr, .. } => collect_expression_read_locations(addr, reads),
+                LirLocation::IndexedMemory { index, .. } => {
                     collect_expression_read_locations(index, reads)
                 }
-                SemanticLocation::Register { .. }
-                | SemanticLocation::Flag { .. }
-                | SemanticLocation::ProgramCounter { .. }
-                | SemanticLocation::Temporary { .. }
-                | SemanticLocation::StackMemory { .. } => {}
+                LirLocation::Register { .. }
+                | LirLocation::Flag { .. }
+                | LirLocation::ProgramCounter { .. }
+                | LirLocation::Temporary { .. }
+                | LirLocation::StackMemory { .. } => {}
             }
         }
-        SemanticExpression::Load { addr, .. } => collect_expression_read_locations(addr, reads),
-        SemanticExpression::ReadProperty { reference, .. } => {
+        LirExpression::Load { addr, .. } => collect_expression_read_locations(addr, reads),
+        LirExpression::ReadProperty { reference, .. } => {
             collect_expression_read_locations(reference, reads)
         }
-        SemanticExpression::ReadElement {
+        LirExpression::ReadElement {
             reference, index, ..
         } => {
             collect_expression_read_locations(reference, reads);
             collect_expression_read_locations(index, reads);
         }
-        SemanticExpression::Unary { arg, .. }
-        | SemanticExpression::Cast { arg, .. }
-        | SemanticExpression::Extract { arg, .. } => collect_expression_read_locations(arg, reads),
-        SemanticExpression::Binary { left, right, .. }
-        | SemanticExpression::Compare { left, right, .. } => {
+        LirExpression::Unary { arg, .. }
+        | LirExpression::Cast { arg, .. }
+        | LirExpression::Extract { arg, .. } => collect_expression_read_locations(arg, reads),
+        LirExpression::Binary { left, right, .. } | LirExpression::Compare { left, right, .. } => {
             collect_expression_read_locations(left, reads);
             collect_expression_read_locations(right, reads);
         }
-        SemanticExpression::Select {
+        LirExpression::Select {
             condition,
             when_true,
             when_false,
@@ -1648,50 +1620,48 @@ fn collect_expression_read_locations(
             collect_expression_read_locations(when_true, reads);
             collect_expression_read_locations(when_false, reads);
         }
-        SemanticExpression::Concat { parts, .. }
-        | SemanticExpression::Intrinsic { args: parts, .. } => {
+        LirExpression::Concat { parts, .. } | LirExpression::Intrinsic { args: parts, .. } => {
             for part in parts {
                 collect_expression_read_locations(part, reads);
             }
         }
-        SemanticExpression::Const { .. }
-        | SemanticExpression::Function { .. }
-        | SemanticExpression::Undefined { .. }
-        | SemanticExpression::Poison { .. }
-        | SemanticExpression::Null { .. }
-        | SemanticExpression::Allocate { .. } => {}
+        LirExpression::Const { .. }
+        | LirExpression::Function { .. }
+        | LirExpression::Undefined { .. }
+        | LirExpression::Poison { .. }
+        | LirExpression::Null { .. }
+        | LirExpression::Allocate { .. } => {}
     }
 }
 
 fn collect_expression_stack_layouts(
-    expression: &SemanticExpression,
+    expression: &LirExpression,
     layouts: &mut HashMap<String, u32>,
 ) {
     match expression {
-        SemanticExpression::DataAddress { .. } => {}
-        SemanticExpression::AddressOf { location, .. } => {
+        LirExpression::DataAddress { .. } => {}
+        LirExpression::AddressOf { location, .. } => {
             collect_stack_layout_for_location(location, layouts);
         }
-        SemanticExpression::Read(location) => collect_stack_layout_for_location(location, layouts),
-        SemanticExpression::Load { addr, .. } => collect_expression_stack_layouts(addr, layouts),
-        SemanticExpression::ReadProperty { reference, .. } => {
+        LirExpression::Read(location) => collect_stack_layout_for_location(location, layouts),
+        LirExpression::Load { addr, .. } => collect_expression_stack_layouts(addr, layouts),
+        LirExpression::ReadProperty { reference, .. } => {
             collect_expression_stack_layouts(reference, layouts)
         }
-        SemanticExpression::ReadElement {
+        LirExpression::ReadElement {
             reference, index, ..
         } => {
             collect_expression_stack_layouts(reference, layouts);
             collect_expression_stack_layouts(index, layouts);
         }
-        SemanticExpression::Unary { arg, .. }
-        | SemanticExpression::Cast { arg, .. }
-        | SemanticExpression::Extract { arg, .. } => collect_expression_stack_layouts(arg, layouts),
-        SemanticExpression::Binary { left, right, .. }
-        | SemanticExpression::Compare { left, right, .. } => {
+        LirExpression::Unary { arg, .. }
+        | LirExpression::Cast { arg, .. }
+        | LirExpression::Extract { arg, .. } => collect_expression_stack_layouts(arg, layouts),
+        LirExpression::Binary { left, right, .. } | LirExpression::Compare { left, right, .. } => {
             collect_expression_stack_layouts(left, layouts);
             collect_expression_stack_layouts(right, layouts);
         }
-        SemanticExpression::Select {
+        LirExpression::Select {
             condition,
             when_true,
             when_false,
@@ -1701,27 +1671,23 @@ fn collect_expression_stack_layouts(
             collect_expression_stack_layouts(when_true, layouts);
             collect_expression_stack_layouts(when_false, layouts);
         }
-        SemanticExpression::Concat { parts, .. }
-        | SemanticExpression::Intrinsic { args: parts, .. } => {
+        LirExpression::Concat { parts, .. } | LirExpression::Intrinsic { args: parts, .. } => {
             for part in parts {
                 collect_expression_stack_layouts(part, layouts);
             }
         }
-        SemanticExpression::Const { .. }
-        | SemanticExpression::Function { .. }
-        | SemanticExpression::Undefined { .. }
-        | SemanticExpression::Poison { .. }
-        | SemanticExpression::Null { .. }
-        | SemanticExpression::Allocate { .. } => {}
+        LirExpression::Const { .. }
+        | LirExpression::Function { .. }
+        | LirExpression::Undefined { .. }
+        | LirExpression::Poison { .. }
+        | LirExpression::Null { .. }
+        | LirExpression::Allocate { .. } => {}
     }
 }
 
-fn collect_stack_layout_for_location(
-    location: &SemanticLocation,
-    layouts: &mut HashMap<String, u32>,
-) {
+fn collect_stack_layout_for_location(location: &LirLocation, layouts: &mut HashMap<String, u32>) {
     match location {
-        SemanticLocation::StackMemory { name, offset, bits } => {
+        LirLocation::StackMemory { name, offset, bits } => {
             let bytes = u32::from((*bits).div_ceil(8));
             let end = offset.saturating_add(bytes.max(1));
             layouts
@@ -1729,19 +1695,19 @@ fn collect_stack_layout_for_location(
                 .and_modify(|current| *current = (*current).max(end))
                 .or_insert(end);
         }
-        SemanticLocation::Memory { addr, .. } => collect_expression_stack_layouts(addr, layouts),
-        SemanticLocation::IndexedMemory { index, .. } => {
+        LirLocation::Memory { addr, .. } => collect_expression_stack_layouts(addr, layouts),
+        LirLocation::IndexedMemory { index, .. } => {
             collect_expression_stack_layouts(index, layouts)
         }
-        SemanticLocation::Register { .. }
-        | SemanticLocation::Flag { .. }
-        | SemanticLocation::ProgramCounter { .. }
-        | SemanticLocation::Temporary { .. } => {}
+        LirLocation::Register { .. }
+        | LirLocation::Flag { .. }
+        | LirLocation::ProgramCounter { .. }
+        | LirLocation::Temporary { .. } => {}
     }
 }
 
-fn should_emit_instruction_encoding(semantics: &Semantic) -> bool {
-    matches!(semantics.status, crate::semantics::SemanticStatus::Partial)
+fn should_emit_instruction_encoding(semantics: &Lir) -> bool {
+    matches!(semantics.status, crate::ir::lir::LirStatus::Partial)
 }
 
 impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
@@ -1755,7 +1721,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .is_some())
     }
 
-    fn is_callable_abi_boundary_location(&self, location: &SemanticLocation) -> bool {
+    fn is_callable_abi_boundary_location(&self, location: &LirLocation) -> bool {
         let Some(abi) = &self.abi else {
             return false;
         };
@@ -1960,7 +1926,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         };
 
         match &semantics.terminator {
-            SemanticTerminator::FallThrough => {
+            LirTerminator::FallThrough => {
                 let fallback_fallthrough_target = block
                     .fallthrough()
                     .and_then(|address| block_map.get(&address).copied())
@@ -1969,7 +1935,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .build_unconditional_branch(fallback_fallthrough_target)
                     .map_err(|err| Error::other(err.to_string()))?;
             }
-            SemanticTerminator::Jump { target } => {
+            LirTerminator::Jump { target } => {
                 let fallback_jump_target = block
                     .branches()
                     .iter()
@@ -1983,7 +1949,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .build_unconditional_branch(target)
                     .map_err(|err| Error::other(err.to_string()))?;
             }
-            SemanticTerminator::Branch {
+            LirTerminator::Branch {
                 condition,
                 true_target,
                 false_target,
@@ -2010,7 +1976,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .build_conditional_branch(condition, true_target, false_target)
                     .map_err(|err| Error::other(err.to_string()))?;
             }
-            SemanticTerminator::Call { does_return, .. } => {
+            LirTerminator::Call { does_return, .. } => {
                 if does_return.unwrap_or(true) {
                     let target = block
                         .fallthrough()
@@ -2025,13 +1991,13 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                         .map_err(|err| Error::other(err.to_string()))?;
                 }
             }
-            SemanticTerminator::Return { .. } => {
+            LirTerminator::Return { .. } => {
                 let target = self.ensure_exit_block(exit_block);
                 self.builder
                     .build_unconditional_branch(target)
                     .map_err(|err| Error::other(err.to_string()))?;
             }
-            SemanticTerminator::Unreachable | SemanticTerminator::Trap => {
+            LirTerminator::Unreachable | LirTerminator::Trap => {
                 self.builder
                     .build_unreachable()
                     .map_err(|err| Error::other(err.to_string()))?;
@@ -2053,12 +2019,12 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     fn lower_prepared_instruction_record(
         &mut self,
         instruction_address: u64,
-        semantics: Option<&Semantic>,
+        semantics: Option<&Lir>,
     ) -> Result<(), Error> {
         self.current_instruction_address = Some(instruction_address);
         if let Some(semantics) = semantics {
             if self.debug
-                && (matches!(semantics.status, crate::semantics::SemanticStatus::Partial)
+                && (matches!(semantics.status, crate::ir::lir::LirStatus::Partial)
                     || !semantics.diagnostics.is_empty())
             {
                 let diagnostics = semantics
@@ -2081,7 +2047,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             if emit_encoding {
                 let Some(encoding) = prepared.encoding.as_ref() else {
                     return Err(Error::other(
-                        "partial instruction semantics require encoding for llvm lowering",
+                        "partial LIR bindings require encoding for llvm lowering",
                     ));
                 };
                 self.emit_instruction_encoding(encoding)?;
@@ -2100,9 +2066,9 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         Ok(())
     }
 
-    fn lower_instruction_semantics(&mut self, semantics: &Semantic) -> Result<(), Error> {
+    fn lower_instruction_semantics(&mut self, semantics: &Lir) -> Result<(), Error> {
         if self.debug
-            && (matches!(semantics.status, crate::semantics::SemanticStatus::Partial)
+            && (matches!(semantics.status, crate::ir::lir::LirStatus::Partial)
                 || !semantics.diagnostics.is_empty())
         {
             let diagnostics = semantics
@@ -2125,7 +2091,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         if emit_encoding {
             let Some(encoding) = prepared.encoding.as_ref() else {
                 return Err(Error::other(
-                    "partial instruction semantics require encoding for llvm lowering",
+                    "partial LIR bindings require encoding for llvm lowering",
                 ));
             };
             self.emit_instruction_encoding(encoding)?;
@@ -2142,10 +2108,10 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         Ok(())
     }
 
-    fn seed_instruction_inputs(&mut self, semantics: &Semantic) -> Result<(), Error> {
-        let mut registers = Vec::<SemanticLocation>::new();
-        let mut program_counters = Vec::<SemanticLocation>::new();
-        let mut flags = Vec::<SemanticLocation>::new();
+    fn seed_instruction_inputs(&mut self, semantics: &Lir) -> Result<(), Error> {
+        let mut registers = Vec::<LirLocation>::new();
+        let mut program_counters = Vec::<LirLocation>::new();
+        let mut flags = Vec::<LirLocation>::new();
         for effect in &semantics.effects {
             self.collect_effect_reads(effect, &mut registers, &mut program_counters, &mut flags);
         }
@@ -2170,31 +2136,31 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
     fn collect_effect_reads(
         &self,
-        effect: &SemanticEffect,
-        registers: &mut Vec<SemanticLocation>,
-        program_counters: &mut Vec<SemanticLocation>,
-        flags: &mut Vec<SemanticLocation>,
+        effect: &LirEffect,
+        registers: &mut Vec<LirLocation>,
+        program_counters: &mut Vec<LirLocation>,
+        flags: &mut Vec<LirLocation>,
     ) {
         match effect {
-            SemanticEffect::Set { dst, expression } => {
+            LirEffect::Set { dst, expression } => {
                 self.collect_expression_reads(expression, registers, program_counters, flags);
                 if let Some((parent_name, parent_bits, _)) = self.x86_parent_register_alias(dst) {
                     push_unique_location(
                         registers,
-                        SemanticLocation::Register {
+                        LirLocation::Register {
                             name: parent_name,
                             bits: parent_bits,
                         },
                     );
                 }
             }
-            SemanticEffect::Store {
+            LirEffect::Store {
                 addr, expression, ..
             } => {
                 self.collect_expression_reads(addr, registers, program_counters, flags);
                 self.collect_expression_reads(expression, registers, program_counters, flags);
             }
-            SemanticEffect::MemorySet {
+            LirEffect::MemorySet {
                 addr,
                 value,
                 count,
@@ -2206,7 +2172,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 self.collect_expression_reads(count, registers, program_counters, flags);
                 self.collect_expression_reads(decrement, registers, program_counters, flags);
             }
-            SemanticEffect::MemoryCopy {
+            LirEffect::MemoryCopy {
                 src_addr,
                 dst_addr,
                 count,
@@ -2218,7 +2184,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 self.collect_expression_reads(count, registers, program_counters, flags);
                 self.collect_expression_reads(decrement, registers, program_counters, flags);
             }
-            SemanticEffect::AtomicCmpXchg {
+            LirEffect::AtomicCmpXchg {
                 addr,
                 expected,
                 desired,
@@ -2228,7 +2194,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 self.collect_expression_reads(expected, registers, program_counters, flags);
                 self.collect_expression_reads(desired, registers, program_counters, flags);
             }
-            SemanticEffect::WriteProperty {
+            LirEffect::WriteProperty {
                 reference,
                 expression,
                 ..
@@ -2236,7 +2202,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 self.collect_expression_reads(reference, registers, program_counters, flags);
                 self.collect_expression_reads(expression, registers, program_counters, flags);
             }
-            SemanticEffect::WriteElement {
+            LirEffect::WriteElement {
                 reference,
                 index,
                 expression,
@@ -2246,31 +2212,31 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 self.collect_expression_reads(index, registers, program_counters, flags);
                 self.collect_expression_reads(expression, registers, program_counters, flags);
             }
-            SemanticEffect::Push { expression, .. } => {
+            LirEffect::Push { expression, .. } => {
                 self.collect_expression_reads(expression, registers, program_counters, flags);
             }
-            SemanticEffect::Pop { .. } => {}
-            SemanticEffect::Intrinsic { args, .. } => {
+            LirEffect::Pop { .. } => {}
+            LirEffect::Intrinsic { args, .. } => {
                 for arg in args {
                     self.collect_expression_reads(arg, registers, program_counters, flags);
                 }
             }
-            SemanticEffect::Fence { .. } | SemanticEffect::Trap { .. } | SemanticEffect::Nop => {}
+            LirEffect::Fence { .. } | LirEffect::Trap { .. } | LirEffect::Nop => {}
         }
     }
 
     fn collect_terminator_reads(
         &self,
-        terminator: &SemanticTerminator,
-        registers: &mut Vec<SemanticLocation>,
-        program_counters: &mut Vec<SemanticLocation>,
-        flags: &mut Vec<SemanticLocation>,
+        terminator: &LirTerminator,
+        registers: &mut Vec<LirLocation>,
+        program_counters: &mut Vec<LirLocation>,
+        flags: &mut Vec<LirLocation>,
     ) {
         match terminator {
-            SemanticTerminator::Jump { target } => {
+            LirTerminator::Jump { target } => {
                 self.collect_expression_reads(target, registers, program_counters, flags);
             }
-            SemanticTerminator::Branch {
+            LirTerminator::Branch {
                 condition,
                 true_target,
                 false_target,
@@ -2279,7 +2245,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 self.collect_expression_reads(true_target, registers, program_counters, flags);
                 self.collect_expression_reads(false_target, registers, program_counters, flags);
             }
-            SemanticTerminator::Call {
+            LirTerminator::Call {
                 target,
                 return_target,
                 ..
@@ -2294,70 +2260,68 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     );
                 }
             }
-            SemanticTerminator::Return { expression } => {
+            LirTerminator::Return { expression } => {
                 if let Some(expression) = expression {
                     self.collect_expression_reads(expression, registers, program_counters, flags);
                 }
             }
-            SemanticTerminator::FallThrough
-            | SemanticTerminator::Trap
-            | SemanticTerminator::Unreachable => {}
+            LirTerminator::FallThrough | LirTerminator::Trap | LirTerminator::Unreachable => {}
         }
     }
 
     fn collect_expression_reads(
         &self,
-        expression: &SemanticExpression,
-        registers: &mut Vec<SemanticLocation>,
-        program_counters: &mut Vec<SemanticLocation>,
-        flags: &mut Vec<SemanticLocation>,
+        expression: &LirExpression,
+        registers: &mut Vec<LirLocation>,
+        program_counters: &mut Vec<LirLocation>,
+        flags: &mut Vec<LirLocation>,
     ) {
         match expression {
-            SemanticExpression::Function { .. } => {}
-            SemanticExpression::DataAddress { .. } => {}
-            SemanticExpression::AddressOf { .. } => {}
-            SemanticExpression::Read(location) => match location.as_ref() {
-                SemanticLocation::Register { .. } => {
+            LirExpression::Function { .. } => {}
+            LirExpression::DataAddress { .. } => {}
+            LirExpression::AddressOf { .. } => {}
+            LirExpression::Read(location) => match location.as_ref() {
+                LirLocation::Register { .. } => {
                     push_unique_location(registers, location.as_ref().clone());
                 }
-                SemanticLocation::ProgramCounter { .. } => {
+                LirLocation::ProgramCounter { .. } => {
                     push_unique_location(program_counters, location.as_ref().clone());
                 }
-                SemanticLocation::Flag { .. } => {
+                LirLocation::Flag { .. } => {
                     push_unique_location(flags, location.as_ref().clone());
                 }
-                SemanticLocation::Memory { addr, .. } => {
+                LirLocation::Memory { addr, .. } => {
                     self.collect_expression_reads(addr, registers, program_counters, flags);
                 }
-                SemanticLocation::IndexedMemory { index, .. } => {
+                LirLocation::IndexedMemory { index, .. } => {
                     self.collect_expression_reads(index, registers, program_counters, flags);
                 }
-                SemanticLocation::StackMemory { .. } => {}
-                SemanticLocation::Temporary { .. } => {}
+                LirLocation::StackMemory { .. } => {}
+                LirLocation::Temporary { .. } => {}
             },
-            SemanticExpression::Load { addr, .. } => {
+            LirExpression::Load { addr, .. } => {
                 self.collect_expression_reads(addr, registers, program_counters, flags);
             }
-            SemanticExpression::ReadProperty { reference, .. } => {
+            LirExpression::ReadProperty { reference, .. } => {
                 self.collect_expression_reads(reference, registers, program_counters, flags);
             }
-            SemanticExpression::ReadElement {
+            LirExpression::ReadElement {
                 reference, index, ..
             } => {
                 self.collect_expression_reads(reference, registers, program_counters, flags);
                 self.collect_expression_reads(index, registers, program_counters, flags);
             }
-            SemanticExpression::Unary { arg, .. }
-            | SemanticExpression::Cast { arg, .. }
-            | SemanticExpression::Extract { arg, .. } => {
+            LirExpression::Unary { arg, .. }
+            | LirExpression::Cast { arg, .. }
+            | LirExpression::Extract { arg, .. } => {
                 self.collect_expression_reads(arg, registers, program_counters, flags);
             }
-            SemanticExpression::Binary { left, right, .. }
-            | SemanticExpression::Compare { left, right, .. } => {
+            LirExpression::Binary { left, right, .. }
+            | LirExpression::Compare { left, right, .. } => {
                 self.collect_expression_reads(left, registers, program_counters, flags);
                 self.collect_expression_reads(right, registers, program_counters, flags);
             }
-            SemanticExpression::Select {
+            LirExpression::Select {
                 condition,
                 when_true,
                 when_false,
@@ -2367,21 +2331,21 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 self.collect_expression_reads(when_true, registers, program_counters, flags);
                 self.collect_expression_reads(when_false, registers, program_counters, flags);
             }
-            SemanticExpression::Concat { parts, .. } => {
+            LirExpression::Concat { parts, .. } => {
                 for part in parts {
                     self.collect_expression_reads(part, registers, program_counters, flags);
                 }
             }
-            SemanticExpression::Intrinsic { args, .. } => {
+            LirExpression::Intrinsic { args, .. } => {
                 for arg in args {
                     self.collect_expression_reads(arg, registers, program_counters, flags);
                 }
             }
-            SemanticExpression::Const { .. }
-            | SemanticExpression::Undefined { .. }
-            | SemanticExpression::Poison { .. }
-            | SemanticExpression::Null { .. }
-            | SemanticExpression::Allocate { .. } => {}
+            LirExpression::Const { .. }
+            | LirExpression::Undefined { .. }
+            | LirExpression::Poison { .. }
+            | LirExpression::Null { .. }
+            | LirExpression::Allocate { .. } => {}
         }
     }
 }

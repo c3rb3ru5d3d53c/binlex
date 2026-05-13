@@ -2,114 +2,114 @@
 
 import ctypes
 from binlex import Configuration
-from binlex.semantics import (
-    Semantics,
-    SemanticAbi,
-    SemanticCpu,
-    Semantic,
-    SemanticEffect,
-    SemanticExpression,
-    SemanticLocation,
-    SemanticOperationBinary,
-    SemanticOperationCast,
-    SemanticStatus,
-    SemanticTerminator,
-    SemanticTrapKind,
+from binlex.ir.lir import (
+    LirModule,
+    LirAbi,
+    LirCpu,
+    Lir,
+    LirEffect,
+    LirExpression,
+    LirLocation,
+    LirOperationBinary,
+    LirOperationCast,
+    LirStatus,
+    LirTerminator,
+    LirTrapKind,
 )
 from binlex.symbolic import Executor, CpuState
 from binlex.lifters import Lifter
 
 configuration = Configuration()
 
-cpu = SemanticCpu.amd64()
-sysv = SemanticAbi.sysv(cpu)
-linux_syscall = SemanticAbi.linux_syscall(cpu)
+cpu = LirCpu.amd64()
+sysv = LirAbi.sysv(cpu)
+linux_syscall = LirAbi.linux_syscall(cpu)
 
-add_two_semantics = Semantics(
+add_two_semantics = LirModule(
     semantics=[
-        Semantic(
+        Lir(
             version=1,
-            status=SemanticStatus.Complete,
+            status=LirStatus.Complete,
             effects=[
-                SemanticEffect.set(
-                    SemanticLocation.register("rax", 64),
-                    SemanticExpression.binary(
-                        SemanticOperationBinary.Add,
-                        SemanticExpression.read(
-                            SemanticLocation.register("rdi", 64)
+                LirEffect.set(
+                    LirLocation.register("rax", 64),
+                    LirExpression.binary(
+                        LirOperationBinary.Add,
+                        LirExpression.read(
+                            LirLocation.register("rdi", 64)
                         ),
-                        SemanticExpression.read(
-                            SemanticLocation.register("rsi", 64)
+                        LirExpression.read(
+                            LirLocation.register("rsi", 64)
                         ),
                         64
                     )
                 )
             ],
-            terminator=SemanticTerminator.return_()
+            terminator=LirTerminator.return_()
         )
     ]
 )
 
-write_semantics = Semantics(
+write_semantics = LirModule(
     semantics=[
-        Semantic(
+        Lir(
             version=1,
-            status=SemanticStatus.Complete,
+            status=LirStatus.Complete,
             abi=linux_syscall,
             effects=[
-                SemanticEffect.set(
-                    SemanticLocation.stack_memory("stack", 8, 64),
-                    SemanticExpression.read(
-                        SemanticLocation.register("rdi", 64)
+                LirEffect.set(
+                    LirLocation.stack_memory("stack", 8, 64),
+                    LirExpression.read(
+                        LirLocation.register("rdi", 64)
                     )
                 ),
-                SemanticEffect.set(
-                    SemanticLocation.stack_memory("stack", 0, 8),
-                    SemanticExpression.cast(
-                        SemanticOperationCast.Truncate,
-                        SemanticExpression.binary(
-                            SemanticOperationBinary.Add,
-                            SemanticExpression.read(
-                                SemanticLocation.register("rdi", 64)
+                LirEffect.set(
+                    LirLocation.stack_memory("stack", 0, 8),
+                    LirExpression.cast(
+                        LirOperationCast.Truncate,
+                        LirExpression.binary(
+                            LirOperationBinary.Add,
+                            LirExpression.read(
+                                LirLocation.register("rdi", 64)
                             ),
-                            SemanticExpression.const(48, 64),
+                            LirExpression.const(48, 64),
                             64
                         ),
                         8
                     )
                 ),
-                SemanticEffect.set(
-                    SemanticLocation.stack_memory("stack", 1, 8),
-                    SemanticExpression.const(10, 8)
+                LirEffect.set(
+                    LirLocation.stack_memory("stack", 1, 8),
+                    LirExpression.const(10, 8)
                 ),
-                SemanticEffect.set(
-                    SemanticLocation.register("rax", 64),
-                    SemanticExpression.const(1, 64)
+                LirEffect.set(
+                    LirLocation.register("rax", 64),
+                    LirExpression.const(1, 64)
                 ),
-                SemanticEffect.set(
-                    SemanticLocation.register("rdi", 64),
-                    SemanticExpression.const(1, 64)
+                LirEffect.set(
+                    LirLocation.register("rdi", 64),
+                    LirExpression.const(1, 64)
                 ),
-                SemanticEffect.set(
-                    SemanticLocation.register("rsi", 64),
-                    SemanticExpression.address_of(
-                        SemanticLocation.stack_memory("stack", 0, 8),
+                LirEffect.set(
+                    LirLocation.register("rsi", 64),
+                    LirExpression.address_of(
+                        LirLocation.stack_memory("stack", 0, 8),
                         64
                     )
                 ),
-                SemanticEffect.set(
-                    SemanticLocation.register("rdx", 64),
-                    SemanticExpression.const(2, 64)
+                LirEffect.set(
+                    LirLocation.register("rdx", 64),
+                    LirExpression.const(2, 64)
                 ),
-                SemanticEffect.trap(SemanticTrapKind.Syscall),
-                SemanticEffect.set(
-                    SemanticLocation.register("rax", 64),
-                    SemanticExpression.read(
-                        SemanticLocation.stack_memory("stack", 8, 64)
+                LirEffect.trap(LirTrapKind.Syscall),
+                LirEffect.set(
+                    LirLocation.register("rax", 64),
+                    LirExpression.read(
+                        LirLocation.stack_memory("stack", 8, 64)
                     )
                 ),
             ],
-            terminator=SemanticTerminator.return_()
+            terminator=LirTerminator.return_()
         )
     ]
 )

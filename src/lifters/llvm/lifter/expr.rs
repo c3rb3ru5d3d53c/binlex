@@ -1,8 +1,8 @@
 use super::LoweringContext;
 use super::helpers::{coerce_int_value_width, const_int, render_address_space, sanitize_symbol};
-use crate::semantics::{
-    SemanticExpression, SemanticLocation, SemanticOperationBinary, SemanticOperationCast,
-    SemanticOperationCompare, SemanticOperationUnary,
+use crate::ir::lir::{
+    LirExpression, LirLocation, LirOperationBinary, LirOperationCast, LirOperationCompare,
+    LirOperationUnary,
 };
 use inkwell::IntPredicate;
 use inkwell::attributes::AttributeLoc;
@@ -12,13 +12,11 @@ use std::io::Error;
 impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     pub(super) fn lower_expression(
         &mut self,
-        expression: &SemanticExpression,
+        expression: &LirExpression,
     ) -> Result<IntValue<'ctx>, Error> {
         match expression {
-            SemanticExpression::Const { value, bits } => {
-                Ok(const_int(self.int_type(*bits), *value))
-            }
-            SemanticExpression::Function { name, bits } => {
+            LirExpression::Const { value, bits } => Ok(const_int(self.int_type(*bits), *value)),
+            LirExpression::Function { name, bits } => {
                 let function = self.module.get_function(name).ok_or_else(|| {
                     Error::other(format!("unknown semantic function target {name}"))
                 })?;
@@ -30,7 +28,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     )
                     .map_err(|err| Error::other(err.to_string()))
             }
-            SemanticExpression::DataAddress { name, bits } => {
+            LirExpression::DataAddress { name, bits } => {
                 let global_name = sanitize_symbol(&format!("binlex_data_{name}"));
                 let global = self
                     .module
@@ -40,7 +38,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .build_ptr_to_int(global.as_pointer_value(), self.int_type(*bits), "datatmp")
                     .map_err(|err| Error::other(err.to_string()))
             }
-            SemanticExpression::AddressOf { location, bits } => {
+            LirExpression::AddressOf { location, bits } => {
                 let pointer = self.pointer_for_location(location)?;
                 let pointer = self
                     .builder
@@ -48,8 +46,8 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .map_err(|err| Error::other(err.to_string()))?;
                 Ok(pointer)
             }
-            SemanticExpression::Read(location) => self.read_location(location),
-            SemanticExpression::Load { space, addr, bits } => {
+            LirExpression::Read(location) => self.read_location(location),
+            LirExpression::Load { space, addr, bits } => {
                 if let Some(value) = self.try_direct_load(space, addr, *bits)? {
                     return Ok(value);
                 }
@@ -76,11 +74,11 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 let addr = self.to_i64(addr);
                 self.call_value(helper, &[addr.into()], "loadtmp")
             }
-            SemanticExpression::Unary { op, arg, bits } => {
+            LirExpression::Unary { op, arg, bits } => {
                 let arg = self.lower_expression(arg)?;
                 self.lower_unary(*op, arg, *bits)
             }
-            SemanticExpression::Binary {
+            LirExpression::Binary {
                 op,
                 left,
                 right,
@@ -90,18 +88,18 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 let right = self.lower_expression(right)?;
                 self.lower_binary(*op, left, right, *bits)
             }
-            SemanticExpression::Cast { op, arg, bits } => {
+            LirExpression::Cast { op, arg, bits } => {
                 let arg = self.lower_expression(arg)?;
                 self.lower_cast(*op, arg, *bits)
             }
-            SemanticExpression::Compare {
+            LirExpression::Compare {
                 op, left, right, ..
             } => {
                 let left = self.lower_expression(left)?;
                 let right = self.lower_expression(right)?;
                 self.lower_compare(*op, left, right)
             }
-            SemanticExpression::Select {
+            LirExpression::Select {
                 condition,
                 when_true,
                 when_false,
@@ -117,7 +115,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .map_err(|err| Error::other(err.to_string()))?
                     .into_int_value())
             }
-            SemanticExpression::Extract { arg, lsb, bits } => {
+            LirExpression::Extract { arg, lsb, bits } => {
                 if let Some(value) = self.try_lower_i386_div_extract(arg, *lsb, *bits)? {
                     return Ok(value);
                 }
@@ -139,7 +137,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                         .map_err(|err| Error::other(err.to_string()))
                 }
             }
-            SemanticExpression::Concat { parts, bits } => {
+            LirExpression::Concat { parts, bits } => {
                 let target = self.int_type(*bits);
                 let mut acc = target.const_zero();
                 for part in parts {
@@ -163,11 +161,11 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 }
                 Ok(acc)
             }
-            SemanticExpression::Undefined { bits } | SemanticExpression::Poison { bits } => {
+            LirExpression::Undefined { bits } | LirExpression::Poison { bits } => {
                 Ok(self.int_type(*bits).const_zero())
             }
-            SemanticExpression::Null { bits } => Ok(self.int_type(*bits).const_zero()),
-            SemanticExpression::Allocate { kind, bits } => {
+            LirExpression::Null { bits } => Ok(self.int_type(*bits).const_zero()),
+            LirExpression::Allocate { kind, bits } => {
                 let helper_name = format!("binlex_ref_alloc_{}_{}", sanitize_symbol(kind), bits);
                 let helper =
                     self.declare_value_helper(&helper_name, self.int_type(*bits), &[], true);
@@ -180,7 +178,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 );
                 self.call_value(helper, &[], "refalloc")
             }
-            SemanticExpression::ReadProperty {
+            LirExpression::ReadProperty {
                 reference,
                 name,
                 bits,
@@ -196,7 +194,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 let reference = self.to_i64(reference);
                 self.call_value(helper, &[reference.into()], "refprop")
             }
-            SemanticExpression::ReadElement {
+            LirExpression::ReadElement {
                 reference,
                 index,
                 bits,
@@ -217,7 +215,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 let index = self.to_i64(index);
                 self.call_value(helper, &[reference.into(), index.into()], "refelem")
             }
-            SemanticExpression::Intrinsic { name, args, bits } => {
+            LirExpression::Intrinsic { name, args, bits } => {
                 let helper_name = format!("binlex_expr_{}", sanitize_symbol(name));
                 let helper =
                     self.declare_value_helper(&helper_name, self.int_type(*bits), &[], true);
@@ -239,7 +237,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
     fn try_lower_i386_div_extract(
         &mut self,
-        arg: &SemanticExpression,
+        arg: &LirExpression,
         lsb: u16,
         bits: u16,
     ) -> Result<Option<IntValue<'ctx>>, Error> {
@@ -251,38 +249,35 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             return Ok(None);
         }
         let (signed, remainder, dividend, divisor) = match arg {
-            SemanticExpression::Binary {
+            LirExpression::Binary {
                 op,
                 left,
                 right,
                 bits: 64,
             } => match op {
-                SemanticOperationBinary::UDiv => (false, false, &**left, &**right),
-                SemanticOperationBinary::SDiv => (true, false, &**left, &**right),
-                SemanticOperationBinary::URem => (false, true, &**left, &**right),
-                SemanticOperationBinary::SRem => (true, true, &**left, &**right),
+                LirOperationBinary::UDiv => (false, false, &**left, &**right),
+                LirOperationBinary::SDiv => (true, false, &**left, &**right),
+                LirOperationBinary::URem => (false, true, &**left, &**right),
+                LirOperationBinary::SRem => (true, true, &**left, &**right),
                 _ => return Ok(None),
             },
             _ => return Ok(None),
         };
         let (high, low) = match dividend {
-            SemanticExpression::Concat { parts, bits: 64 } if parts.len() == 2 => {
-                (&parts[0], &parts[1])
-            }
+            LirExpression::Concat { parts, bits: 64 } if parts.len() == 2 => (&parts[0], &parts[1]),
             _ => return Ok(None),
         };
         let divisor = match divisor {
-            SemanticExpression::Cast { arg, bits: 64, .. } => &**arg,
+            LirExpression::Cast { arg, bits: 64, .. } => &**arg,
             _ => return Ok(None),
         };
         let ty = self.context.i32_type();
         let low_value = self.lower_expression(low)?;
-        let low_value = self.lower_cast(SemanticOperationCast::ZeroExtend, low_value, 32)?;
+        let low_value = self.lower_cast(LirOperationCast::ZeroExtend, low_value, 32)?;
         let high_value = self.lower_expression(high)?;
-        let high_value = self.lower_cast(SemanticOperationCast::ZeroExtend, high_value, 32)?;
+        let high_value = self.lower_cast(LirOperationCast::ZeroExtend, high_value, 32)?;
         let divisor_value = self.lower_expression(divisor)?;
-        let divisor_value =
-            self.lower_cast(SemanticOperationCast::ZeroExtend, divisor_value, 32)?;
+        let divisor_value = self.lower_cast(LirOperationCast::ZeroExtend, divisor_value, 32)?;
         let low_slot = self.build_entry_alloca(ty, "div_low_slot")?;
         let high_slot = self.build_entry_alloca(ty, "div_high_slot")?;
         let divisor_slot = self.build_entry_alloca(ty, "div_divisor_slot")?;
@@ -351,10 +346,10 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
     pub(super) fn read_location(
         &mut self,
-        location: &SemanticLocation,
+        location: &LirLocation,
     ) -> Result<IntValue<'ctx>, Error> {
         match location {
-            SemanticLocation::Memory { space, addr, bits } => {
+            LirLocation::Memory { space, addr, bits } => {
                 if let Some(value) = self.try_direct_load(space, addr, *bits)? {
                     return Ok(value);
                 }
@@ -395,7 +390,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
     pub(super) fn lower_arg_values(
         &mut self,
-        args: &[SemanticExpression],
+        args: &[LirExpression],
     ) -> Result<Vec<BasicMetadataValueEnum<'ctx>>, Error> {
         args.iter()
             .map(|arg| self.lower_expression(arg).map(Into::into))
@@ -419,20 +414,20 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
     fn lower_unary(
         &mut self,
-        op: SemanticOperationUnary,
+        op: LirOperationUnary,
         arg: IntValue<'ctx>,
         bits: u16,
     ) -> Result<IntValue<'ctx>, Error> {
         match op {
-            SemanticOperationUnary::Not => self
+            LirOperationUnary::Not => self
                 .builder
                 .build_not(arg, "nottmp")
                 .map_err(|err| Error::other(err.to_string())),
-            SemanticOperationUnary::Neg => self
+            LirOperationUnary::Neg => self
                 .builder
                 .build_int_neg(arg, "negtmp")
                 .map_err(|err| Error::other(err.to_string())),
-            SemanticOperationUnary::ByteSwap => {
+            LirOperationUnary::ByteSwap => {
                 let name = format!("llvm.bswap.i{}", bits);
                 let function = self.module.get_function(&name).unwrap_or_else(|| {
                     self.module.add_function(
@@ -444,7 +439,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 });
                 self.call_value(function, &[arg.into()], "bswaptmp")
             }
-            SemanticOperationUnary::CountLeadingZeros => {
+            LirOperationUnary::CountLeadingZeros => {
                 let name = format!("llvm.ctlz.i{}", bits);
                 let function = self.module.get_function(&name).unwrap_or_else(|| {
                     self.module.add_function(
@@ -462,7 +457,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     "ctlztmp",
                 )
             }
-            SemanticOperationUnary::CountTrailingZeros => {
+            LirOperationUnary::CountTrailingZeros => {
                 let name = format!("llvm.cttz.i{}", bits);
                 let function = self.module.get_function(&name).unwrap_or_else(|| {
                     self.module.add_function(
@@ -480,7 +475,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     "cttztmp",
                 )
             }
-            SemanticOperationUnary::PopCount => {
+            LirOperationUnary::PopCount => {
                 let name = format!("llvm.ctpop.i{}", bits);
                 let function = self.module.get_function(&name).unwrap_or_else(|| {
                     self.module.add_function(
@@ -516,7 +511,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
     fn lower_binary(
         &mut self,
-        op: SemanticOperationBinary,
+        op: LirOperationBinary,
         left: IntValue<'ctx>,
         right: IntValue<'ctx>,
         bits: u16,
@@ -541,7 +536,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             this.call_value(helper, &[left.into(), right.into()], "binarytmp")
         };
         match op {
-            SemanticOperationBinary::FAdd => {
+            LirOperationBinary::FAdd => {
                 if !matches!(bits, 32 | 64) {
                     return binary_helper(self);
                 }
@@ -554,7 +549,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .map_err(|err| Error::other(err.to_string()))?;
                 self.float_to_int_bits(sum, self.int_type(bits), "fadd_bits")
             }
-            SemanticOperationBinary::FSub => {
+            LirOperationBinary::FSub => {
                 if !matches!(bits, 32 | 64) {
                     return binary_helper(self);
                 }
@@ -567,7 +562,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .map_err(|err| Error::other(err.to_string()))?;
                 self.float_to_int_bits(difference, self.int_type(bits), "fsub_bits")
             }
-            SemanticOperationBinary::FMul => {
+            LirOperationBinary::FMul => {
                 if !matches!(bits, 32 | 64) {
                     return binary_helper(self);
                 }
@@ -580,7 +575,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .map_err(|err| Error::other(err.to_string()))?;
                 self.float_to_int_bits(product, self.int_type(bits), "fmul_bits")
             }
-            SemanticOperationBinary::FDiv => {
+            LirOperationBinary::FDiv => {
                 if !matches!(bits, 32 | 64) {
                     return binary_helper(self);
                 }
@@ -593,47 +588,47 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .map_err(|err| Error::other(err.to_string()))?;
                 self.float_to_int_bits(quotient, self.int_type(bits), "fdiv_bits")
             }
-            SemanticOperationBinary::Add | SemanticOperationBinary::AddWithCarry => self
+            LirOperationBinary::Add | LirOperationBinary::AddWithCarry => self
                 .builder
                 .build_int_add(left, right, "addtmp")
                 .map_err(|err| Error::other(err.to_string())),
-            SemanticOperationBinary::Sub | SemanticOperationBinary::SubWithBorrow => self
+            LirOperationBinary::Sub | LirOperationBinary::SubWithBorrow => self
                 .builder
                 .build_int_sub(left, right, "subtmp")
                 .map_err(|err| Error::other(err.to_string())),
-            SemanticOperationBinary::Mul => self
+            LirOperationBinary::Mul => self
                 .builder
                 .build_int_mul(left, right, "multmp")
                 .map_err(|err| Error::other(err.to_string())),
-            SemanticOperationBinary::UDiv => self
+            LirOperationBinary::UDiv => self
                 .builder
                 .build_int_unsigned_div(left, right, "udivtmp")
                 .map_err(|err| Error::other(err.to_string())),
-            SemanticOperationBinary::SDiv => self
+            LirOperationBinary::SDiv => self
                 .builder
                 .build_int_signed_div(left, right, "sdivtmp")
                 .map_err(|err| Error::other(err.to_string())),
-            SemanticOperationBinary::URem => self
+            LirOperationBinary::URem => self
                 .builder
                 .build_int_unsigned_rem(left, right, "uremtmp")
                 .map_err(|err| Error::other(err.to_string())),
-            SemanticOperationBinary::SRem => self
+            LirOperationBinary::SRem => self
                 .builder
                 .build_int_signed_rem(left, right, "sremtmp")
                 .map_err(|err| Error::other(err.to_string())),
-            SemanticOperationBinary::And => self
+            LirOperationBinary::And => self
                 .builder
                 .build_and(left, right, "andtmp")
                 .map_err(|err| Error::other(err.to_string())),
-            SemanticOperationBinary::Or => self
+            LirOperationBinary::Or => self
                 .builder
                 .build_or(left, right, "ortmp")
                 .map_err(|err| Error::other(err.to_string())),
-            SemanticOperationBinary::Xor => self
+            LirOperationBinary::Xor => self
                 .builder
                 .build_xor(left, right, "xortmp")
                 .map_err(|err| Error::other(err.to_string())),
-            SemanticOperationBinary::Shl => self
+            LirOperationBinary::Shl => self
                 .builder
                 .build_left_shift(
                     left,
@@ -647,7 +642,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     "shltmp",
                 )
                 .map_err(|err| Error::other(err.to_string())),
-            SemanticOperationBinary::LShr => self
+            LirOperationBinary::LShr => self
                 .builder
                 .build_right_shift(
                     left,
@@ -662,7 +657,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     "lshrtmp",
                 )
                 .map_err(|err| Error::other(err.to_string())),
-            SemanticOperationBinary::AShr => self
+            LirOperationBinary::AShr => self
                 .builder
                 .build_right_shift(
                     left,
@@ -677,7 +672,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     "ashrtmp",
                 )
                 .map_err(|err| Error::other(err.to_string())),
-            SemanticOperationBinary::RotateLeft => {
+            LirOperationBinary::RotateLeft => {
                 self.record_semantic_lowering(
                     "binary_intrinsic",
                     format!("RotateLeft bits={} via llvm.fshl.i{}", bits, bits),
@@ -710,7 +705,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     "roltmp",
                 )
             }
-            SemanticOperationBinary::RotateRight => {
+            LirOperationBinary::RotateRight => {
                 self.record_semantic_lowering(
                     "binary_intrinsic",
                     format!("RotateRight bits={} via llvm.fshr.i{}", bits, bits),
@@ -749,7 +744,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
     fn lower_cast(
         &mut self,
-        op: SemanticOperationCast,
+        op: LirOperationCast,
         arg: IntValue<'ctx>,
         bits: u16,
     ) -> Result<IntValue<'ctx>, Error> {
@@ -772,7 +767,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             this.call_value(helper, &[arg.into()], "casttmp")
         };
         match op {
-            SemanticOperationCast::ZeroExtend => {
+            LirOperationCast::ZeroExtend => {
                 if source_bits == bits as u32 {
                     Ok(arg)
                 } else if source_bits > bits as u32 {
@@ -785,7 +780,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                         .map_err(|err| Error::other(err.to_string()))
                 }
             }
-            SemanticOperationCast::SignExtend => {
+            LirOperationCast::SignExtend => {
                 if source_bits == bits as u32 {
                     Ok(arg)
                 } else if source_bits > bits as u32 {
@@ -798,7 +793,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                         .map_err(|err| Error::other(err.to_string()))
                 }
             }
-            SemanticOperationCast::Truncate => {
+            LirOperationCast::Truncate => {
                 if source_bits == bits as u32 {
                     Ok(arg)
                 } else {
@@ -807,7 +802,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                         .map_err(|err| Error::other(err.to_string()))
                 }
             }
-            SemanticOperationCast::IntToFloat => {
+            LirOperationCast::IntToFloat => {
                 if !matches!(bits, 32 | 64) {
                     return cast_helper(self);
                 }
@@ -818,7 +813,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .map_err(|err| Error::other(err.to_string()))?;
                 self.float_to_int_bits(float, target, "sitofp_bits")
             }
-            SemanticOperationCast::UIntToFloat => {
+            LirOperationCast::UIntToFloat => {
                 if !matches!(bits, 32 | 64) {
                     return cast_helper(self);
                 }
@@ -829,7 +824,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .map_err(|err| Error::other(err.to_string()))?;
                 self.float_to_int_bits(float, target, "uitofp_bits")
             }
-            SemanticOperationCast::FloatToInt => {
+            LirOperationCast::FloatToInt => {
                 if !matches!(source_bits as u16, 32 | 64) {
                     return cast_helper(self);
                 }
@@ -894,7 +889,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .map_err(|err| Error::other(err.to_string()))
                     .map(|value| value.into_int_value())
             }
-            SemanticOperationCast::FloatToUInt => {
+            LirOperationCast::FloatToUInt => {
                 if !matches!(source_bits as u16, 32 | 64) {
                     return cast_helper(self);
                 }
@@ -956,7 +951,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
     fn lower_compare(
         &mut self,
-        op: SemanticOperationCompare,
+        op: LirOperationCompare,
         left: IntValue<'ctx>,
         right: IntValue<'ctx>,
     ) -> Result<IntValue<'ctx>, Error> {
@@ -981,16 +976,16 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             this.call_value(helper, &[left.into(), right.into()], "cmptmp")
         };
         let predicate = match op {
-            SemanticOperationCompare::Eq => Some(IntPredicate::EQ),
-            SemanticOperationCompare::Ne => Some(IntPredicate::NE),
-            SemanticOperationCompare::Ult => Some(IntPredicate::ULT),
-            SemanticOperationCompare::Ule => Some(IntPredicate::ULE),
-            SemanticOperationCompare::Ugt => Some(IntPredicate::UGT),
-            SemanticOperationCompare::Uge => Some(IntPredicate::UGE),
-            SemanticOperationCompare::Slt => Some(IntPredicate::SLT),
-            SemanticOperationCompare::Sle => Some(IntPredicate::SLE),
-            SemanticOperationCompare::Sgt => Some(IntPredicate::SGT),
-            SemanticOperationCompare::Sge => Some(IntPredicate::SGE),
+            LirOperationCompare::Eq => Some(IntPredicate::EQ),
+            LirOperationCompare::Ne => Some(IntPredicate::NE),
+            LirOperationCompare::Ult => Some(IntPredicate::ULT),
+            LirOperationCompare::Ule => Some(IntPredicate::ULE),
+            LirOperationCompare::Ugt => Some(IntPredicate::UGT),
+            LirOperationCompare::Uge => Some(IntPredicate::UGE),
+            LirOperationCompare::Slt => Some(IntPredicate::SLT),
+            LirOperationCompare::Sle => Some(IntPredicate::SLE),
+            LirOperationCompare::Sgt => Some(IntPredicate::SGT),
+            LirOperationCompare::Sge => Some(IntPredicate::SGE),
             _ => None,
         };
         if let Some(predicate) = predicate {
@@ -999,10 +994,10 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 .map_err(|err| Error::other(err.to_string()))
         } else {
             match op {
-                SemanticOperationCompare::Oeq
-                | SemanticOperationCompare::Oge
-                | SemanticOperationCompare::Olt
-                | SemanticOperationCompare::Unordered => {
+                LirOperationCompare::Oeq
+                | LirOperationCompare::Oge
+                | LirOperationCompare::Olt
+                | LirOperationCompare::Unordered => {
                     if !matches!(left.get_type().get_bit_width(), 32 | 64) {
                         return compare_helper(self);
                     }
@@ -1010,10 +1005,10 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     let left = self.int_bits_to_float(left, float_type, "fcmp_lhs")?;
                     let right = self.int_bits_to_float(right, float_type, "fcmp_rhs")?;
                     let predicate = match op {
-                        SemanticOperationCompare::Oeq => inkwell::FloatPredicate::OEQ,
-                        SemanticOperationCompare::Oge => inkwell::FloatPredicate::OGE,
-                        SemanticOperationCompare::Olt => inkwell::FloatPredicate::OLT,
-                        SemanticOperationCompare::Unordered => inkwell::FloatPredicate::UNO,
+                        LirOperationCompare::Oeq => inkwell::FloatPredicate::OEQ,
+                        LirOperationCompare::Oge => inkwell::FloatPredicate::OGE,
+                        LirOperationCompare::Olt => inkwell::FloatPredicate::OLT,
+                        LirOperationCompare::Unordered => inkwell::FloatPredicate::UNO,
                         _ => unreachable!("matched above"),
                     };
                     self.builder
