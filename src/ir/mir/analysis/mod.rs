@@ -20,20 +20,16 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod lir;
-pub mod mir;
+pub mod block_order;
+pub mod cfg;
+pub mod memory_state;
+pub mod register_state;
+pub mod targets;
+pub mod use_def;
 
-use pyo3::prelude::*;
-use pyo3::types::PyModule;
-use pyo3::wrap_pymodule;
-
-#[pymodule(name = "ir")]
-pub fn ir_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pymodule!(lir::lir_init))?;
-    m.add_wrapped(wrap_pymodule!(mir::mir_init))?;
-    py.import("sys")?
-        .getattr("modules")?
-        .set_item("binlex_bindings.binlex.ir", m)?;
-    m.setattr("__name__", "binlex_bindings.binlex.ir")?;
-    Ok(())
-}
+pub use block_order::reverse_post_order;
+pub use cfg::{mir_predecessors, mir_successors, reachable_blocks};
+pub use memory_state::MirMemorySummary;
+pub use register_state::{MirRegisterAliases, block_register_aliases, incoming_register_aliases};
+pub use targets::validate_targets;
+pub use use_def::{MirUseDef, build_use_def};

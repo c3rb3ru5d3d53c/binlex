@@ -423,10 +423,10 @@ impl InstructionRecord {
         self.operands.clone()
     }
 
-    /// Replaces the canonical semantics attached to this instruction.
-    pub fn set_semantics(&mut self, semantics: Lir) {
+    /// Replaces the canonical LIR attached to this instruction.
+    pub fn set_lir(&mut self, lir: Lir) {
         let _ = self.prepared_semantics_cache.take();
-        self.semantics = Some(semantics);
+        self.semantics = Some(lir);
     }
 
     pub fn prepared_semantics(&self) -> Result<Option<&Lir>, Error> {

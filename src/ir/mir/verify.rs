@@ -20,20 +20,33 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod lir;
-pub mod mir;
+use super::analysis::validate_targets;
+use super::mir::Mir;
+use std::collections::HashSet;
+use std::io::{Error, ErrorKind};
 
-use pyo3::prelude::*;
-use pyo3::types::PyModule;
-use pyo3::wrap_pymodule;
-
-#[pymodule(name = "ir")]
-pub fn ir_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pymodule!(lir::lir_init))?;
-    m.add_wrapped(wrap_pymodule!(mir::mir_init))?;
-    py.import("sys")?
-        .getattr("modules")?
-        .set_item("binlex_bindings.binlex.ir", m)?;
-    m.setattr("__name__", "binlex_bindings.binlex.ir")?;
+pub fn verify_mir(mir: &Mir) -> Result<(), Error> {
+    let mut names = HashSet::new();
+    for block in &mir.blocks {
+        if block.name.is_empty() {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                "mir block name is empty",
+            ));
+        }
+        if !names.insert(block.name.clone()) {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("duplicate mir block name {}", block.name),
+            ));
+        }
+        if block.terminator.is_none() {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("mir block {} is missing a terminator", block.name),
+            ));
+        }
+    }
+    validate_targets(mir).map_err(|error| Error::new(ErrorKind::InvalidData, error))?;
     Ok(())
 }

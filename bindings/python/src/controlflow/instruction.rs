@@ -501,7 +501,7 @@ impl InstructionJsonDeserializer {
         Ok(py_dict.into())
     }
 
-    pub fn semantic(&self, py: Python<'_>) -> PyResult<Option<Py<PyLir>>> {
+    pub fn lir(&self, py: Python<'_>) -> PyResult<Option<Py<PyLir>>> {
         let binding = self.inner.lock().unwrap();
         let Some(semantics) = binding.semantics.as_ref() else {
             return Ok(None);
@@ -748,8 +748,8 @@ impl Instruction {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the canonical semantics attached to this instruction, if present.
-    pub fn semantic(&self, py: Python) -> PyResult<Option<Py<PyLir>>> {
+    /// Return the canonical LIR attached to this instruction, if present.
+    pub fn lir(&self, py: Python) -> PyResult<Option<Py<PyLir>>> {
         self.with_inner_instruction(py, |instruction| {
             let Some(semantics) = instruction.semantics.as_ref() else {
                 return Ok(None);
@@ -758,12 +758,12 @@ impl Instruction {
         })
     }
 
-    #[pyo3(text_signature = "($self, semantics)")]
-    /// Replace the canonical semantics attached to this instruction and persist it in the CFG.
-    pub fn set_semantics(&self, py: Python<'_>, semantics: Py<PyLir>) -> PyResult<()> {
-        let replacement = semantics.borrow(py).inner.lock().unwrap().clone();
+    #[pyo3(text_signature = "($self, lir)")]
+    /// Replace the canonical LIR attached to this instruction and persist it in the CFG.
+    pub fn set_lir(&self, py: Python<'_>, lir: Py<PyLir>) -> PyResult<()> {
+        let replacement = lir.borrow(py).inner.lock().unwrap().clone();
         let mut updated = self.with_inner_instruction(py, |instruction| Ok(instruction.clone()))?;
-        updated.set_semantics(replacement);
+        updated.set_lir(replacement);
         {
             let binding = self.cfg.borrow(py);
             let mut inner = binding.inner.lock().unwrap();

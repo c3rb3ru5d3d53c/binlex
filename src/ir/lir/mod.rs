@@ -25,6 +25,8 @@ pub mod arm64;
 pub mod cil;
 pub mod cpus;
 pub mod ir;
+pub mod optimizers;
+pub mod print;
 pub mod x86;
 
 pub use abis::{LirAbi, LirAbiKind, LirAbiTrap};
@@ -39,3 +41,8 @@ pub use ir::{
     LirOperationCompare, LirOperationUnary, LirStatus, LirTemporary, LirTerminator,
     LirTerminatorKind, LirTrapKind, normalize_instruction_lir, validate_instruction_lir,
 };
+pub use optimizers::{
+    optimize_branches, optimize_casts, optimize_constants, optimize_identities,
+    optimize_intrinsics, optimize_noops, optimize_simplify,
+};
+pub use print::{format_lir, format_lir_module};

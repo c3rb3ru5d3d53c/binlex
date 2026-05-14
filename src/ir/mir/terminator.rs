@@ -20,20 +20,38 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod lir;
-pub mod mir;
+use super::kind::MirTerminatorKind;
+use super::value::MirValue;
+use serde::{Deserialize, Serialize};
 
-use pyo3::prelude::*;
-use pyo3::types::PyModule;
-use pyo3::wrap_pymodule;
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum MirTerminator {
+    Jump {
+        target: String,
+        arguments: Vec<MirValue>,
+    },
+    CondBr {
+        condition: MirValue,
+        then_target: String,
+        then_arguments: Vec<MirValue>,
+        else_target: String,
+        else_arguments: Vec<MirValue>,
+    },
+    Return {
+        values: Vec<MirValue>,
+    },
+    Trap,
+    Unreachable,
+}
 
-#[pymodule(name = "ir")]
-pub fn ir_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pymodule!(lir::lir_init))?;
-    m.add_wrapped(wrap_pymodule!(mir::mir_init))?;
-    py.import("sys")?
-        .getattr("modules")?
-        .set_item("binlex_bindings.binlex.ir", m)?;
-    m.setattr("__name__", "binlex_bindings.binlex.ir")?;
-    Ok(())
+impl MirTerminator {
+    pub fn kind(&self) -> MirTerminatorKind {
+        match self {
+            Self::Jump { .. } => MirTerminatorKind::Jump,
+            Self::CondBr { .. } => MirTerminatorKind::CondBr,
+            Self::Return { .. } => MirTerminatorKind::Return,
+            Self::Trap => MirTerminatorKind::Trap,
+            Self::Unreachable => MirTerminatorKind::Unreachable,
+        }
+    }
 }

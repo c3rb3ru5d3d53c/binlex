@@ -20,20 +20,36 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod lir;
-pub mod mir;
+use super::kind::MirType;
+use serde::{Deserialize, Serialize};
 
-use pyo3::prelude::*;
-use pyo3::types::PyModule;
-use pyo3::wrap_pymodule;
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum MirValue {
+    Named { name: String, ty: MirType },
+    Integer { value: i128, bits: u16 },
+    Boolean(bool),
+    Null { ty: MirType },
+    Undef { ty: MirType },
+}
 
-#[pymodule(name = "ir")]
-pub fn ir_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pymodule!(lir::lir_init))?;
-    m.add_wrapped(wrap_pymodule!(mir::mir_init))?;
-    py.import("sys")?
-        .getattr("modules")?
-        .set_item("binlex_bindings.binlex.ir", m)?;
-    m.setattr("__name__", "binlex_bindings.binlex.ir")?;
-    Ok(())
+impl MirValue {
+    pub fn named(name: String, ty: MirType) -> Self {
+        Self::Named { name, ty }
+    }
+
+    pub fn integer(value: i128, bits: u16) -> Self {
+        Self::Integer { value, bits }
+    }
+
+    pub fn boolean(value: bool) -> Self {
+        Self::Boolean(value)
+    }
+
+    pub fn null(ty: MirType) -> Self {
+        Self::Null { ty }
+    }
+
+    pub fn undef(ty: MirType) -> Self {
+        Self::Undef { ty }
+    }
 }

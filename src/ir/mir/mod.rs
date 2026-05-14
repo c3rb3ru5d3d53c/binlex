@@ -19,3 +19,26 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
+
+pub mod analysis;
+pub mod block;
+pub mod kind;
+pub mod lower;
+pub mod memory;
+pub mod mir;
+pub mod operation;
+pub mod optimizers;
+pub mod print;
+pub mod terminator;
+pub mod value;
+pub mod verify;
+
+pub use block::{MirBlock, MirBlockParameter};
+pub use kind::{MirCastOperation, MirCompareOperation, MirTerminatorKind, MirType, MirTypeKind};
+pub use memory::MirAddressSpace;
+pub use mir::Mir;
+pub use operation::{MirCallClobber, MirOperation, MirOperationKind};
+pub use print::format_mir;
+pub use terminator::MirTerminator;
+pub use value::MirValue;
+pub use verify::verify_mir;

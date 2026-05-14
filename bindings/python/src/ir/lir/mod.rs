@@ -2421,6 +2421,27 @@ impl Lir {
             .collect();
         self.inner.lock().unwrap().set_diagnostics(diagnostics);
     }
+    pub fn optimize_constants(&mut self) {
+        self.inner.lock().unwrap().optimize_constants();
+    }
+    pub fn optimize_identities(&mut self) {
+        self.inner.lock().unwrap().optimize_identities();
+    }
+    pub fn optimize_casts(&mut self) {
+        self.inner.lock().unwrap().optimize_casts();
+    }
+    pub fn optimize_noops(&mut self) {
+        self.inner.lock().unwrap().optimize_noops();
+    }
+    pub fn optimize_branches(&mut self) {
+        self.inner.lock().unwrap().optimize_branches();
+    }
+    pub fn optimize_intrinsics(&mut self) {
+        self.inner.lock().unwrap().optimize_intrinsics();
+    }
+    pub fn optimize_simplify(&mut self) {
+        self.inner.lock().unwrap().optimize_simplify();
+    }
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_value_to_py(
             py,
@@ -2432,12 +2453,15 @@ impl Lir {
         serde_json::to_string(&*self.inner.lock().unwrap())
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
+    pub fn text(&self) -> String {
+        self.inner.lock().unwrap().text()
+    }
     pub fn print(&self) -> PyResult<()> {
-        println!("{}", self.json()?);
+        println!("{}", self.text());
         Ok(())
     }
     pub fn __str__(&self) -> PyResult<String> {
-        self.json()
+        Ok(self.text())
     }
 
     pub fn __hash__(&self) -> isize {
@@ -2592,6 +2616,27 @@ impl LirModule {
         let data = data.borrow(py).inner.lock().unwrap().clone();
         self.inner.lock().unwrap().data.push(data);
     }
+    pub fn optimize_constants(&mut self) {
+        self.inner.lock().unwrap().optimize_constants();
+    }
+    pub fn optimize_identities(&mut self) {
+        self.inner.lock().unwrap().optimize_identities();
+    }
+    pub fn optimize_casts(&mut self) {
+        self.inner.lock().unwrap().optimize_casts();
+    }
+    pub fn optimize_noops(&mut self) {
+        self.inner.lock().unwrap().optimize_noops();
+    }
+    pub fn optimize_branches(&mut self) {
+        self.inner.lock().unwrap().optimize_branches();
+    }
+    pub fn optimize_intrinsics(&mut self) {
+        self.inner.lock().unwrap().optimize_intrinsics();
+    }
+    pub fn optimize_simplify(&mut self) {
+        self.inner.lock().unwrap().optimize_simplify();
+    }
 
     pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         json_value_to_py(
@@ -2606,8 +2651,12 @@ impl LirModule {
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
+    pub fn text(&self) -> String {
+        self.inner.lock().unwrap().text()
+    }
+
     pub fn print(&self) -> PyResult<()> {
-        println!("{}", self.json()?);
+        println!("{}", self.text());
         Ok(())
     }
 

@@ -101,6 +101,38 @@ impl LirModule {
     pub fn append_data(&mut self, data: LirData) {
         self.data.push(data);
     }
+
+    pub fn text(&self) -> String {
+        crate::ir::lir::format_lir_module(self)
+    }
+
+    pub fn optimize_constants(&mut self) {
+        crate::ir::lir::optimizers::constants::optimize_constants_module(self);
+    }
+
+    pub fn optimize_identities(&mut self) {
+        crate::ir::lir::optimizers::identities::optimize_identities_module(self);
+    }
+
+    pub fn optimize_casts(&mut self) {
+        crate::ir::lir::optimizers::casts::optimize_casts_module(self);
+    }
+
+    pub fn optimize_noops(&mut self) {
+        crate::ir::lir::optimizers::noops::optimize_noops_module(self);
+    }
+
+    pub fn optimize_branches(&mut self) {
+        crate::ir::lir::optimizers::branches::optimize_branches_module(self);
+    }
+
+    pub fn optimize_intrinsics(&mut self) {
+        crate::ir::lir::optimizers::intrinsics::optimize_intrinsics_module(self);
+    }
+
+    pub fn optimize_simplify(&mut self) {
+        crate::ir::lir::optimizers::simplify::optimize_simplify_module(self);
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -622,6 +654,38 @@ impl Lir {
 
     pub fn set_diagnostics(&mut self, diagnostics: Vec<LirDiagnostic>) {
         self.diagnostics = diagnostics;
+    }
+
+    pub fn text(&self) -> String {
+        crate::ir::lir::format_lir(self)
+    }
+
+    pub fn optimize_constants(&mut self) {
+        crate::ir::lir::optimizers::optimize_constants(self);
+    }
+
+    pub fn optimize_identities(&mut self) {
+        crate::ir::lir::optimizers::optimize_identities(self);
+    }
+
+    pub fn optimize_casts(&mut self) {
+        crate::ir::lir::optimizers::optimize_casts(self);
+    }
+
+    pub fn optimize_noops(&mut self) {
+        crate::ir::lir::optimizers::optimize_noops(self);
+    }
+
+    pub fn optimize_branches(&mut self) {
+        crate::ir::lir::optimizers::optimize_branches(self);
+    }
+
+    pub fn optimize_intrinsics(&mut self) {
+        crate::ir::lir::optimizers::optimize_intrinsics(self);
+    }
+
+    pub fn optimize_simplify(&mut self) {
+        crate::ir::lir::optimizers::optimize_simplify(self);
     }
 }
 

@@ -167,14 +167,14 @@ class Instruction:
             triple=triple,
         ).lift_instruction(self)
 
-    def semantic(self):
-        """Return canonical semantics for this instruction, if present."""
-        return self._inner.semantic()
+    def lir(self):
+        """Return canonical LIR for this instruction, if present."""
+        return self._inner.lir()
 
-    def set_semantics(self, semantics):
-        """Replace the canonical semantics for this instruction inside the graph."""
-        inner = getattr(semantics, "_inner", semantics)
-        self._inner.set_semantics(inner)
+    def set_lir(self, lir):
+        """Replace the canonical LIR for this instruction inside the graph."""
+        inner = getattr(lir, "_inner", lir)
+        self._inner.set_lir(inner)
         return self
 
     def to_dict(self):
@@ -286,9 +286,9 @@ class InstructionJsonDeserializer:
         """Return a single processor output attached to this instruction."""
         return self._inner.processor(name)
 
-    def semantic(self):
-        """Return canonical semantics for this serialized instruction, if present."""
-        return self._inner.semantic()
+    def lir(self):
+        """Return canonical LIR for this serialized instruction, if present."""
+        return self._inner.lir()
 
     def to_dict(self):
         """Convert the instruction to a Python dictionary."""

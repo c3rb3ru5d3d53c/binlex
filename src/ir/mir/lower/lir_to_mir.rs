@@ -1,0 +1,835 @@
+// MIT License
+//
+// Copyright (c) [2025] [c3rb3ru5d3d53c]
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+use crate::ir::lir::{
+    Lir, LirAddressSpace, LirEffect, LirExpression, LirLocation, LirModule, LirOperationBinary,
+    LirOperationCast, LirOperationCompare, LirOperationUnary, LirTerminator,
+};
+use crate::ir::mir::{
+    Mir, MirAddressSpace, MirBlock, MirOperation, MirOperationKind, MirTerminator, MirType,
+    MirValue,
+};
+use crate::ir::mir::{MirCastOperation, MirCompareOperation};
+use std::collections::{HashMap, HashSet};
+use std::fmt::{Display, Formatter};
+
+#[derive(Clone, Debug)]
+pub struct MirLowerError {
+    pub message: String,
+}
+
+impl Display for MirLowerError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for MirLowerError {}
+
+#[derive(Default)]
+struct LoweringContext {
+    next_temp: usize,
+}
+
+impl LoweringContext {
+    fn next_name(&mut self, prefix: &str) -> String {
+        let name = format!("{prefix}_{}", self.next_temp);
+        self.next_temp += 1;
+        name
+    }
+}
+
+pub fn lower_lir_to_mir(name: Option<String>, lir: &LirModule) -> Result<Mir, MirLowerError> {
+    let mut mir = Mir::new(name);
+    mir.abi = lir
+        .semantics
+        .iter()
+        .find_map(|semantic| semantic.abi.clone());
+
+    if lir.semantics.is_empty() {
+        let mut block = MirBlock::new("entry".to_string());
+        block.set_terminator(MirTerminator::Return { values: Vec::new() });
+        mir.append_block(block);
+        return Ok(mir);
+    }
+
+    let block_names = build_block_names(&lir.semantics);
+    let mut address_to_block = HashMap::new();
+    for (semantic, block_name) in lir.semantics.iter().zip(block_names.iter()) {
+        if let Some(encoding) = semantic.encoding.as_ref() {
+            address_to_block
+                .entry(encoding.address)
+                .or_insert_with(|| block_name.clone());
+        }
+    }
+
+    let mut context = LoweringContext::default();
+
+    for (index, semantic) in lir.semantics.iter().enumerate() {
+        let mut block = MirBlock::new(block_names[index].clone());
+
+        for effect in &semantic.effects {
+            lower_effect(effect, &mut block, &mut context);
+        }
+
+        let terminator = lower_terminator(
+            semantic,
+            &semantic.terminator,
+            index,
+            &block_names,
+            &address_to_block,
+            &mut block,
+            &mut context,
+        );
+        block.set_terminator(terminator);
+        mir.append_block(block);
+    }
+
+    Ok(mir)
+}
+
+fn build_block_names(semantics: &[Lir]) -> Vec<String> {
+    let mut used = HashSet::new();
+    let mut names = Vec::with_capacity(semantics.len());
+
+    for (index, semantic) in semantics.iter().enumerate() {
+        let base = semantic
+            .encoding
+            .as_ref()
+            .map(|encoding| format!("block_{:x}", encoding.address))
+            .unwrap_or_else(|| format!("block_{index}"));
+
+        let mut candidate = base.clone();
+        let mut suffix = 1usize;
+        while !used.insert(candidate.clone()) {
+            candidate = format!("{base}_{suffix}");
+            suffix += 1;
+        }
+        names.push(candidate);
+    }
+
+    names
+}
+
+fn lower_effect(effect: &LirEffect, block: &mut MirBlock, context: &mut LoweringContext) {
+    match effect {
+        LirEffect::Set { dst, expression } => {
+            let value = lower_expression(expression, block, context);
+            let result = location_name(dst);
+            block.append_operation(MirOperation::new(
+                Some(result),
+                MirOperationKind::Intrinsic {
+                    name: "lir.set".to_string(),
+                    arguments: vec![value],
+                    result_types: vec![mir_type_for_bits(dst.bits())],
+                },
+            ));
+        }
+        LirEffect::Store {
+            space,
+            addr,
+            expression,
+            bits,
+        } => {
+            let address = lower_expression(addr, block, context);
+            let value = lower_expression(expression, block, context);
+            block.append_operation(MirOperation::new(
+                None,
+                MirOperationKind::Store {
+                    address_space: lower_address_space(space),
+                    address,
+                    value,
+                    ty: mir_type_for_bits(*bits),
+                },
+            ));
+        }
+        LirEffect::Trap { kind } => {
+            block.append_operation(MirOperation::new(
+                None,
+                MirOperationKind::Intrinsic {
+                    name: format!("lir.trap.{kind:?}").to_lowercase(),
+                    arguments: Vec::new(),
+                    result_types: Vec::new(),
+                },
+            ));
+        }
+        LirEffect::Fence { kind } => {
+            block.append_operation(MirOperation::new(
+                None,
+                MirOperationKind::Intrinsic {
+                    name: format!("lir.fence.{kind:?}").to_lowercase(),
+                    arguments: Vec::new(),
+                    result_types: Vec::new(),
+                },
+            ));
+        }
+        LirEffect::Push { stack, expression } => {
+            let value = lower_expression(expression, block, context);
+            block.append_operation(MirOperation::new(
+                None,
+                MirOperationKind::Intrinsic {
+                    name: format!("lir.push.{stack}"),
+                    arguments: vec![value],
+                    result_types: Vec::new(),
+                },
+            ));
+        }
+        LirEffect::Pop { stack, dst } => {
+            block.append_operation(MirOperation::new(
+                Some(location_name(dst)),
+                MirOperationKind::Intrinsic {
+                    name: format!("lir.pop.{stack}"),
+                    arguments: Vec::new(),
+                    result_types: vec![mir_type_for_bits(dst.bits())],
+                },
+            ));
+        }
+        LirEffect::Intrinsic {
+            name,
+            args,
+            outputs,
+        } => {
+            let arguments = args
+                .iter()
+                .map(|arg| lower_expression(arg, block, context))
+                .collect();
+            let result_types = outputs
+                .iter()
+                .map(|location| mir_type_for_bits(location.bits()))
+                .collect();
+            let result = outputs.first().map(location_name);
+            block.append_operation(MirOperation::new(
+                result,
+                MirOperationKind::Intrinsic {
+                    name: name.clone(),
+                    arguments,
+                    result_types,
+                },
+            ));
+        }
+        other => {
+            block.append_operation(MirOperation::new(
+                None,
+                MirOperationKind::Intrinsic {
+                    name: format!("lir.effect.{:?}", other.kind()).to_lowercase(),
+                    arguments: Vec::new(),
+                    result_types: Vec::new(),
+                },
+            ));
+        }
+    }
+}
+
+fn lower_terminator(
+    semantic: &Lir,
+    terminator: &LirTerminator,
+    index: usize,
+    block_names: &[String],
+    address_to_block: &HashMap<u64, String>,
+    block: &mut MirBlock,
+    context: &mut LoweringContext,
+) -> MirTerminator {
+    match terminator {
+        LirTerminator::FallThrough => {
+            if let Some(next) = block_names.get(index + 1) {
+                MirTerminator::Jump {
+                    target: next.clone(),
+                    arguments: Vec::new(),
+                }
+            } else {
+                MirTerminator::Return { values: Vec::new() }
+            }
+        }
+        LirTerminator::Jump { target } => MirTerminator::Jump {
+            target: resolve_block_target(target, address_to_block),
+            arguments: Vec::new(),
+        },
+        LirTerminator::Branch {
+            condition,
+            true_target,
+            false_target,
+        } => MirTerminator::CondBr {
+            condition: lower_expression(condition, block, context),
+            then_target: resolve_block_target(true_target, address_to_block),
+            then_arguments: Vec::new(),
+            else_target: resolve_block_target(false_target, address_to_block),
+            else_arguments: Vec::new(),
+        },
+        LirTerminator::Call {
+            target,
+            return_target,
+            does_return,
+        } => {
+            let (call_result, result_types, return_location) = if matches!(does_return, Some(false))
+            {
+                (None, Vec::new(), None)
+            } else {
+                call_result_binding(semantic, context)
+            };
+
+            block.append_operation(MirOperation::new(
+                call_result.clone(),
+                MirOperationKind::Call {
+                    target: resolve_call_target(target),
+                    arguments: call_argument_values(semantic),
+                    result_types: result_types.clone(),
+                    clobbers: Vec::new(),
+                    memory_effects: Vec::new(),
+                },
+            ));
+
+            if let (Some(call_result), Some((location, ty))) = (call_result, return_location) {
+                block.append_operation(MirOperation::new(
+                    Some(location_name(&location)),
+                    MirOperationKind::Intrinsic {
+                        name: "lir.set".to_string(),
+                        arguments: vec![MirValue::named(call_result, ty.clone())],
+                        result_types: vec![ty],
+                    },
+                ));
+            }
+
+            if matches!(does_return, Some(false)) {
+                MirTerminator::Unreachable
+            } else if let Some(return_target) = return_target.as_ref() {
+                MirTerminator::Jump {
+                    target: resolve_block_target(return_target, address_to_block),
+                    arguments: Vec::new(),
+                }
+            } else {
+                MirTerminator::Return { values: Vec::new() }
+            }
+        }
+        LirTerminator::Return { expression } => {
+            let values = expression
+                .as_ref()
+                .map(|expression| vec![lower_expression(expression, block, context)])
+                .unwrap_or_default();
+            MirTerminator::Return { values }
+        }
+        LirTerminator::Unreachable => MirTerminator::Unreachable,
+        LirTerminator::Trap => MirTerminator::Trap,
+    }
+}
+
+fn lower_expression(
+    expression: &LirExpression,
+    block: &mut MirBlock,
+    context: &mut LoweringContext,
+) -> MirValue {
+    match expression {
+        LirExpression::Const { value, bits } => MirValue::integer(*value as i128, *bits),
+        LirExpression::Function { name, bits } | LirExpression::DataAddress { name, bits } => {
+            MirValue::named(name.clone(), mir_type_for_bits(*bits))
+        }
+        LirExpression::AddressOf { location, bits } => MirValue::named(
+            format!("addr_of_{}", location_name(location)),
+            mir_type_for_bits(*bits),
+        ),
+        LirExpression::Read(location) => {
+            MirValue::named(location_name(location), mir_type_for_bits(location.bits()))
+        }
+        LirExpression::Load { space, addr, bits } => {
+            let address = lower_expression(addr, block, context);
+            let ty = mir_type_for_bits(*bits);
+            let result = context.next_name("load");
+            block.append_operation(MirOperation::new(
+                Some(result.clone()),
+                MirOperationKind::Load {
+                    address_space: lower_address_space(space),
+                    address,
+                    ty: ty.clone(),
+                },
+            ));
+            MirValue::named(result, ty)
+        }
+        LirExpression::Unary { op, arg, bits } => {
+            lower_unary_expression(*op, arg, *bits, block, context)
+        }
+        LirExpression::Binary {
+            op,
+            left,
+            right,
+            bits,
+        } => lower_binary_expression(*op, left, right, *bits, block, context),
+        LirExpression::Cast { op, arg, bits } => {
+            lower_cast_expression(*op, arg, *bits, block, context)
+        }
+        LirExpression::Compare {
+            op,
+            left,
+            right,
+            bits,
+        } => lower_compare_expression(*op, left, right, *bits, block, context),
+        LirExpression::Select {
+            condition,
+            when_true,
+            when_false,
+            bits,
+        } => {
+            let condition = lower_expression(condition, block, context);
+            let when_true = lower_expression(when_true, block, context);
+            let when_false = lower_expression(when_false, block, context);
+            let ty = mir_type_for_bits(*bits);
+            let result = context.next_name("select");
+            block.append_operation(MirOperation::new(
+                Some(result.clone()),
+                MirOperationKind::Select {
+                    condition,
+                    when_true,
+                    when_false,
+                    ty: ty.clone(),
+                },
+            ));
+            MirValue::named(result, ty)
+        }
+        LirExpression::Extract { arg, lsb, bits } => {
+            let value = lower_expression(arg, block, context);
+            let ty = mir_type_for_bits(*bits);
+            let result = context.next_name("extract");
+            block.append_operation(MirOperation::new(
+                Some(result.clone()),
+                MirOperationKind::Extract {
+                    value,
+                    lsb: *lsb,
+                    ty: ty.clone(),
+                },
+            ));
+            MirValue::named(result, ty)
+        }
+        LirExpression::Undefined { bits } | LirExpression::Poison { bits } => {
+            MirValue::undef(mir_type_for_bits(*bits))
+        }
+        LirExpression::Null { bits } => MirValue::null(mir_type_for_bits(*bits)),
+        other => {
+            let ty = mir_type_for_expression(other);
+            let result = context.next_name("expr");
+            let arguments = expression_arguments(other)
+                .into_iter()
+                .map(|arg| lower_expression(arg, block, context))
+                .collect();
+            block.append_operation(MirOperation::new(
+                Some(result.clone()),
+                MirOperationKind::Intrinsic {
+                    name: format!("lir.expr.{:?}", other.kind()).to_lowercase(),
+                    arguments,
+                    result_types: vec![ty.clone()],
+                },
+            ));
+            MirValue::named(result, ty)
+        }
+    }
+}
+
+fn lower_unary_expression(
+    op: LirOperationUnary,
+    arg: &LirExpression,
+    bits: u16,
+    block: &mut MirBlock,
+    context: &mut LoweringContext,
+) -> MirValue {
+    let value = lower_expression(arg, block, context);
+    let ty = mir_type_for_bits(bits);
+    let result = context.next_name("unary");
+
+    let kind = match op {
+        LirOperationUnary::Not => MirOperationKind::Not {
+            value,
+            ty: ty.clone(),
+        },
+        LirOperationUnary::PopCount => MirOperationKind::Popcount {
+            value,
+            ty: ty.clone(),
+        },
+        _ => MirOperationKind::Intrinsic {
+            name: format!("lir.unary.{op:?}").to_lowercase(),
+            arguments: vec![value],
+            result_types: vec![ty.clone()],
+        },
+    };
+
+    block.append_operation(MirOperation::new(Some(result.clone()), kind));
+    MirValue::named(result, ty)
+}
+
+fn lower_binary_expression(
+    op: LirOperationBinary,
+    left: &LirExpression,
+    right: &LirExpression,
+    bits: u16,
+    block: &mut MirBlock,
+    context: &mut LoweringContext,
+) -> MirValue {
+    let lhs = lower_expression(left, block, context);
+    let rhs = lower_expression(right, block, context);
+    let ty = mir_type_for_bits(bits);
+    let result = context.next_name("bin");
+
+    let kind = match op {
+        LirOperationBinary::Add => MirOperationKind::Add {
+            lhs,
+            rhs,
+            ty: ty.clone(),
+        },
+        LirOperationBinary::Sub => MirOperationKind::Sub {
+            lhs,
+            rhs,
+            ty: ty.clone(),
+        },
+        LirOperationBinary::Mul => MirOperationKind::Mul {
+            lhs,
+            rhs,
+            ty: ty.clone(),
+        },
+        LirOperationBinary::And => MirOperationKind::And {
+            lhs,
+            rhs,
+            ty: ty.clone(),
+        },
+        LirOperationBinary::Or => MirOperationKind::Or {
+            lhs,
+            rhs,
+            ty: ty.clone(),
+        },
+        LirOperationBinary::Xor => MirOperationKind::Xor {
+            lhs,
+            rhs,
+            ty: ty.clone(),
+        },
+        LirOperationBinary::Shl => MirOperationKind::Shl {
+            lhs,
+            rhs,
+            ty: ty.clone(),
+        },
+        LirOperationBinary::LShr => MirOperationKind::LShr {
+            lhs,
+            rhs,
+            ty: ty.clone(),
+        },
+        LirOperationBinary::AShr => MirOperationKind::AShr {
+            lhs,
+            rhs,
+            ty: ty.clone(),
+        },
+        _ => MirOperationKind::Intrinsic {
+            name: format!("lir.binary.{op:?}").to_lowercase(),
+            arguments: vec![lhs, rhs],
+            result_types: vec![ty.clone()],
+        },
+    };
+
+    block.append_operation(MirOperation::new(Some(result.clone()), kind));
+    MirValue::named(result, ty)
+}
+
+fn lower_cast_expression(
+    op: LirOperationCast,
+    arg: &LirExpression,
+    bits: u16,
+    block: &mut MirBlock,
+    context: &mut LoweringContext,
+) -> MirValue {
+    let value = lower_expression(arg, block, context);
+    let ty = mir_type_for_bits(bits);
+    let result = context.next_name("cast");
+
+    let kind = match op {
+        LirOperationCast::ZeroExtend => MirOperationKind::Cast {
+            op: MirCastOperation::ZeroExtend,
+            value,
+            ty: ty.clone(),
+        },
+        LirOperationCast::SignExtend => MirOperationKind::Cast {
+            op: MirCastOperation::SignExtend,
+            value,
+            ty: ty.clone(),
+        },
+        LirOperationCast::Truncate => MirOperationKind::Cast {
+            op: MirCastOperation::Truncate,
+            value,
+            ty: ty.clone(),
+        },
+        LirOperationCast::Bitcast => MirOperationKind::Cast {
+            op: MirCastOperation::Bitcast,
+            value,
+            ty: ty.clone(),
+        },
+        _ => MirOperationKind::Intrinsic {
+            name: format!("lir.cast.{op:?}").to_lowercase(),
+            arguments: vec![value],
+            result_types: vec![ty.clone()],
+        },
+    };
+
+    block.append_operation(MirOperation::new(Some(result.clone()), kind));
+    MirValue::named(result, ty)
+}
+
+fn lower_compare_expression(
+    op: LirOperationCompare,
+    left: &LirExpression,
+    right: &LirExpression,
+    bits: u16,
+    block: &mut MirBlock,
+    context: &mut LoweringContext,
+) -> MirValue {
+    let lhs = lower_expression(left, block, context);
+    let rhs = lower_expression(right, block, context);
+    let result_ty = MirType::integer(1);
+    let result = context.next_name("cmp");
+
+    let kind = match op {
+        LirOperationCompare::Eq => MirOperationKind::Icmp {
+            op: MirCompareOperation::Eq,
+            lhs,
+            rhs,
+            ty: mir_type_for_bits(bits),
+        },
+        LirOperationCompare::Ne => MirOperationKind::Icmp {
+            op: MirCompareOperation::Ne,
+            lhs,
+            rhs,
+            ty: mir_type_for_bits(bits),
+        },
+        LirOperationCompare::Ult => MirOperationKind::Icmp {
+            op: MirCompareOperation::Ult,
+            lhs,
+            rhs,
+            ty: mir_type_for_bits(bits),
+        },
+        LirOperationCompare::Ule => MirOperationKind::Icmp {
+            op: MirCompareOperation::Ule,
+            lhs,
+            rhs,
+            ty: mir_type_for_bits(bits),
+        },
+        LirOperationCompare::Ugt => MirOperationKind::Icmp {
+            op: MirCompareOperation::Ugt,
+            lhs,
+            rhs,
+            ty: mir_type_for_bits(bits),
+        },
+        LirOperationCompare::Uge => MirOperationKind::Icmp {
+            op: MirCompareOperation::Uge,
+            lhs,
+            rhs,
+            ty: mir_type_for_bits(bits),
+        },
+        LirOperationCompare::Slt => MirOperationKind::Icmp {
+            op: MirCompareOperation::Slt,
+            lhs,
+            rhs,
+            ty: mir_type_for_bits(bits),
+        },
+        LirOperationCompare::Sle => MirOperationKind::Icmp {
+            op: MirCompareOperation::Sle,
+            lhs,
+            rhs,
+            ty: mir_type_for_bits(bits),
+        },
+        LirOperationCompare::Sgt => MirOperationKind::Icmp {
+            op: MirCompareOperation::Sgt,
+            lhs,
+            rhs,
+            ty: mir_type_for_bits(bits),
+        },
+        LirOperationCompare::Sge => MirOperationKind::Icmp {
+            op: MirCompareOperation::Sge,
+            lhs,
+            rhs,
+            ty: mir_type_for_bits(bits),
+        },
+        _ => MirOperationKind::Intrinsic {
+            name: format!("lir.compare.{op:?}").to_lowercase(),
+            arguments: vec![lhs, rhs],
+            result_types: vec![result_ty.clone()],
+        },
+    };
+
+    block.append_operation(MirOperation::new(Some(result.clone()), kind));
+    MirValue::named(result, result_ty)
+}
+
+fn expression_arguments(expression: &LirExpression) -> Vec<&LirExpression> {
+    match expression {
+        LirExpression::Select {
+            condition,
+            when_true,
+            when_false,
+            ..
+        } => vec![condition, when_true, when_false],
+        LirExpression::Extract { arg, .. } => vec![arg],
+        LirExpression::Concat { parts, .. } => parts.iter().collect(),
+        LirExpression::Intrinsic { args, .. } => args.iter().collect(),
+        LirExpression::Allocate { .. } => Vec::new(),
+        LirExpression::ReadProperty { reference, .. } => vec![reference],
+        LirExpression::ReadElement {
+            reference, index, ..
+        } => vec![reference, index],
+        _ => Vec::new(),
+    }
+}
+
+fn resolve_block_target(target: &LirExpression, address_to_block: &HashMap<u64, String>) -> String {
+    match target {
+        LirExpression::Const { value, .. } => u64::try_from(*value)
+            .ok()
+            .and_then(|address| address_to_block.get(&address).cloned())
+            .unwrap_or_else(|| format!("block_{value:x}")),
+        LirExpression::Function { name, .. } | LirExpression::DataAddress { name, .. } => {
+            name.clone()
+        }
+        LirExpression::AddressOf { location, .. } | LirExpression::Read(location) => {
+            location_name(location)
+        }
+        _ => "unknown_target".to_string(),
+    }
+}
+
+fn resolve_call_target(target: &LirExpression) -> String {
+    match target {
+        LirExpression::Const { value, .. } => format!("function_{value:x}"),
+        LirExpression::Function { name, .. } | LirExpression::DataAddress { name, .. } => {
+            name.clone()
+        }
+        LirExpression::AddressOf { location, .. } | LirExpression::Read(location) => {
+            location_name(location)
+        }
+        _ => "unknown_target".to_string(),
+    }
+}
+
+fn lower_address_space(space: &LirAddressSpace) -> MirAddressSpace {
+    match space {
+        LirAddressSpace::Default => MirAddressSpace::default_space(),
+        LirAddressSpace::Stack => MirAddressSpace::stack(),
+        LirAddressSpace::Heap => MirAddressSpace::heap(),
+        LirAddressSpace::Global => MirAddressSpace::global(),
+        LirAddressSpace::Io => MirAddressSpace::io(),
+        LirAddressSpace::State => MirAddressSpace::named("state".to_string()),
+        LirAddressSpace::CpuMemory { name }
+        | LirAddressSpace::Segment { name }
+        | LirAddressSpace::Named { name } => MirAddressSpace::named(name.clone()),
+    }
+}
+
+fn call_result_binding(
+    semantic: &Lir,
+    context: &mut LoweringContext,
+) -> (Option<String>, Vec<MirType>, Option<(LirLocation, MirType)>) {
+    let Some(location) = call_return_location(semantic) else {
+        return (None, Vec::new(), None);
+    };
+    let ty = mir_type_for_bits(location.bits());
+    let result = context.next_name("call");
+    (Some(result.clone()), vec![ty.clone()], Some((location, ty)))
+}
+
+fn call_return_location(semantic: &Lir) -> Option<LirLocation> {
+    if let Some(abi) = semantic.abi.as_ref() {
+        if let Some(location) = abi
+            .return_locations
+            .iter()
+            .find(|location| matches!(location, LirLocation::Register { .. }))
+        {
+            return Some(location.clone());
+        }
+    }
+
+    match semantic
+        .encoding
+        .as_ref()
+        .map(|encoding| encoding.architecture.as_str())
+    {
+        Some("amd64") => Some(LirLocation::Register {
+            name: "rax".to_string(),
+            bits: 64,
+        }),
+        Some("i386") => Some(LirLocation::Register {
+            name: "eax".to_string(),
+            bits: 32,
+        }),
+        Some("arm64") => Some(LirLocation::Register {
+            name: "x0".to_string(),
+            bits: 64,
+        }),
+        _ => None,
+    }
+}
+
+fn call_argument_values(semantic: &Lir) -> Vec<MirValue> {
+    let Some(abi) = semantic.abi.as_ref() else {
+        return Vec::new();
+    };
+
+    abi.function_arguments
+        .iter()
+        .filter_map(|location| match location {
+            LirLocation::Register { .. } => Some(MirValue::named(
+                location_name(location),
+                mir_type_for_bits(location.bits()),
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
+fn mir_type_for_expression(expression: &LirExpression) -> MirType {
+    match expression {
+        LirExpression::Const { bits, .. }
+        | LirExpression::Function { bits, .. }
+        | LirExpression::DataAddress { bits, .. }
+        | LirExpression::AddressOf { bits, .. }
+        | LirExpression::Load { bits, .. }
+        | LirExpression::Unary { bits, .. }
+        | LirExpression::Binary { bits, .. }
+        | LirExpression::Cast { bits, .. }
+        | LirExpression::Compare { bits, .. }
+        | LirExpression::Select { bits, .. }
+        | LirExpression::Extract { bits, .. }
+        | LirExpression::Concat { bits, .. }
+        | LirExpression::Undefined { bits }
+        | LirExpression::Poison { bits }
+        | LirExpression::Intrinsic { bits, .. }
+        | LirExpression::Null { bits }
+        | LirExpression::Allocate { bits, .. }
+        | LirExpression::ReadProperty { bits, .. }
+        | LirExpression::ReadElement { bits, .. } => mir_type_for_bits(*bits),
+        LirExpression::Read(location) => mir_type_for_bits(location.bits()),
+    }
+}
+
+fn mir_type_for_bits(bits: u16) -> MirType {
+    MirType::integer(bits.max(1))
+}
+
+fn location_name(location: &LirLocation) -> String {
+    match location {
+        LirLocation::Register { name, .. }
+        | LirLocation::Flag { name, .. }
+        | LirLocation::IndexedMemory { name, .. }
+        | LirLocation::StackMemory { name, .. } => name.clone(),
+        LirLocation::ProgramCounter { .. } => "pc".to_string(),
+        LirLocation::Temporary { id, .. } => format!("tmp_{id}"),
+        LirLocation::Memory { space, .. } => format!("mem_{:?}", space).to_lowercase(),
+    }
+}

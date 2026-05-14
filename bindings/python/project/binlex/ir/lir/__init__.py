@@ -217,6 +217,33 @@ class Lir:
         abi = getattr(abi, "_inner", abi)
         self._inner.set_abi(abi)
 
+    def optimize_constants(self):
+        self._inner.optimize_constants()
+
+    def optimize_identities(self):
+        self._inner.optimize_identities()
+
+    def optimize_casts(self):
+        self._inner.optimize_casts()
+
+    def optimize_noops(self):
+        self._inner.optimize_noops()
+
+    def optimize_branches(self):
+        self._inner.optimize_branches()
+
+    def optimize_intrinsics(self):
+        self._inner.optimize_intrinsics()
+
+    def optimize_simplify(self):
+        self._inner.optimize_simplify()
+
+    def text(self):
+        return self._inner.text()
+
+    def __str__(self):
+        return self.text()
+
     def __getattr__(self, name):
         return getattr(self._inner, name)
 
@@ -280,6 +307,33 @@ class LirModule:
     def append_data(self, data):
         data = getattr(data, "_inner", data)
         self._inner.append_data(data)
+
+    def optimize_constants(self):
+        self._inner.optimize_constants()
+
+    def optimize_identities(self):
+        self._inner.optimize_identities()
+
+    def optimize_casts(self):
+        self._inner.optimize_casts()
+
+    def optimize_noops(self):
+        self._inner.optimize_noops()
+
+    def optimize_branches(self):
+        self._inner.optimize_branches()
+
+    def optimize_intrinsics(self):
+        self._inner.optimize_intrinsics()
+
+    def optimize_simplify(self):
+        self._inner.optimize_simplify()
+
+    def text(self):
+        return self._inner.text()
+
+    def __str__(self):
+        return self.text()
 
     def __getattr__(self, name):
         return getattr(self._inner, name)
