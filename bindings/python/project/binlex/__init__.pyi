@@ -6,6 +6,7 @@ from binlex.config import Configuration
 from binlex.core import Architecture
 from . import clients
 from . import compression
+from . import decompilers
 from . import embeddings
 from . import genetics
 from . import hashing
@@ -18,7 +19,7 @@ from . import rules
 from . import symbolic
 from . import util
 from binlex.core import Magic
-from . import controlflow, disassemblers, formats, lifters, storage
+from . import controlflow, disassemblers, formats, storage
 
 __all__ = [
     "Architecture",
@@ -30,6 +31,7 @@ __all__ = [
     "clients",
     "compression",
     "controlflow",
+    "decompilers",
     "disassemblers",
     "embeddings",
     "formats",
@@ -39,7 +41,6 @@ __all__ = [
     "ir",
     "indexing",
     "databases",
-    "lifters",
     "math",
     "metadata",
     "rules",

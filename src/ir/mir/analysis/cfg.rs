@@ -1,21 +1,32 @@
-use crate::ir::mir::{Mir, MirTerminator};
+use crate::ir::mir::{Mir, MirControlTarget, MirTerminator};
 use std::collections::{HashMap, HashSet};
 
 pub fn mir_successors(mir: &Mir) -> HashMap<String, Vec<String>> {
     let mut successors = HashMap::new();
     for block in mir.blocks() {
         let edges = match block.terminator.as_ref() {
-            Some(MirTerminator::Jump { target, .. }) => vec![target.clone()],
+            Some(MirTerminator::Jump { target, .. }) => direct_successors(target),
             Some(MirTerminator::CondBr {
                 then_target,
                 else_target,
                 ..
-            }) => vec![then_target.clone(), else_target.clone()],
+            }) => {
+                let mut edges = direct_successors(then_target);
+                edges.extend(direct_successors(else_target));
+                edges
+            }
             _ => Vec::new(),
         };
         successors.insert(block.name.clone(), edges);
     }
     successors
+}
+
+fn direct_successors(target: &MirControlTarget) -> Vec<String> {
+    match target {
+        MirControlTarget::Direct(name) => vec![name.clone()],
+        MirControlTarget::FunctionIndirect(_) | MirControlTarget::BlockIndirect(_) => Vec::new(),
+    }
 }
 
 pub fn mir_predecessors(mir: &Mir) -> HashMap<String, Vec<String>> {

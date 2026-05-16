@@ -2,5 +2,7 @@
 
 from . import lir
 from . import mir
+from . import llvm
+from . import vex
 
-__all__ = ["lir", "mir"]
+__all__ = ["lir", "mir", "llvm", "vex"]

@@ -1,7 +1,7 @@
 use crate::controlflow::{Block, Function, Instruction};
 use crate::Configuration;
 use binlex::io::Stderr;
-use binlex::lifters::vex::Lifter as InnerLifter;
+use binlex::ir::vex::Lifter as InnerLifter;
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 use std::sync::{Arc, Mutex};
@@ -122,7 +122,7 @@ pub fn vex_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Lifter>()?;
     py.import("sys")?
         .getattr("modules")?
-        .set_item("binlex_bindings.binlex.lifters.vex", m)?;
-    m.setattr("__name__", "binlex_bindings.binlex.lifters.vex")?;
+        .set_item("binlex_bindings.binlex.ir.vex", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.ir.vex")?;
     Ok(())
 }

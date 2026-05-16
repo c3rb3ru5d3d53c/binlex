@@ -61,10 +61,8 @@ fn is_stack_derived_with_depth(value: &MirValue, defs: &DefMap, depth: usize) ->
                 let rhs_stack = is_stack_derived_with_depth(rhs, defs, depth + 1);
                 (lhs_stack && is_constant(rhs)) || (rhs_stack && is_constant(lhs))
             }
-            Some(MirOperationKind::Intrinsic {
-                name, arguments, ..
-            }) if name == "lir.set" && arguments.len() == 1 => {
-                is_stack_derived_with_depth(&arguments[0], defs, depth + 1)
+            Some(MirOperationKind::Copy { value, .. }) => {
+                is_stack_derived_with_depth(value, defs, depth + 1)
             }
             _ => false,
         },

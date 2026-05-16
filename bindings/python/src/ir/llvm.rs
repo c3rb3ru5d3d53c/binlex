@@ -5,8 +5,8 @@ use crate::Configuration;
 use binlex::controlflow::{Block, Function, Graph, Instruction, InstructionRecord};
 use binlex::core::Architecture;
 use binlex::io::Stderr;
-use binlex::ir::lir::{Lir, LirAbi, LirCpuKind, LirModule, LirTerminator};
-use binlex::lifters::llvm::{JittedFunction as InnerJittedFunction, Lifter as InnerLifter};
+use binlex::ir::lir::{LirAbi, LirCpuKind, LirInstruction, LirModule, LirTerminator};
+use binlex::ir::llvm::{JittedFunction as InnerJittedFunction, Lifter as InnerLifter};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 use std::collections::BTreeMap;
@@ -292,11 +292,16 @@ fn compile_created_function(
                     .blocks
                     .get(index + 1)
                     .map(|_| next_block_base + 0x1000);
+                let instructions = semantics
+                    .instructions()
+                    .into_iter()
+                    .cloned()
+                    .collect::<Vec<_>>();
                 insert_semantics_block(
                     &mut graph,
                     architecture,
                     block_address,
-                    &semantics.semantics,
+                    &instructions,
                     next_block_address,
                     config,
                 );
@@ -321,7 +326,7 @@ fn insert_semantics_block(
     graph: &mut Graph,
     architecture: Architecture,
     block_address: u64,
-    semantics: &[Lir],
+    semantics: &[LirInstruction],
     next_block_address: Option<u64>,
     config: &binlex::Configuration,
 ) {
@@ -343,7 +348,7 @@ fn insert_semantics_block(
                 }
                 LirTerminator::Jump { target } => {
                     record.is_jump = true;
-                    if let Some(address) = semantic_expression_u64(target) {
+                    if let Some(address) = semantic_expression_u64(&target) {
                         record.to.insert(address);
                     } else if let Some(next) = next_block_address {
                         record.to.insert(next);
@@ -356,10 +361,10 @@ fn insert_semantics_block(
                 } => {
                     record.is_jump = true;
                     record.is_conditional = true;
-                    if let Some(address) = semantic_expression_u64(true_target) {
+                    if let Some(address) = semantic_expression_u64(&true_target) {
                         record.to.insert(address);
                     }
-                    if let Some(address) = semantic_expression_u64(false_target) {
+                    if let Some(address) = semantic_expression_u64(&false_target) {
                         record.to.insert(address);
                     }
                 }
@@ -1414,7 +1419,7 @@ pub fn llvm_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<JittedFunction>()?;
     py.import("sys")?
         .getattr("modules")?
-        .set_item("binlex_bindings.binlex.lifters.llvm", m)?;
-    m.setattr("__name__", "binlex_bindings.binlex.lifters.llvm")?;
+        .set_item("binlex_bindings.binlex.ir.llvm", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.ir.llvm")?;
     Ok(())
 }

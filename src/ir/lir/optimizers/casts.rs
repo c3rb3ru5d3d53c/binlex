@@ -1,5 +1,6 @@
 use crate::ir::lir::{
-    Lir, LirEffect, LirExpression, LirLocation, LirModule, LirOperationCast, LirTerminator,
+    Lir, LirEffect, LirExpression, LirFunction, LirLocation, LirModule, LirOperationCast,
+    LirTerminator,
 };
 
 pub fn optimize_casts(lir: &mut Lir) {
@@ -9,9 +10,17 @@ pub fn optimize_casts(lir: &mut Lir) {
     optimize_terminator(&mut lir.terminator);
 }
 
+pub fn optimize_casts_function(function: &mut LirFunction) {
+    for block in &mut function.blocks {
+        for lir in &mut block.instructions {
+            optimize_casts(lir);
+        }
+    }
+}
+
 pub fn optimize_casts_module(module: &mut LirModule) {
-    for lir in &mut module.semantics {
-        optimize_casts(lir);
+    for function in &mut module.functions {
+        optimize_casts_function(function);
     }
 }
 

@@ -86,6 +86,17 @@ pub fn optimize_memory_state(mir: &mut Mir) {
                     );
                     normalized.push(operation);
                 }
+                MirOperationKind::MemoryCopy {
+                    src_space,
+                    dst_space,
+                    ..
+                } => {
+                    aliases.clear();
+                    memory.retain(|cell, _| {
+                        cell.address_space != *src_space && cell.address_space != *dst_space
+                    });
+                    normalized.push(operation);
+                }
                 MirOperationKind::Call { memory_effects, .. } => {
                     aliases.clear();
                     if memory_effects.is_empty() {
@@ -170,15 +181,31 @@ fn rewrite_operation(operation: &mut MirOperation, aliases: &AliasMap) {
         MirOperationKind::Add { lhs, rhs, .. }
         | MirOperationKind::Sub { lhs, rhs, .. }
         | MirOperationKind::Mul { lhs, rhs, .. }
+        | MirOperationKind::FAdd { lhs, rhs, .. }
+        | MirOperationKind::FSub { lhs, rhs, .. }
+        | MirOperationKind::FMul { lhs, rhs, .. }
+        | MirOperationKind::FDiv { lhs, rhs, .. }
         | MirOperationKind::And { lhs, rhs, .. }
         | MirOperationKind::Or { lhs, rhs, .. }
         | MirOperationKind::Xor { lhs, rhs, .. }
         | MirOperationKind::Shl { lhs, rhs, .. }
         | MirOperationKind::LShr { lhs, rhs, .. }
         | MirOperationKind::AShr { lhs, rhs, .. }
-        | MirOperationKind::Icmp { lhs, rhs, .. } => {
+        | MirOperationKind::UDiv { lhs, rhs, .. }
+        | MirOperationKind::SDiv { lhs, rhs, .. }
+        | MirOperationKind::URem { lhs, rhs, .. }
+        | MirOperationKind::SRem { lhs, rhs, .. }
+        | MirOperationKind::RotateLeft { lhs, rhs, .. }
+        | MirOperationKind::RotateRight { lhs, rhs, .. }
+        | MirOperationKind::Icmp { lhs, rhs, .. }
+        | MirOperationKind::Fcmp { lhs, rhs, .. } => {
             rewrite_value(lhs, aliases);
             rewrite_value(rhs, aliases);
+        }
+        MirOperationKind::Concat { parts, .. } => {
+            for part in parts {
+                rewrite_value(part, aliases);
+            }
         }
         MirOperationKind::Select {
             condition,
@@ -190,15 +217,31 @@ fn rewrite_operation(operation: &mut MirOperation, aliases: &AliasMap) {
             rewrite_value(when_true, aliases);
             rewrite_value(when_false, aliases);
         }
-        MirOperationKind::Extract { value, .. }
+        MirOperationKind::Copy { value, .. }
+        | MirOperationKind::Extract { value, .. }
+        | MirOperationKind::Neg { value, .. }
         | MirOperationKind::Not { value, .. }
-        | MirOperationKind::Popcount { value, .. } => rewrite_value(value, aliases),
+        | MirOperationKind::Popcount { value, .. }
+        | MirOperationKind::CountLeadingZeros { value, .. }
+        | MirOperationKind::CountTrailingZeros { value, .. } => rewrite_value(value, aliases),
         MirOperationKind::Load { address, .. } => {
             rewrite_value(address, aliases);
         }
         MirOperationKind::Store { address, value, .. } => {
             rewrite_value(address, aliases);
             rewrite_value(value, aliases);
+        }
+        MirOperationKind::MemoryCopy {
+            src_address,
+            dst_address,
+            count,
+            decrement,
+            ..
+        } => {
+            rewrite_value(src_address, aliases);
+            rewrite_value(dst_address, aliases);
+            rewrite_value(count, aliases);
+            rewrite_value(decrement, aliases);
         }
         MirOperationKind::Cast { value, .. } => {
             rewrite_value(value, aliases);

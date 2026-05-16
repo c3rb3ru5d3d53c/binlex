@@ -1,6 +1,6 @@
-"""VEX lifter wrappers backed by the Rust core implementation."""
+"""VEX IR wrappers backed by the Rust core implementation."""
 
-from binlex_bindings.binlex.lifters.vex import Lifter as _LifterBinding
+from binlex_bindings.binlex.ir.vex import Lifter as _LifterBinding
 
 
 class Lifter:
@@ -39,6 +39,5 @@ class Lifter:
 
     def __str__(self):
         return self.ir()
-
 
 __all__ = ["Lifter"]

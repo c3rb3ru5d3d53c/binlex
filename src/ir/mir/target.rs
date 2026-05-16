@@ -20,25 +20,26 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod llvm;
-#[cfg(not(target_os = "windows"))]
-pub mod vex;
+use super::value::MirValue;
+use serde::{Deserialize, Serialize};
 
-use crate::lifters::llvm::llvm_init;
-#[cfg(not(target_os = "windows"))]
-use crate::lifters::vex::vex_init;
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum MirControlTarget {
+    Direct(String),
+    FunctionIndirect(MirValue),
+    BlockIndirect(MirValue),
+}
 
-use pyo3::{prelude::*, wrap_pymodule};
+impl MirControlTarget {
+    pub fn direct(name: String) -> Self {
+        Self::Direct(name)
+    }
 
-#[pymodule]
-#[pyo3(name = "lifters")]
-pub fn lifters_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pymodule!(llvm_init))?;
-    #[cfg(not(target_os = "windows"))]
-    m.add_wrapped(wrap_pymodule!(vex_init))?;
-    py.import("sys")?
-        .getattr("modules")?
-        .set_item("binlex_bindings.binlex.lifters", m)?;
-    m.setattr("__name__", "binlex_bindings.binlex.lifters")?;
-    Ok(())
+    pub fn function_indirect(value: MirValue) -> Self {
+        Self::FunctionIndirect(value)
+    }
+
+    pub fn block_indirect(value: MirValue) -> Self {
+        Self::BlockIndirect(value)
+    }
 }

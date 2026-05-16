@@ -21,14 +21,15 @@
 // SOFTWARE.
 
 use super::block::MirBlockParameter;
-use super::kind::{MirCastOperation, MirCompareOperation, MirType};
+use super::kind::{MirCastOperation, MirCompareOperation, MirFloatCompareOperation, MirType};
 use super::memory::MirAddressSpace;
-use super::mir::Mir;
+use super::mir::{MirFunction, MirModule};
 use super::operation::{MirCallClobber, MirOperation, MirOperationKind};
+use super::target::MirControlTarget;
 use super::terminator::MirTerminator;
 use super::value::MirValue;
 
-pub fn format_mir(mir: &Mir) -> String {
+pub fn format_mir_function(mir: &MirFunction) -> String {
     let mut lines = Vec::new();
     let name = mir.name.clone().unwrap_or_else(|| "anonymous".to_string());
     lines.push(format!("mir.function {} {{", format_code_location(&name)));
@@ -59,6 +60,26 @@ pub fn format_mir(mir: &Mir) -> String {
     lines.join("\n")
 }
 
+pub fn format_mir_module(module: &MirModule) -> String {
+    let name = module
+        .name
+        .clone()
+        .unwrap_or_else(|| "anonymous".to_string());
+    let mut lines = vec![format!("mir.module {} {{", format_code_location(&name))];
+
+    for (index, function) in module.functions.iter().enumerate() {
+        if index > 0 {
+            lines.push(String::new());
+        }
+        for line in format_mir_function(function).lines() {
+            lines.push(format!("  {line}"));
+        }
+    }
+
+    lines.push("}".to_string());
+    lines.join("\n")
+}
+
 fn format_block_parameter(parameter: &MirBlockParameter) -> String {
     let name = parameter.name.clone().unwrap_or_else(|| "_".to_string());
     format!("%{}: {}", name, format_type(&parameter.ty))
@@ -71,6 +92,9 @@ fn format_operation(operation: &MirOperation) -> String {
         .map(|result| format!("%{} = ", result))
         .unwrap_or_default();
     let body = match &operation.kind {
+        MirOperationKind::Copy { value, ty } => {
+            format!("mir.copy {} : {}", format_value(value), format_type(ty))
+        }
         MirOperationKind::Add { lhs, rhs, ty } => {
             format!(
                 "mir.add {}, {} : {}",
@@ -90,6 +114,38 @@ fn format_operation(operation: &MirOperation) -> String {
         MirOperationKind::Mul { lhs, rhs, ty } => {
             format!(
                 "mir.mul {}, {} : {}",
+                format_value(lhs),
+                format_value(rhs),
+                format_type(ty)
+            )
+        }
+        MirOperationKind::FAdd { lhs, rhs, ty } => {
+            format!(
+                "mir.fadd {}, {} : {}",
+                format_value(lhs),
+                format_value(rhs),
+                format_type(ty)
+            )
+        }
+        MirOperationKind::FSub { lhs, rhs, ty } => {
+            format!(
+                "mir.fsub {}, {} : {}",
+                format_value(lhs),
+                format_value(rhs),
+                format_type(ty)
+            )
+        }
+        MirOperationKind::FMul { lhs, rhs, ty } => {
+            format!(
+                "mir.fmul {}, {} : {}",
+                format_value(lhs),
+                format_value(rhs),
+                format_type(ty)
+            )
+        }
+        MirOperationKind::FDiv { lhs, rhs, ty } => {
+            format!(
+                "mir.fdiv {}, {} : {}",
                 format_value(lhs),
                 format_value(rhs),
                 format_type(ty)
@@ -143,6 +199,54 @@ fn format_operation(operation: &MirOperation) -> String {
                 format_type(ty)
             )
         }
+        MirOperationKind::UDiv { lhs, rhs, ty } => {
+            format!(
+                "mir.udiv {}, {} : {}",
+                format_value(lhs),
+                format_value(rhs),
+                format_type(ty)
+            )
+        }
+        MirOperationKind::SDiv { lhs, rhs, ty } => {
+            format!(
+                "mir.sdiv {}, {} : {}",
+                format_value(lhs),
+                format_value(rhs),
+                format_type(ty)
+            )
+        }
+        MirOperationKind::URem { lhs, rhs, ty } => {
+            format!(
+                "mir.urem {}, {} : {}",
+                format_value(lhs),
+                format_value(rhs),
+                format_type(ty)
+            )
+        }
+        MirOperationKind::SRem { lhs, rhs, ty } => {
+            format!(
+                "mir.srem {}, {} : {}",
+                format_value(lhs),
+                format_value(rhs),
+                format_type(ty)
+            )
+        }
+        MirOperationKind::RotateLeft { lhs, rhs, ty } => {
+            format!(
+                "mir.rol {}, {} : {}",
+                format_value(lhs),
+                format_value(rhs),
+                format_type(ty)
+            )
+        }
+        MirOperationKind::RotateRight { lhs, rhs, ty } => {
+            format!(
+                "mir.ror {}, {} : {}",
+                format_value(lhs),
+                format_value(rhs),
+                format_type(ty)
+            )
+        }
         MirOperationKind::Select {
             condition,
             when_true,
@@ -155,6 +259,15 @@ fn format_operation(operation: &MirOperation) -> String {
             format_value(when_false),
             format_type(ty)
         ),
+        MirOperationKind::Concat { parts, ty } => format!(
+            "mir.concat ({}) : {}",
+            parts
+                .iter()
+                .map(format_value)
+                .collect::<Vec<_>>()
+                .join(", "),
+            format_type(ty)
+        ),
         MirOperationKind::Extract { value, lsb, ty } => format!(
             "mir.extract {}, lsb {}, bits {} : {}",
             format_value(value),
@@ -165,8 +278,17 @@ fn format_operation(operation: &MirOperation) -> String {
         MirOperationKind::Not { value, ty } => {
             format!("mir.not {} : {}", format_value(value), format_type(ty))
         }
+        MirOperationKind::Neg { value, ty } => {
+            format!("mir.neg {} : {}", format_value(value), format_type(ty))
+        }
         MirOperationKind::Popcount { value, ty } => {
             format!("mir.popcount {} : {}", format_value(value), format_type(ty))
+        }
+        MirOperationKind::CountLeadingZeros { value, ty } => {
+            format!("mir.clz {} : {}", format_value(value), format_type(ty))
+        }
+        MirOperationKind::CountTrailingZeros { value, ty } => {
+            format!("mir.ctz {} : {}", format_value(value), format_type(ty))
         }
         MirOperationKind::Load {
             address_space,
@@ -190,9 +312,34 @@ fn format_operation(operation: &MirOperation) -> String {
             format_value(value),
             format_type(ty)
         ),
+        MirOperationKind::MemoryCopy {
+            src_space,
+            src_address,
+            dst_space,
+            dst_address,
+            count,
+            element_bits,
+            decrement,
+        } => format!(
+            "mir.memcpy {}:{}, {}:{}, count {}, element_bits {}, decrement {}",
+            format_address_space(src_space),
+            format_value(src_address),
+            format_address_space(dst_space),
+            format_value(dst_address),
+            format_value(count),
+            element_bits,
+            format_value(decrement)
+        ),
         MirOperationKind::Icmp { op, lhs, rhs, ty } => format!(
             "mir.icmp {} {}, {} : {}",
             format_compare(op),
+            format_value(lhs),
+            format_value(rhs),
+            format_type(ty)
+        ),
+        MirOperationKind::Fcmp { op, lhs, rhs, ty } => format!(
+            "mir.fcmp {} {}, {} : {}",
+            format_float_compare(op),
             format_value(lhs),
             format_value(rhs),
             format_type(ty)
@@ -211,7 +358,7 @@ fn format_operation(operation: &MirOperation) -> String {
             memory_effects,
         } => format!(
             "mir.call {}({}) -> ({}){}{}",
-            format_code_location(target),
+            format_control_target(target),
             arguments
                 .iter()
                 .map(format_value)
@@ -251,7 +398,7 @@ fn format_terminator(terminator: &MirTerminator) -> String {
     match terminator {
         MirTerminator::Jump { target, arguments } => format!(
             "mir.jump {}({})",
-            format_code_location(target),
+            format_control_target(target),
             arguments
                 .iter()
                 .map(format_value)
@@ -267,13 +414,13 @@ fn format_terminator(terminator: &MirTerminator) -> String {
         } => format!(
             "mir.cond_br {}, {}({}), {}({})",
             format_value(condition),
-            format_code_location(then_target),
+            format_control_target(then_target),
             then_arguments
                 .iter()
                 .map(format_value)
                 .collect::<Vec<_>>()
                 .join(", "),
-            format_code_location(else_target),
+            format_control_target(else_target),
             else_arguments
                 .iter()
                 .map(format_value)
@@ -315,6 +462,18 @@ fn format_code_location(name: &str) -> String {
         name.to_string()
     } else {
         format!("@{}", name)
+    }
+}
+
+fn format_control_target(target: &MirControlTarget) -> String {
+    match target {
+        MirControlTarget::Direct(name) => format_code_location(name),
+        MirControlTarget::FunctionIndirect(value) => {
+            format!("function_indirect {}", format_value(value))
+        }
+        MirControlTarget::BlockIndirect(value) => {
+            format!("block_indirect {}", format_value(value))
+        }
     }
 }
 
@@ -421,11 +580,36 @@ fn format_compare(op: &MirCompareOperation) -> &'static str {
     }
 }
 
+fn format_float_compare(op: &MirFloatCompareOperation) -> &'static str {
+    match op {
+        MirFloatCompareOperation::Ordered => "ordered",
+        MirFloatCompareOperation::Unordered => "unordered",
+        MirFloatCompareOperation::Oeq => "oeq",
+        MirFloatCompareOperation::One => "one",
+        MirFloatCompareOperation::Olt => "olt",
+        MirFloatCompareOperation::Ole => "ole",
+        MirFloatCompareOperation::Ogt => "ogt",
+        MirFloatCompareOperation::Oge => "oge",
+        MirFloatCompareOperation::Ueq => "ueq",
+        MirFloatCompareOperation::Une => "une",
+        MirFloatCompareOperation::Ult => "ult",
+        MirFloatCompareOperation::Ule => "ule",
+        MirFloatCompareOperation::Ugt => "ugt",
+        MirFloatCompareOperation::Uge => "uge",
+    }
+}
+
 fn format_cast(op: &MirCastOperation) -> &'static str {
     match op {
         MirCastOperation::ZeroExtend => "zext",
         MirCastOperation::SignExtend => "sext",
         MirCastOperation::Truncate => "trunc",
         MirCastOperation::Bitcast => "bitcast",
+        MirCastOperation::IntToFloat => "sitofp",
+        MirCastOperation::UIntToFloat => "uitofp",
+        MirCastOperation::FloatToInt => "fptosi",
+        MirCastOperation::FloatToUInt => "fptoui",
+        MirCastOperation::FloatExtend => "fpext",
+        MirCastOperation::FloatTruncate => "fptrunc",
     }
 }

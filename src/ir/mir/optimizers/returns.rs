@@ -2,7 +2,26 @@ use crate::ir::mir::analysis::block_register_aliases;
 use crate::ir::mir::{Mir, MirAddressSpace, MirOperationKind, MirTerminator, MirType, MirValue};
 use std::collections::HashMap;
 
-type DefMap = HashMap<String, MirOperationKind>;
+#[derive(Clone, Debug)]
+enum ReturnDef {
+    Load {
+        address_space: MirAddressSpace,
+        address: MirValue,
+    },
+    Add {
+        lhs: MirValue,
+        rhs: MirValue,
+    },
+    Sub {
+        lhs: MirValue,
+        rhs: MirValue,
+    },
+    Set {
+        value: MirValue,
+    },
+}
+
+type DefMap = HashMap<String, ReturnDef>;
 
 pub fn optimize_returns(mir: &mut Mir) {
     let aliases = block_register_aliases(mir);
@@ -32,16 +51,40 @@ pub fn optimize_returns(mir: &mut Mir) {
 }
 
 fn build_defs(mir: &Mir) -> DefMap {
-    mir.blocks()
-        .iter()
-        .flat_map(|block| block.operations.iter())
-        .filter_map(|operation| {
-            operation
-                .result
-                .as_ref()
-                .map(|result| (result.clone(), operation.kind.clone()))
-        })
-        .collect()
+    let mut defs = DefMap::new();
+
+    for block in mir.blocks() {
+        for operation in &block.operations {
+            let Some(result) = operation.result.as_ref() else {
+                continue;
+            };
+            let def = match &operation.kind {
+                MirOperationKind::Load {
+                    address_space,
+                    address,
+                    ..
+                } => ReturnDef::Load {
+                    address_space: address_space.clone(),
+                    address: address.clone(),
+                },
+                MirOperationKind::Add { lhs, rhs, .. } => ReturnDef::Add {
+                    lhs: lhs.clone(),
+                    rhs: rhs.clone(),
+                },
+                MirOperationKind::Sub { lhs, rhs, .. } => ReturnDef::Sub {
+                    lhs: lhs.clone(),
+                    rhs: rhs.clone(),
+                },
+                MirOperationKind::Copy { value, .. } => ReturnDef::Set {
+                    value: value.clone(),
+                },
+                _ => continue,
+            };
+            defs.insert(result.clone(), def);
+        }
+    }
+
+    defs
 }
 
 fn is_machine_return_target(value: &MirValue, defs: &DefMap) -> bool {
@@ -55,20 +98,17 @@ fn is_machine_return_target_with_depth(value: &MirValue, defs: &DefMap, depth: u
 
     match value {
         MirValue::Named { name, .. } => match defs.get(name) {
-            Some(MirOperationKind::Load {
+            Some(ReturnDef::Load {
                 address_space,
                 address,
-                ..
             }) => {
                 matches!(
                     address_space,
                     MirAddressSpace::Default | MirAddressSpace::Stack
                 ) && is_stack_derived(address, defs)
             }
-            Some(MirOperationKind::Intrinsic {
-                name, arguments, ..
-            }) if name == "lir.set" && arguments.len() == 1 => {
-                is_machine_return_target_with_depth(&arguments[0], defs, depth + 1)
+            Some(ReturnDef::Set { value }) => {
+                is_machine_return_target_with_depth(value, defs, depth + 1)
             }
             _ => false,
         },
@@ -109,17 +149,12 @@ fn is_stack_derived_with_depth(value: &MirValue, defs: &DefMap, depth: usize) ->
     match value {
         MirValue::Named { name, .. } if is_stack_pointer_name(name) => true,
         MirValue::Named { name, .. } => match defs.get(name) {
-            Some(MirOperationKind::Add { lhs, rhs, .. })
-            | Some(MirOperationKind::Sub { lhs, rhs, .. }) => {
+            Some(ReturnDef::Add { lhs, rhs }) | Some(ReturnDef::Sub { lhs, rhs }) => {
                 let lhs_stack = is_stack_derived_with_depth(lhs, defs, depth + 1);
                 let rhs_stack = is_stack_derived_with_depth(rhs, defs, depth + 1);
                 (lhs_stack && is_constant(rhs)) || (rhs_stack && is_constant(lhs))
             }
-            Some(MirOperationKind::Intrinsic {
-                name, arguments, ..
-            }) if name == "lir.set" && arguments.len() == 1 => {
-                is_stack_derived_with_depth(&arguments[0], defs, depth + 1)
-            }
+            Some(ReturnDef::Set { value }) => is_stack_derived_with_depth(value, defs, depth + 1),
             _ => false,
         },
         _ => false,

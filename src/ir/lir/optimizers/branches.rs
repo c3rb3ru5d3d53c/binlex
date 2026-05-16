@@ -1,4 +1,6 @@
-use crate::ir::lir::{Lir, LirEffect, LirExpression, LirLocation, LirModule, LirTerminator};
+use crate::ir::lir::{
+    Lir, LirEffect, LirExpression, LirFunction, LirLocation, LirModule, LirTerminator,
+};
 
 pub fn optimize_branches(lir: &mut Lir) {
     for effect in &mut lir.effects {
@@ -7,9 +9,17 @@ pub fn optimize_branches(lir: &mut Lir) {
     optimize_terminator(&mut lir.terminator);
 }
 
+pub fn optimize_branches_function(function: &mut LirFunction) {
+    for block in &mut function.blocks {
+        for lir in &mut block.instructions {
+            optimize_branches(lir);
+        }
+    }
+}
+
 pub fn optimize_branches_module(module: &mut LirModule) {
-    for lir in &mut module.semantics {
-        optimize_branches(lir);
+    for function in &mut module.functions {
+        optimize_branches_function(function);
     }
 }
 

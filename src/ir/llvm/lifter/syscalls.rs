@@ -706,7 +706,7 @@ mod tests {
         Lir, LirAbi, LirAbiKind, LirCpu, LirCpuKind, LirEffect, LirExpression, LirLocation,
         LirModule, LirStatus, LirTerminator, LirTrapKind,
     };
-    use crate::lifters::llvm::Lifter;
+    use crate::ir::llvm::Lifter;
     use crate::{Architecture, Configuration};
 
     fn cpu_kind(architecture: Architecture) -> LirCpuKind {

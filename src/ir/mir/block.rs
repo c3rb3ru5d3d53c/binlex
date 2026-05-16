@@ -23,6 +23,8 @@
 use super::kind::MirType;
 use super::operation::MirOperation;
 use super::terminator::MirTerminator;
+use crate::ir::lir::LirBlock;
+use crate::ir::mir::lower::{MirLowerError, lower_lir_block_to_mir};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -50,6 +52,10 @@ pub struct MirBlock {
 }
 
 impl MirBlock {
+    pub fn from_lir(name: Option<String>, lir: &LirBlock) -> Result<Self, MirLowerError> {
+        lower_lir_block_to_mir(name, lir)
+    }
+
     pub fn new(name: String) -> Self {
         Self {
             name,

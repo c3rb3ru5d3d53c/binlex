@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use crate::controlflow::{Graph, InstructionRecord};
 use crate::disassemblers::cil::Disassembler;
 use crate::ir::lir::{Lir, LirStatus};
-use crate::lifters::llvm::Lifter;
+use crate::ir::llvm::Lifter;
 use crate::{Architecture, Configuration};
 
 pub(super) fn disassemble_cil_single(name: &str, bytes: &[u8]) -> InstructionRecord {

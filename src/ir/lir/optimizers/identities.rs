@@ -1,5 +1,6 @@
 use crate::ir::lir::{
-    Lir, LirEffect, LirExpression, LirLocation, LirModule, LirOperationBinary, LirTerminator,
+    Lir, LirEffect, LirExpression, LirFunction, LirLocation, LirModule, LirOperationBinary,
+    LirTerminator,
 };
 
 pub fn optimize_identities(lir: &mut Lir) {
@@ -9,9 +10,17 @@ pub fn optimize_identities(lir: &mut Lir) {
     optimize_terminator(&mut lir.terminator);
 }
 
+pub fn optimize_identities_function(function: &mut LirFunction) {
+    for block in &mut function.blocks {
+        for lir in &mut block.instructions {
+            optimize_identities(lir);
+        }
+    }
+}
+
 pub fn optimize_identities_module(module: &mut LirModule) {
-    for lir in &mut module.semantics {
-        optimize_identities(lir);
+    for function in &mut module.functions {
+        optimize_identities_function(function);
     }
 }
 

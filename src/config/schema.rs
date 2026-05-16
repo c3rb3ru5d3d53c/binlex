@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::lifters::llvm::Mode as LlvmMode;
+use crate::ir::llvm::Mode as LlvmMode;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::ops::{Deref, DerefMut};

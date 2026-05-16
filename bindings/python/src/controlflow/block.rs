@@ -28,6 +28,8 @@ use crate::controlflow::Instruction;
 use crate::controlflow::Reference;
 use crate::genetics::Chromosome;
 use crate::hashing::{MinHash32, SSDeep, SHA256, TLSH};
+use crate::ir::lir::LirBlock as PyLirBlock;
+use crate::ir::mir::PyMirBlock;
 use crate::Architecture;
 use crate::Configuration;
 use binlex::controlflow::Block as InnerBlock;
@@ -350,6 +352,20 @@ impl Block {
                 result.push(instruction);
             }
             Ok(result)
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn lir(&self, py: Python<'_>) -> PyResult<Py<PyLirBlock>> {
+        self.with_inner_block(py, |block| {
+            Py::new(py, PyLirBlock::from_inner(block.lir()?))
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn mir(&self, py: Python<'_>) -> PyResult<Py<PyMirBlock>> {
+        self.with_inner_block(py, |block| {
+            Py::new(py, PyMirBlock::from_inner(block.mir()?))
         })
     }
 

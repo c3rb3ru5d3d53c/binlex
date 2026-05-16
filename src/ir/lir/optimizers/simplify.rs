@@ -2,9 +2,9 @@ use crate::ir::lir::optimizers::{
     optimize_branches, optimize_casts, optimize_constants, optimize_identities,
     optimize_intrinsics, optimize_noops,
 };
-use crate::ir::lir::{Lir, LirModule};
+use crate::ir::lir::{Lir, LirFunction, LirModule};
 
-pub fn optimize_simplify(lir: &mut Lir) {
+pub fn optimize(lir: &mut Lir) {
     optimize_intrinsics(lir);
     optimize_constants(lir);
     optimize_identities(lir);
@@ -13,8 +13,16 @@ pub fn optimize_simplify(lir: &mut Lir) {
     optimize_noops(lir);
 }
 
-pub fn optimize_simplify_module(module: &mut LirModule) {
-    for lir in &mut module.semantics {
-        optimize_simplify(lir);
+pub fn optimize_function(function: &mut LirFunction) {
+    for block in &mut function.blocks {
+        for lir in &mut block.instructions {
+            optimize(lir);
+        }
+    }
+}
+
+pub fn optimize_module(module: &mut LirModule) {
+    for function in &mut module.functions {
+        optimize_function(function);
     }
 }

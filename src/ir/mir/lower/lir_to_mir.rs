@@ -21,14 +21,15 @@
 // SOFTWARE.
 
 use crate::ir::lir::{
-    Lir, LirAddressSpace, LirEffect, LirExpression, LirLocation, LirModule, LirOperationBinary,
-    LirOperationCast, LirOperationCompare, LirOperationUnary, LirTerminator,
+    Lir, LirAbi, LirAddressSpace, LirBlock as LirBasicBlock, LirCpu, LirEffect, LirExpression,
+    LirFunction, LirLocation, LirOperationBinary, LirOperationCast, LirOperationCompare,
+    LirOperationUnary, LirTerminator,
 };
 use crate::ir::mir::{
-    Mir, MirAddressSpace, MirBlock, MirOperation, MirOperationKind, MirTerminator, MirType,
-    MirValue,
+    MirAddressSpace, MirBlock, MirControlTarget, MirFunction, MirOperation, MirOperationKind,
+    MirTerminator, MirType, MirValue,
 };
-use crate::ir::mir::{MirCastOperation, MirCompareOperation};
+use crate::ir::mir::{MirCastOperation, MirCompareOperation, MirFloatCompareOperation};
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 
@@ -58,23 +59,74 @@ impl LoweringContext {
     }
 }
 
-pub fn lower_lir_to_mir(name: Option<String>, lir: &LirModule) -> Result<Mir, MirLowerError> {
-    let mut mir = Mir::new(name);
-    mir.abi = lir
-        .semantics
-        .iter()
-        .find_map(|semantic| semantic.abi.clone());
+pub fn lower_lir_to_mir(
+    name: Option<String>,
+    lir: &LirFunction,
+) -> Result<MirFunction, MirLowerError> {
+    let mut mir = MirFunction::new(name);
+    mir.abi = lir.abi.clone().or_else(|| {
+        lir.instructions()
+            .into_iter()
+            .find_map(|instruction| instruction.abi.clone())
+    });
 
-    if lir.semantics.is_empty() {
+    if lir.blocks.is_empty() || lir.blocks.iter().all(|block| block.instructions.is_empty()) {
         let mut block = MirBlock::new("entry".to_string());
         block.set_terminator(MirTerminator::Return { values: Vec::new() });
         mir.append_block(block);
         return Ok(mir);
     }
 
-    let block_names = build_block_names(&lir.semantics);
+    let block_names = build_block_names(&lir.blocks);
     let mut address_to_block = HashMap::new();
-    for (semantic, block_name) in lir.semantics.iter().zip(block_names.iter()) {
+    for (lir_block, block_name) in lir.blocks.iter().zip(block_names.iter()) {
+        for semantic in &lir_block.instructions {
+            if let Some(encoding) = semantic.encoding.as_ref() {
+                address_to_block
+                    .entry(encoding.address)
+                    .or_insert_with(|| block_name.clone());
+            }
+        }
+    }
+
+    let mut context = LoweringContext::default();
+
+    for (index, lir_block) in lir.blocks.iter().enumerate() {
+        if lir_block.instructions.is_empty() {
+            continue;
+        }
+        mir.append_block(lower_lir_block_with_context(
+            block_names[index].clone(),
+            lir_block,
+            mir.abi.as_ref(),
+            index,
+            &block_names,
+            &address_to_block,
+            &mut context,
+        )?);
+    }
+
+    Ok(mir)
+}
+
+pub fn lower_lir_block_to_mir(
+    name: Option<String>,
+    lir: &LirBasicBlock,
+) -> Result<MirBlock, MirLowerError> {
+    let block_name = name
+        .or_else(|| lir.name.clone())
+        .or_else(|| {
+            lir.instructions.first().and_then(|semantic| {
+                semantic
+                    .encoding
+                    .as_ref()
+                    .map(|encoding| format!("block_{:x}", encoding.address))
+            })
+        })
+        .unwrap_or_else(|| "block_0".to_string());
+
+    let mut address_to_block = HashMap::new();
+    for semantic in &lir.instructions {
         if let Some(encoding) = semantic.encoding.as_ref() {
             address_to_block
                 .entry(encoding.address)
@@ -82,40 +134,73 @@ pub fn lower_lir_to_mir(name: Option<String>, lir: &LirModule) -> Result<Mir, Mi
         }
     }
 
+    let block_names = vec![block_name.clone()];
     let mut context = LoweringContext::default();
-
-    for (index, semantic) in lir.semantics.iter().enumerate() {
-        let mut block = MirBlock::new(block_names[index].clone());
-
-        for effect in &semantic.effects {
-            lower_effect(effect, &mut block, &mut context);
-        }
-
-        let terminator = lower_terminator(
-            semantic,
-            &semantic.terminator,
-            index,
-            &block_names,
-            &address_to_block,
-            &mut block,
-            &mut context,
-        );
-        block.set_terminator(terminator);
-        mir.append_block(block);
-    }
-
-    Ok(mir)
+    lower_lir_block_with_context(
+        block_name,
+        lir,
+        None,
+        0,
+        &block_names,
+        &address_to_block,
+        &mut context,
+    )
 }
 
-fn build_block_names(semantics: &[Lir]) -> Vec<String> {
-    let mut used = HashSet::new();
-    let mut names = Vec::with_capacity(semantics.len());
+fn lower_lir_block_with_context(
+    block_name: String,
+    lir_block: &LirBasicBlock,
+    function_abi: Option<&LirAbi>,
+    index: usize,
+    block_names: &[String],
+    address_to_block: &HashMap<u64, String>,
+    context: &mut LoweringContext,
+) -> Result<MirBlock, MirLowerError> {
+    if lir_block.instructions.is_empty() {
+        return Err(MirLowerError {
+            message: format!("cannot lower empty LIR block {block_name}"),
+        });
+    }
 
-    for (index, semantic) in semantics.iter().enumerate() {
-        let base = semantic
-            .encoding
-            .as_ref()
-            .map(|encoding| format!("block_{:x}", encoding.address))
+    let mut block = MirBlock::new(block_name);
+
+    for semantic in &lir_block.instructions {
+        for effect in &semantic.effects {
+            lower_effect(effect, &mut block, context);
+        }
+    }
+
+    let semantic = lir_block.instructions.last().expect("non-empty block");
+    let terminator = lower_terminator(
+        semantic,
+        &semantic.terminator,
+        function_abi,
+        index,
+        block_names,
+        address_to_block,
+        &mut block,
+        context,
+    );
+    block.set_terminator(terminator);
+    Ok(block)
+}
+
+fn build_block_names(blocks: &[LirBasicBlock]) -> Vec<String> {
+    let mut used = HashSet::new();
+    let mut names = Vec::with_capacity(blocks.len());
+
+    for (index, block) in blocks.iter().enumerate() {
+        let base = block
+            .name
+            .clone()
+            .or_else(|| {
+                block.instructions.first().and_then(|semantic| {
+                    semantic
+                        .encoding
+                        .as_ref()
+                        .map(|encoding| format!("block_{:x}", encoding.address))
+                })
+            })
             .unwrap_or_else(|| format!("block_{index}"));
 
         let mut candidate = base.clone();
@@ -132,18 +217,57 @@ fn build_block_names(semantics: &[Lir]) -> Vec<String> {
 
 fn lower_effect(effect: &LirEffect, block: &mut MirBlock, context: &mut LoweringContext) {
     match effect {
-        LirEffect::Set { dst, expression } => {
-            let value = lower_expression(expression, block, context);
-            let result = location_name(dst);
-            block.append_operation(MirOperation::new(
-                Some(result),
-                MirOperationKind::Intrinsic {
-                    name: "lir.set".to_string(),
-                    arguments: vec![value],
-                    result_types: vec![mir_type_for_bits(dst.bits())],
-                },
-            ));
-        }
+        LirEffect::Set { dst, expression } => match dst {
+            LirLocation::Memory { space, addr, bits } => {
+                let address = lower_expression(addr, block, context);
+                let value = lower_expression(expression, block, context);
+                block.append_operation(MirOperation::new(
+                    None,
+                    MirOperationKind::Store {
+                        address_space: lower_address_space(space),
+                        address,
+                        value,
+                        ty: mir_type_for_bits(*bits),
+                    },
+                ));
+            }
+            LirLocation::IndexedMemory { name, index, bits } => {
+                let address = lower_expression(index, block, context);
+                let value = lower_expression(expression, block, context);
+                block.append_operation(MirOperation::new(
+                    None,
+                    MirOperationKind::Store {
+                        address_space: MirAddressSpace::named(name.clone()),
+                        address,
+                        value,
+                        ty: mir_type_for_bits(*bits),
+                    },
+                ));
+            }
+            LirLocation::StackMemory { name, offset, bits } => {
+                let value = lower_expression(expression, block, context);
+                block.append_operation(MirOperation::new(
+                    None,
+                    MirOperationKind::Store {
+                        address_space: MirAddressSpace::named(name.clone()),
+                        address: MirValue::integer(*offset as i128, 64),
+                        value,
+                        ty: mir_type_for_bits(*bits),
+                    },
+                ));
+            }
+            _ => {
+                let value = lower_expression(expression, block, context);
+                let result = location_name(dst);
+                block.append_operation(MirOperation::new(
+                    Some(result),
+                    MirOperationKind::Copy {
+                        value,
+                        ty: mir_type_for_bits(dst.bits()),
+                    },
+                ));
+            }
+        },
         LirEffect::Store {
             space,
             addr,
@@ -159,6 +283,32 @@ fn lower_effect(effect: &LirEffect, block: &mut MirBlock, context: &mut Lowering
                     address,
                     value,
                     ty: mir_type_for_bits(*bits),
+                },
+            ));
+        }
+        LirEffect::MemoryCopy {
+            src_space,
+            src_addr,
+            dst_space,
+            dst_addr,
+            count,
+            element_bits,
+            decrement,
+        } => {
+            let src_address = lower_expression(src_addr, block, context);
+            let dst_address = lower_expression(dst_addr, block, context);
+            let count = lower_expression(count, block, context);
+            let decrement = lower_expression(decrement, block, context);
+            block.append_operation(MirOperation::new(
+                None,
+                MirOperationKind::MemoryCopy {
+                    src_space: lower_address_space(src_space),
+                    src_address,
+                    dst_space: lower_address_space(dst_space),
+                    dst_address,
+                    count,
+                    element_bits: *element_bits,
+                    decrement,
                 },
             ));
         }
@@ -242,6 +392,7 @@ fn lower_effect(effect: &LirEffect, block: &mut MirBlock, context: &mut Lowering
 fn lower_terminator(
     semantic: &Lir,
     terminator: &LirTerminator,
+    function_abi: Option<&LirAbi>,
     index: usize,
     block_names: &[String],
     address_to_block: &HashMap<u64, String>,
@@ -252,7 +403,7 @@ fn lower_terminator(
         LirTerminator::FallThrough => {
             if let Some(next) = block_names.get(index + 1) {
                 MirTerminator::Jump {
-                    target: next.clone(),
+                    target: MirControlTarget::direct(next.clone()),
                     arguments: Vec::new(),
                 }
             } else {
@@ -260,7 +411,7 @@ fn lower_terminator(
             }
         }
         LirTerminator::Jump { target } => MirTerminator::Jump {
-            target: resolve_block_target(target, address_to_block),
+            target: resolve_block_target(target, address_to_block, block, context),
             arguments: Vec::new(),
         },
         LirTerminator::Branch {
@@ -269,9 +420,9 @@ fn lower_terminator(
             false_target,
         } => MirTerminator::CondBr {
             condition: lower_expression(condition, block, context),
-            then_target: resolve_block_target(true_target, address_to_block),
+            then_target: resolve_block_target(true_target, address_to_block, block, context),
             then_arguments: Vec::new(),
-            else_target: resolve_block_target(false_target, address_to_block),
+            else_target: resolve_block_target(false_target, address_to_block, block, context),
             else_arguments: Vec::new(),
         },
         LirTerminator::Call {
@@ -286,11 +437,13 @@ fn lower_terminator(
                 call_result_binding(semantic, context)
             };
 
+            let arguments = call_argument_values(semantic, function_abi, block, context);
+            let target = resolve_call_target(target, block, context);
             block.append_operation(MirOperation::new(
                 call_result.clone(),
                 MirOperationKind::Call {
-                    target: resolve_call_target(target),
-                    arguments: call_argument_values(semantic),
+                    target,
+                    arguments,
                     result_types: result_types.clone(),
                     clobbers: Vec::new(),
                     memory_effects: Vec::new(),
@@ -300,10 +453,9 @@ fn lower_terminator(
             if let (Some(call_result), Some((location, ty))) = (call_result, return_location) {
                 block.append_operation(MirOperation::new(
                     Some(location_name(&location)),
-                    MirOperationKind::Intrinsic {
-                        name: "lir.set".to_string(),
-                        arguments: vec![MirValue::named(call_result, ty.clone())],
-                        result_types: vec![ty],
+                    MirOperationKind::Copy {
+                        value: MirValue::named(call_result, ty.clone()),
+                        ty,
                     },
                 ));
             }
@@ -312,7 +464,7 @@ fn lower_terminator(
                 MirTerminator::Unreachable
             } else if let Some(return_target) = return_target.as_ref() {
                 MirTerminator::Jump {
-                    target: resolve_block_target(return_target, address_to_block),
+                    target: resolve_block_target(return_target, address_to_block, block, context),
                     arguments: Vec::new(),
                 }
             } else {
@@ -402,6 +554,39 @@ fn lower_expression(
             ));
             MirValue::named(result, ty)
         }
+        LirExpression::Concat { parts, bits } => {
+            let parts = parts
+                .iter()
+                .map(|part| lower_expression(part, block, context))
+                .collect::<Vec<_>>();
+            let ty = mir_type_for_bits(*bits);
+            let result = context.next_name("concat");
+            block.append_operation(MirOperation::new(
+                Some(result.clone()),
+                MirOperationKind::Concat {
+                    parts,
+                    ty: ty.clone(),
+                },
+            ));
+            MirValue::named(result, ty)
+        }
+        LirExpression::Intrinsic { name, args, bits } => {
+            let ty = mir_type_for_bits(*bits);
+            let result = context.next_name("expr");
+            let arguments = args
+                .iter()
+                .map(|arg| lower_expression(arg, block, context))
+                .collect();
+            block.append_operation(MirOperation::new(
+                Some(result.clone()),
+                MirOperationKind::Intrinsic {
+                    name: name.clone(),
+                    arguments,
+                    result_types: vec![ty.clone()],
+                },
+            ));
+            MirValue::named(result, ty)
+        }
         LirExpression::Extract { arg, lsb, bits } => {
             let value = lower_expression(arg, block, context);
             let ty = mir_type_for_bits(*bits);
@@ -456,7 +641,19 @@ fn lower_unary_expression(
             value,
             ty: ty.clone(),
         },
+        LirOperationUnary::Neg => MirOperationKind::Neg {
+            value,
+            ty: ty.clone(),
+        },
         LirOperationUnary::PopCount => MirOperationKind::Popcount {
+            value,
+            ty: ty.clone(),
+        },
+        LirOperationUnary::CountLeadingZeros => MirOperationKind::CountLeadingZeros {
+            value,
+            ty: ty.clone(),
+        },
+        LirOperationUnary::CountTrailingZeros => MirOperationKind::CountTrailingZeros {
             value,
             ty: ty.clone(),
         },
@@ -481,7 +678,13 @@ fn lower_binary_expression(
 ) -> MirValue {
     let lhs = lower_expression(left, block, context);
     let rhs = lower_expression(right, block, context);
-    let ty = mir_type_for_bits(bits);
+    let ty = match op {
+        LirOperationBinary::FAdd
+        | LirOperationBinary::FSub
+        | LirOperationBinary::FMul
+        | LirOperationBinary::FDiv => MirType::float(bits.max(1)),
+        _ => mir_type_for_bits(bits),
+    };
     let result = context.next_name("bin");
 
     let kind = match op {
@@ -496,6 +699,26 @@ fn lower_binary_expression(
             ty: ty.clone(),
         },
         LirOperationBinary::Mul => MirOperationKind::Mul {
+            lhs,
+            rhs,
+            ty: ty.clone(),
+        },
+        LirOperationBinary::FAdd => MirOperationKind::FAdd {
+            lhs,
+            rhs,
+            ty: ty.clone(),
+        },
+        LirOperationBinary::FSub => MirOperationKind::FSub {
+            lhs,
+            rhs,
+            ty: ty.clone(),
+        },
+        LirOperationBinary::FMul => MirOperationKind::FMul {
+            lhs,
+            rhs,
+            ty: ty.clone(),
+        },
+        LirOperationBinary::FDiv => MirOperationKind::FDiv {
             lhs,
             rhs,
             ty: ty.clone(),
@@ -530,6 +753,36 @@ fn lower_binary_expression(
             rhs,
             ty: ty.clone(),
         },
+        LirOperationBinary::UDiv => MirOperationKind::UDiv {
+            lhs,
+            rhs,
+            ty: ty.clone(),
+        },
+        LirOperationBinary::SDiv => MirOperationKind::SDiv {
+            lhs,
+            rhs,
+            ty: ty.clone(),
+        },
+        LirOperationBinary::URem => MirOperationKind::URem {
+            lhs,
+            rhs,
+            ty: ty.clone(),
+        },
+        LirOperationBinary::SRem => MirOperationKind::SRem {
+            lhs,
+            rhs,
+            ty: ty.clone(),
+        },
+        LirOperationBinary::RotateLeft => MirOperationKind::RotateLeft {
+            lhs,
+            rhs,
+            ty: ty.clone(),
+        },
+        LirOperationBinary::RotateRight => MirOperationKind::RotateRight {
+            lhs,
+            rhs,
+            ty: ty.clone(),
+        },
         _ => MirOperationKind::Intrinsic {
             name: format!("lir.binary.{op:?}").to_lowercase(),
             arguments: vec![lhs, rhs],
@@ -549,7 +802,13 @@ fn lower_cast_expression(
     context: &mut LoweringContext,
 ) -> MirValue {
     let value = lower_expression(arg, block, context);
-    let ty = mir_type_for_bits(bits);
+    let ty = match op {
+        LirOperationCast::IntToFloat
+        | LirOperationCast::UIntToFloat
+        | LirOperationCast::FloatExtend
+        | LirOperationCast::FloatTruncate => MirType::float(bits.max(1)),
+        _ => mir_type_for_bits(bits),
+    };
     let result = context.next_name("cast");
 
     let kind = match op {
@@ -573,10 +832,35 @@ fn lower_cast_expression(
             value,
             ty: ty.clone(),
         },
-        _ => MirOperationKind::Intrinsic {
-            name: format!("lir.cast.{op:?}").to_lowercase(),
-            arguments: vec![value],
-            result_types: vec![ty.clone()],
+        LirOperationCast::IntToFloat => MirOperationKind::Cast {
+            op: MirCastOperation::IntToFloat,
+            value,
+            ty: ty.clone(),
+        },
+        LirOperationCast::UIntToFloat => MirOperationKind::Cast {
+            op: MirCastOperation::UIntToFloat,
+            value,
+            ty: ty.clone(),
+        },
+        LirOperationCast::FloatToInt => MirOperationKind::Cast {
+            op: MirCastOperation::FloatToInt,
+            value,
+            ty: ty.clone(),
+        },
+        LirOperationCast::FloatToUInt => MirOperationKind::Cast {
+            op: MirCastOperation::FloatToUInt,
+            value,
+            ty: ty.clone(),
+        },
+        LirOperationCast::FloatExtend => MirOperationKind::Cast {
+            op: MirCastOperation::FloatExtend,
+            value,
+            ty: ty.clone(),
+        },
+        LirOperationCast::FloatTruncate => MirOperationKind::Cast {
+            op: MirCastOperation::FloatTruncate,
+            value,
+            ty: ty.clone(),
         },
     };
 
@@ -596,72 +880,168 @@ fn lower_compare_expression(
     let rhs = lower_expression(right, block, context);
     let result_ty = MirType::integer(1);
     let result = context.next_name("cmp");
+    let operand_ty = match op {
+        LirOperationCompare::Ordered
+        | LirOperationCompare::Unordered
+        | LirOperationCompare::Oeq
+        | LirOperationCompare::One
+        | LirOperationCompare::Olt
+        | LirOperationCompare::Ole
+        | LirOperationCompare::Ogt
+        | LirOperationCompare::Oge
+        | LirOperationCompare::Ueq
+        | LirOperationCompare::Une
+        | LirOperationCompare::UltFp
+        | LirOperationCompare::UleFp
+        | LirOperationCompare::UgtFp
+        | LirOperationCompare::UgeFp => MirType::float(bits.max(1)),
+        _ => mir_type_for_bits(bits),
+    };
 
     let kind = match op {
         LirOperationCompare::Eq => MirOperationKind::Icmp {
             op: MirCompareOperation::Eq,
             lhs,
             rhs,
-            ty: mir_type_for_bits(bits),
+            ty: operand_ty.clone(),
         },
         LirOperationCompare::Ne => MirOperationKind::Icmp {
             op: MirCompareOperation::Ne,
             lhs,
             rhs,
-            ty: mir_type_for_bits(bits),
+            ty: operand_ty.clone(),
         },
         LirOperationCompare::Ult => MirOperationKind::Icmp {
             op: MirCompareOperation::Ult,
             lhs,
             rhs,
-            ty: mir_type_for_bits(bits),
+            ty: operand_ty.clone(),
         },
         LirOperationCompare::Ule => MirOperationKind::Icmp {
             op: MirCompareOperation::Ule,
             lhs,
             rhs,
-            ty: mir_type_for_bits(bits),
+            ty: operand_ty.clone(),
         },
         LirOperationCompare::Ugt => MirOperationKind::Icmp {
             op: MirCompareOperation::Ugt,
             lhs,
             rhs,
-            ty: mir_type_for_bits(bits),
+            ty: operand_ty.clone(),
         },
         LirOperationCompare::Uge => MirOperationKind::Icmp {
             op: MirCompareOperation::Uge,
             lhs,
             rhs,
-            ty: mir_type_for_bits(bits),
+            ty: operand_ty.clone(),
         },
         LirOperationCompare::Slt => MirOperationKind::Icmp {
             op: MirCompareOperation::Slt,
             lhs,
             rhs,
-            ty: mir_type_for_bits(bits),
+            ty: operand_ty.clone(),
         },
         LirOperationCompare::Sle => MirOperationKind::Icmp {
             op: MirCompareOperation::Sle,
             lhs,
             rhs,
-            ty: mir_type_for_bits(bits),
+            ty: operand_ty.clone(),
         },
         LirOperationCompare::Sgt => MirOperationKind::Icmp {
             op: MirCompareOperation::Sgt,
             lhs,
             rhs,
-            ty: mir_type_for_bits(bits),
+            ty: operand_ty.clone(),
         },
         LirOperationCompare::Sge => MirOperationKind::Icmp {
             op: MirCompareOperation::Sge,
             lhs,
             rhs,
-            ty: mir_type_for_bits(bits),
+            ty: operand_ty.clone(),
         },
-        _ => MirOperationKind::Intrinsic {
-            name: format!("lir.compare.{op:?}").to_lowercase(),
-            arguments: vec![lhs, rhs],
-            result_types: vec![result_ty.clone()],
+        LirOperationCompare::Ordered => MirOperationKind::Fcmp {
+            op: MirFloatCompareOperation::Ordered,
+            lhs,
+            rhs,
+            ty: operand_ty.clone(),
+        },
+        LirOperationCompare::Unordered => MirOperationKind::Fcmp {
+            op: MirFloatCompareOperation::Unordered,
+            lhs,
+            rhs,
+            ty: operand_ty.clone(),
+        },
+        LirOperationCompare::Oeq => MirOperationKind::Fcmp {
+            op: MirFloatCompareOperation::Oeq,
+            lhs,
+            rhs,
+            ty: operand_ty.clone(),
+        },
+        LirOperationCompare::One => MirOperationKind::Fcmp {
+            op: MirFloatCompareOperation::One,
+            lhs,
+            rhs,
+            ty: operand_ty.clone(),
+        },
+        LirOperationCompare::Olt => MirOperationKind::Fcmp {
+            op: MirFloatCompareOperation::Olt,
+            lhs,
+            rhs,
+            ty: operand_ty.clone(),
+        },
+        LirOperationCompare::Ole => MirOperationKind::Fcmp {
+            op: MirFloatCompareOperation::Ole,
+            lhs,
+            rhs,
+            ty: operand_ty.clone(),
+        },
+        LirOperationCompare::Ogt => MirOperationKind::Fcmp {
+            op: MirFloatCompareOperation::Ogt,
+            lhs,
+            rhs,
+            ty: operand_ty.clone(),
+        },
+        LirOperationCompare::Oge => MirOperationKind::Fcmp {
+            op: MirFloatCompareOperation::Oge,
+            lhs,
+            rhs,
+            ty: operand_ty.clone(),
+        },
+        LirOperationCompare::Ueq => MirOperationKind::Fcmp {
+            op: MirFloatCompareOperation::Ueq,
+            lhs,
+            rhs,
+            ty: operand_ty.clone(),
+        },
+        LirOperationCompare::Une => MirOperationKind::Fcmp {
+            op: MirFloatCompareOperation::Une,
+            lhs,
+            rhs,
+            ty: operand_ty.clone(),
+        },
+        LirOperationCompare::UltFp => MirOperationKind::Fcmp {
+            op: MirFloatCompareOperation::Ult,
+            lhs,
+            rhs,
+            ty: operand_ty.clone(),
+        },
+        LirOperationCompare::UleFp => MirOperationKind::Fcmp {
+            op: MirFloatCompareOperation::Ule,
+            lhs,
+            rhs,
+            ty: operand_ty.clone(),
+        },
+        LirOperationCompare::UgtFp => MirOperationKind::Fcmp {
+            op: MirFloatCompareOperation::Ugt,
+            lhs,
+            rhs,
+            ty: operand_ty.clone(),
+        },
+        LirOperationCompare::UgeFp => MirOperationKind::Fcmp {
+            op: MirFloatCompareOperation::Uge,
+            lhs,
+            rhs,
+            ty: operand_ty,
         },
     };
 
@@ -689,32 +1069,42 @@ fn expression_arguments(expression: &LirExpression) -> Vec<&LirExpression> {
     }
 }
 
-fn resolve_block_target(target: &LirExpression, address_to_block: &HashMap<u64, String>) -> String {
+fn resolve_block_target(
+    target: &LirExpression,
+    address_to_block: &HashMap<u64, String>,
+    block: &mut MirBlock,
+    context: &mut LoweringContext,
+) -> MirControlTarget {
     match target {
         LirExpression::Const { value, .. } => u64::try_from(*value)
             .ok()
-            .and_then(|address| address_to_block.get(&address).cloned())
-            .unwrap_or_else(|| format!("block_{value:x}")),
+            .and_then(|address| {
+                address_to_block
+                    .get(&address)
+                    .cloned()
+                    .map(MirControlTarget::direct)
+            })
+            .unwrap_or_else(|| MirControlTarget::direct(format!("block_{value:x}"))),
         LirExpression::Function { name, .. } | LirExpression::DataAddress { name, .. } => {
-            name.clone()
+            MirControlTarget::direct(name.clone())
         }
-        LirExpression::AddressOf { location, .. } | LirExpression::Read(location) => {
-            location_name(location)
-        }
-        _ => "unknown_target".to_string(),
+        _ => MirControlTarget::block_indirect(lower_expression(target, block, context)),
     }
 }
 
-fn resolve_call_target(target: &LirExpression) -> String {
+fn resolve_call_target(
+    target: &LirExpression,
+    block: &mut MirBlock,
+    context: &mut LoweringContext,
+) -> MirControlTarget {
     match target {
-        LirExpression::Const { value, .. } => format!("function_{value:x}"),
+        LirExpression::Const { value, .. } => {
+            MirControlTarget::direct(format!("function_{value:x}"))
+        }
         LirExpression::Function { name, .. } | LirExpression::DataAddress { name, .. } => {
-            name.clone()
+            MirControlTarget::direct(name.clone())
         }
-        LirExpression::AddressOf { location, .. } | LirExpression::Read(location) => {
-            location_name(location)
-        }
-        _ => "unknown_target".to_string(),
+        _ => MirControlTarget::function_indirect(lower_expression(target, block, context)),
     }
 }
 
@@ -776,21 +1166,141 @@ fn call_return_location(semantic: &Lir) -> Option<LirLocation> {
     }
 }
 
-fn call_argument_values(semantic: &Lir) -> Vec<MirValue> {
-    let Some(abi) = semantic.abi.as_ref() else {
-        return Vec::new();
+fn call_argument_values(
+    semantic: &Lir,
+    function_abi: Option<&LirAbi>,
+    block: &mut MirBlock,
+    context: &mut LoweringContext,
+) -> Vec<MirValue> {
+    let owned_abi;
+    let abi = if let Some(abi) = semantic.abi.as_ref() {
+        abi
+    } else if let Some(abi) = function_abi {
+        abi
+    } else {
+        owned_abi = infer_call_abi(semantic, block);
+        let Some(abi) = owned_abi.as_ref() else {
+            return Vec::new();
+        };
+        abi
     };
 
     abi.function_arguments
         .iter()
+        .map(|location| lower_call_argument_location(location, block, context))
+        .collect()
+}
+
+fn lower_call_argument_location(
+    location: &LirLocation,
+    block: &mut MirBlock,
+    context: &mut LoweringContext,
+) -> MirValue {
+    match location {
+        LirLocation::Register { .. }
+        | LirLocation::Flag { .. }
+        | LirLocation::ProgramCounter { .. }
+        | LirLocation::Temporary { .. } => {
+            MirValue::named(location_name(location), mir_type_for_bits(location.bits()))
+        }
+        LirLocation::StackMemory { name, offset, bits } => {
+            let ty = mir_type_for_bits(*bits);
+            let result = context.next_name("arg");
+            block.append_operation(MirOperation::new(
+                Some(result.clone()),
+                MirOperationKind::Load {
+                    address_space: MirAddressSpace::named(name.clone()),
+                    address: MirValue::integer(*offset as i128, 64),
+                    ty: ty.clone(),
+                },
+            ));
+            MirValue::named(result, ty)
+        }
+        LirLocation::Memory { space, addr, bits } => {
+            let ty = mir_type_for_bits(*bits);
+            let result = context.next_name("arg");
+            let address = lower_expression(addr, block, context);
+            block.append_operation(MirOperation::new(
+                Some(result.clone()),
+                MirOperationKind::Load {
+                    address_space: lower_address_space(space),
+                    address,
+                    ty: ty.clone(),
+                },
+            ));
+            MirValue::named(result, ty)
+        }
+        LirLocation::IndexedMemory { name, index, bits } => {
+            let ty = mir_type_for_bits(*bits);
+            let result = context.next_name("arg");
+            let address = lower_expression(index, block, context);
+            block.append_operation(MirOperation::new(
+                Some(result.clone()),
+                MirOperationKind::Load {
+                    address_space: MirAddressSpace::named(name.clone()),
+                    address,
+                    ty: ty.clone(),
+                },
+            ));
+            MirValue::named(result, ty)
+        }
+    }
+}
+
+fn infer_call_abi(semantic: &Lir, block: &MirBlock) -> Option<LirAbi> {
+    let architecture = semantic
+        .encoding
+        .as_ref()
+        .map(|encoding| encoding.architecture.as_str())?;
+
+    match architecture {
+        "amd64" => infer_amd64_call_abi(block),
+        "i386" => infer_i386_call_abi(block),
+        "arm64" => LirCpu::arm64().ok().and_then(|cpu| LirAbi::sysv(&cpu).ok()),
+        _ => None,
+    }
+}
+
+fn infer_amd64_call_abi(block: &MirBlock) -> Option<LirAbi> {
+    let cpu = LirCpu::amd64().ok()?;
+    let windows = LirAbi::windows64(&cpu).ok()?;
+    let sysv = LirAbi::sysv(&cpu).ok()?;
+
+    let windows_score = score_call_abi_candidates(block, &windows);
+    let sysv_score = score_call_abi_candidates(block, &sysv);
+
+    if windows_score >= sysv_score {
+        Some(windows)
+    } else {
+        Some(sysv)
+    }
+}
+
+fn infer_i386_call_abi(block: &MirBlock) -> Option<LirAbi> {
+    let cpu = LirCpu::i386().ok()?;
+    let fastcall = LirAbi::fastcall(&cpu).ok()?;
+    if score_call_abi_candidates(block, &fastcall) > 0 {
+        return Some(fastcall);
+    }
+    LirAbi::cdecl(&cpu).ok()
+}
+
+fn score_call_abi_candidates(block: &MirBlock, abi: &LirAbi) -> usize {
+    let mut defined = HashSet::new();
+    for operation in &block.operations {
+        if let Some(result) = operation.result.as_ref() {
+            defined.insert(result.as_str());
+        }
+    }
+
+    abi.function_arguments
+        .iter()
         .filter_map(|location| match location {
-            LirLocation::Register { .. } => Some(MirValue::named(
-                location_name(location),
-                mir_type_for_bits(location.bits()),
-            )),
+            LirLocation::Register { name, .. } => Some(name.as_str()),
             _ => None,
         })
-        .collect()
+        .filter(|name| defined.contains(name))
+        .count()
 }
 
 fn mir_type_for_expression(expression: &LirExpression) -> MirType {

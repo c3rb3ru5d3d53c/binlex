@@ -96,11 +96,35 @@ pub enum MirCompareOperation {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum MirFloatCompareOperation {
+    Ordered,
+    Unordered,
+    Oeq,
+    One,
+    Olt,
+    Ole,
+    Ogt,
+    Oge,
+    Ueq,
+    Une,
+    Ult,
+    Ule,
+    Ugt,
+    Uge,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MirCastOperation {
     ZeroExtend,
     SignExtend,
     Truncate,
     Bitcast,
+    IntToFloat,
+    UIntToFloat,
+    FloatToInt,
+    FloatToUInt,
+    FloatExtend,
+    FloatTruncate,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

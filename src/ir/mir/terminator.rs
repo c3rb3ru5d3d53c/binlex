@@ -21,20 +21,21 @@
 // SOFTWARE.
 
 use super::kind::MirTerminatorKind;
+use super::target::MirControlTarget;
 use super::value::MirValue;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MirTerminator {
     Jump {
-        target: String,
+        target: MirControlTarget,
         arguments: Vec<MirValue>,
     },
     CondBr {
         condition: MirValue,
-        then_target: String,
+        then_target: MirControlTarget,
         then_arguments: Vec<MirValue>,
-        else_target: String,
+        else_target: MirControlTarget,
         else_arguments: Vec<MirValue>,
     },
     Return {

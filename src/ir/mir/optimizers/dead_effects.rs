@@ -1,10 +1,10 @@
-use crate::ir::mir::analysis::build_use_def;
+use crate::ir::mir::analysis::build_use_counts;
 use crate::ir::mir::{Mir, MirAddressSpace, MirOperation, MirOperationKind, MirType, MirValue};
 use std::collections::HashSet;
 
 pub fn optimize_dead_effects(mir: &mut Mir) {
     loop {
-        let uses = build_use_def(mir).uses;
+        let uses = build_use_counts(mir);
         let mut changed = false;
 
         for block in mir.blocks_mut() {
@@ -98,6 +98,10 @@ fn is_dead_effect_candidate(kind: &MirOperationKind) -> bool {
         MirOperationKind::Add { .. }
         | MirOperationKind::Sub { .. }
         | MirOperationKind::Mul { .. }
+        | MirOperationKind::FAdd { .. }
+        | MirOperationKind::FSub { .. }
+        | MirOperationKind::FMul { .. }
+        | MirOperationKind::FDiv { .. }
         | MirOperationKind::And { .. }
         | MirOperationKind::Or { .. }
         | MirOperationKind::Xor { .. }
@@ -105,11 +109,14 @@ fn is_dead_effect_candidate(kind: &MirOperationKind) -> bool {
         | MirOperationKind::LShr { .. }
         | MirOperationKind::AShr { .. }
         | MirOperationKind::Select { .. }
+        | MirOperationKind::Concat { .. }
         | MirOperationKind::Extract { .. }
+        | MirOperationKind::Neg { .. }
         | MirOperationKind::Not { .. }
         | MirOperationKind::Popcount { .. }
         | MirOperationKind::Load { .. }
         | MirOperationKind::Icmp { .. }
+        | MirOperationKind::Fcmp { .. }
         | MirOperationKind::Cast { .. } => true,
         MirOperationKind::Intrinsic { name, .. } => name.starts_with("mir.call_clobber."),
         _ => false,

@@ -1,4 +1,4 @@
-use crate::ir::mir::{Mir, MirTerminator};
+use crate::ir::mir::{Mir, MirControlTarget, MirTerminator};
 use std::collections::HashMap;
 
 pub fn optimize_branches(mir: &mut Mir) {
@@ -14,12 +14,16 @@ pub fn optimize_branches(mir: &mut Mir) {
             match terminator {
                 MirTerminator::Jump { target, arguments } => {
                     if arguments.is_empty() {
-                        if let Some((new_target, new_arguments)) =
-                            trivial_jumps.get(target).cloned()
-                        {
-                            *target = new_target;
-                            *arguments = new_arguments;
-                            changed = true;
+                        if let MirControlTarget::Direct(target_name) = target {
+                            if let Some((new_target, new_arguments)) =
+                                trivial_jumps.get(target_name).cloned()
+                            {
+                                if *target != new_target || *arguments != new_arguments {
+                                    *target = new_target;
+                                    *arguments = new_arguments;
+                                    changed = true;
+                                }
+                            }
                         }
                     }
                 }
@@ -40,21 +44,29 @@ pub fn optimize_branches(mir: &mut Mir) {
                     }
 
                     if then_arguments.is_empty() {
-                        if let Some((new_target, new_arguments)) =
-                            trivial_jumps.get(then_target).cloned()
-                        {
-                            *then_target = new_target;
-                            *then_arguments = new_arguments;
-                            changed = true;
+                        if let MirControlTarget::Direct(target_name) = then_target {
+                            if let Some((new_target, new_arguments)) =
+                                trivial_jumps.get(target_name).cloned()
+                            {
+                                if *then_target != new_target || *then_arguments != new_arguments {
+                                    *then_target = new_target;
+                                    *then_arguments = new_arguments;
+                                    changed = true;
+                                }
+                            }
                         }
                     }
                     if else_arguments.is_empty() {
-                        if let Some((new_target, new_arguments)) =
-                            trivial_jumps.get(else_target).cloned()
-                        {
-                            *else_target = new_target;
-                            *else_arguments = new_arguments;
-                            changed = true;
+                        if let MirControlTarget::Direct(target_name) = else_target {
+                            if let Some((new_target, new_arguments)) =
+                                trivial_jumps.get(target_name).cloned()
+                            {
+                                if *else_target != new_target || *else_arguments != new_arguments {
+                                    *else_target = new_target;
+                                    *else_arguments = new_arguments;
+                                    changed = true;
+                                }
+                            }
                         }
                     }
                 }
@@ -69,7 +81,9 @@ pub fn optimize_branches(mir: &mut Mir) {
     }
 }
 
-fn trivial_jump_targets(mir: &Mir) -> HashMap<String, (String, Vec<crate::ir::mir::MirValue>)> {
+fn trivial_jump_targets(
+    mir: &Mir,
+) -> HashMap<String, (MirControlTarget, Vec<crate::ir::mir::MirValue>)> {
     let mut map = HashMap::new();
     for block in mir.blocks() {
         if !block.parameters.is_empty() || !block.operations.is_empty() {
@@ -78,6 +92,9 @@ fn trivial_jump_targets(mir: &Mir) -> HashMap<String, (String, Vec<crate::ir::mi
         let Some(MirTerminator::Jump { target, arguments }) = block.terminator.as_ref() else {
             continue;
         };
+        if matches!(target, MirControlTarget::Direct(name) if name == &block.name) {
+            continue;
+        }
         map.insert(block.name.clone(), (target.clone(), arguments.clone()));
     }
     map

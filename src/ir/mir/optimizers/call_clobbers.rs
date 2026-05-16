@@ -180,10 +180,8 @@ fn resolve_canonical_pointer_region(
             }
 
             match defs.get(name) {
-                Some(MirOperationKind::Intrinsic {
-                    name, arguments, ..
-                }) if name == "lir.set" && arguments.len() == 1 => {
-                    resolve_canonical_pointer_region(&arguments[0], defs, depth + 1)
+                Some(MirOperationKind::Copy { value, .. }) => {
+                    resolve_canonical_pointer_region(value, defs, depth + 1)
                 }
                 Some(MirOperationKind::Cast { value, .. }) => {
                     resolve_canonical_pointer_region(value, defs, depth + 1)
@@ -208,10 +206,8 @@ fn resolve_stack_base(value: &MirValue, defs: &DefMap, depth: usize) -> Option<M
     match value {
         MirValue::Named { name, .. } if is_stack_base_name(name) => Some(MirAddressSpace::stack()),
         MirValue::Named { name, .. } => match defs.get(name) {
-            Some(MirOperationKind::Intrinsic {
-                name, arguments, ..
-            }) if name == "lir.set" && arguments.len() == 1 => {
-                resolve_stack_base(&arguments[0], defs, depth + 1)
+            Some(MirOperationKind::Copy { value, .. }) => {
+                resolve_stack_base(value, defs, depth + 1)
             }
             Some(MirOperationKind::Cast { value, .. }) => {
                 resolve_stack_base(value, defs, depth + 1)
@@ -259,10 +255,8 @@ fn resolve_stack_offset(
                 let (base, current, _) = resolve_stack_offset(lhs, defs, depth + 1)?;
                 Some((base, current - offset, bits))
             }
-            Some(MirOperationKind::Intrinsic {
-                name, arguments, ..
-            }) if name == "lir.set" && arguments.len() == 1 => {
-                resolve_stack_offset(&arguments[0], defs, depth + 1)
+            Some(MirOperationKind::Copy { value, .. }) => {
+                resolve_stack_offset(value, defs, depth + 1)
             }
             Some(MirOperationKind::Cast { value, .. }) => {
                 resolve_stack_offset(value, defs, depth + 1)

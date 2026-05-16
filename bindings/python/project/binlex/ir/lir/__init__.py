@@ -2,10 +2,12 @@
 
 from binlex_bindings.binlex.ir.lir import *
 from binlex_bindings.binlex.ir.lir import LirAbi as _LirAbiBinding
+from binlex_bindings.binlex.ir.lir import LirBlock as _LirBlockBinding
 from binlex_bindings.binlex.ir.lir import LirCpu as _LirCpuBinding
 from binlex_bindings.binlex.ir.lir import LirData as _LirDataBinding
 from binlex_bindings.binlex.ir.lir import Lir as _LirBinding
-from binlex_bindings.binlex.ir.lir import LirModule as _LirsBinding
+from binlex_bindings.binlex.ir.lir import LirFunction as _LirFunctionBinding
+from binlex_bindings.binlex.ir.lir import LirModule as _LirModuleBinding
 
 from binlex.core.architecture import Architecture
 
@@ -171,8 +173,8 @@ class LirAbi:
         return getattr(self._inner, name)
 
 
-class Lir:
-    """Wrapper around the Rust low-level IR object."""
+class LirInstruction:
+    """Wrapper around the Rust low-level instruction IR object."""
 
     def __init__(
         self,
@@ -235,8 +237,8 @@ class Lir:
     def optimize_intrinsics(self):
         self._inner.optimize_intrinsics()
 
-    def optimize_simplify(self):
-        self._inner.optimize_simplify()
+    def optimize(self):
+        self._inner.optimize()
 
     def text(self):
         return self._inner.text()
@@ -268,13 +270,12 @@ class LirData:
         return getattr(self._inner, name)
 
 
-class LirModule:
-    """Lir instructions plus attached static data."""
+class LirBlock:
+    """Block-scoped container for low-level instructions."""
 
-    def __init__(self, semantics=None, data=None):
-        semantics = [getattr(item, "_inner", item) for item in list(semantics or [])]
-        data = [getattr(item, "_inner", item) for item in list(data or [])]
-        self._inner = _LirsBinding(semantics=semantics, data=data)
+    def __init__(self, name=None, instructions=None):
+        instructions = [getattr(item, "_inner", item) for item in list(instructions or [])]
+        self._inner = _LirBlockBinding(name=name, instructions=instructions)
 
     @classmethod
     def _from_inner(cls, inner):
@@ -284,21 +285,151 @@ class LirModule:
 
     @classmethod
     def from_dict(cls, data):
-        return cls._from_inner(_LirsBinding.from_dict(data))
+        return cls._from_inner(_LirBlockBinding.from_dict(data))
 
-    def semantics(self):
-        return [Lir._from_inner(item) for item in self._inner.semantics()]
+    def instructions(self):
+        return [LirInstruction._from_inner(item) for item in self._inner.instructions()]
+
+    def set_instructions(self, instructions):
+        instructions = [getattr(item, "_inner", item) for item in instructions]
+        self._inner.set_instructions(instructions)
+
+    def append_instruction(self, instruction):
+        instruction = getattr(instruction, "_inner", instruction)
+        self._inner.append_instruction(instruction)
+
+    def optimize_constants(self):
+        self._inner.optimize_constants()
+
+    def optimize_identities(self):
+        self._inner.optimize_identities()
+
+    def optimize_casts(self):
+        self._inner.optimize_casts()
+
+    def optimize_noops(self):
+        self._inner.optimize_noops()
+
+    def optimize_branches(self):
+        self._inner.optimize_branches()
+
+    def optimize_intrinsics(self):
+        self._inner.optimize_intrinsics()
+
+    def optimize(self):
+        self._inner.optimize()
+
+    def text(self):
+        return self._inner.text()
+
+    def __str__(self):
+        return self.text()
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+
+class LirFunction:
+    """Function-scoped low-level IR."""
+
+    def __init__(self, name=None, abi=None, blocks=None):
+        abi = getattr(abi, "_inner", abi)
+        blocks = [getattr(item, "_inner", item) for item in list(blocks or [])]
+        self._inner = _LirFunctionBinding(name=name, abi=abi, blocks=blocks)
+
+    @classmethod
+    def _from_inner(cls, inner):
+        instance = cls.__new__(cls)
+        instance._inner = inner
+        return instance
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls._from_inner(_LirFunctionBinding.from_dict(data))
+
+    def abi(self):
+        abi = self._inner.abi()
+        if abi is None:
+            return None
+        return LirAbi._from_inner(abi)
+
+    def set_abi(self, abi):
+        abi = getattr(abi, "_inner", abi)
+        self._inner.set_abi(abi)
+
+    def blocks(self):
+        return [LirBlock._from_inner(item) for item in self._inner.blocks()]
+
+    def set_blocks(self, blocks):
+        blocks = [getattr(item, "_inner", item) for item in blocks]
+        self._inner.set_blocks(blocks)
+
+    def append_block(self, block):
+        block = getattr(block, "_inner", block)
+        self._inner.append_block(block)
+
+    def optimize_constants(self):
+        self._inner.optimize_constants()
+
+    def optimize_identities(self):
+        self._inner.optimize_identities()
+
+    def optimize_casts(self):
+        self._inner.optimize_casts()
+
+    def optimize_noops(self):
+        self._inner.optimize_noops()
+
+    def optimize_branches(self):
+        self._inner.optimize_branches()
+
+    def optimize_intrinsics(self):
+        self._inner.optimize_intrinsics()
+
+    def optimize(self):
+        self._inner.optimize()
+
+    def text(self):
+        return self._inner.text()
+
+    def __str__(self):
+        return self.text()
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+
+class LirModule:
+    """Module-scoped low-level IR."""
+
+    def __init__(self, name=None, functions=None, data=None):
+        functions = [getattr(item, "_inner", item) for item in list(functions or [])]
+        data = [getattr(item, "_inner", item) for item in list(data or [])]
+        self._inner = _LirModuleBinding(name=name, functions=functions, data=data)
+
+    @classmethod
+    def _from_inner(cls, inner):
+        instance = cls.__new__(cls)
+        instance._inner = inner
+        return instance
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls._from_inner(_LirModuleBinding.from_dict(data))
+
+    def functions(self):
+        return [LirFunction._from_inner(item) for item in self._inner.functions()]
 
     def data(self):
         return [LirData._from_inner(item) for item in self._inner.data()]
 
-    def set_semantics(self, semantics):
-        semantics = [getattr(item, "_inner", item) for item in semantics]
-        self._inner.set_semantics(semantics)
+    def set_functions(self, functions):
+        functions = [getattr(item, "_inner", item) for item in functions]
+        self._inner.set_functions(functions)
 
-    def append_semantic(self, semantic):
-        semantic = getattr(semantic, "_inner", semantic)
-        self._inner.append_semantic(semantic)
+    def append_function(self, function):
+        function = getattr(function, "_inner", function)
+        self._inner.append_function(function)
 
     def set_data(self, data):
         data = [getattr(item, "_inner", item) for item in data]
@@ -326,8 +457,8 @@ class LirModule:
     def optimize_intrinsics(self):
         self._inner.optimize_intrinsics()
 
-    def optimize_simplify(self):
-        self._inner.optimize_simplify()
+    def optimize(self):
+        self._inner.optimize()
 
     def text(self):
         return self._inner.text()
@@ -337,3 +468,9 @@ class LirModule:
 
     def __getattr__(self, name):
         return getattr(self._inner, name)
+
+
+try:
+    del Lir
+except NameError:
+    pass

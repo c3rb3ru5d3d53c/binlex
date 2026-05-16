@@ -1,6 +1,6 @@
 use crate::ir::lir::{
-    Lir, LirEffect, LirExpression, LirLocation, LirModule, LirOperationBinary, LirOperationCast,
-    LirOperationCompare, LirOperationUnary, LirTerminator,
+    Lir, LirEffect, LirExpression, LirFunction, LirLocation, LirModule, LirOperationBinary,
+    LirOperationCast, LirOperationCompare, LirOperationUnary, LirTerminator,
 };
 
 pub fn optimize_constants(lir: &mut Lir) {
@@ -10,9 +10,17 @@ pub fn optimize_constants(lir: &mut Lir) {
     optimize_terminator(&mut lir.terminator);
 }
 
+pub fn optimize_constants_function(function: &mut LirFunction) {
+    for block in &mut function.blocks {
+        for lir in &mut block.instructions {
+            optimize_constants(lir);
+        }
+    }
+}
+
 pub fn optimize_constants_module(module: &mut LirModule) {
-    for lir in &mut module.semantics {
-        optimize_constants(lir);
+    for function in &mut module.functions {
+        optimize_constants_function(function);
     }
 }
 

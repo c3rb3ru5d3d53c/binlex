@@ -32,4 +32,4 @@ pub use cfg::{mir_predecessors, mir_successors, reachable_blocks};
 pub use memory_state::MirMemorySummary;
 pub use register_state::{MirRegisterAliases, block_register_aliases, incoming_register_aliases};
 pub use targets::validate_targets;
-pub use use_def::{MirUseDef, build_use_def};
+pub use use_def::{MirUseDef, build_use_counts, build_use_def};

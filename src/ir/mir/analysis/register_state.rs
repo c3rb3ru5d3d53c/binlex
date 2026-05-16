@@ -99,13 +99,7 @@ fn alias_from_operation(
 ) -> Option<(String, crate::ir::mir::MirValue)> {
     let result = operation.result.clone()?;
     match &operation.kind {
-        MirOperationKind::Intrinsic {
-            name,
-            arguments,
-            result_types,
-        } if name == "lir.set" && arguments.len() == 1 && result_types.len() == 1 => {
-            Some((result, arguments[0].clone()))
-        }
+        MirOperationKind::Copy { value, .. } => Some((result, value.clone())),
         _ => None,
     }
 }

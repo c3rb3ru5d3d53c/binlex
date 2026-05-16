@@ -229,7 +229,9 @@ impl Drop for Image {
 
         if !self.cache {
             if let Err(error) = std::fs::remove_file(&self.path) {
-                eprintln!("Failed to remove file {}: {}", self.path, error);
+                if error.kind() != io::ErrorKind::NotFound {
+                    eprintln!("Failed to remove file {}: {}", self.path, error);
+                }
             }
         }
     }

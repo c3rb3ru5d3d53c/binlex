@@ -1,6 +1,6 @@
 use crate::ir::mir::Mir;
 
-pub fn optimize_simplify(mir: &mut Mir) {
+pub fn optimize(mir: &mut Mir) {
     mir.optimize_blocks();
     mir.optimize_abi();
     mir.optimize_returns();

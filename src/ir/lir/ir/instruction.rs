@@ -54,7 +54,7 @@ mod semantic_const_value_serde {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Lir {
+pub struct LirInstruction {
     pub version: u32,
     pub status: LirStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -78,24 +78,222 @@ pub struct LirData {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct LirModule {
+pub struct LirBlock {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub semantics: Vec<Lir>,
+    pub instructions: Vec<LirInstruction>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirFunction {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub abi: Option<LirAbi>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocks: Vec<LirBlock>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirModule {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub functions: Vec<LirFunction>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub data: Vec<LirData>,
 }
 
+impl LirBlock {
+    pub fn new(name: Option<String>) -> Self {
+        Self {
+            name,
+            instructions: Vec::new(),
+        }
+    }
+
+    pub fn instructions(&self) -> &[LirInstruction] {
+        &self.instructions
+    }
+
+    pub fn instructions_mut(&mut self) -> &mut Vec<LirInstruction> {
+        &mut self.instructions
+    }
+
+    pub fn append_instruction(&mut self, instruction: LirInstruction) {
+        self.instructions.push(instruction);
+    }
+
+    pub fn text(&self) -> String {
+        crate::ir::lir::format_lir_block(self)
+    }
+
+    pub fn optimize_constants(&mut self) {
+        for instruction in &mut self.instructions {
+            instruction.optimize_constants();
+        }
+    }
+
+    pub fn optimize_identities(&mut self) {
+        for instruction in &mut self.instructions {
+            instruction.optimize_identities();
+        }
+    }
+
+    pub fn optimize_casts(&mut self) {
+        for instruction in &mut self.instructions {
+            instruction.optimize_casts();
+        }
+    }
+
+    pub fn optimize_noops(&mut self) {
+        for instruction in &mut self.instructions {
+            instruction.optimize_noops();
+        }
+    }
+
+    pub fn optimize_branches(&mut self) {
+        for instruction in &mut self.instructions {
+            instruction.optimize_branches();
+        }
+    }
+
+    pub fn optimize_intrinsics(&mut self) {
+        for instruction in &mut self.instructions {
+            instruction.optimize_intrinsics();
+        }
+    }
+
+    pub fn optimize(&mut self) {
+        for instruction in &mut self.instructions {
+            instruction.optimize();
+        }
+    }
+}
+
+impl LirFunction {
+    pub fn new(name: Option<String>) -> Self {
+        Self {
+            name,
+            abi: None,
+            blocks: Vec::new(),
+        }
+    }
+
+    pub fn from_instructions(name: Option<String>, instructions: Vec<LirInstruction>) -> Self {
+        let abi = instructions
+            .iter()
+            .find_map(|instruction| instruction.abi.clone());
+        let mut block = LirBlock::new(Some("block_0".to_string()));
+        block.instructions = instructions;
+        Self {
+            name,
+            abi,
+            blocks: vec![block],
+        }
+    }
+
+    pub fn blocks(&self) -> &[LirBlock] {
+        &self.blocks
+    }
+
+    pub fn blocks_mut(&mut self) -> &mut Vec<LirBlock> {
+        &mut self.blocks
+    }
+
+    pub fn instructions(&self) -> Vec<&LirInstruction> {
+        self.blocks
+            .iter()
+            .flat_map(|block| block.instructions.iter())
+            .collect()
+    }
+
+    pub fn append_block(&mut self, block: LirBlock) {
+        self.blocks.push(block);
+    }
+
+    pub fn text(&self) -> String {
+        crate::ir::lir::format_lir_function(self)
+    }
+
+    pub fn optimize_constants(&mut self) {
+        for block in &mut self.blocks {
+            block.optimize_constants();
+        }
+    }
+
+    pub fn optimize_identities(&mut self) {
+        for block in &mut self.blocks {
+            block.optimize_identities();
+        }
+    }
+
+    pub fn optimize_casts(&mut self) {
+        for block in &mut self.blocks {
+            block.optimize_casts();
+        }
+    }
+
+    pub fn optimize_noops(&mut self) {
+        for block in &mut self.blocks {
+            block.optimize_noops();
+        }
+    }
+
+    pub fn optimize_branches(&mut self) {
+        for block in &mut self.blocks {
+            block.optimize_branches();
+        }
+    }
+
+    pub fn optimize_intrinsics(&mut self) {
+        for block in &mut self.blocks {
+            block.optimize_intrinsics();
+        }
+    }
+
+    pub fn optimize(&mut self) {
+        for block in &mut self.blocks {
+            block.optimize();
+        }
+    }
+}
+
 impl LirModule {
-    pub fn semantics(&self) -> &[Lir] {
-        &self.semantics
+    pub fn new(name: Option<String>) -> Self {
+        Self {
+            name,
+            functions: Vec::new(),
+            data: Vec::new(),
+        }
+    }
+
+    pub fn functions(&self) -> &[LirFunction] {
+        &self.functions
+    }
+
+    pub fn functions_mut(&mut self) -> &mut Vec<LirFunction> {
+        &mut self.functions
+    }
+
+    pub fn append_function(&mut self, function: LirFunction) {
+        self.functions.push(function);
+    }
+
+    pub fn instructions(&self) -> Vec<&LirInstruction> {
+        self.functions
+            .iter()
+            .flat_map(|function| function.instructions())
+            .collect()
+    }
+
+    pub fn primary_function(&self) -> Option<&LirFunction> {
+        self.functions.first()
     }
 
     pub fn data(&self) -> &[LirData] {
         &self.data
-    }
-
-    pub fn append_semantic(&mut self, semantic: Lir) {
-        self.semantics.push(semantic);
     }
 
     pub fn append_data(&mut self, data: LirData) {
@@ -107,31 +305,45 @@ impl LirModule {
     }
 
     pub fn optimize_constants(&mut self) {
-        crate::ir::lir::optimizers::constants::optimize_constants_module(self);
+        for function in &mut self.functions {
+            function.optimize_constants();
+        }
     }
 
     pub fn optimize_identities(&mut self) {
-        crate::ir::lir::optimizers::identities::optimize_identities_module(self);
+        for function in &mut self.functions {
+            function.optimize_identities();
+        }
     }
 
     pub fn optimize_casts(&mut self) {
-        crate::ir::lir::optimizers::casts::optimize_casts_module(self);
+        for function in &mut self.functions {
+            function.optimize_casts();
+        }
     }
 
     pub fn optimize_noops(&mut self) {
-        crate::ir::lir::optimizers::noops::optimize_noops_module(self);
+        for function in &mut self.functions {
+            function.optimize_noops();
+        }
     }
 
     pub fn optimize_branches(&mut self) {
-        crate::ir::lir::optimizers::branches::optimize_branches_module(self);
+        for function in &mut self.functions {
+            function.optimize_branches();
+        }
     }
 
     pub fn optimize_intrinsics(&mut self) {
-        crate::ir::lir::optimizers::intrinsics::optimize_intrinsics_module(self);
+        for function in &mut self.functions {
+            function.optimize_intrinsics();
+        }
     }
 
-    pub fn optimize_simplify(&mut self) {
-        crate::ir::lir::optimizers::simplify::optimize_simplify_module(self);
+    pub fn optimize(&mut self) {
+        for function in &mut self.functions {
+            function.optimize();
+        }
     }
 }
 
@@ -610,7 +822,7 @@ pub enum LirDiagnosticKind {
     Named { name: String },
 }
 
-impl Lir {
+impl LirInstruction {
     pub fn process(&self) -> LirJson {
         LirJson {
             version: self.version,
@@ -657,7 +869,7 @@ impl Lir {
     }
 
     pub fn text(&self) -> String {
-        crate::ir::lir::format_lir(self)
+        crate::ir::lir::format_lir_instruction(self)
     }
 
     pub fn optimize_constants(&mut self) {
@@ -684,8 +896,8 @@ impl Lir {
         crate::ir::lir::optimizers::optimize_intrinsics(self);
     }
 
-    pub fn optimize_simplify(&mut self) {
-        crate::ir::lir::optimizers::optimize_simplify(self);
+    pub fn optimize(&mut self) {
+        crate::ir::lir::optimizers::optimize(self);
     }
 }
 
@@ -1608,8 +1820,8 @@ fn default_terminator_for_kind(kind: LirTerminatorKind) -> LirTerminator {
 }
 
 impl LirJson {
-    pub fn into_semantics(self) -> Lir {
-        Lir {
+    pub fn into_instruction(self) -> LirInstruction {
+        LirInstruction {
             version: self.version,
             status: self.status,
             abi: self.abi,
@@ -1620,16 +1832,20 @@ impl LirJson {
             diagnostics: self.diagnostics,
         }
     }
+
+    pub fn into_semantics(self) -> LirInstruction {
+        self.into_instruction()
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Lir, LirEncoding, LirExpression, LirStatus, LirTerminator};
+    use super::{LirEncoding, LirExpression, LirInstruction, LirStatus, LirTerminator};
     use crate::ir::lir::{LirAbi, LirAbiKind, LirCpu, LirCpuKind};
 
     #[test]
     fn semantic_const_json_serializes_u128_as_string() {
-        let semantics = Lir {
+        let semantics = LirInstruction {
             version: 1,
             status: LirStatus::Complete,
             abi: Some(
@@ -1700,7 +1916,7 @@ mod tests {
 
         let json: super::LirJson =
             serde_json::from_value(payload).expect("deserialize semantics json");
-        let semantics = json.into_semantics();
+        let semantics = json.into_instruction();
 
         match semantics.terminator {
             LirTerminator::Return {

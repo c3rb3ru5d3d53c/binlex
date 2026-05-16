@@ -90,10 +90,8 @@ fn resolve_stack_offset(
                 let (base, current, _) = resolve_stack_offset(lhs, defs, depth + 1)?;
                 Some((base, current - offset, bits))
             }
-            Some(MirOperationKind::Intrinsic {
-                name, arguments, ..
-            }) if name == "lir.set" && arguments.len() == 1 => {
-                resolve_stack_offset(&arguments[0], defs, depth + 1)
+            Some(MirOperationKind::Copy { value, .. }) => {
+                resolve_stack_offset(value, defs, depth + 1)
             }
             Some(MirOperationKind::Cast { value, .. }) => {
                 resolve_stack_offset(value, defs, depth + 1)

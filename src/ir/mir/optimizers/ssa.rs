@@ -1,8 +1,9 @@
-use crate::ir::mir::analysis::{mir_predecessors, reverse_post_order};
+use crate::ir::mir::analysis::{mir_predecessors, mir_successors, reverse_post_order};
 use crate::ir::mir::{
-    Mir, MirBlockParameter, MirOperation, MirOperationKind, MirTerminator, MirType, MirValue,
+    Mir, MirBlockParameter, MirControlTarget, MirOperation, MirOperationKind, MirTerminator,
+    MirType, MirValue,
 };
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{HashMap, HashSet};
 
 type VersionMap = HashMap<String, MirValue>;
 
@@ -15,6 +16,7 @@ struct MergeParameter {
 
 pub fn optimize_ssa(mir: &mut Mir) {
     let predecessors = mir_predecessors(mir);
+    let successors = mir_successors(mir);
     let order = reverse_post_order(mir);
     let indices = mir
         .blocks()
@@ -22,63 +24,61 @@ pub fn optimize_ssa(mir: &mut Mir) {
         .enumerate()
         .map(|(index, block)| (block.name.clone(), index))
         .collect::<HashMap<_, _>>();
+    let live_in = live_in_bases(mir, &order, &successors);
     let mut outgoing = HashMap::<String, VersionMap>::new();
-    let mut changed = true;
+    clear_ssa_edges(mir);
+    let mut counters = HashMap::<String, usize>::new();
 
-    while changed {
-        changed = false;
-        clear_ssa_edges(mir);
-        let mut counters = HashMap::<String, usize>::new();
+    for block_name in &order {
+        let Some(index) = indices.get(block_name).copied() else {
+            continue;
+        };
 
-        for block_name in &order {
-            let Some(index) = indices.get(block_name).copied() else {
-                continue;
-            };
+        let (mut current, merges) = incoming_versions(
+            block_name,
+            &predecessors,
+            &outgoing,
+            live_in.get(block_name),
+        );
 
-            let (mut current, merges) = incoming_versions(block_name, &predecessors, &outgoing);
+        for merge in &merges {
+            current.insert(
+                merge.base.clone(),
+                MirValue::named(merge.name.clone(), merge.ty.clone()),
+            );
+        }
 
-            for merge in &merges {
-                current.insert(
-                    merge.base.clone(),
-                    MirValue::named(merge.name.clone(), merge.ty.clone()),
-                );
-            }
+        wire_merge_arguments(mir, &indices, &predecessors, &outgoing, block_name, &merges);
 
-            wire_merge_arguments(mir, &indices, &predecessors, &outgoing, block_name, &merges);
+        let block = &mut mir.blocks_mut()[index];
+        block.parameters = merges
+            .iter()
+            .map(|merge| MirBlockParameter::new(Some(merge.name.clone()), merge.ty.clone()))
+            .collect();
 
-            let block = &mut mir.blocks_mut()[index];
-            block.parameters = merges
-                .iter()
-                .map(|merge| MirBlockParameter::new(Some(merge.name.clone()), merge.ty.clone()))
-                .collect();
-
-            for parameter in &block.parameters {
-                if let Some(name) = parameter.name.as_ref() {
-                    let base = base_name(name);
-                    current.insert(base, MirValue::named(name.clone(), parameter.ty.clone()));
-                }
-            }
-
-            for operation in &mut block.operations {
-                rewrite_operation(operation, &current);
-                if let Some(result) = operation.result.as_mut() {
-                    let base = base_name(result);
-                    let versioned = next_version(&base, &mut counters);
-                    let ty = result_type(&operation.kind);
-                    current.insert(base, MirValue::named(versioned.clone(), ty));
-                    *result = versioned;
-                }
-            }
-
-            if let Some(terminator) = block.terminator.as_mut() {
-                rewrite_terminator(terminator, &current);
-            }
-
-            if outgoing.get(&block.name) != Some(&current) {
-                outgoing.insert(block.name.clone(), current);
-                changed = true;
+        for parameter in &block.parameters {
+            if let Some(name) = parameter.name.as_ref() {
+                let base = base_name(name);
+                current.insert(base, MirValue::named(name.clone(), parameter.ty.clone()));
             }
         }
+
+        for operation in &mut block.operations {
+            rewrite_operation(operation, &current);
+            if let Some(result) = operation.result.as_mut() {
+                let base = base_name(result);
+                let versioned = next_version(&base, &mut counters);
+                let ty = result_type(&operation.kind);
+                current.insert(base, MirValue::named(versioned.clone(), ty));
+                *result = versioned;
+            }
+        }
+
+        if let Some(terminator) = block.terminator.as_mut() {
+            rewrite_terminator(terminator, &current);
+        }
+
+        outgoing.insert(block.name.clone(), current);
     }
 }
 
@@ -107,6 +107,7 @@ fn incoming_versions(
     block: &str,
     predecessors: &HashMap<String, Vec<String>>,
     outgoing: &HashMap<String, VersionMap>,
+    live_in: Option<&HashSet<String>>,
 ) -> (VersionMap, Vec<MergeParameter>) {
     let Some(preds) = predecessors.get(block) else {
         return (VersionMap::new(), Vec::new());
@@ -118,18 +119,14 @@ fn incoming_versions(
         return (VersionMap::new(), Vec::new());
     };
 
-    let mut shared = first_versions.clone();
+    let mut shared = VersionMap::new();
     let mut merges = Vec::new();
-    let all_names = preds
-        .iter()
-        .filter_map(|predecessor| outgoing.get(predecessor))
-        .flat_map(|versions| versions.keys().cloned())
-        .collect::<BTreeSet<_>>();
+    let Some(live_bases) = live_in else {
+        return (shared, merges);
+    };
 
-    for name in all_names {
-        let base = base_name(&name);
-        let Some(first_value) = first_versions.get(&base).cloned() else {
-            shared.remove(&base);
+    for base in live_bases {
+        let Some(first_value) = first_versions.get(base).cloned() else {
             continue;
         };
 
@@ -137,7 +134,7 @@ fn incoming_versions(
         for predecessor in rest {
             let Some(value) = outgoing
                 .get(predecessor)
-                .and_then(|versions| versions.get(&base))
+                .and_then(|versions| versions.get(base))
             else {
                 agree = false;
                 break;
@@ -149,21 +146,184 @@ fn incoming_versions(
         }
 
         if agree {
-            shared.insert(base, first_value);
+            shared.insert(base.clone(), first_value);
             continue;
         }
 
-        shared.remove(&base);
         if let Some(ty) = value_type(&first_value) {
             merges.push(MergeParameter {
                 name: format!("{base}.phi.{block}"),
-                base,
+                base: base.clone(),
                 ty,
             });
         }
     }
 
     (shared, merges)
+}
+
+fn live_in_bases(
+    mir: &Mir,
+    order: &[String],
+    successors: &HashMap<String, Vec<String>>,
+) -> HashMap<String, HashSet<String>> {
+    let mut uses = HashMap::<String, HashSet<String>>::new();
+    let mut defs = HashMap::<String, HashSet<String>>::new();
+    for block in mir.blocks() {
+        let (block_uses, block_defs) = block_use_def(block);
+        uses.insert(block.name.clone(), block_uses);
+        defs.insert(block.name.clone(), block_defs);
+    }
+
+    let mut live_in = HashMap::<String, HashSet<String>>::new();
+    let mut live_out = HashMap::<String, HashSet<String>>::new();
+
+    loop {
+        let mut changed = false;
+        for block_name in order.iter().rev() {
+            let mut out = HashSet::<String>::new();
+            if let Some(edges) = successors.get(block_name) {
+                for successor in edges {
+                    if let Some(successor_live_in) = live_in.get(successor) {
+                        out.extend(successor_live_in.iter().cloned());
+                    }
+                }
+            }
+
+            let mut incoming = uses.get(block_name).cloned().unwrap_or_default();
+            let block_defs = defs.get(block_name).cloned().unwrap_or_default();
+            for name in &out {
+                if !block_defs.contains(name) {
+                    incoming.insert(name.clone());
+                }
+            }
+
+            if live_out.get(block_name) != Some(&out) {
+                live_out.insert(block_name.clone(), out);
+                changed = true;
+            }
+            if live_in.get(block_name) != Some(&incoming) {
+                live_in.insert(block_name.clone(), incoming);
+                changed = true;
+            }
+        }
+
+        if !changed {
+            break;
+        }
+    }
+
+    live_in
+}
+
+fn block_use_def(block: &crate::ir::mir::MirBlock) -> (HashSet<String>, HashSet<String>) {
+    let mut uses = HashSet::<String>::new();
+    let mut defs = HashSet::<String>::new();
+
+    for operation in &block.operations {
+        for used in operation_bases(&operation.kind) {
+            if !defs.contains(&used) {
+                uses.insert(used);
+            }
+        }
+        if let Some(result) = operation.result.as_ref() {
+            defs.insert(base_name(result));
+        }
+    }
+
+    if let Some(terminator) = block.terminator.as_ref() {
+        for used in terminator_bases(terminator) {
+            if !defs.contains(&used) {
+                uses.insert(used);
+            }
+        }
+    }
+
+    (uses, defs)
+}
+
+fn operation_bases(kind: &MirOperationKind) -> Vec<String> {
+    match kind {
+        MirOperationKind::Add { lhs, rhs, .. }
+        | MirOperationKind::Sub { lhs, rhs, .. }
+        | MirOperationKind::Mul { lhs, rhs, .. }
+        | MirOperationKind::FAdd { lhs, rhs, .. }
+        | MirOperationKind::FSub { lhs, rhs, .. }
+        | MirOperationKind::FMul { lhs, rhs, .. }
+        | MirOperationKind::FDiv { lhs, rhs, .. }
+        | MirOperationKind::And { lhs, rhs, .. }
+        | MirOperationKind::Or { lhs, rhs, .. }
+        | MirOperationKind::Xor { lhs, rhs, .. }
+        | MirOperationKind::Shl { lhs, rhs, .. }
+        | MirOperationKind::LShr { lhs, rhs, .. }
+        | MirOperationKind::AShr { lhs, rhs, .. }
+        | MirOperationKind::UDiv { lhs, rhs, .. }
+        | MirOperationKind::SDiv { lhs, rhs, .. }
+        | MirOperationKind::URem { lhs, rhs, .. }
+        | MirOperationKind::SRem { lhs, rhs, .. }
+        | MirOperationKind::RotateLeft { lhs, rhs, .. }
+        | MirOperationKind::RotateRight { lhs, rhs, .. }
+        | MirOperationKind::Icmp { lhs, rhs, .. }
+        | MirOperationKind::Fcmp { lhs, rhs, .. } => vec_from_values([lhs, rhs]),
+        MirOperationKind::Select {
+            condition,
+            when_true,
+            when_false,
+            ..
+        } => vec_from_values([condition, when_true, when_false]),
+        MirOperationKind::Concat { parts, .. } => parts.iter().filter_map(value_base).collect(),
+        MirOperationKind::Copy { value, .. }
+        | MirOperationKind::Extract { value, .. }
+        | MirOperationKind::Not { value, .. }
+        | MirOperationKind::Neg { value, .. }
+        | MirOperationKind::Popcount { value, .. }
+        | MirOperationKind::CountLeadingZeros { value, .. }
+        | MirOperationKind::CountTrailingZeros { value, .. }
+        | MirOperationKind::Load { address: value, .. }
+        | MirOperationKind::Cast { value, .. } => vec_from_values([value]),
+        MirOperationKind::Store { address, value, .. } => vec_from_values([address, value]),
+        MirOperationKind::MemoryCopy {
+            src_address,
+            dst_address,
+            count,
+            decrement,
+            ..
+        } => vec_from_values([src_address, dst_address, count, decrement]),
+        MirOperationKind::Call { arguments, .. }
+        | MirOperationKind::Intrinsic { arguments, .. } => {
+            arguments.iter().filter_map(value_base).collect()
+        }
+    }
+}
+
+fn terminator_bases(terminator: &MirTerminator) -> Vec<String> {
+    match terminator {
+        MirTerminator::Jump { arguments, .. } | MirTerminator::Return { values: arguments } => {
+            arguments.iter().filter_map(value_base).collect()
+        }
+        MirTerminator::CondBr {
+            condition,
+            then_arguments,
+            else_arguments,
+            ..
+        } => std::iter::once(condition)
+            .chain(then_arguments.iter())
+            .chain(else_arguments.iter())
+            .filter_map(value_base)
+            .collect(),
+        MirTerminator::Trap | MirTerminator::Unreachable => Vec::new(),
+    }
+}
+
+fn value_base(value: &MirValue) -> Option<String> {
+    match value {
+        MirValue::Named { name, .. } => Some(base_name(name)),
+        _ => None,
+    }
+}
+
+fn vec_from_values<const N: usize>(values: [&MirValue; N]) -> Vec<String> {
+    values.into_iter().filter_map(value_base).collect()
 }
 
 fn wire_merge_arguments(
@@ -205,7 +365,11 @@ fn append_terminator_argument(terminator: &mut MirTerminator, target: &str, valu
         MirTerminator::Jump {
             target: edge_target,
             arguments,
-        } if edge_target == target => arguments.push(value),
+        } => {
+            if direct_target_name(edge_target) == Some(target) {
+                arguments.push(value);
+            }
+        }
         MirTerminator::CondBr {
             then_target,
             then_arguments,
@@ -213,17 +377,21 @@ fn append_terminator_argument(terminator: &mut MirTerminator, target: &str, valu
             else_arguments,
             ..
         } => {
-            if then_target == target {
+            if matches!(then_target, MirControlTarget::Direct(name) if name == target) {
                 then_arguments.push(value.clone());
             }
-            if else_target == target {
+            if matches!(else_target, MirControlTarget::Direct(name) if name == target) {
                 else_arguments.push(value);
             }
         }
-        MirTerminator::Jump { .. }
-        | MirTerminator::Return { .. }
-        | MirTerminator::Trap
-        | MirTerminator::Unreachable => {}
+        MirTerminator::Return { .. } | MirTerminator::Trap | MirTerminator::Unreachable => {}
+    }
+}
+
+fn direct_target_name(target: &MirControlTarget) -> Option<&str> {
+    match target {
+        MirControlTarget::Direct(name) => Some(name.as_str()),
+        MirControlTarget::FunctionIndirect(_) | MirControlTarget::BlockIndirect(_) => None,
     }
 }
 
@@ -232,13 +400,24 @@ fn rewrite_operation(operation: &mut MirOperation, current: &VersionMap) {
         MirOperationKind::Add { lhs, rhs, .. }
         | MirOperationKind::Sub { lhs, rhs, .. }
         | MirOperationKind::Mul { lhs, rhs, .. }
+        | MirOperationKind::FAdd { lhs, rhs, .. }
+        | MirOperationKind::FSub { lhs, rhs, .. }
+        | MirOperationKind::FMul { lhs, rhs, .. }
+        | MirOperationKind::FDiv { lhs, rhs, .. }
         | MirOperationKind::And { lhs, rhs, .. }
         | MirOperationKind::Or { lhs, rhs, .. }
         | MirOperationKind::Xor { lhs, rhs, .. }
         | MirOperationKind::Shl { lhs, rhs, .. }
         | MirOperationKind::LShr { lhs, rhs, .. }
         | MirOperationKind::AShr { lhs, rhs, .. }
-        | MirOperationKind::Icmp { lhs, rhs, .. } => {
+        | MirOperationKind::UDiv { lhs, rhs, .. }
+        | MirOperationKind::SDiv { lhs, rhs, .. }
+        | MirOperationKind::URem { lhs, rhs, .. }
+        | MirOperationKind::SRem { lhs, rhs, .. }
+        | MirOperationKind::RotateLeft { lhs, rhs, .. }
+        | MirOperationKind::RotateRight { lhs, rhs, .. }
+        | MirOperationKind::Icmp { lhs, rhs, .. }
+        | MirOperationKind::Fcmp { lhs, rhs, .. } => {
             rewrite_value(lhs, current);
             rewrite_value(rhs, current);
         }
@@ -252,15 +431,36 @@ fn rewrite_operation(operation: &mut MirOperation, current: &VersionMap) {
             rewrite_value(when_true, current);
             rewrite_value(when_false, current);
         }
-        MirOperationKind::Extract { value, .. }
+        MirOperationKind::Concat { parts, .. } => {
+            for part in parts {
+                rewrite_value(part, current);
+            }
+        }
+        MirOperationKind::Copy { value, .. }
+        | MirOperationKind::Extract { value, .. }
         | MirOperationKind::Not { value, .. }
+        | MirOperationKind::Neg { value, .. }
         | MirOperationKind::Popcount { value, .. } => rewrite_value(value, current),
+        MirOperationKind::CountLeadingZeros { value, .. }
+        | MirOperationKind::CountTrailingZeros { value, .. } => rewrite_value(value, current),
         MirOperationKind::Load { address, .. } => {
             rewrite_value(address, current);
         }
         MirOperationKind::Store { address, value, .. } => {
             rewrite_value(address, current);
             rewrite_value(value, current);
+        }
+        MirOperationKind::MemoryCopy {
+            src_address,
+            dst_address,
+            count,
+            decrement,
+            ..
+        } => {
+            rewrite_value(src_address, current);
+            rewrite_value(dst_address, current);
+            rewrite_value(count, current);
+            rewrite_value(decrement, current);
         }
         MirOperationKind::Cast { value, .. } => {
             rewrite_value(value, current);
@@ -315,27 +515,43 @@ fn rewrite_value(value: &mut MirValue, current: &VersionMap) {
 
 fn result_type(kind: &MirOperationKind) -> MirType {
     match kind {
-        MirOperationKind::Add { ty, .. }
+        MirOperationKind::Copy { ty, .. }
+        | MirOperationKind::Add { ty, .. }
         | MirOperationKind::Sub { ty, .. }
         | MirOperationKind::Mul { ty, .. }
+        | MirOperationKind::FAdd { ty, .. }
+        | MirOperationKind::FSub { ty, .. }
+        | MirOperationKind::FMul { ty, .. }
+        | MirOperationKind::FDiv { ty, .. }
         | MirOperationKind::And { ty, .. }
         | MirOperationKind::Or { ty, .. }
         | MirOperationKind::Xor { ty, .. }
         | MirOperationKind::Shl { ty, .. }
         | MirOperationKind::LShr { ty, .. }
         | MirOperationKind::AShr { ty, .. }
+        | MirOperationKind::UDiv { ty, .. }
+        | MirOperationKind::SDiv { ty, .. }
+        | MirOperationKind::URem { ty, .. }
+        | MirOperationKind::SRem { ty, .. }
+        | MirOperationKind::RotateLeft { ty, .. }
+        | MirOperationKind::RotateRight { ty, .. }
         | MirOperationKind::Select { ty, .. }
+        | MirOperationKind::Concat { ty, .. }
         | MirOperationKind::Extract { ty, .. }
         | MirOperationKind::Not { ty, .. }
+        | MirOperationKind::Neg { ty, .. }
         | MirOperationKind::Popcount { ty, .. }
+        | MirOperationKind::CountLeadingZeros { ty, .. }
+        | MirOperationKind::CountTrailingZeros { ty, .. }
         | MirOperationKind::Load { ty, .. }
         | MirOperationKind::Icmp { ty, .. }
+        | MirOperationKind::Fcmp { ty, .. }
         | MirOperationKind::Cast { ty, .. } => ty.clone(),
         MirOperationKind::Call { result_types, .. }
         | MirOperationKind::Intrinsic { result_types, .. } => {
             result_types.first().cloned().unwrap_or_else(MirType::void)
         }
-        MirOperationKind::Store { .. } => MirType::void(),
+        MirOperationKind::Store { .. } | MirOperationKind::MemoryCopy { .. } => MirType::void(),
     }
 }
 

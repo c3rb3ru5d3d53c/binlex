@@ -7,9 +7,9 @@ use crate::ir::lir::{
     Lir, LirAbi, LirCpu, LirCpuKind, LirData, LirEffect, LirExpression, LirLocation, LirModule,
     LirTerminator,
 };
-use crate::lifters::llvm::optimizers::Optimizers;
-use crate::lifters::llvm::prepare::prepare_instruction_semantics;
-use crate::lifters::llvm::verify::verify_module;
+use crate::ir::llvm::optimizers::Optimizers;
+use crate::ir::llvm::prepare::prepare_instruction_semantics;
+use crate::ir::llvm::verify::verify_module;
 use inkwell::OptimizationLevel;
 use inkwell::attributes::AttributeLoc;
 use inkwell::basic_block::BasicBlock;
@@ -262,18 +262,22 @@ impl Lifter {
     ) -> Result<(), Error> {
         self.bind_architecture()?;
         self.declare_semantics_data(&semantics.data)?;
+        let instructions = semantics
+            .instructions()
+            .into_iter()
+            .cloned()
+            .collect::<Vec<_>>();
         let abi = self
             .resolve_override_abi(abi)?
-            .or_else(|| self.resolve_semantics_abi(&semantics.semantics));
+            .or_else(|| self.resolve_semantics_abi(&instructions));
         let name = self.next_emitted_name("semantic_block");
         let function_arguments =
-            self.active_function_arguments_for_semantics(&semantics.semantics, abi.as_ref());
+            self.active_function_arguments_for_semantics(&instructions, abi.as_ref());
         let function = self.add_function_for_lift(&name, abi.clone(), &function_arguments);
-        let stack_layouts =
-            self.collect_stack_layouts_for_semantics(&semantics.semantics, abi.as_ref());
+        let stack_layouts = self.collect_stack_layouts_for_semantics(&instructions, abi.as_ref());
         let mut lowering =
             self.lowering_context(function, abi, function_arguments, stack_layouts)?;
-        for semantics in &semantics.semantics {
+        for semantics in &instructions {
             lowering.lower_instruction_semantics(semantics)?;
         }
         lowering.finish()?;
@@ -297,20 +301,24 @@ impl Lifter {
     ) -> Result<(), Error> {
         self.bind_architecture()?;
         self.declare_semantics_data(&semantics.data)?;
+        let instructions = semantics
+            .instructions()
+            .into_iter()
+            .cloned()
+            .collect::<Vec<_>>();
         let abi = self
             .resolve_override_abi(abi)?
-            .or_else(|| self.resolve_semantics_abi(&semantics.semantics));
+            .or_else(|| self.resolve_semantics_abi(&instructions));
         if !self.emitted.insert(name.to_string()) {
             return Ok(());
         }
         let function_arguments =
-            self.active_function_arguments_for_semantics(&semantics.semantics, abi.as_ref());
+            self.active_function_arguments_for_semantics(&instructions, abi.as_ref());
         let function = self.add_function_for_lift(name, abi.clone(), &function_arguments);
-        let stack_layouts =
-            self.collect_stack_layouts_for_semantics(&semantics.semantics, abi.as_ref());
+        let stack_layouts = self.collect_stack_layouts_for_semantics(&instructions, abi.as_ref());
         let mut lowering =
             self.lowering_context(function, abi, function_arguments, stack_layouts)?;
-        for semantics in &semantics.semantics {
+        for semantics in &instructions {
             lowering.lower_instruction_semantics(semantics)?;
         }
         lowering.finish()?;

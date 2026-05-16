@@ -36,11 +36,14 @@ use crate::hashing::SHA256;
 use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
 use crate::hex;
-use crate::ir::lir::{LirAbi, LirCpu};
-use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
+use crate::ir::lir::{
+    LirAbi, LirCpu, LirEffect, LirExpression, LirFunction, LirLocation, LirOperationBinary,
+    LirTerminator,
+};
+use crate::ir::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
+use crate::ir::mir::MirFunction;
 #[cfg(not(target_os = "windows"))]
-use crate::lifters::vex::{Lifter as VexLifter, VexJson};
-use crate::lifters::{LiftedFunction, Lifter, LifterBackend, LifterError};
+use crate::ir::vex::{Lifter as VexLifter, VexJson};
 use crate::metadata::Attributes;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -527,29 +530,22 @@ impl<'function> Function<'function> {
         .embed_function(self)
     }
 
-    /// Return a lifted function handle for this function using the default backend.
-    pub fn lift(&self) -> Result<LiftedFunction, LifterError> {
-        let cpu = LirCpu::from_architecture(self.architecture())
-            .map_err(|error| LifterError::Io(Error::other(error.to_string())))?;
-        let lifter = Lifter::new(cpu, self.cfg.config.clone(), LifterBackend::Default, None)?;
-        lifter.lift_function(self, None)?;
-        lifter
-            .functions()?
-            .into_iter()
-            .next()
-            .ok_or_else(|| LifterError::Io(Error::other("lifted function handle missing")))
+    pub fn llvm(&self, abi: Option<&LirAbi>, triple: Option<String>) -> Result<LlvmLifter, Error> {
+        let mut lifter = if let Some(triple) = triple {
+            let cpu = LirCpu::from_architecture(self.architecture())
+                .map_err(|error| Error::other(error.to_string()))?;
+            LlvmLifter::new(cpu, self.cfg.config.clone(), Some(triple))
+                .map_err(|error| Error::other(error.to_string()))?
+        } else {
+            LlvmLifter::from_architecture(self.architecture(), self.cfg.config.clone())
+        };
+        lifter.lift_function(self, abi)?;
+        Ok(lifter)
     }
 
-    /// Return a lifter artifact for this function using the provided backend, ABI, and optional triple.
-    pub fn lift_with(
-        &self,
-        backend: LifterBackend,
-        abi: Option<&LirAbi>,
-        triple: Option<String>,
-    ) -> Result<Lifter, LifterError> {
-        let cpu = LirCpu::from_architecture(self.architecture())
-            .map_err(|error| LifterError::Io(Error::other(error.to_string())))?;
-        let lifter = Lifter::new(cpu, self.cfg.config.clone(), backend, triple)?;
+    #[cfg(not(target_os = "windows"))]
+    pub fn vex(&self, abi: Option<&LirAbi>) -> Result<VexLifter, Error> {
+        let mut lifter = VexLifter::new(self.cfg.config.clone());
         lifter.lift_function(self, abi)?;
         Ok(lifter)
     }
@@ -744,6 +740,202 @@ impl<'function> Function<'function> {
             .keys()
             .filter_map(|&block_address| Block::new(block_address, self.cfg).ok())
             .collect()
+    }
+
+    fn const_u64_value(expression: &LirExpression) -> Option<u64> {
+        match expression {
+            LirExpression::Const { value, .. } => u64::try_from(*value).ok(),
+            _ => None,
+        }
+    }
+
+    fn read_register_name(expression: &LirExpression) -> Option<&str> {
+        match expression {
+            LirExpression::Read(location) => match location.as_ref() {
+                LirLocation::Register { name, .. } => Some(name.as_str()),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    fn resolve_indirect_symbol_address(
+        encoding: Option<&crate::ir::lir::LirEncoding>,
+        expression: &LirExpression,
+        register_map: &BTreeMap<String, LirExpression>,
+        depth: usize,
+    ) -> Option<u64> {
+        if depth > 4 {
+            return None;
+        }
+
+        match expression {
+            LirExpression::Binary {
+                op, left, right, ..
+            } if matches!(op, LirOperationBinary::Add)
+                && matches!(Self::read_register_name(left), Some("rip" | "eip")) =>
+            {
+                let displacement = Self::const_u64_value(right)?;
+                let encoding = encoding?;
+                Some(encoding.address + encoding.bytes.len() as u64 + displacement)
+            }
+            LirExpression::Read(location) => {
+                if let LirLocation::Register { name, .. } = location.as_ref()
+                    && let Some(aliased) = register_map.get(name)
+                {
+                    return Self::resolve_indirect_symbol_address(
+                        encoding,
+                        aliased,
+                        register_map,
+                        depth + 1,
+                    );
+                }
+                None
+            }
+            _ => Self::const_u64_value(expression),
+        }
+    }
+
+    fn resolve_indirect_symbol_name(
+        encoding: Option<&crate::ir::lir::LirEncoding>,
+        target: &LirExpression,
+        symbol_map: &BTreeMap<u64, String>,
+        register_map: &BTreeMap<String, LirExpression>,
+        depth: usize,
+    ) -> Option<String> {
+        if depth > 4 {
+            return None;
+        }
+
+        if let LirExpression::Read(location) = target
+            && let LirLocation::Register { name, .. } = location.as_ref()
+            && let Some(aliased) = register_map.get(name)
+        {
+            return Self::resolve_indirect_symbol_name(
+                encoding,
+                aliased,
+                symbol_map,
+                register_map,
+                depth + 1,
+            );
+        }
+
+        let (space, addr) = match target {
+            LirExpression::Load { space, addr, .. } => (space, addr.as_ref()),
+            _ => return None,
+        };
+
+        if !matches!(space, crate::ir::lir::LirAddressSpace::Default) {
+            return None;
+        }
+
+        let address = Self::resolve_indirect_symbol_address(encoding, addr, register_map, 0)?;
+        symbol_map.get(&address).cloned()
+    }
+
+    fn rewrite_lir_function_symbols(
+        lir: &mut LirFunction,
+        symbol_map: &BTreeMap<u64, String>,
+    ) -> bool {
+        if symbol_map.is_empty() {
+            return false;
+        }
+
+        let mut changed = false;
+
+        for block in &mut lir.blocks {
+            let mut register_map = BTreeMap::<String, LirExpression>::new();
+
+            for instruction in &mut block.instructions {
+                let encoding = instruction.encoding.as_ref();
+                for effect in &instruction.effects {
+                    if let LirEffect::Set {
+                        dst: LirLocation::Register { name, .. },
+                        expression,
+                    } = effect
+                    {
+                        register_map.insert(name.clone(), expression.clone());
+                    }
+                }
+
+                match &mut instruction.terminator {
+                    LirTerminator::Call { target, .. } | LirTerminator::Jump { target } => {
+                        if let Some(name) = Self::resolve_indirect_symbol_name(
+                            encoding,
+                            target,
+                            symbol_map,
+                            &register_map,
+                            0,
+                        ) {
+                            *target = LirExpression::Function { name, bits: 64 };
+                            changed = true;
+                        }
+                    }
+                    LirTerminator::Branch {
+                        true_target,
+                        false_target,
+                        ..
+                    } => {
+                        if let Some(name) = Self::resolve_indirect_symbol_name(
+                            encoding,
+                            true_target,
+                            symbol_map,
+                            &register_map,
+                            0,
+                        ) {
+                            *true_target = LirExpression::Function { name, bits: 64 };
+                            changed = true;
+                        }
+                        if let Some(name) = Self::resolve_indirect_symbol_name(
+                            encoding,
+                            false_target,
+                            symbol_map,
+                            &register_map,
+                            0,
+                        ) {
+                            *false_target = LirExpression::Function { name, bits: 64 };
+                            changed = true;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        changed
+    }
+
+    pub fn lir(&self) -> Result<LirFunction, Error> {
+        let blocks = self
+            .blocks()
+            .into_iter()
+            .map(|block| block.lir())
+            .collect::<Result<Vec<_>, Error>>()?;
+        let abi = blocks
+            .iter()
+            .flat_map(|block| block.instructions.iter())
+            .find_map(|instruction| instruction.abi.clone());
+        Ok(LirFunction {
+            name: Some(format!("function_{:x}", self.address)),
+            abi,
+            blocks,
+        })
+    }
+
+    pub fn mir(&self) -> Result<MirFunction, Error> {
+        let mut lir = self.lir()?;
+        lir.optimize();
+        MirFunction::from_lir(None, &lir).map_err(|error| Error::other(error.to_string()))
+    }
+
+    pub fn mir_with_symbols(
+        &self,
+        symbol_map: &BTreeMap<u64, String>,
+    ) -> Result<MirFunction, Error> {
+        let mut lir = self.lir()?;
+        Self::rewrite_lir_function_symbols(&mut lir, symbol_map);
+        lir.optimize();
+        MirFunction::from_lir(None, &lir).map_err(|error| Error::other(error.to_string()))
     }
 
     /// Retrieves all blocks that fall within the contiguous reconstruction region.

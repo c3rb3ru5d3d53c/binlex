@@ -62,7 +62,7 @@ pub use memory_aliases::optimize_memory_aliases;
 pub use memory_state::optimize_memory_state;
 pub use register_state::optimize_register_state;
 pub use returns::optimize_returns;
-pub use simplify::optimize_simplify;
+pub use simplify::optimize;
 pub use ssa::optimize_ssa;
 pub use ssa_liveness::optimize_ssa_liveness;
 pub use stack::optimize_stack;

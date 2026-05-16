@@ -160,10 +160,7 @@ fn x87_binary(
         (0, x87_float_operand(machine, operands.first()?)?)
     };
     let lhs = x87_stack_expr(dst_index);
-    let result = match order {
-        BinaryOrder::Normal => x87_expr_intrinsic(op, vec![lhs, rhs]),
-        BinaryOrder::Reverse => x87_expr_intrinsic(op, vec![rhs, lhs]),
-    };
+    let result = x87_binary_expression(op, lhs, rhs, order);
     Some(vec![LirEffect::Set {
         dst: x87_stack_location(dst_index),
         expression: result,
@@ -183,8 +180,8 @@ fn x87_binary_pop(
     let target = x87_stack_expr(target_index);
     let st0 = x87_stack_expr(0);
     let result = match order {
-        BinaryPopOrder::TargetOpSt0 => x87_expr_intrinsic(op, vec![target, st0]),
-        BinaryPopOrder::St0OpTarget => x87_expr_intrinsic(op, vec![st0, target]),
+        BinaryPopOrder::TargetOpSt0 => x87_binary_expression(op, target, st0, BinaryOrder::Normal),
+        BinaryPopOrder::St0OpTarget => x87_binary_expression(op, st0, target, BinaryOrder::Normal),
     };
     Some(x87_pop_with_replacement(target_index, result))
 }
@@ -197,14 +194,39 @@ fn x87_binary_int(
 ) -> Option<Vec<LirEffect>> {
     let rhs = x87_int_operand(machine, operands.first()?)?;
     let lhs = x87_stack_expr(0);
-    let result = match order {
-        BinaryOrder::Normal => x87_expr_intrinsic(op, vec![lhs, rhs]),
-        BinaryOrder::Reverse => x87_expr_intrinsic(op, vec![rhs, lhs]),
-    };
+    let result = x87_binary_expression(op, lhs, rhs, order);
     Some(vec![LirEffect::Set {
         dst: x87_stack_location(0),
         expression: result,
     }])
+}
+
+fn x87_binary_expression(
+    op: &str,
+    lhs: LirExpression,
+    rhs: LirExpression,
+    order: BinaryOrder,
+) -> LirExpression {
+    let (left, right) = match order {
+        BinaryOrder::Normal => (lhs, rhs),
+        BinaryOrder::Reverse => (rhs, lhs),
+    };
+    let binary_op = match op {
+        "add" => Some(LirOperationBinary::FAdd),
+        "sub" => Some(LirOperationBinary::FSub),
+        "mul" => Some(LirOperationBinary::FMul),
+        "div" => Some(LirOperationBinary::FDiv),
+        _ => None,
+    };
+    match binary_op {
+        Some(op) => LirExpression::Binary {
+            op,
+            left: Box::new(left),
+            right: Box::new(right),
+            bits: X87_BITS,
+        },
+        None => x87_expr_intrinsic(op, vec![left, right]),
+    }
 }
 
 fn x87_compare_rhs(machine: Architecture, operands: &[X86OperandView]) -> Option<LirExpression> {
@@ -496,8 +518,24 @@ fn x87_float_operand(machine: Architecture, operand: &X86OperandView) -> Option<
     let raw = operand_expr(machine, operand)?;
     let bits = x87_operand_bits(operand)?;
     Some(match bits {
-        32 => x87_expr_intrinsic("load_f32", vec![raw]),
-        64 => x87_expr_intrinsic("load_f64", vec![raw]),
+        32 => LirExpression::Cast {
+            op: LirOperationCast::FloatExtend,
+            arg: Box::new(LirExpression::Extract {
+                arg: Box::new(raw),
+                lsb: 0,
+                bits: 32,
+            }),
+            bits: X87_BITS,
+        },
+        64 => LirExpression::Cast {
+            op: LirOperationCast::FloatExtend,
+            arg: Box::new(LirExpression::Extract {
+                arg: Box::new(raw),
+                lsb: 0,
+                bits: 64,
+            }),
+            bits: X87_BITS,
+        },
         80 => raw,
         _ => return None,
     })
@@ -507,9 +545,33 @@ fn x87_int_operand(machine: Architecture, operand: &X86OperandView) -> Option<Li
     let raw = operand_expr(machine, operand)?;
     let bits = x87_operand_bits(operand)?;
     Some(match bits {
-        16 => x87_expr_intrinsic("load_i16", vec![raw]),
-        32 => x87_expr_intrinsic("load_i32", vec![raw]),
-        64 => x87_expr_intrinsic("load_i64", vec![raw]),
+        16 => LirExpression::Cast {
+            op: LirOperationCast::IntToFloat,
+            arg: Box::new(LirExpression::Extract {
+                arg: Box::new(raw),
+                lsb: 0,
+                bits: 16,
+            }),
+            bits: X87_BITS,
+        },
+        32 => LirExpression::Cast {
+            op: LirOperationCast::IntToFloat,
+            arg: Box::new(LirExpression::Extract {
+                arg: Box::new(raw),
+                lsb: 0,
+                bits: 32,
+            }),
+            bits: X87_BITS,
+        },
+        64 => LirExpression::Cast {
+            op: LirOperationCast::IntToFloat,
+            arg: Box::new(LirExpression::Extract {
+                arg: Box::new(raw),
+                lsb: 0,
+                bits: 64,
+            }),
+            bits: X87_BITS,
+        },
         _ => return None,
     })
 }

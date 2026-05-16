@@ -1404,11 +1404,31 @@ impl PE {
         for import in self.pe.imports() {
             let library = import.name();
             for entry in import.entries() {
-                let name = entry.name();
-                if name.is_empty() {
-                    continue;
-                }
+                let name = match entry.name() {
+                    name if !name.is_empty() => name,
+                    _ if entry.is_ordinal() => format!("ordinal_{}", entry.ordinal()),
+                    _ => continue,
+                };
                 let address = self.normalize_symbol_address(entry.iat_address());
+                symbols.entry(address).or_insert_with(|| {
+                    self.symbol_from_virtual_address(
+                        format!("{library}!{name}"),
+                        address,
+                        SymbolKind::Import,
+                    )
+                });
+            }
+        }
+
+        for import in self.pe.delay_imports() {
+            let library = import.name();
+            for entry in import.entries() {
+                let name = match entry.name() {
+                    name if !name.is_empty() => name,
+                    _ if entry.is_ordinal() => format!("ordinal_{}", entry.ordinal()),
+                    _ => continue,
+                };
+                let address = self.normalize_symbol_address(entry.value());
                 symbols.entry(address).or_insert_with(|| {
                     self.symbol_from_virtual_address(
                         format!("{library}!{name}"),

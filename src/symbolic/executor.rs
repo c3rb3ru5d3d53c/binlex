@@ -54,12 +54,13 @@ impl SymbolicExecutor {
         semantics: &LirModule,
         state: &SymbolicCpuState,
     ) -> Result<Vec<SymbolicCpuState>, Error> {
-        if semantics.semantics.is_empty() {
+        if semantics.instructions().is_empty() {
             return Ok(vec![state.clone()]);
         }
         let (semantics, working, _, start_index) =
             self.prepare_state_and_semantics(semantics.clone(), state)?;
-        self.step_instruction(&semantics.semantics[start_index], &working)
+        let instructions = semantics.instructions();
+        self.step_instruction(instructions[start_index], &working)
     }
 
     pub fn run(
@@ -70,7 +71,7 @@ impl SymbolicExecutor {
     ) -> Result<Vec<SymbolicCpuState>, Error> {
         let (semantics, initial_state, address_to_index, start_index) =
             self.prepare_state_and_semantics(semantics.clone(), state)?;
-        let semantics = semantics.semantics.iter().collect::<Vec<_>>();
+        let semantics = semantics.instructions();
         if semantics.is_empty() {
             return Ok(vec![state.clone()]);
         }
@@ -179,7 +180,7 @@ impl SymbolicExecutor {
         let mut working_state = state.clone();
         working_state.load_semantic_data(&semantics.data)?;
         let mut address_to_index = HashMap::new();
-        for (index, instruction) in semantics.semantics.iter().enumerate() {
+        for (index, instruction) in semantics.instructions().into_iter().enumerate() {
             if let Some(encoding) = instruction.encoding.as_ref() {
                 address_to_index.entry(encoding.address).or_insert(index);
             }

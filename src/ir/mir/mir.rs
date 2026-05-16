@@ -22,20 +22,20 @@
 
 use super::block::MirBlock;
 use super::optimizers::{
-    optimize_abi, optimize_blocks, optimize_branches, optimize_call_clobbers, optimize_calls,
-    optimize_constants, optimize_copy_propagation, optimize_cse, optimize_dead_effects,
-    optimize_flags, optimize_intrinsics, optimize_liveness, optimize_memory_aliases,
-    optimize_memory_state, optimize_register_state, optimize_returns, optimize_simplify,
+    optimize, optimize_abi, optimize_blocks, optimize_branches, optimize_call_clobbers,
+    optimize_calls, optimize_constants, optimize_copy_propagation, optimize_cse,
+    optimize_dead_effects, optimize_flags, optimize_intrinsics, optimize_liveness,
+    optimize_memory_aliases, optimize_memory_state, optimize_register_state, optimize_returns,
     optimize_ssa, optimize_ssa_liveness, optimize_stack, optimize_stack_pointers,
     optimize_stack_slots, optimize_subexpressions, optimize_targets, optimize_undefs,
 };
-use super::print::format_mir;
-use crate::ir::lir::{LirAbi, LirModule};
+use super::print::{format_mir_function, format_mir_module};
+use crate::ir::lir::{LirAbi, LirFunction, LirModule};
 use crate::ir::mir::lower::{MirLowerError, lower_lir_to_mir};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-pub struct Mir {
+pub struct MirFunction {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -44,9 +44,9 @@ pub struct Mir {
     pub blocks: Vec<MirBlock>,
 }
 
-impl Mir {
-    pub fn from_lir(name: Option<String>, lir: &LirModule) -> Result<Self, MirLowerError> {
-        lower_lir_to_mir(name, lir)
+impl MirFunction {
+    pub fn from_lir(name: Option<String>, lir: &LirFunction) -> Result<Self, MirLowerError> {
+        lower_lir_to_mir(name.or_else(|| lir.name.clone()), lir)
     }
 
     pub fn new(name: Option<String>) -> Self {
@@ -165,11 +165,203 @@ impl Mir {
         optimize_ssa_liveness(self);
     }
 
-    pub fn optimize_simplify(&mut self) {
-        optimize_simplify(self);
+    pub fn optimize(&mut self) {
+        optimize(self);
     }
 
     pub fn text(&self) -> String {
-        format_mir(self)
+        format_mir_function(self)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub struct MirModule {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub functions: Vec<MirFunction>,
+}
+
+impl MirModule {
+    pub fn from_lir(name: Option<String>, lir: &LirModule) -> Result<Self, MirLowerError> {
+        let mut module = Self::new(name.or_else(|| lir.name.clone()));
+        for function in &lir.functions {
+            let function_name = function.name.clone();
+            module.append_function(MirFunction::from_lir(function_name, function)?);
+        }
+        Ok(module)
+    }
+
+    pub fn new(name: Option<String>) -> Self {
+        Self {
+            name,
+            functions: Vec::new(),
+        }
+    }
+
+    pub fn functions(&self) -> &[MirFunction] {
+        &self.functions
+    }
+
+    pub fn functions_mut(&mut self) -> &mut Vec<MirFunction> {
+        &mut self.functions
+    }
+
+    pub fn append_function(&mut self, function: MirFunction) {
+        self.functions.push(function);
+    }
+
+    pub fn optimize_register_state(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_register_state();
+        }
+    }
+
+    pub fn optimize_returns(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_returns();
+        }
+    }
+
+    pub fn optimize_blocks(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_blocks();
+        }
+    }
+
+    pub fn optimize_abi(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_abi();
+        }
+    }
+
+    pub fn optimize_subexpressions(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_subexpressions();
+        }
+    }
+
+    pub fn optimize_flags(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_flags();
+        }
+    }
+
+    pub fn optimize_liveness(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_liveness();
+        }
+    }
+
+    pub fn optimize_undefs(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_undefs();
+        }
+    }
+
+    pub fn optimize_intrinsics(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_intrinsics();
+        }
+    }
+
+    pub fn optimize_cse(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_cse();
+        }
+    }
+
+    pub fn optimize_stack(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_stack();
+        }
+    }
+
+    pub fn optimize_stack_pointers(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_stack_pointers();
+        }
+    }
+
+    pub fn optimize_stack_slots(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_stack_slots();
+        }
+    }
+
+    pub fn optimize_calls(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_calls();
+        }
+    }
+
+    pub fn optimize_call_clobbers(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_call_clobbers();
+        }
+    }
+
+    pub fn optimize_memory_aliases(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_memory_aliases();
+        }
+    }
+
+    pub fn optimize_branches(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_branches();
+        }
+    }
+
+    pub fn optimize_memory_state(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_memory_state();
+        }
+    }
+
+    pub fn optimize_constants(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_constants();
+        }
+    }
+
+    pub fn optimize_dead_effects(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_dead_effects();
+        }
+    }
+
+    pub fn optimize_copy_propagation(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_copy_propagation();
+        }
+    }
+
+    pub fn optimize_targets(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_targets();
+        }
+    }
+
+    pub fn optimize_ssa(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_ssa();
+        }
+    }
+
+    pub fn optimize_ssa_liveness(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_ssa_liveness();
+        }
+    }
+
+    pub fn optimize(&mut self) {
+        for function in &mut self.functions {
+            function.optimize();
+        }
+    }
+
+    pub fn text(&self) -> String {
+        format_mir_module(self)
     }
 }

@@ -353,7 +353,7 @@ impl<'a> Disassembler<'a> {
         let selected_backend = self.selected_backend;
         let image_base = self.image_base;
 
-        pool.install(|| {
+        pool.install(|| -> Result<(), Error> {
             while !cfg.functions.queue.is_empty() {
                 let function_addresses = cfg.functions.dequeue_all();
                 cfg.functions
@@ -377,24 +377,25 @@ impl<'a> Disassembler<'a> {
                                 external_executable_address_ranges.clone(),
                                 external_config.clone(),
                             )
-                            .ok()
                         },
                         |disasm, addresses| {
+                            let disasm = disasm
+                                .as_ref()
+                                .map_err(|error| Error::other(error.to_string()))?;
                             let mut graph = Graph::new(external_machine, graph_config.clone());
-                            if let Some(disasm) = disasm.as_ref() {
-                                for address in addresses {
-                                    let _ = disasm.disassemble_function(*address, &mut graph);
-                                }
+                            for address in addresses {
+                                let _ = disasm.disassemble_function(*address, &mut graph);
                             }
-                            graph
+                            Ok::<Graph, Error>(graph)
                         },
                     )
-                    .collect();
+                    .collect::<Result<Vec<_>, Error>>()?;
                 for mut graph in graphs {
                     cfg.merge(&mut graph);
                 }
             }
-        });
+            Ok(())
+        })?;
 
         Ok(())
     }

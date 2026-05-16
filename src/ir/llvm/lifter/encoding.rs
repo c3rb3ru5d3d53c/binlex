@@ -181,7 +181,7 @@ mod tests {
         LirStatus, LirTerminator,
     };
     use crate::ir::lir::{LirAbi, LirAbiKind, LirCpu, LirCpuKind, LirModule};
-    use crate::lifters::llvm::Lifter;
+    use crate::ir::llvm::Lifter;
     use std::collections::BTreeMap;
 
     #[test]

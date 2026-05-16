@@ -36,11 +36,11 @@ use crate::hashing::SHA256;
 use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
 use crate::hex;
-use crate::ir::lir::{LirAbi, LirCpu};
-use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
+use crate::ir::lir::{LirAbi, LirBlock, LirCpu};
+use crate::ir::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
+use crate::ir::mir::MirBlock;
 #[cfg(not(target_os = "windows"))]
-use crate::lifters::vex::{Lifter as VexLifter, VexJson};
-use crate::lifters::{Lifter, LifterBackend, LifterError};
+use crate::ir::vex::{Lifter as VexLifter, VexJson};
 use crate::metadata::Attributes;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -347,6 +347,36 @@ impl<'block> Block<'block> {
         self.cfg.architecture
     }
 
+    pub fn lir(&self) -> Result<LirBlock, Error> {
+        let instructions = self
+            .instructions()
+            .into_iter()
+            .map(|instruction| {
+                instruction
+                    .semantics
+                    .clone()
+                    .or_else(|| instruction.build_semantics())
+                    .ok_or_else(|| {
+                        Error::other(format!(
+                            "Block -> 0x{:x}: instruction 0x{:x} has no LIR",
+                            self.address, instruction.address
+                        ))
+                    })
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+
+        Ok(LirBlock {
+            name: Some(format!("block_{:x}", self.address)),
+            instructions,
+        })
+    }
+
+    pub fn mir(&self) -> Result<MirBlock, Error> {
+        let mut lir = self.lir()?;
+        lir.optimize();
+        MirBlock::from_lir(None, &lir).map_err(|error| Error::other(error.to_string()))
+    }
+
     /// Prints the JSON representation of the block to standard output.
     #[allow(dead_code)]
     pub fn print(&self) {
@@ -522,21 +552,22 @@ impl<'block> Block<'block> {
         .embed_block(self)
     }
 
-    /// Return a lifter artifact for this block using the default backend.
-    pub fn lift(&self) -> Result<Lifter, LifterError> {
-        self.lift_with(LifterBackend::Default, None, None)
+    pub fn llvm(&self, abi: Option<&LirAbi>, triple: Option<String>) -> Result<LlvmLifter, Error> {
+        let mut lifter = if let Some(triple) = triple {
+            let cpu = LirCpu::from_architecture(self.architecture())
+                .map_err(|error| Error::other(error.to_string()))?;
+            LlvmLifter::new(cpu, self.cfg.config.clone(), Some(triple))
+                .map_err(|error| Error::other(error.to_string()))?
+        } else {
+            LlvmLifter::from_architecture(self.architecture(), self.cfg.config.clone())
+        };
+        lifter.lift_block(self, abi)?;
+        Ok(lifter)
     }
 
-    /// Return a lifter artifact for this block using the provided backend, ABI, and optional triple.
-    pub fn lift_with(
-        &self,
-        backend: LifterBackend,
-        abi: Option<&LirAbi>,
-        triple: Option<String>,
-    ) -> Result<Lifter, LifterError> {
-        let cpu = LirCpu::from_architecture(self.architecture())
-            .map_err(|error| LifterError::Io(Error::other(error.to_string())))?;
-        let lifter = Lifter::new(cpu, self.cfg.config.clone(), backend, triple)?;
+    #[cfg(not(target_os = "windows"))]
+    pub fn vex(&self, abi: Option<&LirAbi>) -> Result<VexLifter, Error> {
+        let mut lifter = VexLifter::new(self.cfg.config.clone());
         lifter.lift_block(self, abi)?;
         Ok(lifter)
     }

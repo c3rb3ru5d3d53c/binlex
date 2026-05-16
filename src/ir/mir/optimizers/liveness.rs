@@ -37,8 +37,5 @@ pub fn optimize_liveness(mir: &mut Mir) {
 }
 
 fn is_dead_binding_candidate(kind: &MirOperationKind) -> bool {
-    matches!(
-        kind,
-        MirOperationKind::Intrinsic { name, .. } if name == "lir.set"
-    )
+    matches!(kind, MirOperationKind::Copy { .. })
 }

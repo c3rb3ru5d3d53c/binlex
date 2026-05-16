@@ -26,6 +26,9 @@ use crate::formats::Image;
 use crate::Architecture;
 use crate::Configuration;
 use binlex::disassemblers::capstone::Disassembler as InnerDisassembler;
+use binlex::Architecture as InnerArchitecture;
+use binlex::Configuration as InnerConfiguration;
+use memmap2::Mmap;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
@@ -43,7 +46,61 @@ pub struct Disassembler {
     config: Py<Configuration>,
 }
 
+enum MaterializedInput {
+    Bytes(Vec<u8>),
+    MappedImage { mmap: Mmap, base: u64 },
+}
+
 impl Disassembler {
+    fn materialize_input(
+        &self,
+        py: Python<'_>,
+    ) -> PyResult<(
+        InnerArchitecture,
+        MaterializedInput,
+        BTreeMap<u64, u64>,
+        InnerConfiguration,
+    )> {
+        let machine = self.machine.borrow(py).inner;
+        let config = self.config.borrow(py).inner.lock().unwrap().clone();
+        if let Some(bytes) = &self.bytes {
+            let bytes = bytes.bind(py);
+            return Ok((
+                machine,
+                MaterializedInput::Bytes(bytes.as_bytes().to_vec()),
+                self.executable_address_ranges.clone(),
+                config,
+            ));
+        }
+        if let Some(image) = &self.image {
+            let mut image = image.borrow_mut(py);
+            let image_base = image.inner.base();
+            let _ = image
+                .inner
+                .mmap()
+                .map_err(|error| PyTypeError::new_err(error.to_string()))?;
+            let handle = image
+                .inner
+                .handle
+                .as_ref()
+                .ok_or_else(|| PyTypeError::new_err("image file handle is closed"))?;
+            let mmap = unsafe { Mmap::map(handle) }
+                .map_err(|error| PyTypeError::new_err(error.to_string()))?;
+            return Ok((
+                machine,
+                MaterializedInput::MappedImage {
+                    mmap,
+                    base: image_base,
+                },
+                self.executable_address_ranges.clone(),
+                config,
+            ));
+        }
+        Err(PyTypeError::new_err(
+            "expected an Image or bytes object for the 'image' argument",
+        ))
+    }
+
     fn with_inner_disassembler<T, F>(&self, py: Python, f: F) -> PyResult<T>
     where
         F: FnOnce(InnerDisassembler<'_>) -> Result<T, Error>,
@@ -125,11 +182,29 @@ impl Disassembler {
         address: u64,
         graph: Py<Graph>,
     ) -> Result<Instruction, Error> {
-        let graph_ref = &mut graph.borrow_mut(py);
-        let result = self
-            .with_inner_disassembler(py, |disassembler| {
-                disassembler
-                    .disassemble_instruction_address(address, &mut graph_ref.inner.lock().unwrap())
+        let (machine, input, executable_address_ranges, config) = self
+            .materialize_input(py)
+            .map_err(|error| Error::other(error.to_string()))?;
+        let graph_inner = graph.borrow(py).inner.clone();
+        let result = py
+            .detach(move || match input {
+                MaterializedInput::Bytes(image) => {
+                    let disassembler =
+                        InnerDisassembler::new(machine, &image, executable_address_ranges, config)?;
+                    disassembler
+                        .disassemble_instruction_address(address, &mut graph_inner.lock().unwrap())
+                }
+                MaterializedInput::MappedImage { mmap, base } => {
+                    let disassembler = InnerDisassembler::new_with_image_base(
+                        machine,
+                        &mmap[..],
+                        base,
+                        executable_address_ranges,
+                        config,
+                    )?;
+                    disassembler
+                        .disassemble_instruction_address(address, &mut graph_inner.lock().unwrap())
+                }
             })
             .map_err(|error| Error::other(error.to_string()))?;
         Instruction::new(result, graph.clone_ref(py))
@@ -143,11 +218,29 @@ impl Disassembler {
         address: u64,
         graph: Py<Graph>,
     ) -> Result<Function, Error> {
-        let graph_ref = &mut graph.borrow_mut(py);
-        let result = self
-            .with_inner_disassembler(py, |disassembler| {
-                disassembler
-                    .disassemble_function_address(address, &mut graph_ref.inner.lock().unwrap())
+        let (machine, input, executable_address_ranges, config) = self
+            .materialize_input(py)
+            .map_err(|error| Error::other(error.to_string()))?;
+        let graph_inner = graph.borrow(py).inner.clone();
+        let result = py
+            .detach(move || match input {
+                MaterializedInput::Bytes(image) => {
+                    let disassembler =
+                        InnerDisassembler::new(machine, &image, executable_address_ranges, config)?;
+                    disassembler
+                        .disassemble_function_address(address, &mut graph_inner.lock().unwrap())
+                }
+                MaterializedInput::MappedImage { mmap, base } => {
+                    let disassembler = InnerDisassembler::new_with_image_base(
+                        machine,
+                        &mmap[..],
+                        base,
+                        executable_address_ranges,
+                        config,
+                    )?;
+                    disassembler
+                        .disassemble_function_address(address, &mut graph_inner.lock().unwrap())
+                }
             })
             .map_err(|error| Error::other(error.to_string()))?;
         Function::new(result, graph.clone_ref(py)).map_err(|error| Error::other(error.to_string()))
@@ -160,9 +253,26 @@ impl Disassembler {
         address: u64,
         graph: Py<Graph>,
     ) -> Result<Block, Error> {
-        let graph_ref = &mut graph.borrow_mut(py);
-        self.with_inner_disassembler(py, |disassembler| {
-            disassembler.disassemble_block_address(address, &mut graph_ref.inner.lock().unwrap())
+        let (machine, input, executable_address_ranges, config) = self
+            .materialize_input(py)
+            .map_err(|error| Error::other(error.to_string()))?;
+        let graph_inner = graph.borrow(py).inner.clone();
+        py.detach(move || match input {
+            MaterializedInput::Bytes(image) => {
+                let disassembler =
+                    InnerDisassembler::new(machine, &image, executable_address_ranges, config)?;
+                disassembler.disassemble_block_address(address, &mut graph_inner.lock().unwrap())
+            }
+            MaterializedInput::MappedImage { mmap, base } => {
+                let disassembler = InnerDisassembler::new_with_image_base(
+                    machine,
+                    &mmap[..],
+                    base,
+                    executable_address_ranges,
+                    config,
+                )?;
+                disassembler.disassemble_block_address(address, &mut graph_inner.lock().unwrap())
+            }
         })
         .map_err(|error| Error::other(error.to_string()))?;
         Block::new(address, graph.clone_ref(py)).map_err(|error| Error::other(error.to_string()))
@@ -175,9 +285,26 @@ impl Disassembler {
         addresses: BTreeSet<u64>,
         graph: Py<Graph>,
     ) -> Result<(), Error> {
-        let graph_ref = &mut graph.borrow_mut(py);
-        self.with_inner_disassembler(py, |disassembler| {
-            disassembler.disassemble(addresses, &mut graph_ref.inner.lock().unwrap())
+        let (machine, input, executable_address_ranges, config) = self
+            .materialize_input(py)
+            .map_err(|error| Error::other(error.to_string()))?;
+        let graph_inner = graph.borrow(py).inner.clone();
+        py.detach(move || match input {
+            MaterializedInput::Bytes(image) => {
+                let disassembler =
+                    InnerDisassembler::new(machine, &image, executable_address_ranges, config)?;
+                disassembler.disassemble(addresses, &mut graph_inner.lock().unwrap())
+            }
+            MaterializedInput::MappedImage { mmap, base } => {
+                let disassembler = InnerDisassembler::new_with_image_base(
+                    machine,
+                    &mmap[..],
+                    base,
+                    executable_address_ranges,
+                    config,
+                )?;
+                disassembler.disassemble(addresses, &mut graph_inner.lock().unwrap())
+            }
         })
         .map_err(|error| Error::other(error.to_string()))?;
         Ok(())

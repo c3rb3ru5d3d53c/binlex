@@ -1,5 +1,5 @@
-use crate::ir::mir::Mir;
 use crate::ir::mir::analysis::mir_successors;
+use crate::ir::mir::{Mir, MirControlTarget};
 
 pub fn validate_targets(mir: &Mir) -> Result<(), String> {
     let names = mir
@@ -15,4 +15,8 @@ pub fn validate_targets(mir: &Mir) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+fn _is_direct(target: &MirControlTarget) -> bool {
+    matches!(target, MirControlTarget::Direct(_))
 }

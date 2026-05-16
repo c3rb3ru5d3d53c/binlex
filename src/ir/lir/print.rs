@@ -1,9 +1,9 @@
 use crate::ir::lir::{
-    Lir, LirAddressSpace, LirData, LirDiagnostic, LirEffect, LirEncoding, LirExpression,
-    LirFenceKind, LirLocation, LirModule, LirTerminator, LirTrapKind,
+    LirAddressSpace, LirBlock, LirData, LirDiagnostic, LirEffect, LirEncoding, LirExpression,
+    LirFenceKind, LirFunction, LirInstruction, LirModule, LirTerminator, LirTrapKind,
 };
 
-pub fn format_lir(lir: &Lir) -> String {
+pub fn format_lir_instruction(lir: &LirInstruction) -> String {
     let mut lines = Vec::new();
     let header = lir
         .encoding
@@ -56,31 +56,65 @@ pub fn format_lir(lir: &Lir) -> String {
     lines.join("\n")
 }
 
-pub fn format_lir_module(module: &LirModule) -> String {
-    let mut lines = Vec::new();
-    for (index, lir) in module.semantics.iter().enumerate() {
+pub fn format_lir_block(block: &LirBlock) -> String {
+    let name = block.name.as_deref().unwrap_or("block");
+    let mut lines = vec![format!("lir.block @{name} {{")];
+    for (index, instruction) in block.instructions.iter().enumerate() {
         if index > 0 {
             lines.push(String::new());
         }
-        lines.push(format_lir(lir));
+        for line in format_lir_instruction(instruction).lines() {
+            lines.push(format!("  {line}"));
+        }
+    }
+    lines.push("}".to_string());
+    lines.join("\n")
+}
+
+pub fn format_lir_function(function: &LirFunction) -> String {
+    let name = function.name.as_deref().unwrap_or("function");
+    let mut lines = vec![format!("lir.function @{name} {{")];
+    if let Some(abi) = function.abi.as_ref() {
+        lines.push(format!("  abi {}", abi.name));
+    }
+    for (index, block) in function.blocks.iter().enumerate() {
+        if index > 0 || function.abi.is_some() {
+            lines.push(String::new());
+        }
+        for line in format_lir_block(block).lines() {
+            lines.push(format!("  {line}"));
+        }
+    }
+    lines.push("}".to_string());
+    lines.join("\n")
+}
+
+pub fn format_lir_module(module: &LirModule) -> String {
+    let name = module.name.as_deref().unwrap_or("module");
+    let mut lines = vec![format!("lir.module @{name} {{")];
+
+    for (index, function) in module.functions.iter().enumerate() {
+        if index > 0 {
+            lines.push(String::new());
+        }
+        for line in format_lir_function(function).lines() {
+            lines.push(format!("  {line}"));
+        }
     }
 
     if !module.data.is_empty() {
-        if !lines.is_empty() {
+        if !module.functions.is_empty() {
             lines.push(String::new());
         }
-        lines.push("lir.data {".to_string());
+        lines.push("  lir.data {".to_string());
         for data in &module.data {
-            lines.push(format!("  {}", format_data(data)));
+            lines.push(format!("    {}", format_data(data)));
         }
-        lines.push("}".to_string());
+        lines.push("  }".to_string());
     }
 
-    if lines.is_empty() {
-        "lir.module {}".to_string()
-    } else {
-        lines.join("\n")
-    }
+    lines.push("}".to_string());
+    lines.join("\n")
 }
 
 fn push_encoding(lines: &mut Vec<String>, encoding: &LirEncoding) {
@@ -195,25 +229,25 @@ fn format_effect(effect: &LirEffect) -> String {
             format!("push {} <- {}", stack, format_expression(expression))
         }
         LirEffect::Pop { stack, dst } => format!("pop {} -> {}", stack, format_location(dst)),
-        LirEffect::Fence { kind } => format!("fence {}", format_fence_kind(kind)),
-        LirEffect::Trap { kind } => format!("trap {}", format_trap_kind(kind)),
+        LirEffect::Fence { kind } => format!("fence {}", format_fence_kind(kind.clone())),
+        LirEffect::Trap { kind } => format!("trap {}", format_trap_kind(kind.clone())),
         LirEffect::Intrinsic {
             name,
             args,
             outputs,
-        } => format!(
-            "intrinsic {}({}) -> ({})",
-            name,
-            args.iter()
+        } => {
+            let args = args
+                .iter()
                 .map(format_expression)
                 .collect::<Vec<_>>()
-                .join(", "),
-            outputs
+                .join(", ");
+            let outputs = outputs
                 .iter()
                 .map(format_location)
                 .collect::<Vec<_>>()
-                .join(", ")
-        ),
+                .join(", ");
+            format!("intrinsic {}({}) -> [{}]", name, args, outputs)
+        }
         LirEffect::Nop => "nop".to_string(),
     }
 }
@@ -237,18 +271,18 @@ fn format_terminator(terminator: &LirTerminator) -> String {
             return_target,
             does_return,
         } => {
-            let return_suffix = return_target
+            let return_target = return_target
                 .as_ref()
                 .map(|target| format!(", return {}", format_expression(target)))
                 .unwrap_or_default();
-            let does_return_suffix = does_return
-                .map(|does_return| format!(", does_return {}", does_return))
+            let does_return = does_return
+                .map(|value| format!(", does_return {}", value))
                 .unwrap_or_default();
             format!(
                 "call {}{}{}",
                 format_expression(target),
-                return_suffix,
-                does_return_suffix
+                return_target,
+                does_return
             )
         }
         LirTerminator::Return { expression } => expression
@@ -260,57 +294,101 @@ fn format_terminator(terminator: &LirTerminator) -> String {
     }
 }
 
+fn format_diagnostic(diagnostic: &LirDiagnostic) -> String {
+    format!("{:?}: {}", diagnostic.kind, diagnostic.message)
+}
+
+fn format_data(data: &LirData) -> String {
+    let bytes = data
+        .bytes
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    format!("{} [{}]", data.name, bytes)
+}
+
+fn format_location(location: &crate::ir::lir::LirLocation) -> String {
+    match location {
+        crate::ir::lir::LirLocation::Register { name, .. }
+        | crate::ir::lir::LirLocation::Flag { name, .. } => format!("%{}", name),
+        crate::ir::lir::LirLocation::ProgramCounter { .. } => "%pc".to_string(),
+        crate::ir::lir::LirLocation::Temporary { id, .. } => format!("%tmp{id}"),
+        crate::ir::lir::LirLocation::Memory { space, addr, .. } => {
+            format!(
+                "{}[{}]",
+                format_address_space(space),
+                format_expression(addr)
+            )
+        }
+        crate::ir::lir::LirLocation::IndexedMemory { name, index, .. } => {
+            format!("{}[{}]", name, format_expression(index))
+        }
+        crate::ir::lir::LirLocation::StackMemory { name, offset, .. } => {
+            format!("{}[{}]", name, offset)
+        }
+    }
+}
+
 fn format_expression(expression: &LirExpression) -> String {
     match expression {
         LirExpression::Const { value, bits } => format!("{value}:i{bits}"),
-        LirExpression::Function { name, bits } => format!("function {} : i{}", name, bits),
-        LirExpression::DataAddress { name, bits } => format!("data {} : i{}", name, bits),
+        LirExpression::Function { name, bits } => format!("@{name}:i{bits}"),
+        LirExpression::DataAddress { name, bits } => format!("&data[{name}]:i{bits}"),
+        LirExpression::Read(location) => format!("read {}", format_location(location)),
         LirExpression::AddressOf { location, bits } => {
             format!("address_of {} : i{}", format_location(location), bits)
         }
-        LirExpression::Read(location) => format!("read {}", format_location(location)),
         LirExpression::Load { space, addr, bits } => format!(
             "load {}[{}] : i{}",
             format_address_space(space),
             format_expression(addr),
             bits
         ),
-        LirExpression::Unary { op, arg, bits } => format!(
-            "{}({}) : i{}",
-            format!("{op:?}").to_lowercase(),
-            format_expression(arg),
-            bits
-        ),
+        LirExpression::Unary { op, arg, bits } => {
+            format!("{:?}({}) : i{}", op, format_expression(arg), bits).to_lowercase()
+        }
         LirExpression::Binary {
             op,
             left,
             right,
             bits,
         } => format!(
-            "{}({}, {}) : i{}",
-            format!("{op:?}").to_lowercase(),
+            "{:?}({}, {}) : i{}",
+            op,
             format_expression(left),
             format_expression(right),
             bits
-        ),
-        LirExpression::Cast { op, arg, bits } => format!(
-            "{}({}) : i{}",
-            format!("{op:?}").to_lowercase(),
-            format_expression(arg),
-            bits
-        ),
+        )
+        .to_lowercase(),
+        LirExpression::Cast { op, arg, bits } => {
+            format!("{:?}({}) : i{}", op, format_expression(arg), bits).to_lowercase()
+        }
         LirExpression::Compare {
             op,
             left,
             right,
             bits,
         } => format!(
-            "{}({}, {}) : i{}",
-            format!("{op:?}").to_lowercase(),
+            "{:?}({}, {}) : i{}",
+            op,
             format_expression(left),
             format_expression(right),
             bits
+        )
+        .to_lowercase(),
+        LirExpression::Concat { parts, bits } => format!(
+            "concat({}) : i{}",
+            parts
+                .iter()
+                .map(format_expression)
+                .collect::<Vec<_>>()
+                .join(", "),
+            bits
         ),
+        LirExpression::Extract { arg, lsb, bits } => {
+            format!("extract({}, {}, {})", format_expression(arg), lsb, bits)
+        }
         LirExpression::Select {
             condition,
             when_true,
@@ -323,23 +401,6 @@ fn format_expression(expression: &LirExpression) -> String {
             format_expression(when_false),
             bits
         ),
-        LirExpression::Extract { arg, lsb, bits } => format!(
-            "extract({}, lsb {}, bits {})",
-            format_expression(arg),
-            lsb,
-            bits
-        ),
-        LirExpression::Concat { parts, bits } => format!(
-            "concat({}) : i{}",
-            parts
-                .iter()
-                .map(format_expression)
-                .collect::<Vec<_>>()
-                .join(", "),
-            bits
-        ),
-        LirExpression::Undefined { bits } => format!("undefined:i{}", bits),
-        LirExpression::Poison { bits } => format!("poison:i{}", bits),
         LirExpression::Intrinsic { name, args, bits } => format!(
             "{}({}) : i{}",
             name,
@@ -349,7 +410,9 @@ fn format_expression(expression: &LirExpression) -> String {
                 .join(", "),
             bits
         ),
-        LirExpression::Null { bits } => format!("null:i{}", bits),
+        LirExpression::Undefined { bits } => format!("undef:i{bits}"),
+        LirExpression::Poison { bits } => format!("poison:i{bits}"),
+        LirExpression::Null { bits } => format!("null:i{bits}"),
         LirExpression::Allocate { kind, bits } => format!("allocate {} : i{}", kind, bits),
         LirExpression::ReadProperty {
             reference,
@@ -374,73 +437,14 @@ fn format_expression(expression: &LirExpression) -> String {
     }
 }
 
-fn format_location(location: &LirLocation) -> String {
-    match location {
-        LirLocation::Register { name, .. } => format!("%{}", name),
-        LirLocation::Flag { name, .. } => format!("%{}", name),
-        LirLocation::ProgramCounter { .. } => "%pc".to_string(),
-        LirLocation::Temporary { id, .. } => format!("%tmp{}", id),
-        LirLocation::Memory { space, addr, .. } => format!(
-            "{}[{}]",
-            format_address_space(space),
-            format_expression(addr)
-        ),
-        LirLocation::IndexedMemory { name, index, .. } => {
-            format!("{}[{}]", name, format_expression(index))
-        }
-        LirLocation::StackMemory { name, offset, .. } => format!("{}[{}]", name, offset),
-    }
-}
-
 fn format_address_space(space: &LirAddressSpace) -> String {
-    match space {
-        LirAddressSpace::Default => "default".to_string(),
-        LirAddressSpace::State => "state".to_string(),
-        LirAddressSpace::Stack => "stack".to_string(),
-        LirAddressSpace::Heap => "heap".to_string(),
-        LirAddressSpace::Global => "global".to_string(),
-        LirAddressSpace::Io => "io".to_string(),
-        LirAddressSpace::CpuMemory { name }
-        | LirAddressSpace::Segment { name }
-        | LirAddressSpace::Named { name } => name.clone(),
-    }
+    format!("{space:?}").to_lowercase()
 }
 
-fn format_fence_kind(kind: &LirFenceKind) -> String {
-    match kind {
-        LirFenceKind::Acquire => "acquire".to_string(),
-        LirFenceKind::Release => "release".to_string(),
-        LirFenceKind::AcquireRelease => "acquire_release".to_string(),
-        LirFenceKind::SequentiallyConsistent => "sequentially_consistent".to_string(),
-        LirFenceKind::Named { name } => name.clone(),
-    }
+fn format_fence_kind(kind: LirFenceKind) -> String {
+    format!("{kind:?}").to_lowercase()
 }
 
-fn format_trap_kind(kind: &LirTrapKind) -> String {
-    match kind {
-        LirTrapKind::Breakpoint => "breakpoint".to_string(),
-        LirTrapKind::DivideError => "divide_error".to_string(),
-        LirTrapKind::Overflow => "overflow".to_string(),
-        LirTrapKind::InvalidOpcode => "invalid_opcode".to_string(),
-        LirTrapKind::GeneralProtection => "general_protection".to_string(),
-        LirTrapKind::PageFault => "page_fault".to_string(),
-        LirTrapKind::AlignmentFault => "alignment_fault".to_string(),
-        LirTrapKind::Syscall => "syscall".to_string(),
-        LirTrapKind::Interrupt => "interrupt".to_string(),
-        LirTrapKind::Named { name } => name.clone(),
-    }
-}
-
-fn format_diagnostic(diagnostic: &LirDiagnostic) -> String {
-    format!("{:?}: {}", diagnostic.kind, diagnostic.message)
-}
-
-fn format_data(data: &LirData) -> String {
-    let bytes = data
-        .bytes
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<Vec<_>>()
-        .join(" ");
-    format!("{} = [{}]", data.name, bytes)
+fn format_trap_kind(kind: LirTrapKind) -> String {
+    format!("{kind:?}").to_lowercase()
 }

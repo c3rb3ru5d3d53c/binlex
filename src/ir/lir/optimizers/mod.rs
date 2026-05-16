@@ -12,4 +12,4 @@ pub use constants::optimize_constants;
 pub use identities::optimize_identities;
 pub use intrinsics::optimize_intrinsics;
 pub use noops::optimize_noops;
-pub use simplify::optimize_simplify;
+pub use simplify::optimize;

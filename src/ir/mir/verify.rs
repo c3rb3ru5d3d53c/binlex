@@ -21,11 +21,11 @@
 // SOFTWARE.
 
 use super::analysis::validate_targets;
-use super::mir::Mir;
+use super::mir::{MirFunction, MirModule};
 use std::collections::HashSet;
 use std::io::{Error, ErrorKind};
 
-pub fn verify_mir(mir: &Mir) -> Result<(), Error> {
+pub fn verify_mir_function(mir: &MirFunction) -> Result<(), Error> {
     let mut names = HashSet::new();
     for block in &mir.blocks {
         if block.name.is_empty() {
@@ -48,5 +48,12 @@ pub fn verify_mir(mir: &Mir) -> Result<(), Error> {
         }
     }
     validate_targets(mir).map_err(|error| Error::new(ErrorKind::InvalidData, error))?;
+    Ok(())
+}
+
+pub fn verify_mir_module(module: &MirModule) -> Result<(), Error> {
+    for function in &module.functions {
+        verify_mir_function(function)?;
+    }
     Ok(())
 }

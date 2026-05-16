@@ -35,14 +35,13 @@ use crate::io::Stderr;
 use crate::ir::lir::arm64::InstructionDetailArm64;
 use crate::ir::lir::cil::InstructionDetailCil;
 use crate::ir::lir::x86::InstructionDetailX86;
-use crate::ir::lir::{Lir, LirAbi, LirCpu, LirJson};
+use crate::ir::lir::{LirCpu, LirInstruction, LirJson};
 use crate::ir::lir::{
     LirDiagnostic, LirDiagnosticKind, LirEffect, LirEncoding, LirStatus, LirTerminator,
 };
-use crate::lifters::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
+use crate::ir::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
 #[cfg(not(target_os = "windows"))]
-use crate::lifters::vex::{Lifter as VexLifter, VexJson};
-use crate::lifters::{Lifter, LifterBackend, LifterError};
+use crate::ir::vex::{Lifter as VexLifter, VexJson};
 use crate::metadata::Attributes;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -127,7 +126,7 @@ impl InstructionDetail {
         }
     }
 
-    pub fn build_semantic(self) -> Lir {
+    pub fn build_lir(self) -> LirInstruction {
         match self.kind {
             InstructionDetailKind::X86(view) => {
                 let mut semantics = crate::ir::lir::x86::build(view.clone()).unwrap_or_else(|| {
@@ -247,8 +246,8 @@ pub struct InstructionRecord {
     /// Decoded instruction detail captured for semantic lowering.
     pub instruction_detail: Option<InstructionDetail>,
     /// Optional canonical LIR bindings for later lifting.
-    pub semantics: Option<Lir>,
-    prepared_semantics_cache: OnceLock<Result<Lir, String>>,
+    pub semantics: Option<LirInstruction>,
+    prepared_semantics_cache: OnceLock<Result<LirInstruction, String>>,
 }
 
 impl Clone for InstructionRecord {
@@ -424,17 +423,17 @@ impl InstructionRecord {
     }
 
     /// Replaces the canonical LIR attached to this instruction.
-    pub fn set_lir(&mut self, lir: Lir) {
+    pub fn set_lir(&mut self, lir: LirInstruction) {
         let _ = self.prepared_semantics_cache.take();
         self.semantics = Some(lir);
     }
 
-    pub fn prepared_semantics(&self) -> Result<Option<&Lir>, Error> {
+    pub fn prepared_semantics(&self) -> Result<Option<&LirInstruction>, Error> {
         let Some(semantics) = self.semantics.as_ref() else {
             return Ok(None);
         };
         match self.prepared_semantics_cache.get_or_init(|| {
-            crate::lifters::llvm::prepare::prepare_instruction_semantics(semantics)
+            crate::ir::llvm::prepare::prepare_instruction_semantics(semantics)
                 .map_err(|error| error.to_string())
         }) {
             Ok(prepared) => Ok(Some(prepared)),
@@ -450,13 +449,13 @@ impl InstructionRecord {
         self.instruction_detail = Some(detail);
     }
 
-    pub fn build_semantics(&self) -> Option<Lir> {
+    pub fn build_semantics(&self) -> Option<LirInstruction> {
         self.instruction_detail
             .clone()
-            .map(InstructionDetail::build_semantic)
+            .map(InstructionDetail::build_lir)
     }
 
-    pub fn build_and_log_semantics(&self) -> Option<Lir> {
+    pub fn build_and_log_semantics(&self) -> Option<LirInstruction> {
         let semantics = self.build_semantics()?;
         log_semantics_debug(
             &self.config,
@@ -735,26 +734,22 @@ impl<'instruction> Instruction<'instruction> {
             .embed_instruction(self)
     }
 
-    /// Return a lifter artifact for this instruction using the default backend.
-    pub fn lift(&self) -> Result<Lifter, LifterError> {
-        self.lift_with(LifterBackend::Default, None, None)
+    pub fn llvm(&self, triple: Option<String>) -> Result<LlvmLifter, Error> {
+        let mut lifter = if let Some(triple) = triple {
+            let cpu = LirCpu::from_architecture(self.architecture)
+                .map_err(|error| Error::other(error.to_string()))?;
+            LlvmLifter::new(cpu, self.config.clone(), Some(triple))
+                .map_err(|error| Error::other(error.to_string()))?
+        } else {
+            LlvmLifter::from_architecture(self.architecture, self.config.clone())
+        };
+        lifter.lift_instruction(self)?;
+        Ok(lifter)
     }
 
-    /// Return a lifter artifact for this instruction using the provided backend and optional triple.
-    pub fn lift_with(
-        &self,
-        backend: LifterBackend,
-        _abi: Option<&LirAbi>,
-        triple: Option<String>,
-    ) -> Result<Lifter, LifterError> {
-        let lifter = Lifter::from_architecture(self.architecture, self.config.clone(), backend)?;
-        if let Some(triple) = triple {
-            let cpu = LirCpu::from_architecture(self.architecture)
-                .map_err(|error| LifterError::Io(Error::other(error.to_string())))?;
-            let lifter = Lifter::new(cpu, self.config.clone(), backend, Some(triple))?;
-            lifter.lift_instruction(self)?;
-            return Ok(lifter);
-        }
+    #[cfg(not(target_os = "windows"))]
+    pub fn vex(&self) -> Result<VexLifter, Error> {
+        let mut lifter = VexLifter::new(self.config.clone());
         lifter.lift_instruction(self)?;
         Ok(lifter)
     }
@@ -837,7 +832,7 @@ fn log_semantics_debug(
     mnemonic: &str,
     disassembly: &str,
     bytes: &[u8],
-    semantics: &Lir,
+    semantics: &LirInstruction,
 ) {
     let has_intrinsic_effect = semantics
         .effects
@@ -921,8 +916,8 @@ fn unsupported_fallthrough(
     operand_text: Option<String>,
     bytes: Vec<u8>,
     message: &str,
-) -> Lir {
-    Lir {
+) -> LirInstruction {
+    LirInstruction {
         version: 1,
         status: LirStatus::Partial,
         abi: None,

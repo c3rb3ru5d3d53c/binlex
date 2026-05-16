@@ -35,14 +35,17 @@ pub use cpus::{
     LirCpuRegister, LirMemory, LirMemoryAddressed, LirMemoryIndexed, LirMemoryStack,
 };
 pub use ir::{
-    Lir, LirAddressSpace, LirData, LirDiagnostic, LirDiagnosticKind, LirEffect, LirEffectKind,
-    LirEncoding, LirExpression, LirExpressionKind, LirFenceKind, LirJson, LirLocation,
-    LirLocationKind, LirModule, LirOperation, LirOperationBinary, LirOperationCast,
-    LirOperationCompare, LirOperationUnary, LirStatus, LirTemporary, LirTerminator,
-    LirTerminatorKind, LirTrapKind, normalize_instruction_lir, validate_instruction_lir,
+    LirAddressSpace, LirBlock, LirData, LirDiagnostic, LirDiagnosticKind, LirEffect, LirEffectKind,
+    LirEncoding, LirExpression, LirExpressionKind, LirFenceKind, LirFunction, LirInstruction,
+    LirJson, LirLocation, LirLocationKind, LirModule, LirOperation, LirOperationBinary,
+    LirOperationCast, LirOperationCompare, LirOperationUnary, LirStatus, LirTemporary,
+    LirTerminator, LirTerminatorKind, LirTrapKind, normalize_instruction_lir,
+    validate_instruction_lir,
 };
 pub use optimizers::{
-    optimize_branches, optimize_casts, optimize_constants, optimize_identities,
-    optimize_intrinsics, optimize_noops, optimize_simplify,
+    optimize, optimize_branches, optimize_casts, optimize_constants, optimize_identities,
+    optimize_intrinsics, optimize_noops,
 };
-pub use print::{format_lir, format_lir_module};
+pub use print::{format_lir_block, format_lir_function, format_lir_instruction, format_lir_module};
+
+pub(crate) use ir::LirInstruction as Lir;

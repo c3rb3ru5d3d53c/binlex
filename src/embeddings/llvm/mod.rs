@@ -1,7 +1,7 @@
 use crate::Configuration;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::io::Stderr;
-use crate::lifters::llvm::Lifter as LlvmLifter;
+use crate::ir::llvm::Lifter as LlvmLifter;
 use crate::math::stats::normalize_l2;
 use inkwell::context::Context;
 use inkwell::memory_buffer::MemoryBuffer;

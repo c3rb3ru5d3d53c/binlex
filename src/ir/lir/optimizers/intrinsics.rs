@@ -1,4 +1,6 @@
-use crate::ir::lir::{Lir, LirEffect, LirExpression, LirLocation, LirModule, LirTerminator};
+use crate::ir::lir::{
+    Lir, LirEffect, LirExpression, LirFunction, LirLocation, LirModule, LirTerminator,
+};
 
 pub fn optimize_intrinsics(lir: &mut Lir) {
     for effect in &mut lir.effects {
@@ -7,9 +9,17 @@ pub fn optimize_intrinsics(lir: &mut Lir) {
     optimize_terminator(&mut lir.terminator);
 }
 
+pub fn optimize_intrinsics_function(function: &mut LirFunction) {
+    for block in &mut function.blocks {
+        for lir in &mut block.instructions {
+            optimize_intrinsics(lir);
+        }
+    }
+}
+
 pub fn optimize_intrinsics_module(module: &mut LirModule) {
-    for lir in &mut module.semantics {
-        optimize_intrinsics(lir);
+    for function in &mut module.functions {
+        optimize_intrinsics_function(function);
     }
 }
 

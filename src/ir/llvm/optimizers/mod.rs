@@ -1,4 +1,4 @@
-use crate::lifters::llvm::Lifter;
+use crate::ir::llvm::Lifter;
 use std::io::Error;
 
 pub struct Optimizers {

@@ -25,11 +25,11 @@ pub mod normalize;
 pub mod validate;
 
 pub use instruction::{
-    Lir, LirAddressSpace, LirData, LirDiagnostic, LirDiagnosticKind, LirEffect, LirEffectKind,
-    LirEncoding, LirExpression, LirExpressionKind, LirFenceKind, LirJson, LirLocation,
-    LirLocationKind, LirModule, LirOperation, LirOperationBinary, LirOperationCast,
-    LirOperationCompare, LirOperationUnary, LirStatus, LirTemporary, LirTerminator,
-    LirTerminatorKind, LirTrapKind,
+    LirAddressSpace, LirBlock, LirData, LirDiagnostic, LirDiagnosticKind, LirEffect, LirEffectKind,
+    LirEncoding, LirExpression, LirExpressionKind, LirFenceKind, LirFunction, LirInstruction,
+    LirJson, LirLocation, LirLocationKind, LirModule, LirOperation, LirOperationBinary,
+    LirOperationCast, LirOperationCompare, LirOperationUnary, LirStatus, LirTemporary,
+    LirTerminator, LirTerminatorKind, LirTrapKind,
 };
 pub use normalize::normalize_instruction_lir;
 pub use validate::validate_instruction_lir;

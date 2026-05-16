@@ -81,15 +81,31 @@ fn rewrite_operation(operation: &mut MirOperation, undefs: &UndefMap) {
         MirOperationKind::Add { lhs, rhs, .. }
         | MirOperationKind::Sub { lhs, rhs, .. }
         | MirOperationKind::Mul { lhs, rhs, .. }
+        | MirOperationKind::FAdd { lhs, rhs, .. }
+        | MirOperationKind::FSub { lhs, rhs, .. }
+        | MirOperationKind::FMul { lhs, rhs, .. }
+        | MirOperationKind::FDiv { lhs, rhs, .. }
         | MirOperationKind::And { lhs, rhs, .. }
         | MirOperationKind::Or { lhs, rhs, .. }
         | MirOperationKind::Xor { lhs, rhs, .. }
         | MirOperationKind::Shl { lhs, rhs, .. }
         | MirOperationKind::LShr { lhs, rhs, .. }
         | MirOperationKind::AShr { lhs, rhs, .. }
-        | MirOperationKind::Icmp { lhs, rhs, .. } => {
+        | MirOperationKind::UDiv { lhs, rhs, .. }
+        | MirOperationKind::SDiv { lhs, rhs, .. }
+        | MirOperationKind::URem { lhs, rhs, .. }
+        | MirOperationKind::SRem { lhs, rhs, .. }
+        | MirOperationKind::RotateLeft { lhs, rhs, .. }
+        | MirOperationKind::RotateRight { lhs, rhs, .. }
+        | MirOperationKind::Icmp { lhs, rhs, .. }
+        | MirOperationKind::Fcmp { lhs, rhs, .. } => {
             rewrite_value(lhs, undefs);
             rewrite_value(rhs, undefs);
+        }
+        MirOperationKind::Concat { parts, .. } => {
+            for part in parts {
+                rewrite_value(part, undefs);
+            }
         }
         MirOperationKind::Select {
             condition,
@@ -101,13 +117,29 @@ fn rewrite_operation(operation: &mut MirOperation, undefs: &UndefMap) {
             rewrite_value(when_true, undefs);
             rewrite_value(when_false, undefs);
         }
-        MirOperationKind::Extract { value, .. }
+        MirOperationKind::Copy { value, .. }
+        | MirOperationKind::Extract { value, .. }
+        | MirOperationKind::Neg { value, .. }
         | MirOperationKind::Not { value, .. }
-        | MirOperationKind::Popcount { value, .. } => rewrite_value(value, undefs),
+        | MirOperationKind::Popcount { value, .. }
+        | MirOperationKind::CountLeadingZeros { value, .. }
+        | MirOperationKind::CountTrailingZeros { value, .. } => rewrite_value(value, undefs),
         MirOperationKind::Load { address, .. } => rewrite_value(address, undefs),
         MirOperationKind::Store { address, value, .. } => {
             rewrite_value(address, undefs);
             rewrite_value(value, undefs);
+        }
+        MirOperationKind::MemoryCopy {
+            src_address,
+            dst_address,
+            count,
+            decrement,
+            ..
+        } => {
+            rewrite_value(src_address, undefs);
+            rewrite_value(dst_address, undefs);
+            rewrite_value(count, undefs);
+            rewrite_value(decrement, undefs);
         }
         MirOperationKind::Cast { value, .. } => rewrite_value(value, undefs),
         MirOperationKind::Call { arguments, .. }
@@ -162,6 +194,10 @@ fn fold_undef(kind: &MirOperationKind) -> Option<MirValue> {
         MirOperationKind::Add { lhs, rhs, ty }
         | MirOperationKind::Sub { lhs, rhs, ty }
         | MirOperationKind::Mul { lhs, rhs, ty }
+        | MirOperationKind::FAdd { lhs, rhs, ty }
+        | MirOperationKind::FSub { lhs, rhs, ty }
+        | MirOperationKind::FMul { lhs, rhs, ty }
+        | MirOperationKind::FDiv { lhs, rhs, ty }
         | MirOperationKind::And { lhs, rhs, ty }
         | MirOperationKind::Or { lhs, rhs, ty }
         | MirOperationKind::Xor { lhs, rhs, ty }
@@ -169,6 +205,25 @@ fn fold_undef(kind: &MirOperationKind) -> Option<MirValue> {
         | MirOperationKind::LShr { lhs, rhs, ty }
         | MirOperationKind::AShr { lhs, rhs, ty } => {
             if is_undef(lhs) || is_undef(rhs) {
+                Some(MirValue::undef(ty.clone()))
+            } else {
+                None
+            }
+        }
+        MirOperationKind::UDiv { lhs, rhs, ty }
+        | MirOperationKind::SDiv { lhs, rhs, ty }
+        | MirOperationKind::URem { lhs, rhs, ty }
+        | MirOperationKind::SRem { lhs, rhs, ty }
+        | MirOperationKind::RotateLeft { lhs, rhs, ty }
+        | MirOperationKind::RotateRight { lhs, rhs, ty } => {
+            if is_undef(lhs) || is_undef(rhs) {
+                Some(MirValue::undef(ty.clone()))
+            } else {
+                None
+            }
+        }
+        MirOperationKind::Concat { parts, ty } => {
+            if parts.iter().any(is_undef) {
                 Some(MirValue::undef(ty.clone()))
             } else {
                 None
@@ -188,9 +243,19 @@ fn fold_undef(kind: &MirOperationKind) -> Option<MirValue> {
                 None
             }
         }
+        MirOperationKind::Copy { value, ty } => {
+            if is_undef(value) {
+                Some(MirValue::undef(ty.clone()))
+            } else {
+                None
+            }
+        }
         MirOperationKind::Extract { value, ty, .. }
+        | MirOperationKind::Neg { value, ty }
         | MirOperationKind::Not { value, ty }
         | MirOperationKind::Popcount { value, ty }
+        | MirOperationKind::CountLeadingZeros { value, ty }
+        | MirOperationKind::CountTrailingZeros { value, ty }
         | MirOperationKind::Cast { value, ty, .. } => {
             if is_undef(value) {
                 Some(MirValue::undef(ty.clone()))
@@ -198,7 +263,7 @@ fn fold_undef(kind: &MirOperationKind) -> Option<MirValue> {
                 None
             }
         }
-        MirOperationKind::Icmp { lhs, rhs, .. } => {
+        MirOperationKind::Icmp { lhs, rhs, .. } | MirOperationKind::Fcmp { lhs, rhs, .. } => {
             if is_undef(lhs) || is_undef(rhs) {
                 Some(MirValue::undef(MirType::integer(1)))
             } else {
@@ -207,6 +272,7 @@ fn fold_undef(kind: &MirOperationKind) -> Option<MirValue> {
         }
         MirOperationKind::Load { .. }
         | MirOperationKind::Store { .. }
+        | MirOperationKind::MemoryCopy { .. }
         | MirOperationKind::Call { .. }
         | MirOperationKind::Intrinsic { .. } => None,
     }

@@ -322,12 +322,77 @@ fn packed_convert(machine: Architecture, view: &InstructionDetailX86) -> Option<
                 bits: 128,
             }
         }
+        "cvtsi2sd" => scalar_convert_expression(
+            machine,
+            view,
+            LirExpression::Cast {
+                op: LirOperationCast::IntToFloat,
+                arg: Box::new(src),
+                bits: 64,
+            },
+            64,
+        )?,
+        "cvtsi2ss" => scalar_convert_expression(
+            machine,
+            view,
+            LirExpression::Cast {
+                op: LirOperationCast::IntToFloat,
+                arg: Box::new(src),
+                bits: 32,
+            },
+            32,
+        )?,
+        "cvtss2sd" => scalar_convert_expression(
+            machine,
+            view,
+            LirExpression::Cast {
+                op: LirOperationCast::FloatExtend,
+                arg: Box::new(low_32(src)),
+                bits: 64,
+            },
+            64,
+        )?,
+        "cvtsd2ss" => scalar_convert_expression(
+            machine,
+            view,
+            LirExpression::Cast {
+                op: LirOperationCast::FloatTruncate,
+                arg: Box::new(low_64(src)),
+                bits: 32,
+            },
+            32,
+        )?,
         _ => operation_intrinsic(view, dst_bits, vec![src]),
     };
     Some(common::complete(
         LirTerminator::FallThrough,
         vec![LirEffect::Set { dst, expression }],
     ))
+}
+
+fn scalar_convert_expression(
+    machine: Architecture,
+    view: &InstructionDetailX86,
+    lower: LirExpression,
+    lower_bits: u16,
+) -> Option<LirExpression> {
+    let dst = operand_location(machine, view.operands().first()?)?;
+    let dst_bits = common::location_bits(&dst);
+    if dst_bits > lower_bits {
+        let upper = operand_expr(machine, view.operands().first()?).map(|current| {
+            LirExpression::Extract {
+                arg: Box::new(current),
+                lsb: lower_bits,
+                bits: dst_bits - lower_bits,
+            }
+        })?;
+        Some(LirExpression::Concat {
+            parts: vec![upper, lower],
+            bits: dst_bits,
+        })
+    } else {
+        Some(lower)
+    }
 }
 
 fn scalar_fp(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
@@ -419,12 +484,39 @@ fn packed_fp(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> 
         .iter()
         .filter_map(|operand| operand_expr(machine, operand))
         .collect::<Vec<_>>();
+    let expression = match view.mnemonic.as_str() {
+        "mulps" => {
+            let left = args.first()?.clone();
+            let right = args.get(1)?.clone();
+            let lane_count = dst_bits / 32;
+            let mut parts = Vec::with_capacity(lane_count as usize);
+            for lane in (0..lane_count).rev() {
+                let lsb = lane * 32;
+                parts.push(LirExpression::Binary {
+                    op: LirOperationBinary::FMul,
+                    left: Box::new(LirExpression::Extract {
+                        arg: Box::new(left.clone()),
+                        lsb,
+                        bits: 32,
+                    }),
+                    right: Box::new(LirExpression::Extract {
+                        arg: Box::new(right.clone()),
+                        lsb,
+                        bits: 32,
+                    }),
+                    bits: 32,
+                });
+            }
+            LirExpression::Concat {
+                parts,
+                bits: dst_bits,
+            }
+        }
+        _ => operation_intrinsic(view, dst_bits, args),
+    };
     Some(common::complete(
         LirTerminator::FallThrough,
-        vec![LirEffect::Set {
-            dst,
-            expression: operation_intrinsic(view, dst_bits, args),
-        }],
+        vec![LirEffect::Set { dst, expression }],
     ))
 }
 

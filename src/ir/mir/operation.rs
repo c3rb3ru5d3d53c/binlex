@@ -20,8 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use super::kind::{MirCastOperation, MirCompareOperation, MirType};
+use super::kind::{MirCastOperation, MirCompareOperation, MirFloatCompareOperation, MirType};
 use super::memory::MirAddressSpace;
+use super::target::MirControlTarget;
 use super::value::MirValue;
 use serde::{Deserialize, Serialize};
 
@@ -33,6 +34,10 @@ pub struct MirCallClobber {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MirOperationKind {
+    Copy {
+        value: MirValue,
+        ty: MirType,
+    },
     Add {
         lhs: MirValue,
         rhs: MirValue,
@@ -44,6 +49,26 @@ pub enum MirOperationKind {
         ty: MirType,
     },
     Mul {
+        lhs: MirValue,
+        rhs: MirValue,
+        ty: MirType,
+    },
+    FAdd {
+        lhs: MirValue,
+        rhs: MirValue,
+        ty: MirType,
+    },
+    FSub {
+        lhs: MirValue,
+        rhs: MirValue,
+        ty: MirType,
+    },
+    FMul {
+        lhs: MirValue,
+        rhs: MirValue,
+        ty: MirType,
+    },
+    FDiv {
         lhs: MirValue,
         rhs: MirValue,
         ty: MirType,
@@ -78,10 +103,44 @@ pub enum MirOperationKind {
         rhs: MirValue,
         ty: MirType,
     },
+    UDiv {
+        lhs: MirValue,
+        rhs: MirValue,
+        ty: MirType,
+    },
+    SDiv {
+        lhs: MirValue,
+        rhs: MirValue,
+        ty: MirType,
+    },
+    URem {
+        lhs: MirValue,
+        rhs: MirValue,
+        ty: MirType,
+    },
+    SRem {
+        lhs: MirValue,
+        rhs: MirValue,
+        ty: MirType,
+    },
+    RotateLeft {
+        lhs: MirValue,
+        rhs: MirValue,
+        ty: MirType,
+    },
+    RotateRight {
+        lhs: MirValue,
+        rhs: MirValue,
+        ty: MirType,
+    },
     Select {
         condition: MirValue,
         when_true: MirValue,
         when_false: MirValue,
+        ty: MirType,
+    },
+    Concat {
+        parts: Vec<MirValue>,
         ty: MirType,
     },
     Extract {
@@ -93,7 +152,19 @@ pub enum MirOperationKind {
         value: MirValue,
         ty: MirType,
     },
+    Neg {
+        value: MirValue,
+        ty: MirType,
+    },
     Popcount {
+        value: MirValue,
+        ty: MirType,
+    },
+    CountLeadingZeros {
+        value: MirValue,
+        ty: MirType,
+    },
+    CountTrailingZeros {
         value: MirValue,
         ty: MirType,
     },
@@ -108,8 +179,23 @@ pub enum MirOperationKind {
         value: MirValue,
         ty: MirType,
     },
+    MemoryCopy {
+        src_space: MirAddressSpace,
+        src_address: MirValue,
+        dst_space: MirAddressSpace,
+        dst_address: MirValue,
+        count: MirValue,
+        element_bits: u16,
+        decrement: MirValue,
+    },
     Icmp {
         op: MirCompareOperation,
+        lhs: MirValue,
+        rhs: MirValue,
+        ty: MirType,
+    },
+    Fcmp {
+        op: MirFloatCompareOperation,
         lhs: MirValue,
         rhs: MirValue,
         ty: MirType,
@@ -120,7 +206,7 @@ pub enum MirOperationKind {
         ty: MirType,
     },
     Call {
-        target: String,
+        target: MirControlTarget,
         arguments: Vec<MirValue>,
         result_types: Vec<MirType>,
         clobbers: Vec<MirCallClobber>,

@@ -1,82 +1,110 @@
 use crate::ir::mir::analysis::mir_predecessors;
-use crate::ir::mir::{Mir, MirOperationKind, MirTerminator, MirValue};
-use std::collections::HashMap;
+use crate::ir::mir::{Mir, MirBlock, MirControlTarget, MirOperationKind, MirTerminator, MirValue};
+use std::collections::{HashMap, HashSet};
 
 pub fn optimize_blocks(mir: &mut Mir) {
     loop {
         let predecessors = mir_predecessors(mir);
-        let block_index_by_name: HashMap<String, usize> = mir
+        let blocks_by_name: HashMap<String, MirBlock> = mir
             .blocks()
             .iter()
-            .enumerate()
-            .map(|(index, block)| (block.name.clone(), index))
+            .cloned()
+            .map(|block| (block.name.clone(), block))
             .collect();
 
-        let mut changed = false;
-
-        for block_index in 0..mir.blocks().len() {
-            let Some((target_name, arguments)) = jump_target(mir, block_index) else {
-                continue;
-            };
-
-            let Some(&target_index) = block_index_by_name.get(&target_name) else {
-                continue;
-            };
-
-            if target_index == block_index {
-                continue;
-            }
-
-            let Some(target_block) = mir.blocks().get(target_index) else {
-                continue;
-            };
-
-            if !target_block.parameters.is_empty()
-                && target_block.parameters.len() != arguments.len()
-            {
-                continue;
-            }
-
-            let Some(preds) = predecessors.get(&target_name) else {
-                continue;
-            };
-
-            if preds.len() != 1 || preds[0] != mir.blocks()[block_index].name {
-                continue;
-            }
-
-            merge_successor_block(mir, block_index, target_index, arguments);
-            changed = true;
+        let merge_plan = collect_merge_plan(mir, &predecessors, &blocks_by_name);
+        if merge_plan.is_empty() {
             break;
         }
 
-        if !changed {
-            break;
-        }
+        apply_merge_plan(mir, &blocks_by_name, &merge_plan);
     }
 }
 
-fn jump_target(mir: &Mir, block_index: usize) -> Option<(String, Vec<crate::ir::mir::MirValue>)> {
-    let terminator = mir.blocks().get(block_index)?.terminator.as_ref()?;
+fn collect_merge_plan(
+    mir: &Mir,
+    predecessors: &HashMap<String, Vec<String>>,
+    blocks_by_name: &HashMap<String, MirBlock>,
+) -> HashMap<String, (String, Vec<MirValue>)> {
+    let mut plan = HashMap::<String, (String, Vec<MirValue>)>::new();
+    let mut consumed_targets = HashSet::<String>::new();
+
+    for block in mir.blocks() {
+        let Some((target_name, arguments)) = jump_target(block) else {
+            continue;
+        };
+        if block.name == target_name || consumed_targets.contains(&target_name) {
+            continue;
+        }
+
+        let Some(target_block) = blocks_by_name.get(&target_name) else {
+            continue;
+        };
+        if !target_block.parameters.is_empty() && target_block.parameters.len() != arguments.len() {
+            continue;
+        }
+
+        let Some(preds) = predecessors.get(&target_name) else {
+            continue;
+        };
+        if preds.len() != 1 || preds[0] != block.name {
+            continue;
+        }
+
+        consumed_targets.insert(target_name.clone());
+        plan.insert(block.name.clone(), (target_name, arguments));
+    }
+
+    plan
+}
+
+fn apply_merge_plan(
+    mir: &mut Mir,
+    blocks_by_name: &HashMap<String, MirBlock>,
+    merge_plan: &HashMap<String, (String, Vec<MirValue>)>,
+) {
+    let merged_targets = merge_plan
+        .values()
+        .map(|(target, _)| target.clone())
+        .collect::<HashSet<_>>();
+    let mut new_blocks =
+        Vec::with_capacity(mir.blocks().len().saturating_sub(merged_targets.len()));
+
+    for block in mir.blocks().iter().cloned() {
+        if merged_targets.contains(&block.name) {
+            continue;
+        }
+
+        if let Some((target_name, arguments)) = merge_plan.get(&block.name) {
+            let Some(target_block) = blocks_by_name.get(target_name).cloned() else {
+                new_blocks.push(block);
+                continue;
+            };
+            new_blocks.push(merged_block(block, target_block, arguments.clone()));
+        } else {
+            new_blocks.push(block);
+        }
+    }
+
+    *mir.blocks_mut() = new_blocks;
+}
+
+fn jump_target(block: &MirBlock) -> Option<(String, Vec<MirValue>)> {
+    let terminator = block.terminator.as_ref()?;
     match terminator {
-        MirTerminator::Jump { target, arguments } => Some((target.clone(), arguments.clone())),
+        MirTerminator::Jump {
+            target: MirControlTarget::Direct(target),
+            arguments,
+        } => Some((target.clone(), arguments.clone())),
         _ => None,
     }
 }
 
-fn merge_successor_block(
-    mir: &mut Mir,
-    block_index: usize,
-    target_index: usize,
+fn merged_block(
+    mut block: MirBlock,
+    mut target_block: MirBlock,
     arguments: Vec<MirValue>,
-) {
-    let mut target_block = mir.blocks_mut().remove(target_index);
-    let destination_index = if target_index < block_index {
-        block_index - 1
-    } else {
-        block_index
-    };
-
+) -> MirBlock {
     let replacements = target_block
         .parameters
         .iter()
@@ -94,9 +122,9 @@ fn merge_successor_block(
     }
     target_block.parameters.clear();
 
-    let block = &mut mir.blocks_mut()[destination_index];
     block.operations.extend(target_block.operations);
     block.terminator = target_block.terminator;
+    block
 }
 
 fn rewrite_operation(
@@ -107,15 +135,31 @@ fn rewrite_operation(
         MirOperationKind::Add { lhs, rhs, .. }
         | MirOperationKind::Sub { lhs, rhs, .. }
         | MirOperationKind::Mul { lhs, rhs, .. }
+        | MirOperationKind::FAdd { lhs, rhs, .. }
+        | MirOperationKind::FSub { lhs, rhs, .. }
+        | MirOperationKind::FMul { lhs, rhs, .. }
+        | MirOperationKind::FDiv { lhs, rhs, .. }
         | MirOperationKind::And { lhs, rhs, .. }
         | MirOperationKind::Or { lhs, rhs, .. }
         | MirOperationKind::Xor { lhs, rhs, .. }
         | MirOperationKind::Shl { lhs, rhs, .. }
         | MirOperationKind::LShr { lhs, rhs, .. }
         | MirOperationKind::AShr { lhs, rhs, .. }
-        | MirOperationKind::Icmp { lhs, rhs, .. } => {
+        | MirOperationKind::UDiv { lhs, rhs, .. }
+        | MirOperationKind::SDiv { lhs, rhs, .. }
+        | MirOperationKind::URem { lhs, rhs, .. }
+        | MirOperationKind::SRem { lhs, rhs, .. }
+        | MirOperationKind::RotateLeft { lhs, rhs, .. }
+        | MirOperationKind::RotateRight { lhs, rhs, .. }
+        | MirOperationKind::Icmp { lhs, rhs, .. }
+        | MirOperationKind::Fcmp { lhs, rhs, .. } => {
             rewrite_value(lhs, replacements);
             rewrite_value(rhs, replacements);
+        }
+        MirOperationKind::Concat { parts, .. } => {
+            for part in parts {
+                rewrite_value(part, replacements);
+            }
         }
         MirOperationKind::Select {
             condition,
@@ -127,14 +171,30 @@ fn rewrite_operation(
             rewrite_value(when_true, replacements);
             rewrite_value(when_false, replacements);
         }
-        MirOperationKind::Extract { value, .. }
+        MirOperationKind::Copy { value, .. }
+        | MirOperationKind::Extract { value, .. }
+        | MirOperationKind::Neg { value, .. }
         | MirOperationKind::Not { value, .. }
         | MirOperationKind::Popcount { value, .. }
+        | MirOperationKind::CountLeadingZeros { value, .. }
+        | MirOperationKind::CountTrailingZeros { value, .. }
         | MirOperationKind::Load { address: value, .. }
         | MirOperationKind::Cast { value, .. } => rewrite_value(value, replacements),
         MirOperationKind::Store { address, value, .. } => {
             rewrite_value(address, replacements);
             rewrite_value(value, replacements);
+        }
+        MirOperationKind::MemoryCopy {
+            src_address,
+            dst_address,
+            count,
+            decrement,
+            ..
+        } => {
+            rewrite_value(src_address, replacements);
+            rewrite_value(dst_address, replacements);
+            rewrite_value(count, replacements);
+            rewrite_value(decrement, replacements);
         }
         MirOperationKind::Call { arguments, .. }
         | MirOperationKind::Intrinsic { arguments, .. } => {

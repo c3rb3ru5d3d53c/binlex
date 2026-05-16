@@ -1,10 +1,19 @@
-use crate::ir::mir::analysis::build_use_def;
-use crate::ir::mir::{Mir, MirTerminator, MirValue};
+use crate::ir::mir::analysis::{build_use_counts, mir_predecessors};
+use crate::ir::mir::{Mir, MirControlTarget, MirTerminator, MirValue};
+use std::collections::{HashMap, HashSet};
 
 pub fn optimize_ssa_liveness(mir: &mut Mir) {
+    let indices = mir
+        .blocks()
+        .iter()
+        .enumerate()
+        .map(|(index, block)| (block.name.clone(), index))
+        .collect::<HashMap<_, _>>();
+    let predecessors = mir_predecessors(mir);
+
     loop {
-        let mut changed = fold_trivial_block_parameters(mir);
-        let uses = build_use_def(mir).uses;
+        let mut changed = fold_trivial_block_parameters(mir, &indices, &predecessors);
+        let uses = build_use_counts(mir);
 
         for block_index in 0..mir.blocks().len() {
             let block_name = mir.blocks()[block_index].name.clone();
@@ -48,10 +57,11 @@ pub fn optimize_ssa_liveness(mir: &mut Mir) {
 }
 
 fn keep_selected<T>(values: Vec<T>, keep_indices: &[usize]) -> Vec<T> {
+    let keep = keep_indices.iter().copied().collect::<HashSet<_>>();
     values
         .into_iter()
         .enumerate()
-        .filter_map(|(index, value)| keep_indices.contains(&index).then_some(value))
+        .filter_map(|(index, value)| keep.contains(&index).then_some(value))
         .collect()
 }
 
@@ -60,8 +70,10 @@ fn trim_edge_arguments(terminator: &mut MirTerminator, target: &str, keep_indice
         MirTerminator::Jump {
             target: edge_target,
             arguments,
-        } if edge_target == target => {
-            *arguments = keep_selected(std::mem::take(arguments), keep_indices);
+        } => {
+            if direct_target_name(edge_target) == Some(target) {
+                *arguments = keep_selected(std::mem::take(arguments), keep_indices);
+            }
         }
         MirTerminator::CondBr {
             then_target,
@@ -70,21 +82,22 @@ fn trim_edge_arguments(terminator: &mut MirTerminator, target: &str, keep_indice
             else_arguments,
             ..
         } => {
-            if then_target == target {
+            if matches!(then_target, MirControlTarget::Direct(name) if name == target) {
                 *then_arguments = keep_selected(std::mem::take(then_arguments), keep_indices);
             }
-            if else_target == target {
+            if matches!(else_target, MirControlTarget::Direct(name) if name == target) {
                 *else_arguments = keep_selected(std::mem::take(else_arguments), keep_indices);
             }
         }
-        MirTerminator::Jump { .. }
-        | MirTerminator::Return { .. }
-        | MirTerminator::Trap
-        | MirTerminator::Unreachable => {}
+        MirTerminator::Return { .. } | MirTerminator::Trap | MirTerminator::Unreachable => {}
     }
 }
 
-fn fold_trivial_block_parameters(mir: &mut Mir) -> bool {
+fn fold_trivial_block_parameters(
+    mir: &mut Mir,
+    indices: &HashMap<String, usize>,
+    predecessors: &HashMap<String, Vec<String>>,
+) -> bool {
     let mut changed = false;
     let block_names = mir
         .blocks()
@@ -93,11 +106,7 @@ fn fold_trivial_block_parameters(mir: &mut Mir) -> bool {
         .collect::<Vec<_>>();
 
     for block_name in block_names {
-        let Some(block_index) = mir
-            .blocks()
-            .iter()
-            .position(|block| block.name == block_name)
-        else {
+        let Some(block_index) = indices.get(&block_name).copied() else {
             continue;
         };
 
@@ -108,7 +117,8 @@ fn fold_trivial_block_parameters(mir: &mut Mir) -> bool {
 
         let mut replacements = Vec::<(usize, MirValue)>::new();
         for param_index in 0..param_len {
-            let incoming = incoming_argument_values(mir, &block_name, param_index);
+            let incoming =
+                incoming_argument_values(mir, indices, predecessors, &block_name, param_index);
             if incoming.is_empty() {
                 continue;
             }
@@ -146,9 +156,22 @@ fn fold_trivial_block_parameters(mir: &mut Mir) -> bool {
     changed
 }
 
-fn incoming_argument_values(mir: &Mir, target: &str, param_index: usize) -> Vec<MirValue> {
+fn incoming_argument_values(
+    mir: &Mir,
+    indices: &HashMap<String, usize>,
+    predecessors: &HashMap<String, Vec<String>>,
+    target: &str,
+    param_index: usize,
+) -> Vec<MirValue> {
     let mut values = Vec::new();
-    for block in mir.blocks() {
+    let Some(preds) = predecessors.get(target) else {
+        return values;
+    };
+    for predecessor in preds {
+        let Some(index) = indices.get(predecessor).copied() else {
+            continue;
+        };
+        let block = &mir.blocks()[index];
         let Some(terminator) = block.terminator.as_ref() else {
             continue;
         };
@@ -156,9 +179,11 @@ fn incoming_argument_values(mir: &Mir, target: &str, param_index: usize) -> Vec<
             MirTerminator::Jump {
                 target: edge_target,
                 arguments,
-            } if edge_target == target => {
-                if let Some(value) = arguments.get(param_index) {
-                    values.push(value.clone());
+            } => {
+                if direct_target_name(edge_target) == Some(target) {
+                    if let Some(value) = arguments.get(param_index) {
+                        values.push(value.clone());
+                    }
                 }
             }
             MirTerminator::CondBr {
@@ -168,12 +193,12 @@ fn incoming_argument_values(mir: &Mir, target: &str, param_index: usize) -> Vec<
                 else_arguments,
                 ..
             } => {
-                if then_target == target {
+                if matches!(then_target, MirControlTarget::Direct(name) if name == target) {
                     if let Some(value) = then_arguments.get(param_index) {
                         values.push(value.clone());
                     }
                 }
-                if else_target == target {
+                if matches!(else_target, MirControlTarget::Direct(name) if name == target) {
                     if let Some(value) = else_arguments.get(param_index) {
                         values.push(value.clone());
                     }
@@ -204,15 +229,31 @@ fn replace_operation_uses(
         MirOperationKind::Add { lhs, rhs, .. }
         | MirOperationKind::Sub { lhs, rhs, .. }
         | MirOperationKind::Mul { lhs, rhs, .. }
+        | MirOperationKind::FAdd { lhs, rhs, .. }
+        | MirOperationKind::FSub { lhs, rhs, .. }
+        | MirOperationKind::FMul { lhs, rhs, .. }
+        | MirOperationKind::FDiv { lhs, rhs, .. }
         | MirOperationKind::And { lhs, rhs, .. }
         | MirOperationKind::Or { lhs, rhs, .. }
         | MirOperationKind::Xor { lhs, rhs, .. }
         | MirOperationKind::Shl { lhs, rhs, .. }
         | MirOperationKind::LShr { lhs, rhs, .. }
         | MirOperationKind::AShr { lhs, rhs, .. }
-        | MirOperationKind::Icmp { lhs, rhs, .. } => {
+        | MirOperationKind::UDiv { lhs, rhs, .. }
+        | MirOperationKind::SDiv { lhs, rhs, .. }
+        | MirOperationKind::URem { lhs, rhs, .. }
+        | MirOperationKind::SRem { lhs, rhs, .. }
+        | MirOperationKind::RotateLeft { lhs, rhs, .. }
+        | MirOperationKind::RotateRight { lhs, rhs, .. }
+        | MirOperationKind::Icmp { lhs, rhs, .. }
+        | MirOperationKind::Fcmp { lhs, rhs, .. } => {
             replace_value(lhs, name, replacement);
             replace_value(rhs, name, replacement);
+        }
+        MirOperationKind::Concat { parts, .. } => {
+            for part in parts {
+                replace_value(part, name, replacement);
+            }
         }
         MirOperationKind::Select {
             condition,
@@ -224,14 +265,30 @@ fn replace_operation_uses(
             replace_value(when_true, name, replacement);
             replace_value(when_false, name, replacement);
         }
-        MirOperationKind::Extract { value, .. }
+        MirOperationKind::Copy { value, .. }
+        | MirOperationKind::Extract { value, .. }
+        | MirOperationKind::Neg { value, .. }
         | MirOperationKind::Not { value, .. }
         | MirOperationKind::Popcount { value, .. }
+        | MirOperationKind::CountLeadingZeros { value, .. }
+        | MirOperationKind::CountTrailingZeros { value, .. }
         | MirOperationKind::Cast { value, .. }
         | MirOperationKind::Load { address: value, .. } => replace_value(value, name, replacement),
         MirOperationKind::Store { address, value, .. } => {
             replace_value(address, name, replacement);
             replace_value(value, name, replacement);
+        }
+        MirOperationKind::MemoryCopy {
+            src_address,
+            dst_address,
+            count,
+            decrement,
+            ..
+        } => {
+            replace_value(src_address, name, replacement);
+            replace_value(dst_address, name, replacement);
+            replace_value(count, name, replacement);
+            replace_value(decrement, name, replacement);
         }
         MirOperationKind::Call { arguments, .. }
         | MirOperationKind::Intrinsic { arguments, .. } => {
@@ -283,8 +340,8 @@ fn remove_edge_argument(terminator: &mut MirTerminator, target: &str, param_inde
         MirTerminator::Jump {
             target: edge_target,
             arguments,
-        } if edge_target == target => {
-            if param_index < arguments.len() {
+        } => {
+            if direct_target_name(edge_target) == Some(target) && param_index < arguments.len() {
                 arguments.remove(param_index);
             }
         }
@@ -295,13 +352,24 @@ fn remove_edge_argument(terminator: &mut MirTerminator, target: &str, param_inde
             else_arguments,
             ..
         } => {
-            if then_target == target && param_index < then_arguments.len() {
+            if matches!(then_target, MirControlTarget::Direct(name) if name == target)
+                && param_index < then_arguments.len()
+            {
                 then_arguments.remove(param_index);
             }
-            if else_target == target && param_index < else_arguments.len() {
+            if matches!(else_target, MirControlTarget::Direct(name) if name == target)
+                && param_index < else_arguments.len()
+            {
                 else_arguments.remove(param_index);
             }
         }
         _ => {}
+    }
+}
+
+fn direct_target_name(target: &MirControlTarget) -> Option<&str> {
+    match target {
+        MirControlTarget::Direct(name) => Some(name.as_str()),
+        MirControlTarget::FunctionIndirect(_) | MirControlTarget::BlockIndirect(_) => None,
     }
 }

@@ -26,6 +26,8 @@ use crate::controlflow::EntityKind;
 use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
 use crate::hashing::{MinHash32, SSDeep, SHA256, TLSH};
+use crate::ir::lir::LirFunction as PyLirFunction;
+use crate::ir::mir::PyMirFunction;
 use crate::Architecture;
 use crate::Configuration;
 use binlex::controlflow::EntityKind as InnerEntityKind;
@@ -367,6 +369,34 @@ impl Function {
                 result.push(block);
             }
             Ok(result)
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn lir(&self, py: Python<'_>) -> PyResult<Py<PyLirFunction>> {
+        self.with_inner_function(py, |function| {
+            let inner = py.detach(|| function.lir())?;
+            Py::new(py, PyLirFunction::from_inner(inner))
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn mir(&self, py: Python<'_>) -> PyResult<Py<PyMirFunction>> {
+        self.with_inner_function(py, |function| {
+            let inner = py.detach(|| function.mir())?;
+            Py::new(py, PyMirFunction::from_inner(inner))
+        })
+    }
+
+    #[pyo3(text_signature = "($self, symbols)")]
+    pub fn mir_with_symbols(
+        &self,
+        py: Python<'_>,
+        symbols: BTreeMap<u64, String>,
+    ) -> PyResult<Py<PyMirFunction>> {
+        self.with_inner_function(py, |function| {
+            let inner = py.detach(|| function.mir_with_symbols(&symbols))?;
+            Py::new(py, PyMirFunction::from_inner(inner))
         })
     }
 

@@ -29,16 +29,23 @@ pub mod mir;
 pub mod operation;
 pub mod optimizers;
 pub mod print;
+pub mod target;
 pub mod terminator;
 pub mod value;
 pub mod verify;
 
 pub use block::{MirBlock, MirBlockParameter};
-pub use kind::{MirCastOperation, MirCompareOperation, MirTerminatorKind, MirType, MirTypeKind};
+pub use kind::{
+    MirCastOperation, MirCompareOperation, MirFloatCompareOperation, MirTerminatorKind, MirType,
+    MirTypeKind,
+};
 pub use memory::MirAddressSpace;
-pub use mir::Mir;
+pub use mir::{MirFunction, MirModule};
 pub use operation::{MirCallClobber, MirOperation, MirOperationKind};
-pub use print::format_mir;
+pub use print::{format_mir_function, format_mir_module};
+pub use target::MirControlTarget;
 pub use terminator::MirTerminator;
 pub use value::MirValue;
-pub use verify::verify_mir;
+pub use verify::{verify_mir_function, verify_mir_module};
+
+pub(crate) use mir::MirFunction as Mir;

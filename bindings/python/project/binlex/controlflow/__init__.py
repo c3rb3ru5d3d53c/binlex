@@ -37,13 +37,174 @@ from binlex_bindings.binlex.controlflow.instruction import OperandKind as Operan
 
 from binlex.core.architecture import _coerce_architecture
 from binlex.hashing import MinHash32, SHA256, SSDeep, TLSH
-from binlex.ir.lir import LirCpu, _cpu_kind_from_architecture
+from binlex.ir.lir import LirBlock, LirCpu, LirFunction, LirInstruction, _cpu_kind_from_architecture
+from binlex.ir.mir import MirBlock, MirFunction
 
 EntityKind = _EntityKindBinding
 
 
 def _cpu_for_architecture(architecture):
     return LirCpu.from_kind(_cpu_kind_from_architecture(architecture))
+
+
+def _decompiler_symbol_map(graph):
+    decompiler = getattr(graph, "_decompiler", None)
+    if decompiler is None:
+        return {}
+    cached = getattr(decompiler, "_symbol_address_map", None)
+    if cached is not None:
+        return cached
+    symbol_map = {}
+    for symbol in decompiler.symbols:
+        try:
+            if isinstance(symbol, dict):
+                virtual_address = symbol.get("virtual_address")
+                name = symbol.get("name")
+            else:
+                virtual_address = symbol.virtual_address()
+                name = symbol.name()
+        except Exception:
+            continue
+        if virtual_address is None or not name:
+            continue
+        symbol_map[int(virtual_address)] = name
+    decompiler._symbol_address_map = symbol_map
+    return symbol_map
+
+
+def _const_u64_value(expression):
+    if not isinstance(expression, dict) or "Const" not in expression:
+        return None
+    value = expression["Const"].get("value")
+    try:
+        return int(value)
+    except Exception:
+        return None
+
+
+def _read_register_name(expression):
+    if not isinstance(expression, dict) or "Read" not in expression:
+        return None
+    read = expression["Read"]
+    if not isinstance(read, dict) or "Register" not in read:
+        return None
+    return read["Register"].get("name")
+
+
+def _resolve_indirect_symbol_address(instruction_dict, expression, register_map, depth=0):
+    if depth > 4 or not isinstance(expression, dict):
+        return None
+
+    if "Binary" in expression:
+        binary = expression["Binary"]
+        if (
+            isinstance(binary, dict)
+            and binary.get("op") == "Add"
+            and _read_register_name(binary.get("left")) in {"rip", "eip"}
+        ):
+            displacement = _const_u64_value(binary.get("right"))
+            encoding = instruction_dict.get("encoding") or {}
+            base = encoding.get("address")
+            size = len(encoding.get("bytes") or [])
+            if displacement is not None and base is not None:
+                return int(base) + int(size) + displacement
+
+    register_name = _read_register_name(expression)
+    if register_name and register_map:
+        aliased = register_map.get(register_name)
+        if isinstance(aliased, dict):
+            return _resolve_indirect_symbol_address(
+                instruction_dict, aliased, register_map, depth + 1
+            )
+
+    return _const_u64_value(expression)
+
+
+def _resolve_indirect_symbol_name(
+    instruction_dict, target_dict, symbol_map, register_map=None, depth=0
+):
+    if depth > 4 or not symbol_map or not isinstance(target_dict, dict):
+        return None
+
+    register_name = _read_register_name(target_dict)
+    if register_name and register_map:
+        aliased = register_map.get(register_name)
+        if isinstance(aliased, dict):
+            return _resolve_indirect_symbol_name(
+                instruction_dict, aliased, symbol_map, register_map, depth + 1
+            )
+
+    load = target_dict.get("Load")
+    if not isinstance(load, dict):
+        return None
+
+    bits = load.get("bits", 64)
+    space = load.get("space")
+    addr = load.get("addr")
+
+    address = None
+    if space == "Default":
+        address = _resolve_indirect_symbol_address(
+            instruction_dict, addr, register_map or {}
+        )
+
+    if address is None:
+        return None
+
+    symbol_name = symbol_map.get(address)
+    if not symbol_name:
+        return None
+
+    return {"Function": {"name": symbol_name, "bits": bits}}
+
+
+def _rewrite_lir_function_symbols(lir_function, graph):
+    symbol_map = _decompiler_symbol_map(graph)
+    if not symbol_map:
+        return lir_function
+
+    data = lir_function.to_dict()
+    changed = False
+
+    for block in data.get("blocks", []):
+        register_map = {}
+        for instruction in block.get("instructions", []):
+            for effect in instruction.get("effects", []):
+                if not isinstance(effect, dict):
+                    continue
+                item = effect.get("Set")
+                if not isinstance(item, dict):
+                    continue
+                dst = item.get("dst")
+                expression = item.get("expression")
+                if not isinstance(dst, dict) or not isinstance(expression, dict):
+                    continue
+                register = dst.get("Register")
+                if not isinstance(register, dict):
+                    continue
+                name = register.get("name")
+                if isinstance(name, str) and name:
+                    register_map[name] = expression
+
+            terminator = instruction.get("terminator") or {}
+            if not isinstance(terminator, dict):
+                continue
+            for kind in ("Call", "Jump"):
+                item = terminator.get(kind)
+                if not isinstance(item, dict):
+                    continue
+                target = item.get("target")
+                replacement = _resolve_indirect_symbol_name(
+                    instruction, target, symbol_map, register_map
+                )
+                if replacement is None:
+                    continue
+                item["target"] = replacement
+                changed = True
+
+    if not changed:
+        return lir_function
+    return LirFunction.from_dict(data)
 
 
 class Instruction:
@@ -53,13 +214,15 @@ class Instruction:
         """Look up the instruction at `address` within the provided graph."""
         self._inner = _InstructionBinding(address, cfg._inner)
         self._config = cfg._config
+        self._graph = cfg
 
     @classmethod
-    def _from_binding(cls, binding, config=None):
+    def _from_binding(cls, binding, config=None, graph=None):
         """Wrap an existing native instruction binding."""
         result = cls.__new__(cls)
         result._inner = binding
         result._config = config
+        result._graph = graph
         return result
 
     def address(self):
@@ -153,23 +316,38 @@ class Instruction:
             dimensions=dimensions,
         ).embed_instruction(self)
 
-    def lift(self, backend=None, abi=None, triple=None):
-        """Return a lifter artifact for this instruction, if available."""
-        from binlex.lifters import Lifter, LifterBackend
+    def llvm(self, triple=None):
+        """Return LLVM IR for this instruction."""
+        from binlex.ir.llvm import LlvmModule
 
         if self._config is None:
             return None
-        backend = LifterBackend.DEFAULT if backend is None else backend
-        return Lifter(
+        llvm = LlvmModule(
             _cpu_for_architecture(self.architecture()),
             self._config,
-            backend=backend,
             triple=triple,
-        ).lift_instruction(self)
+        )
+        if llvm.lift_instruction(self) is None:
+            return None
+        return llvm
+
+    def vex(self, triple=None):
+        """Return VEX IR for this instruction."""
+        from binlex.ir.vex import Lifter
+
+        if self._config is None:
+            return None
+        vex = Lifter(self._config, triple=triple)
+        if vex.lift_instruction(self) is None:
+            return None
+        return vex
 
     def lir(self):
         """Return canonical LIR for this instruction, if present."""
-        return self._inner.lir()
+        lir = self._inner.lir()
+        if lir is None:
+            return None
+        return LirInstruction._from_inner(lir)
 
     def set_lir(self, lir):
         """Replace the canonical LIR for this instruction inside the graph."""
@@ -288,7 +466,10 @@ class InstructionJsonDeserializer:
 
     def lir(self):
         """Return canonical LIR for this serialized instruction, if present."""
-        return self._inner.lir()
+        lir = self._inner.lir()
+        if lir is None:
+            return None
+        return LirInstruction._from_inner(lir)
 
     def to_dict(self):
         """Convert the instruction to a Python dictionary."""
@@ -314,13 +495,15 @@ class Block:
         """Look up the block that starts at `address` within the provided graph."""
         self._inner = _BlockBinding(address, cfg._inner)
         self._config = cfg._config
+        self._graph = cfg
 
     @classmethod
-    def _from_binding(cls, binding, config=None):
+    def _from_binding(cls, binding, config=None, graph=None):
         """Wrap an existing native block binding."""
         result = cls.__new__(cls)
         result._inner = binding
         result._config = config
+        result._graph = graph
         return result
 
     def address(self):
@@ -341,7 +524,7 @@ class Block:
 
     def instructions(self):
         """Return the instructions contained in this block."""
-        return [Instruction._from_binding(item, self._config) for item in self._inner.instructions()]
+        return [Instruction._from_binding(item, self._config, self._graph) for item in self._inner.instructions()]
 
     def bytes(self):
         """Return the raw bytes for this block."""
@@ -369,11 +552,11 @@ class Block:
 
     def successors(self):
         """Return the blocks directly reached from this block."""
-        return [Block._from_binding(item, self._config) for item in self._inner.successors()]
+        return [Block._from_binding(item, self._config, self._graph) for item in self._inner.successors()]
 
     def predecessors(self):
         """Return the blocks that directly reach this block."""
-        return [Block._from_binding(item, self._config) for item in self._inner.predecessors()]
+        return [Block._from_binding(item, self._config, self._graph) for item in self._inner.predecessors()]
 
     def successor_references(self):
         """Return direct outgoing control-flow references for this block."""
@@ -389,7 +572,7 @@ class Block:
 
     def callees(self):
         """Return the functions directly called from this block."""
-        return [Function._from_binding(item, self._config) for item in self._inner.callees()]
+        return [Function._from_binding(item, self._config, self._graph) for item in self._inner.callees()]
 
     def callee_references(self):
         """Return direct outgoing call references for this block."""
@@ -418,19 +601,39 @@ class Block:
             dimensions=dimensions,
         ).embed_block(self)
 
-    def lift(self, backend=None, abi=None, triple=None):
-        """Return a lifter artifact for this block, if available."""
-        from binlex.lifters import Lifter, LifterBackend
+    def llvm(self, abi=None, triple=None):
+        """Return LLVM IR for this block."""
+        from binlex.ir.llvm import LlvmModule
 
         if self._config is None:
             return None
-        backend = LifterBackend.DEFAULT if backend is None else backend
-        return Lifter(
+        llvm = LlvmModule(
             _cpu_for_architecture(self.architecture()),
             self._config,
-            backend=backend,
             triple=triple,
-        ).lift_block(self, abi=abi)
+        )
+        if llvm.lift_block(self, abi=abi) is None:
+            return None
+        return llvm
+
+    def vex(self, abi=None, triple=None):
+        """Return VEX IR for this block."""
+        from binlex.ir.vex import Lifter
+
+        if self._config is None:
+            return None
+        vex = Lifter(self._config, triple=triple)
+        if vex.lift_block(self, abi=abi) is None:
+            return None
+        return vex
+
+    def lir(self):
+        """Return canonical LIR for this block."""
+        return LirBlock._from_inner(self._inner.lir())
+
+    def mir(self):
+        """Return optimized MIR for this block."""
+        return self._inner.mir()
 
     def tlsh(self):
         """Return the TLSH object for this block, if available."""
@@ -480,13 +683,15 @@ class Function:
         """Look up the function that starts at `address` within the provided graph."""
         self._inner = _FunctionBinding(address, cfg._inner)
         self._config = cfg._config
+        self._graph = cfg
 
     @classmethod
-    def _from_binding(cls, binding, config=None):
+    def _from_binding(cls, binding, config=None, graph=None):
         """Wrap an existing native function binding."""
         result = cls.__new__(cls)
         result._inner = binding
         result._config = config
+        result._graph = graph
         return result
 
     def address(self):
@@ -515,7 +720,7 @@ class Function:
 
     def blocks(self):
         """Return the basic blocks contained in this function."""
-        return [Block._from_binding(item, self._config) for item in self._inner.blocks()]
+        return [Block._from_binding(item, self._config, self._graph) for item in self._inner.blocks()]
 
     def bytes(self):
         """Return the raw bytes for this function, if available."""
@@ -543,11 +748,11 @@ class Function:
 
     def callees(self):
         """Return the functions directly called by this function."""
-        return [Function._from_binding(item, self._config) for item in self._inner.callees()]
+        return [Function._from_binding(item, self._config, self._graph) for item in self._inner.callees()]
 
     def callers(self):
         """Return the functions that directly call this function."""
-        return [Function._from_binding(item, self._config) for item in self._inner.callers()]
+        return [Function._from_binding(item, self._config, self._graph) for item in self._inner.callers()]
 
     def callee_references(self):
         """Return a mapping of callsite addresses to callee function addresses."""
@@ -580,26 +785,70 @@ class Function:
             dimensions=dimensions,
         ).embed_function(self)
 
-    def lift(self, backend=None, abi=None, triple=None):
-        """Return a lifted function handle for LLVM-backed lifts."""
-        from binlex.lifters import Lifter, LifterBackend
+    def llvm(self, abi=None, triple=None):
+        """Return LLVM IR for this function."""
+        from binlex.ir.llvm import LlvmModule
 
         if self._config is None:
             return None
-        backend = LifterBackend.DEFAULT if backend is None else backend
-        if backend not in (LifterBackend.DEFAULT, LifterBackend.LLVM):
-            return None
-        lifter = Lifter(
+        llvm = LlvmModule(
             _cpu_for_architecture(self.architecture()),
             self._config,
-            backend=backend,
             triple=triple,
         )
-        lifted = lifter.create_function(f"function_{self.address():x}", abi=abi)
-        for block in self.blocks():
-            if lifted.lift_block(block) is None:
-                return None
-        return lifted
+        if llvm.lift_function(self, abi=abi) is None:
+            return None
+        return llvm
+
+    def vex(self, abi=None, triple=None):
+        """Return VEX IR for this function."""
+        from binlex.ir.vex import Lifter
+
+        if self._config is None:
+            return None
+        vex = Lifter(self._config, triple=triple)
+        if vex.lift_function(self, abi=abi) is None:
+            return None
+        return vex
+
+    def lir(self):
+        """Return canonical LIR for this function."""
+        cache = getattr(self._graph, "_decompilation_cache", None)
+        if cache is not None:
+            cached = cache["lir"].get(self.address())
+            if cached is not None:
+                return cached
+        result = LirFunction._from_inner(self._inner.lir())
+        if cache is not None:
+            cache["lir"][self.address()] = result
+        return result
+
+    def mir(self):
+        """Return optimized MIR for this function."""
+        cache = getattr(self._graph, "_decompilation_cache", None)
+        if cache is not None:
+            cached = cache["mir"].get(self.address())
+            if cached is not None:
+                return cached
+        decompiler = getattr(self._graph, "_decompiler", None)
+        if decompiler is not None and decompiler.symbols:
+            result = MirFunction._from_inner(
+                self._inner.mir_with_symbols(_decompiler_symbol_map(self._graph))
+            )
+        else:
+            result = MirFunction._from_inner(self._inner.mir())
+        if cache is not None:
+            cache["mir"][self.address()] = result
+        return result
+
+    def hir(self):
+        """Return cached HIR for this function when available."""
+        cache = getattr(self._graph, "_decompilation_cache", None)
+        if cache is not None:
+            cached = cache["hir"].get(self.address())
+            if cached is not None:
+                return cached
+        raise NotImplementedError("HIR decompilation is not implemented yet")
 
     def tlsh(self):
         """Return the TLSH object for this function, if available."""
@@ -711,7 +960,7 @@ class _LLVM:
         return lifter.verify()
 
     def _lift(self):
-        from binlex.lifters import Lifter, LifterBackend
+        from binlex.ir.llvm import LlvmModule
 
         config = getattr(self._owner, "_config", None)
         if config is None:
@@ -719,7 +968,7 @@ class _LLVM:
         if self._mode is not None:
             config = config.clone()
             config.lifters.llvm.mode = self._mode
-        lifter = Lifter(_cpu_for_architecture(self._owner.architecture()), config, backend=LifterBackend.LLVM)
+        lifter = LlvmModule(_cpu_for_architecture(self._owner.architecture()), config)
         if isinstance(self._owner, Instruction):
             lifter = lifter.lift_instruction(self._owner)
         elif isinstance(self._owner, Block):
@@ -1047,6 +1296,8 @@ class Graph:
         """Create a graph for the given architecture and configuration."""
         self._inner = _GraphBinding(_coerce_architecture(architecture), config)
         self._config = config
+        self._decompiler = None
+        self._decompilation_cache = {"lir": {}, "mir": {}, "hir": {}}
 
     @classmethod
     def _from_binding(cls, binding, config=None):
@@ -1054,19 +1305,33 @@ class Graph:
         result = cls.__new__(cls)
         result._inner = binding
         result._config = config
+        result._decompiler = None
+        result._decompilation_cache = {"lir": {}, "mir": {}, "hir": {}}
         return result
 
     def instructions(self):
         """Return all instructions currently tracked by the graph."""
-        return [Instruction._from_binding(item, self._config) for item in self._inner.instructions()]
+        return [Instruction._from_binding(item, self._config, self) for item in self._inner.instructions()]
 
     def blocks(self):
         """Return all blocks currently tracked by the graph."""
-        return [Block._from_binding(item, self._config) for item in self._inner.blocks()]
+        return [Block._from_binding(item, self._config, self) for item in self._inner.blocks()]
 
     def functions(self):
         """Return all functions currently tracked by the graph."""
-        return [Function._from_binding(item, self._config) for item in self._inner.functions()]
+        return [Function._from_binding(item, self._config, self) for item in self._inner.functions()]
+
+    def instruction(self, address):
+        """Return the instruction at `address`, if it exists."""
+        return self.get_instruction(address)
+
+    def block(self, address):
+        """Return the block at `address`, if it exists."""
+        return self.get_block(address)
+
+    def function(self, address):
+        """Return the function at `address`, if it exists."""
+        return self.get_function(address)
 
     @property
     def queue_instructions(self):
@@ -1100,21 +1365,21 @@ class Graph:
         result = self._inner.get_instruction(address)
         if result is None:
             return None
-        return Instruction._from_binding(result, self._config)
+        return Instruction._from_binding(result, self._config, self)
 
     def get_block(self, address):
         """Return the block at `address`, if it exists."""
         result = self._inner.get_block(address)
         if result is None:
             return None
-        return Block._from_binding(result, self._config)
+        return Block._from_binding(result, self._config, self)
 
     def get_function(self, address):
         """Return the function at `address`, if it exists."""
         result = self._inner.get_function(address)
         if result is None:
             return None
-        return Function._from_binding(result, self._config)
+        return Function._from_binding(result, self._config, self)
 
     def __getattr__(self, name):
         """Delegate unknown attributes to the underlying native graph object."""
