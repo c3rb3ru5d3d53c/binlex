@@ -22,10 +22,10 @@
 
 use super::{
     ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDatabaseLocal, ConfigDatabases,
-    ConfigDisassembler, ConfigDisassemblerSweep, ConfigEmbeddings, ConfigEntityEmbeddings,
-    ConfigEntityLifters, ConfigFile, ConfigFormats, ConfigFunctions, ConfigHashEnabled,
-    ConfigHeuristicEntropy, ConfigHeuristicFeatures, ConfigImaging, ConfigImagingMinhash,
-    ConfigImagingTLSH, ConfigIndex, ConfigIndexLocal, ConfigInstructions,
+    ConfigDecompiler, ConfigDisassembler, ConfigDisassemblerSweep, ConfigEmbeddings,
+    ConfigEntityEmbeddings, ConfigEntityLifters, ConfigFile, ConfigFormats, ConfigFunctions,
+    ConfigHashEnabled, ConfigHeuristicEntropy, ConfigHeuristicFeatures, ConfigImaging,
+    ConfigImagingMinhash, ConfigImagingTLSH, ConfigIndex, ConfigIndexLocal, ConfigInstructions,
     ConfigInstructionsSemantics, ConfigLifters, ConfigLiftersLLVM, ConfigLiftersVex, ConfigMarkov,
     ConfigMinhash, ConfigMmap, ConfigMmapCache, ConfigProcessors, ConfigSemantics, ConfigStorage,
     ConfigStorageLocal, ConfigTLSH, Configuration,
@@ -163,6 +163,7 @@ impl Configuration {
             disassembler: ConfigDisassembler {
                 sweep: ConfigDisassemblerSweep { enabled: true },
             },
+            decompiler: ConfigDecompiler::default(),
             lifters: ConfigLifters::default(),
             embeddings: ConfigEmbeddings::default(),
             processors: ConfigProcessors::default(),

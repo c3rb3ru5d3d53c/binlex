@@ -26,8 +26,8 @@ class Decompiler:
         self._symbols = [] if symbols is None else [_freeze_symbol(symbol) for symbol in symbols]
         self._backend = backend
         self._graph._decompiler = self
-        if not hasattr(self._graph, "_decompilation_cache"):
-            self._graph._decompilation_cache = {"lir": {}, "mir": {}, "hir": {}}
+        self._graph._decompilation_cache = {"lir": {}, "mir": {}, "hir": {}}
+        self._symbol_address_map = None
 
     @property
     def graph(self):

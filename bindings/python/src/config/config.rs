@@ -1762,6 +1762,14 @@ impl Configuration {
     }
 
     #[getter]
+    /// Return the decompiler configuration group.
+    pub fn get_decompiler(&self) -> PyResult<ConfigDecompiler> {
+        Ok(ConfigDecompiler {
+            inner: Arc::clone(&self.inner),
+        })
+    }
+
+    #[getter]
     /// Return the lifter configuration group.
     pub fn get_lifters(&self) -> PyResult<ConfigLifters> {
         Ok(ConfigLifters {
@@ -1879,12 +1887,95 @@ pub struct ConfigDisassembler {
     pub inner: Arc<Mutex<InnerConfig>>,
 }
 
+#[pyclass]
+pub struct ConfigDecompiler {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pyclass]
+pub struct ConfigDecompilerLir {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pyclass]
+pub struct ConfigDecompilerMir {
+    pub inner: Arc<Mutex<InnerConfig>>,
+}
+
+#[pyclass]
+pub struct ConfigDecompilerOptimize {
+    pub inner: Arc<Mutex<InnerConfig>>,
+    pub stage: &'static str,
+}
+
 #[pymethods]
 impl ConfigDisassembler {
     #[getter]
     pub fn get_sweep(&self) -> ConfigDisassemblerSweep {
         ConfigDisassemblerSweep {
             inner: Arc::clone(&self.inner),
+        }
+    }
+}
+
+#[pymethods]
+impl ConfigDecompiler {
+    #[getter]
+    pub fn get_lir(&self) -> ConfigDecompilerLir {
+        ConfigDecompilerLir {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+
+    #[getter]
+    pub fn get_mir(&self) -> ConfigDecompilerMir {
+        ConfigDecompilerMir {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+}
+
+#[pymethods]
+impl ConfigDecompilerLir {
+    #[getter]
+    pub fn get_optimize(&self) -> ConfigDecompilerOptimize {
+        ConfigDecompilerOptimize {
+            inner: Arc::clone(&self.inner),
+            stage: "lir",
+        }
+    }
+}
+
+#[pymethods]
+impl ConfigDecompilerMir {
+    #[getter]
+    pub fn get_optimize(&self) -> ConfigDecompilerOptimize {
+        ConfigDecompilerOptimize {
+            inner: Arc::clone(&self.inner),
+            stage: "mir",
+        }
+    }
+}
+
+#[pymethods]
+impl ConfigDecompilerOptimize {
+    #[getter]
+    pub fn get_enabled(&self) -> bool {
+        let inner = self.inner.lock().unwrap();
+        match self.stage {
+            "lir" => inner.decompiler.lir.optimize.enabled,
+            "mir" => inner.decompiler.mir.optimize.enabled,
+            _ => false,
+        }
+    }
+
+    #[setter]
+    pub fn set_enabled(&mut self, value: bool) {
+        let mut inner = self.inner.lock().unwrap();
+        match self.stage {
+            "lir" => inner.decompiler.lir.optimize.enabled = value,
+            "mir" => inner.decompiler.mir.optimize.enabled = value,
+            _ => {}
         }
     }
 }

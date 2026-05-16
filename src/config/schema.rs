@@ -243,6 +243,8 @@ pub struct ConfigData {
     pub mmap: ConfigMmap,
     pub disassembler: ConfigDisassembler,
     #[serde(default)]
+    pub decompiler: ConfigDecompiler,
+    #[serde(default)]
     pub lifters: ConfigLifters,
     #[serde(default)]
     pub embeddings: ConfigEmbeddings,
@@ -308,6 +310,31 @@ pub struct ConfigDisassembler {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigDecompiler {
+    #[serde(default)]
+    pub lir: ConfigDecompilerLir,
+    #[serde(default)]
+    pub mir: ConfigDecompilerMir,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigDecompilerLir {
+    #[serde(default)]
+    pub optimize: ConfigDecompilerOptimize,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigDecompilerMir {
+    #[serde(default)]
+    pub optimize: ConfigDecompilerOptimize,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigDecompilerOptimize {
+    pub enabled: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigIndex {
     #[serde(default)]
     pub local: ConfigIndexLocal,
@@ -356,6 +383,37 @@ impl Default for ConfigMarkov {
 impl Default for ConfigInstructionsSemantics {
     fn default() -> Self {
         Self { enabled: true }
+    }
+}
+
+impl Default for ConfigDecompilerOptimize {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
+impl Default for ConfigDecompilerLir {
+    fn default() -> Self {
+        Self {
+            optimize: ConfigDecompilerOptimize::default(),
+        }
+    }
+}
+
+impl Default for ConfigDecompilerMir {
+    fn default() -> Self {
+        Self {
+            optimize: ConfigDecompilerOptimize::default(),
+        }
+    }
+}
+
+impl Default for ConfigDecompiler {
+    fn default() -> Self {
+        Self {
+            lir: ConfigDecompilerLir::default(),
+            mir: ConfigDecompilerMir::default(),
+        }
     }
 }
 

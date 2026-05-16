@@ -72,6 +72,29 @@ def _decompiler_symbol_map(graph):
     return symbol_map
 
 
+def _decompiler_optimize_enabled(graph, stage):
+    decompiler = getattr(graph, "_decompiler", None)
+    if decompiler is None:
+        return False
+    try:
+        return bool(getattr(getattr(decompiler.configuration.decompiler, stage).optimize, "enabled"))
+    except Exception:
+        return False
+
+
+def _maybe_optimize_decompiler_stage(graph, stage, value):
+    if value is None:
+        return value
+    if not _decompiler_optimize_enabled(graph, stage):
+        return value
+    marker = f"_binlex_decompiler_{stage}_optimized"
+    if getattr(value, marker, False):
+        return value
+    value.optimize()
+    setattr(value, marker, True)
+    return value
+
+
 def _const_u64_value(expression):
     if not isinstance(expression, dict) or "Const" not in expression:
         return None
@@ -817,19 +840,20 @@ class Function:
         if cache is not None:
             cached = cache["lir"].get(self.address())
             if cached is not None:
-                return cached
+                return _maybe_optimize_decompiler_stage(self._graph, "lir", cached)
         result = LirFunction._from_inner(self._inner.lir())
+        result = _maybe_optimize_decompiler_stage(self._graph, "lir", result)
         if cache is not None:
             cache["lir"][self.address()] = result
         return result
 
     def mir(self):
-        """Return optimized MIR for this function."""
+        """Return MIR for this function."""
         cache = getattr(self._graph, "_decompilation_cache", None)
         if cache is not None:
             cached = cache["mir"].get(self.address())
             if cached is not None:
-                return cached
+                return _maybe_optimize_decompiler_stage(self._graph, "mir", cached)
         decompiler = getattr(self._graph, "_decompiler", None)
         if decompiler is not None and decompiler.symbols:
             result = MirFunction._from_inner(
@@ -837,6 +861,7 @@ class Function:
             )
         else:
             result = MirFunction._from_inner(self._inner.mir())
+        result = _maybe_optimize_decompiler_stage(self._graph, "mir", result)
         if cache is not None:
             cache["mir"][self.address()] = result
         return result
