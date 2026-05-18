@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use binlex::assemblers::{Assembler, AssemblerBackend};
 use binlex::controlflow::{Block, Function, Graph, Instruction};
 use binlex::ir::lir::{
     Lir, LirAbi, LirAbiKind, LirCpu, LirCpuKind, LirDiagnosticKind, LirEffect, LirExpression,
@@ -554,6 +555,35 @@ fn llvm_lifter_handles_partial_width_register_updates() {
     );
 
     verify_all_entity_lifts(&graph);
+}
+
+#[test]
+fn llvm_lifter_avoids_poison_for_oversized_byte_shift_counts() {
+    let config = Configuration::default();
+    let assembler = Assembler::new(
+        Architecture::I386,
+        config.clone(),
+        AssemblerBackend::Default,
+    )
+    .expect("assembler");
+    let bytes = assembler
+        .assemble(0, "mov al, 1; shl al, 0xbf; movzx eax, al; ret")
+        .expect("assemble");
+    let graph = disassemble_graph(Architecture::I386, &bytes);
+    let function = Function::new(0, &graph).expect("function");
+    let cpu = LirCpu::from_kind(LirCpuKind::I386).expect("cpu");
+    let abi = LirAbi::from_kind(LirAbiKind::Stdcall, &cpu).expect("abi");
+
+    let mut lifter = Lifter::from_architecture(function.architecture(), Configuration::default());
+    lifter
+        .lift_function(&function, Some(&abi))
+        .expect("function should lift");
+    lifter.optimize_mem2reg().expect("mem2reg");
+    lifter.optimize_instcombine().expect("instcombine");
+
+    let ir = lifter.ir();
+    assert!(!ir.contains("ret i32 poison"), "{ir}");
+    assert!(ir.contains("ret i32 0"), "{ir}");
 }
 
 #[test]
