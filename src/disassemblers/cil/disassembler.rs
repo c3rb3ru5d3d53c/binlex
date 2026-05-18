@@ -49,8 +49,6 @@ pub struct Disassembler<'disassembler> {
 }
 
 impl<'disassembler> Disassembler<'disassembler> {
-    const FUNCTION_GROUP_SIZE: usize = 4;
-
     pub fn new(
         architecture: Architecture,
         image: &'disassembler [u8],
@@ -111,14 +109,16 @@ impl<'disassembler> Disassembler<'disassembler> {
             .any(|(start, end)| address >= *start && address <= *end)
     }
 
-    fn group_function_addresses(addresses: &BTreeSet<u64>) -> Vec<Vec<u64>> {
+    fn group_function_addresses(addresses: &BTreeSet<u64>, worker_count: usize) -> Vec<Vec<u64>> {
+        let target_groups = worker_count.max(1).saturating_mul(4);
+        let group_size = addresses.len().max(1).div_ceil(target_groups.max(1));
         let mut groups = Vec::new();
-        let mut current = Vec::with_capacity(Self::FUNCTION_GROUP_SIZE);
+        let mut current = Vec::with_capacity(group_size);
         for address in addresses {
             current.push(*address);
-            if current.len() == Self::FUNCTION_GROUP_SIZE {
+            if current.len() == group_size {
                 groups.push(current);
-                current = Vec::with_capacity(Self::FUNCTION_GROUP_SIZE);
+                current = Vec::with_capacity(group_size);
             }
         }
         if !current.is_empty() {
@@ -407,7 +407,10 @@ impl<'disassembler> Disassembler<'disassembler> {
                 let function_addresses = cfg.functions.dequeue_all();
                 cfg.functions
                     .insert_processed_extend(function_addresses.clone());
-                let function_groups = Self::group_function_addresses(&function_addresses);
+                let function_groups = Self::group_function_addresses(
+                    &function_addresses,
+                    cfg.config.resolved_threads(),
+                );
                 let graphs: Vec<Graph> = function_groups
                     .par_iter()
                     .map_init(

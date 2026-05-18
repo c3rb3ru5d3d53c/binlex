@@ -65,8 +65,11 @@ class Decompiler:
                 self._decompile_function(function)
             return self
 
+        target_batches = max(1, worker_count * 4)
+        chunk_size = max(1, (len(functions) + target_batches - 1) // target_batches)
+        batches = [functions[index:index + chunk_size] for index in range(0, len(functions), chunk_size)]
         with ThreadPoolExecutor(max_workers=worker_count) as executor:
-            list(executor.map(self._decompile_function, functions))
+            list(executor.map(self._decompile_batch, batches))
         return self
 
     def _decompile_function(self, function):
@@ -75,6 +78,11 @@ class Decompiler:
         function.lir()
         function.mir()
         return function
+
+    def _decompile_batch(self, functions):
+        for function in functions:
+            self._decompile_function(function)
+        return functions
 
 __all__ = ["Decompiler", "DecompilerBackend"]
 

@@ -358,11 +358,14 @@ impl<'a> Disassembler<'a> {
                 let function_addresses = cfg.functions.dequeue_all();
                 cfg.functions
                     .insert_processed_extend(function_addresses.clone());
+                let worker_count = cfg.config.resolved_threads().max(1);
+                let target_groups = worker_count.saturating_mul(4).max(1);
+                let chunk_size = (function_addresses.len().max(1)).div_ceil(target_groups);
                 let function_groups: Vec<Vec<u64>> = function_addresses
                     .iter()
                     .copied()
                     .collect::<Vec<_>>()
-                    .chunks(cfg.config.resolved_threads().max(1))
+                    .chunks(chunk_size.max(1))
                     .map(|chunk| chunk.to_vec())
                     .collect();
                 let graphs: Vec<Graph> = function_groups

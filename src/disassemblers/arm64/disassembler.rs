@@ -67,9 +67,12 @@ impl<'a> Disassembler<'a> {
     fn group_function_addresses_for_backend(
         backend: Backend,
         addresses: &BTreeSet<u64>,
+        worker_count: usize,
     ) -> Vec<Vec<u64>> {
+        let target_groups = worker_count.max(1).saturating_mul(4);
+        let group_size = addresses.len().max(1).div_ceil(target_groups.max(1));
         match backend {
-            Backend::Capstone => arm64_metrics::group_function_addresses(addresses, 4),
+            Backend::Capstone => arm64_metrics::group_function_addresses(addresses, group_size),
         }
     }
 
@@ -417,6 +420,7 @@ impl<'a> Disassembler<'a> {
                     let function_groups = Self::group_function_addresses_for_backend(
                         selected_backend,
                         &function_addresses,
+                        cfg.config.resolved_threads(),
                     );
                     let graphs: Vec<Graph> = function_groups
                         .par_iter()
