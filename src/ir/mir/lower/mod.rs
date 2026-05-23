@@ -22,4 +22,6 @@
 
 pub mod lir_to_mir;
 
-pub use lir_to_mir::{MirLowerError, lower_lir_block_to_mir, lower_lir_to_mir};
+pub use lir_to_mir::{
+    MirLowerError, lower_lir_block_to_mir, lower_lir_to_mir, materialize_entry_parameters,
+};

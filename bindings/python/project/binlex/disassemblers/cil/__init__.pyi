@@ -6,11 +6,12 @@ from binlex import Architecture, Configuration
 from binlex.controlflow import Block, Function, Graph, Instruction
 from binlex.formats import Image, Symbol
 
+
 class Disassembler:
     def __init__(
         self,
         machine: Architecture,
-        image: Image | bytes,
+        image: Image | bytes | memoryview,
         executable_address_ranges: dict[int, int],
         configuration: Configuration,
         symbols: Sequence[Symbol | Mapping[str, object]] | None = None,
@@ -19,6 +20,6 @@ class Disassembler:
     def disassemble_function(self, address: int, graph: Graph) -> Function: ...
     def disassemble_block(self, address: int, graph: Graph) -> Block: ...
     def disassemble(self, addresses: set[int], graph: Graph) -> None: ...
-    def disassemble_sweep(self) -> set[int]: ...
+
 
 __all__: list[str]

@@ -117,11 +117,17 @@ fn is_machine_return_target_with_depth(value: &MirValue, defs: &DefMap, depth: u
 }
 
 fn abi_return_register(defs: &DefMap) -> Option<MirValue> {
-    for (register, bits) in [("rax", 64), ("eax", 32), ("x0", 64), ("w0", 32)] {
-        if defs.contains_key(register) {
+    for (register, bits) in [
+        ("ret0", 64),
+        ("eax", 32),
+        ("rax", 64),
+        ("w0", 32),
+        ("x0", 64),
+    ] {
+        if let Some(def) = defs.get(register) {
             return Some(MirValue::named(
                 register.to_string(),
-                MirType::integer(bits),
+                return_def_type(def).unwrap_or_else(|| MirType::integer(bits)),
             ));
         }
     }
@@ -129,7 +135,7 @@ fn abi_return_register(defs: &DefMap) -> Option<MirValue> {
 }
 
 fn abi_return_value_from_aliases(aliases: &HashMap<String, MirValue>) -> Option<MirValue> {
-    for register in ["rax", "eax", "x0", "w0"] {
+    for register in ["ret0", "eax", "rax", "w0", "x0"] {
         if let Some(value) = aliases.get(register) {
             return Some(value.clone());
         }
@@ -162,12 +168,26 @@ fn is_stack_derived_with_depth(value: &MirValue, defs: &DefMap, depth: usize) ->
 }
 
 fn is_stack_pointer_name(name: &str) -> bool {
-    matches!(
-        name,
-        "rsp" | "esp" | "sp" | "rbp" | "ebp" | "bp" | "fp" | "sp_el0" | "sp_el1"
-    )
+    matches!(name, "sp" | "fp")
 }
 
 fn is_constant(value: &MirValue) -> bool {
     matches!(value, MirValue::Integer { .. })
+}
+
+fn return_def_type(def: &ReturnDef) -> Option<MirType> {
+    match def {
+        ReturnDef::Set { value } => value_type(value),
+        _ => None,
+    }
+}
+
+fn value_type(value: &MirValue) -> Option<MirType> {
+    match value {
+        MirValue::Named { ty, .. } | MirValue::Null { ty } | MirValue::Undef { ty } => {
+            Some(ty.clone())
+        }
+        MirValue::Integer { bits, .. } => Some(MirType::integer(*bits)),
+        MirValue::Boolean(_) => Some(MirType::integer(1)),
+    }
 }

@@ -3,10 +3,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use binlex::assemblers::{Assembler, AssemblerBackend};
 use binlex::controlflow::{Block, Function, Graph, Instruction};
 use binlex::ir::lir::{
-    Lir, LirAbi, LirAbiKind, LirCpu, LirCpuKind, LirDiagnosticKind, LirEffect, LirExpression,
-    LirLocation, LirModule, LirOperationBinary, LirStatus, LirTerminator,
+    LirAbi, LirAbiKind, LirBlock, LirCpu, LirCpuKind, LirDiagnosticKind, LirEffect,
+    LirExpression, LirFunction, LirInstruction, LirLocation, LirModule, LirOperationBinary,
+    LirStatus, LirTerminator,
 };
-use binlex::lifters::llvm::Lifter;
+use binlex::ir::llvm::Lifter;
 use binlex::{Architecture, Configuration};
 
 fn disassemble_graph(architecture: Architecture, bytes: &[u8]) -> Graph {
@@ -64,7 +65,7 @@ fn build_fastcall_semantic_function_graph() -> Graph {
     instruction.bytes = vec![0x8d, 0x41, 0x01, 0xc3];
     instruction.pattern = "8d4101c3".to_string();
     instruction.is_return = true;
-    instruction.semantics = Some(Lir {
+    instruction.semantics = Some(LirInstruction {
         version: 1,
         status: LirStatus::Complete,
         abi: None,
@@ -235,25 +236,23 @@ fn function_lift_returns_lifted_function_handle() {
     let graph = disassemble_graph(Architecture::I386, &[0x31, 0xc0, 0x40, 0xc3]);
     let function = Function::new(0, &graph).expect("function");
 
-    let lifted = function.lift().expect("function should lift");
-    assert_eq!(lifted.name(), "function_0");
-
-    let ir = lifted.ir().expect("lifted function ir");
-    assert!(ir.contains("define void @function_0()"));
+    let mut lifted = Lifter::from_architecture(function.architecture(), Configuration::default());
+    lifted
+        .lift_function(&function, None)
+        .expect("function should lift");
+    assert!(lifted.ir().contains("define void @function_0()"));
 }
 
 #[test]
-fn lifted_function_set_name_updates_ir() {
+fn lifted_function_named_emits_requested_symbol() {
     let graph = disassemble_graph(Architecture::I386, &[0x31, 0xc0, 0x40, 0xc3]);
     let function = Function::new(0, &graph).expect("function");
 
-    let lifted = function.lift().expect("function should lift");
+    let mut lifted = Lifter::from_architecture(function.architecture(), Configuration::default());
     lifted
-        .set_name("renamed_function")
+        .lift_function_named(&function, None, "renamed_function", None)
         .expect("rename should succeed");
-
-    assert_eq!(lifted.name(), "renamed_function");
-    let ir = lifted.ir().expect("lifted function ir");
+    let ir = lifted.ir();
     assert!(ir.contains("define void @renamed_function()"));
 }
 
@@ -344,29 +343,37 @@ fn llvm_lift_function_semantics_uses_explicit_abi_without_native_sync_epilogue()
     let cpu = LirCpu::from_kind(LirCpuKind::I386).expect("cpu");
     let abi = LirAbi::from_kind(LirAbiKind::Fastcall, &cpu).expect("abi");
     let semantics = LirModule {
-        semantics: vec![Lir {
-            version: 1,
-            status: LirStatus::Complete,
+        name: Some("add_one".to_string()),
+        functions: vec![LirFunction {
+            name: Some("add_one".to_string()),
             abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
-            effects: vec![LirEffect::Set {
-                dst: LirLocation::Register {
-                    name: "eax".to_string(),
-                    bits: 32,
-                },
-                expression: LirExpression::Binary {
-                    op: LirOperationBinary::Add,
-                    left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
-                        name: "ecx".to_string(),
-                        bits: 32,
-                    }))),
-                    right: Box::new(LirExpression::Const { value: 1, bits: 32 }),
-                    bits: 32,
-                },
+            blocks: vec![LirBlock {
+                name: Some("entry".to_string()),
+                instructions: vec![LirInstruction {
+                    version: 1,
+                    status: LirStatus::Complete,
+                    abi: None,
+                    encoding: None,
+                    temporaries: Vec::new(),
+                    effects: vec![LirEffect::Set {
+                        dst: LirLocation::Register {
+                            name: "eax".to_string(),
+                            bits: 32,
+                        },
+                        expression: LirExpression::Binary {
+                            op: LirOperationBinary::Add,
+                            left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                                name: "ecx".to_string(),
+                                bits: 32,
+                            }))),
+                            right: Box::new(LirExpression::Const { value: 1, bits: 32 }),
+                            bits: 32,
+                        },
+                    }],
+                    terminator: LirTerminator::Return { expression: None },
+                    diagnostics: Vec::new(),
+                }],
             }],
-            terminator: LirTerminator::Return { expression: None },
-            diagnostics: Vec::new(),
         }],
         data: Vec::new(),
     };

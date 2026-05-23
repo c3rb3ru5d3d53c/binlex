@@ -2,8 +2,10 @@
 
 use binlex::controlflow::graph::Graph;
 use binlex::controlflow::{Block, Function, InstructionRecord};
-use binlex::ir::lir::{Lir, LirEffect, LirExpression, LirLocation, LirStatus, LirTerminator};
-use binlex::lifters::vex::Lifter;
+use binlex::ir::lir::{
+    LirEffect, LirExpression, LirInstruction, LirLocation, LirStatus, LirTerminator,
+};
+use binlex::ir::vex::Lifter;
 use binlex::{Architecture, Configuration};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -59,7 +61,7 @@ fn instruction(address: u64, bytes: &[u8]) -> InstructionRecord {
         .collect::<Vec<_>>()
         .join("");
     instruction.is_return = bytes == [0xC3];
-    instruction.semantics = Some(Lir {
+    instruction.semantics = Some(LirInstruction {
         version: 1,
         status: LirStatus::Complete,
         abi: None,

@@ -31,11 +31,10 @@ use ::capstone::{
 
 use crate::{
     Architecture,
-    controlflow::graph::Graph,
     controlflow::{Instruction, InstructionDetail, InstructionRecord, Operand, OperandKind},
     disassemblers::arm64::{
-        backends::capstone as arm64_capstone, flow as arm64_flow, indirect as arm64_indirect,
-        targets as arm64_targets,
+        backends::capstone as arm64_capstone, context::DisassemblyContext, flow as arm64_flow,
+        indirect as arm64_indirect, targets as arm64_targets,
     },
     genetics::Chromosome,
     ir::lir::arm64::operand::Arm64ShiftKind,
@@ -442,11 +441,11 @@ fn disassembly_text(instruction: &Insn) -> String {
     }
 }
 
-pub fn build_instruction(
+pub(crate) fn build_instruction(
     disassembler: &arm64_capstone::Disassembler<'_>,
     machine: Architecture,
     address: u64,
-    cfg: &Graph,
+    cfg: &impl DisassemblyContext,
 ) -> Result<InstructionRecord, Error> {
     let instruction_container = disassembler.disassemble_instructions(address, 1)?;
     let instruction = instruction_container.iter().next().ok_or_else(|| {
@@ -460,7 +459,7 @@ pub fn build_instruction(
     let pattern = Chromosome::new(
         instruction.bytes().to_vec(),
         instruction_mask.clone(),
-        cfg.config.clone(),
+        cfg.config().clone(),
     )?
     .pattern();
     let mnemonic = instruction.mnemonic().unwrap_or("").to_ascii_lowercase();
@@ -521,8 +520,11 @@ pub fn build_instruction(
         &operands,
         condition_code,
     );
-    let mut blinstruction =
-        Instruction::create(instruction.address(), cfg.architecture, cfg.config.clone());
+    let mut blinstruction = Instruction::create(
+        instruction.address(),
+        cfg.architecture(),
+        cfg.config().clone(),
+    );
 
     blinstruction.is_jump = is_jump;
     blinstruction.is_call = is_call;
@@ -554,7 +556,7 @@ pub fn build_instruction(
         blinstruction.edges = blinstruction.successors().len();
     }
 
-    if cfg.config.semantics.enabled {
+    if cfg.config().semantics.enabled {
         blinstruction.semantics = blinstruction.build_and_log_semantics();
     }
 

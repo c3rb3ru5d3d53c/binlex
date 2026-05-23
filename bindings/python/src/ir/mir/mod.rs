@@ -869,6 +869,11 @@ impl PyMirFunction {
         format_mir_function(&self.inner.lock().unwrap())
     }
 
+    pub fn print(&self) -> PyResult<()> {
+        self.inner.lock().unwrap().print();
+        Ok(())
+    }
+
     pub fn json(&self) -> PyResult<String> {
         serde_json::to_string(&*self.inner.lock().unwrap())
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
@@ -1038,6 +1043,11 @@ impl PyMirModule {
 
     pub fn text(&self) -> String {
         format_mir_module(&self.inner.lock().unwrap())
+    }
+
+    pub fn print(&self) -> PyResult<()> {
+        self.inner.lock().unwrap().print();
+        Ok(())
     }
 
     pub fn json(&self) -> PyResult<String> {

@@ -20,17 +20,20 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod backends;
-pub mod classify;
-pub(crate) mod context;
-pub mod decoded;
-pub mod disassembler;
-pub mod flow;
-pub mod indirect;
-pub mod pattern;
-pub mod prologue;
-pub mod sweep;
-pub mod targets;
-pub mod translate;
+pub mod decompiler;
 
-pub use disassembler::Disassembler;
+use crate::decompilers::decompiler::decompiler_init;
+use crate::decompilers::decompiler::Decompiler;
+use pyo3::{prelude::*, wrap_pymodule};
+
+#[pymodule]
+#[pyo3(name = "decompilers")]
+pub fn decompilers_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_wrapped(wrap_pymodule!(decompiler_init))?;
+    m.add_class::<Decompiler>()?;
+    py.import("sys")?
+        .getattr("modules")?
+        .set_item("binlex_bindings.binlex.decompilers", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.decompilers")?;
+    Ok(())
+}

@@ -252,17 +252,11 @@ mod tests {
     }
 
     fn semantics_of(semantic: Lir) -> LirModule {
-        LirModule {
-            semantics: vec![semantic],
-            data: Vec::new(),
-        }
+        LirModule::from_instructions(vec![semantic])
     }
 
     fn semantics_many(semantics: Vec<Lir>) -> LirModule {
-        LirModule {
-            semantics,
-            data: Vec::new(),
-        }
+        LirModule::from_instructions(semantics)
     }
 
     #[test]
@@ -367,13 +361,13 @@ mod tests {
             terminator: LirTerminator::Return { expression: None },
             diagnostics: Vec::new(),
         };
-        let semantics = LirModule {
-            semantics: vec![body],
-            data: vec![LirData {
+        let semantics = LirModule::from_instructions_with_data(
+            vec![body],
+            vec![LirData {
                 name: "digits".to_string(),
                 bytes: b"0123456789".to_vec(),
             }],
-        };
+        );
 
         let step_states = executor.step(&semantics, &state).expect("step");
         let step_state = step_states.first().expect("step state");
@@ -418,8 +412,7 @@ mod tests {
 
         state.map_image(&image);
 
-        let semantics = LirModule {
-            semantics: vec![Lir {
+        let semantics = LirModule::from_instructions(vec![Lir {
                 version: 1,
                 status: LirStatus::Complete,
                 abi: None,
@@ -441,9 +434,7 @@ mod tests {
                 }],
                 terminator: LirTerminator::Return { expression: None },
                 diagnostics: Vec::new(),
-            }],
-            data: Vec::new(),
-        };
+            }]);
 
         let states = executor.run(&semantics, &state, None).expect("run");
         let state = states.first().expect("state");
@@ -1449,10 +1440,7 @@ mod tests {
             .expect("write memory");
         let states = executor
             .run(
-                &LirModule {
-                    semantics,
-                    data: Vec::new(),
-                },
+                &LirModule::from_instructions(semantics),
                 &state,
                 None,
             )
@@ -1497,10 +1485,7 @@ mod tests {
             .expect("write memory");
         let states = executor
             .run(
-                &LirModule {
-                    semantics,
-                    data: Vec::new(),
-                },
+                &LirModule::from_instructions(semantics),
                 &state,
                 None,
             )
@@ -1541,10 +1526,7 @@ mod tests {
             SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         let states = executor
             .run(
-                &LirModule {
-                    semantics,
-                    data: Vec::new(),
-                },
+                &LirModule::from_instructions(semantics),
                 &state,
                 None,
             )

@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 pub mod backends;
+pub(crate) mod context;
 pub mod disassembler;
 pub mod instruction;
 pub mod mnemonic;

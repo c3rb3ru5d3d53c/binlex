@@ -265,10 +265,10 @@ fn run_lift_functions(
             .into_iter()
             .take(args.limit.unwrap_or(usize::MAX))
         {
-            let lifted = function.lift()?;
+            let lifted = function.lir()?;
             lifted_count += 1;
             if args.emit_ir {
-                ir_bytes += lifted.ir()?.len();
+                ir_bytes += lifted.text().len();
             }
         }
 
@@ -345,10 +345,10 @@ fn run_lift_from_snapshot(
         for _ in 0..args.repeat_lift {
             for function_address in &function_addresses {
                 let function = binlex::controlflow::Function::new(*function_address, &graph)?;
-                let lifted = function.lift()?;
+                let lifted = function.lir()?;
                 lifted_count += 1;
                 if args.emit_ir {
-                    ir_bytes += lifted.ir()?.len();
+                    ir_bytes += lifted.text().len();
                 }
             }
         }

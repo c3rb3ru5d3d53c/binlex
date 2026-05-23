@@ -22,9 +22,11 @@
 
 use crate::Architecture;
 use crate::Configuration;
+use crate::config::RAYON_WORKER_STACK_SIZE;
 use crate::controlflow::InstructionRecord;
 use crate::controlflow::{Block, Function, Graph, Instruction};
 use crate::disassemblers::arm64::classify as arm64_classify;
+use crate::disassemblers::arm64::context::{DisassemblyContext, DisassemblyShard};
 use crate::disassemblers::arm64::decoded::Arm64DecodedInstruction;
 use crate::disassemblers::arm64::metrics::{self as arm64_metrics, DisassemblyMetrics};
 use crate::disassemblers::arm64::pattern::instruction_chromosome_mask;
@@ -64,18 +66,6 @@ pub struct Disassembler<'a> {
 }
 
 impl<'a> Disassembler<'a> {
-    fn group_function_addresses_for_backend(
-        backend: Backend,
-        addresses: &BTreeSet<u64>,
-        worker_count: usize,
-    ) -> Vec<Vec<u64>> {
-        let target_groups = worker_count.max(1).saturating_mul(4);
-        let group_size = addresses.len().max(1).div_ceil(target_groups.max(1));
-        match backend {
-            Backend::Capstone => arm64_metrics::group_function_addresses(addresses, group_size),
-        }
-    }
-
     fn with_backend_state(
         backend: Backend,
         machine: Architecture,
@@ -375,10 +365,171 @@ impl<'a> Disassembler<'a> {
         })
     }
 
+    fn disassemble_instruction_address_shard(
+        &self,
+        address: u64,
+        cfg: &mut DisassemblyShard,
+    ) -> Result<u64, Error> {
+        let instruction_started_at = match self.begin_instruction_shard(address, cfg)? {
+            Some(started_at) => started_at,
+            None => return Ok(address),
+        };
+
+        let finish_invalid = |cfg: &mut DisassemblyShard| {
+            self.finish_instruction_invalid_shard(address, cfg, instruction_started_at);
+        };
+
+        let instruction = self
+            .prepare_instruction(self.machine, address, cfg)
+            .map_err(|_| {
+                finish_invalid(cfg);
+                let error = format!("0x{:x}: failed to disassemble instruction", address);
+                Error::other(error)
+            })?;
+
+        Stderr::print_debug(
+            cfg.config(),
+            format!(
+                "0x{:x}: mnemonic: {:?}, fallthrough: {:?}, branches: {:?}, is_conditional: {:?}, is_jump: {:?}",
+                instruction.address,
+                instruction.mnemonic,
+                instruction.fallthrough(),
+                instruction.branches(),
+                instruction.is_conditional,
+                instruction.is_jump,
+            ),
+        );
+
+        cfg.functions.enqueue_extend(instruction.functions.clone());
+        cfg.insert_instruction(instruction);
+        self.finish_instruction_valid_shard(address, cfg, instruction_started_at);
+
+        Ok(address)
+    }
+
+    fn disassemble_block_address_shard(
+        &self,
+        address: u64,
+        cfg: &mut DisassemblyShard,
+    ) -> Result<u64, Error> {
+        let block_started_at = match self.begin_block_shard(address, cfg)? {
+            Some(started_at) => started_at,
+            None => return Ok(address),
+        };
+
+        let mut pc = address;
+        let mut has_prologue = false;
+        let mut terminator = address;
+        let mut split_successor: Option<u64> = None;
+
+        while self.disassemble_instruction_address_shard(pc, cfg).is_ok() {
+            let mut instruction = match cfg.get_instruction_record(pc) {
+                Some(instr) => instr,
+                None => {
+                    self.finish_block_invalid_shard(address, cfg, block_started_at);
+                    return Err(Error::other("failed to disassemble instruction"));
+                }
+            };
+
+            if instruction.address == address {
+                instruction.is_block_start = true;
+                cfg.update_instruction(instruction.clone());
+            }
+
+            if instruction.address == address && instruction.is_block_start {
+                instruction.is_prologue = self.is_function_prologue(instruction.address);
+                has_prologue = instruction.is_prologue;
+                cfg.update_instruction(instruction.clone());
+            }
+
+            let is_block_start = instruction.address != address && instruction.is_block_start;
+            if is_block_start {
+                split_successor = Some(instruction.address);
+                break;
+            }
+
+            terminator = instruction.address;
+
+            if instruction.is_trap || instruction.is_return || instruction.is_jump {
+                break;
+            }
+
+            pc += instruction.size() as u64;
+
+            if self.has_known_instruction_address(pc) {
+                split_successor = Some(pc);
+                self.record_shared_tail_split();
+                break;
+            }
+
+            if cfg.blocks.is_pending(pc) || cfg.blocks.is_processed(pc) || cfg.blocks.is_valid(pc) {
+                split_successor = Some(pc);
+                break;
+            }
+        }
+
+        if let Some(successor) = split_successor
+            && let Some(mut instruction) = cfg.get_instruction_record(terminator)
+        {
+            instruction.to.extend(BTreeSet::from([successor]));
+            instruction.edges = instruction.successors().len();
+            cfg.update_instruction(instruction);
+        }
+
+        if has_prologue {
+            cfg.functions.enqueue(address);
+        }
+
+        self.finish_block_valid_shard(address, cfg, block_started_at);
+
+        Ok(terminator)
+    }
+
+    fn disassemble_function_address_shard(
+        &self,
+        address: u64,
+        cfg: &mut DisassemblyShard,
+    ) -> Result<u64, Error> {
+        let function_started_at = match self.begin_function_shard(address, cfg)? {
+            Some(started_at) => started_at,
+            None => return Ok(address),
+        };
+
+        cfg.blocks.enqueue(address);
+
+        while let Some(block_start_address) = cfg.blocks.dequeue() {
+            if cfg.blocks.is_processed(block_start_address) {
+                continue;
+            }
+
+            let block_end_address = self
+                .disassemble_block_address_shard(block_start_address, cfg)
+                .inspect_err(|_| {
+                    self.finish_function_invalid_shard(address, cfg, function_started_at);
+                })?;
+
+            if block_start_address == address {
+                if let Some(mut instruction) = cfg.get_instruction_record(block_start_address) {
+                    instruction.is_function_start = true;
+                    cfg.update_instruction(instruction);
+                }
+            }
+
+            if let Some(instruction) = cfg.get_instruction_record(block_end_address) {
+                cfg.blocks.enqueue_extend(instruction.successors());
+            }
+        }
+
+        self.finish_function_valid_shard(address, cfg, function_started_at);
+
+        Ok(address)
+    }
+
     pub fn disassemble(&self, addresses: BTreeSet<u64>, cfg: &mut Graph) -> Result<(), Error> {
         let disassembly_started_at = Instant::now();
         let pool = ThreadPoolBuilder::new()
             .num_threads(cfg.config.resolved_threads())
+            .stack_size(RAYON_WORKER_STACK_SIZE)
             .build()
             .map_err(|error| Error::other(format!("{}", error)))?;
 
@@ -393,74 +544,107 @@ impl<'a> Disassembler<'a> {
         let external_metrics = self.metrics.clone();
         let selected_backend = self.selected_backend;
         let graph_config = cfg.config.clone();
-        let batch_width = cfg.config.resolved_threads().max(1);
         let image_base = self.image_base;
+        let debug_enabled = cfg.config.debug;
+        let mut round = 0usize;
 
         pool.install(|| {
             while !cfg.functions.queue.is_empty() {
-                let pending_addresses: Vec<u64> = cfg.functions.dequeue_all().into_iter().collect();
-                for chunk in pending_addresses.chunks(batch_width) {
-                    let known_instruction_addresses = Arc::new(cfg.instruction_addresses());
-                    let known_block_addresses = Arc::new(cfg.blocks.valid_addresses());
-                    let known_function_addresses = Arc::new(cfg.functions.valid_addresses());
-                    let function_addresses: BTreeSet<u64> = chunk
-                        .iter()
-                        .copied()
-                        .filter(|address| {
-                            !cfg.functions.is_valid(*address)
-                                && !cfg.is_instruction_address(*address)
-                        })
-                        .collect();
-                    if function_addresses.is_empty() {
-                        continue;
-                    }
+                round += 1;
+                let dequeue_started_at = if debug_enabled {
+                    Some(Instant::now())
+                } else {
+                    None
+                };
+                let function_addresses: Vec<u64> = cfg
+                    .functions
+                    .dequeue_all()
+                    .into_iter()
+                    .filter(|address| {
+                        !cfg.functions.is_valid(*address) && !cfg.is_instruction_address(*address)
+                    })
+                    .collect();
+                let dequeue_elapsed_ms = dequeue_started_at
+                    .map(|started_at| started_at.elapsed().as_secs_f64() * 1000.0);
+                if function_addresses.is_empty() {
+                    continue;
+                }
 
-                    cfg.functions
-                        .insert_processed_extend(function_addresses.clone());
-                    let function_groups = Self::group_function_addresses_for_backend(
-                        selected_backend,
-                        &function_addresses,
-                        cfg.config.resolved_threads(),
+                let function_count = function_addresses.len();
+                let function_addresses_set = function_addresses.iter().copied().collect();
+                let known_instruction_addresses = Arc::new(cfg.instruction_addresses());
+                let known_block_addresses = Arc::new(cfg.blocks.valid_addresses());
+                let known_function_addresses = Arc::new(cfg.functions.valid_addresses());
+
+                cfg.functions
+                    .insert_processed_extend(function_addresses_set);
+
+                let parallel_started_at = if debug_enabled {
+                    Some(Instant::now())
+                } else {
+                    None
+                };
+                let mut merged_graph = function_addresses
+                    .par_iter()
+                    .map_init(
+                        || {
+                            Disassembler::with_backend_state(
+                                selected_backend,
+                                external_machine,
+                                external_image,
+                                image_base,
+                                external_executable_address_ranges.clone(),
+                                external_config.clone(),
+                                external_metrics.clone(),
+                                known_instruction_addresses.clone(),
+                                known_block_addresses.clone(),
+                                known_function_addresses.clone(),
+                            )
+                            .ok()
+                        },
+                        |disasm, address| {
+                            let mut shard =
+                                DisassemblyShard::new(external_machine, graph_config.clone());
+                            if let Some(disasm) = disasm.as_ref() {
+                                let _ =
+                                    disasm.disassemble_function_address_shard(*address, &mut shard);
+                            }
+                            shard
+                        },
+                    )
+                    .reduce(
+                        || DisassemblyShard::new(external_machine, graph_config.clone()),
+                        |mut left, mut right| {
+                            left.merge(&mut right);
+                            left
+                        },
+                    )
+                    .into_graph();
+                let parallel_elapsed_ms = parallel_started_at
+                    .map(|started_at| started_at.elapsed().as_secs_f64() * 1000.0);
+
+                let merge_started_at = Instant::now();
+                cfg.merge(&mut merged_graph);
+                arm64_metrics::record_merge_elapsed_for_metrics(
+                    &external_metrics,
+                    merge_started_at,
+                    graph_config.debug,
+                );
+                if debug_enabled {
+                    let merge_elapsed_ms = merge_started_at.elapsed().as_secs_f64() * 1000.0;
+                    let dequeue_elapsed_ms = dequeue_elapsed_ms.unwrap_or_default();
+                    let parallel_elapsed_ms = parallel_elapsed_ms.unwrap_or_default();
+                    Stderr::print_debug(
+                        &graph_config,
+                        format!(
+                            "[timing] arm64.disassemble.round={} functions={} dequeue={:.3} ms parallel+reduce={:.3} ms final_merge={:.3} ms",
+                            round,
+                            function_count,
+                            dequeue_elapsed_ms,
+                            parallel_elapsed_ms,
+                            merge_elapsed_ms,
+                        ),
                     );
-                    let graphs: Vec<Graph> = function_groups
-                        .par_iter()
-                        .map_init(
-                            || {
-                                Disassembler::with_backend_state(
-                                    selected_backend,
-                                    external_machine,
-                                    external_image,
-                                    image_base,
-                                    external_executable_address_ranges.clone(),
-                                    external_config.clone(),
-                                    external_metrics.clone(),
-                                    known_instruction_addresses.clone(),
-                                    known_block_addresses.clone(),
-                                    known_function_addresses.clone(),
-                                )
-                                .ok()
-                            },
-                            |disasm, addresses| {
-                                let mut graph = Graph::new(external_machine, graph_config.clone());
-                                if let Some(disasm) = disasm.as_ref() {
-                                    for address in addresses {
-                                        let _ = disasm.disassemble_function(*address, &mut graph);
-                                    }
-                                }
-                                graph
-                            },
-                        )
-                        .collect();
-
-                    for mut graph in graphs {
-                        let merge_started_at = Instant::now();
-                        cfg.merge(&mut graph);
-                        arm64_metrics::record_merge_elapsed_for_metrics(
-                            &external_metrics,
-                            merge_started_at,
-                            graph_config.debug,
-                        );
-                    }
                 }
             }
         });
@@ -503,11 +687,11 @@ impl<'a> Disassembler<'a> {
             .any(|(start, end)| address >= *start && address < *end)
     }
 
-    pub(crate) fn prepare_instruction(
+    pub(crate) fn prepare_instruction<C: DisassemblyContext>(
         &self,
         machine: Architecture,
         address: u64,
-        cfg: &Graph,
+        cfg: &C,
     ) -> Result<InstructionRecord, Error> {
         arm64_translate::build_instruction(self, machine, address, cfg)
     }
@@ -544,6 +728,34 @@ impl<'a> Disassembler<'a> {
         Ok(Some(function_started_at))
     }
 
+    pub(crate) fn begin_function_shard(
+        &self,
+        address: u64,
+        cfg: &mut DisassemblyShard,
+    ) -> Result<Option<Instant>, Error> {
+        let function_started_at = Instant::now();
+        self.metric_inc(&self.metrics.functions_processed, 1);
+        cfg.functions.insert_processed(address);
+
+        if self.known_function_addresses.contains(&address) {
+            self.metric_inc(&self.metrics.functions_dedup_skipped, 1);
+            self.metric_elapsed(&self.metrics.function_time_us, function_started_at);
+            return Ok(None);
+        }
+
+        if !self.is_executable_address(address) {
+            let error_message = format!(
+                "Function -> 0x{:x}: it is not in executable memory",
+                address
+            );
+            self.finish_function_invalid_shard(address, cfg, function_started_at);
+            Stderr::print_debug(cfg.config(), &error_message);
+            return Err(Error::other(error_message));
+        }
+
+        Ok(Some(function_started_at))
+    }
+
     pub(crate) fn finish_function_valid(
         &self,
         address: u64,
@@ -555,10 +767,32 @@ impl<'a> Disassembler<'a> {
         self.metric_elapsed(&self.metrics.function_time_us, function_started_at);
     }
 
+    pub(crate) fn finish_function_valid_shard(
+        &self,
+        address: u64,
+        cfg: &mut DisassemblyShard,
+        function_started_at: Instant,
+    ) {
+        cfg.functions.insert_valid(address);
+        self.metric_inc(&self.metrics.functions_valid, 1);
+        self.metric_elapsed(&self.metrics.function_time_us, function_started_at);
+    }
+
     pub(crate) fn finish_function_invalid(
         &self,
         address: u64,
         cfg: &mut Graph,
+        function_started_at: Instant,
+    ) {
+        cfg.functions.insert_invalid(address);
+        self.metric_inc(&self.metrics.functions_invalid, 1);
+        self.metric_elapsed(&self.metrics.function_time_us, function_started_at);
+    }
+
+    pub(crate) fn finish_function_invalid_shard(
+        &self,
+        address: u64,
+        cfg: &mut DisassemblyShard,
         function_started_at: Instant,
     ) {
         cfg.functions.insert_invalid(address);
@@ -595,6 +829,35 @@ impl<'a> Disassembler<'a> {
         Ok(Some(instruction_started_at))
     }
 
+    pub(crate) fn begin_instruction_shard(
+        &self,
+        address: u64,
+        cfg: &mut DisassemblyShard,
+    ) -> Result<Option<Instant>, Error> {
+        let instruction_started_at = Instant::now();
+        self.metric_inc(&self.metrics.instructions_processed, 1);
+        cfg.instructions.insert_processed(address);
+
+        if cfg.get_instruction_record(address).is_some() {
+            self.metric_elapsed(&self.metrics.instruction_time_us, instruction_started_at);
+            return Ok(None);
+        }
+
+        if !self.is_executable_address(address) {
+            cfg.instructions.insert_invalid(address);
+            self.metric_inc(&self.metrics.instructions_invalid, 1);
+            self.metric_elapsed(&self.metrics.instruction_time_us, instruction_started_at);
+            let error = format!(
+                "Instruction -> 0x{:x}: it is not in executable memory",
+                address
+            );
+            Stderr::print_debug(cfg.config(), error.clone());
+            return Err(Error::other(error));
+        }
+
+        Ok(Some(instruction_started_at))
+    }
+
     pub(crate) fn finish_instruction_invalid(
         &self,
         address: u64,
@@ -606,10 +869,32 @@ impl<'a> Disassembler<'a> {
         self.metric_elapsed(&self.metrics.instruction_time_us, instruction_started_at);
     }
 
+    pub(crate) fn finish_instruction_invalid_shard(
+        &self,
+        address: u64,
+        cfg: &mut DisassemblyShard,
+        instruction_started_at: Instant,
+    ) {
+        cfg.instructions.insert_invalid(address);
+        self.metric_inc(&self.metrics.instructions_invalid, 1);
+        self.metric_elapsed(&self.metrics.instruction_time_us, instruction_started_at);
+    }
+
     pub(crate) fn finish_instruction_valid(
         &self,
         address: u64,
         cfg: &mut Graph,
+        instruction_started_at: Instant,
+    ) {
+        cfg.instructions.insert_valid(address);
+        self.metric_inc(&self.metrics.instructions_valid, 1);
+        self.metric_elapsed(&self.metrics.instruction_time_us, instruction_started_at);
+    }
+
+    pub(crate) fn finish_instruction_valid_shard(
+        &self,
+        address: u64,
+        cfg: &mut DisassemblyShard,
         instruction_started_at: Instant,
     ) {
         cfg.instructions.insert_valid(address);
@@ -644,6 +929,33 @@ impl<'a> Disassembler<'a> {
         Ok(Some(block_started_at))
     }
 
+    pub(crate) fn begin_block_shard(
+        &self,
+        address: u64,
+        cfg: &mut DisassemblyShard,
+    ) -> Result<Option<Instant>, Error> {
+        let block_started_at = Instant::now();
+        self.metric_inc(&self.metrics.blocks_processed, 1);
+        cfg.blocks.insert_processed(address);
+
+        if self.known_block_addresses.contains(&address) {
+            self.metric_inc(&self.metrics.blocks_dedup_skipped, 1);
+            self.metric_elapsed(&self.metrics.block_time_us, block_started_at);
+            return Ok(None);
+        }
+
+        if !self.is_executable_address(address) {
+            cfg.functions.insert_invalid(address);
+            self.metric_inc(&self.metrics.blocks_invalid, 1);
+            self.metric_elapsed(&self.metrics.block_time_us, block_started_at);
+            let error_message = format!("Block -> 0x{:x}: it is not in executable memory", address);
+            Stderr::print_debug(cfg.config(), error_message.clone());
+            return Err(Error::other(error_message));
+        }
+
+        Ok(Some(block_started_at))
+    }
+
     pub(crate) fn finish_block_valid(
         &self,
         address: u64,
@@ -655,10 +967,32 @@ impl<'a> Disassembler<'a> {
         self.metric_elapsed(&self.metrics.block_time_us, block_started_at);
     }
 
+    pub(crate) fn finish_block_valid_shard(
+        &self,
+        address: u64,
+        cfg: &mut DisassemblyShard,
+        block_started_at: Instant,
+    ) {
+        cfg.blocks.insert_valid(address);
+        self.metric_inc(&self.metrics.blocks_valid, 1);
+        self.metric_elapsed(&self.metrics.block_time_us, block_started_at);
+    }
+
     pub(crate) fn finish_block_invalid(
         &self,
         address: u64,
         cfg: &mut Graph,
+        block_started_at: Instant,
+    ) {
+        cfg.blocks.insert_invalid(address);
+        self.metric_inc(&self.metrics.blocks_invalid, 1);
+        self.metric_elapsed(&self.metrics.block_time_us, block_started_at);
+    }
+
+    pub(crate) fn finish_block_invalid_shard(
+        &self,
+        address: u64,
+        cfg: &mut DisassemblyShard,
         block_started_at: Instant,
     ) {
         cfg.blocks.insert_invalid(address);

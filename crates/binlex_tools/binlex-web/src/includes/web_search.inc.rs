@@ -380,7 +380,7 @@ fn render_entity_llvm_ir(
         Collection::Function => config.functions.lifters.llvm.enabled = true,
     }
 
-    let mut lifter = binlex::lifters::llvm::Lifter::from_architecture(graph.architecture, config);
+    let mut lifter = binlex::ir::llvm::Lifter::from_architecture(graph.architecture, config);
     match collection {
         Collection::Instruction => {
             let instruction = graph

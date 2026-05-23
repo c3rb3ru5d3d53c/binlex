@@ -22,6 +22,7 @@
 
 pub mod backends;
 pub mod classify;
+pub(crate) mod context;
 pub mod decoded;
 pub mod disassembler;
 pub mod flow;

@@ -26,11 +26,11 @@ use crate::ir::lir::{
     LirOperationUnary, LirTerminator,
 };
 use crate::ir::mir::{
-    MirAddressSpace, MirBlock, MirControlTarget, MirFunction, MirOperation, MirOperationKind,
-    MirTerminator, MirType, MirValue,
+    MirAddressSpace, MirBlock, MirBlockParameter, MirControlTarget, MirFunction, MirOperation,
+    MirOperationKind, MirTerminator, MirType, MirValue,
 };
 use crate::ir::mir::{MirCastOperation, MirCompareOperation, MirFloatCompareOperation};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 
 #[derive(Clone, Debug)]
@@ -49,12 +49,68 @@ impl std::error::Error for MirLowerError {}
 #[derive(Default)]
 struct LoweringContext {
     next_temp: usize,
+    next_register: usize,
+    next_flag: usize,
+    location_names: BTreeMap<String, String>,
+    abi: Option<LirAbi>,
 }
 
 impl LoweringContext {
     fn next_name(&mut self, prefix: &str) -> String {
         let name = format!("{prefix}_{}", self.next_temp);
         self.next_temp += 1;
+        name
+    }
+
+    fn with_abi(abi: Option<&LirAbi>) -> Self {
+        Self {
+            abi: abi.cloned(),
+            ..Self::default()
+        }
+    }
+
+    fn location_name(&mut self, location: &LirLocation) -> String {
+        let abi = self.abi.clone();
+        self.location_name_with_abi(location, abi.as_ref())
+    }
+
+    fn location_name_with_abi(&mut self, location: &LirLocation, abi: Option<&LirAbi>) -> String {
+        match location {
+            LirLocation::Register { name, .. } => self.register_name_with_abi(name, abi),
+            LirLocation::Flag { name, .. } => self.flag_name(name),
+            LirLocation::IndexedMemory { name, .. } | LirLocation::StackMemory { name, .. } => {
+                name.clone()
+            }
+            LirLocation::ProgramCounter { .. } => "pc".to_string(),
+            LirLocation::Temporary { id, .. } => format!("tmp_{id}"),
+            LirLocation::Memory { space, .. } => format!("mem_{:?}", space).to_lowercase(),
+        }
+    }
+
+    fn register_name_with_abi(&mut self, raw_name: &str, abi: Option<&LirAbi>) -> String {
+        if let Some(name) = canonical_register_role(raw_name, abi) {
+            return name;
+        }
+        if let Some(name) = self.location_names.get(raw_name) {
+            return name.clone();
+        }
+        let name = format!("reg{}", self.next_register);
+        self.next_register += 1;
+        self.location_names.insert(raw_name.to_string(), name.clone());
+        name
+    }
+
+    fn flag_name(&mut self, raw_name: &str) -> String {
+        if let Some(name) = canonical_flag_name(raw_name) {
+            return name;
+        }
+        let key = format!("flag:{raw_name}");
+        if let Some(name) = self.location_names.get(&key) {
+            return name.clone();
+        }
+        let name = format!("flag{}", self.next_flag);
+        self.next_flag += 1;
+        self.location_names.insert(key, name.clone());
         name
     }
 }
@@ -64,11 +120,12 @@ pub fn lower_lir_to_mir(
     lir: &LirFunction,
 ) -> Result<MirFunction, MirLowerError> {
     let mut mir = MirFunction::new(name);
-    mir.abi = lir.abi.clone().or_else(|| {
+    let explicit_abi = lir.abi.clone().or_else(|| {
         lir.instructions()
             .into_iter()
             .find_map(|instruction| instruction.abi.clone())
     });
+    mir.abi = explicit_abi.clone().or_else(|| default_function_abi(lir));
 
     if lir.blocks.is_empty() || lir.blocks.iter().all(|block| block.instructions.is_empty()) {
         let mut block = MirBlock::new("entry".to_string());
@@ -89,7 +146,9 @@ pub fn lower_lir_to_mir(
         }
     }
 
-    let mut context = LoweringContext::default();
+    let mut context = LoweringContext::with_abi(mir.abi.as_ref());
+    mir.entry_parameters =
+        build_entry_parameters(lir, mir.abi.as_ref(), explicit_abi.is_some(), &mut context);
 
     for (index, lir_block) in lir.blocks.iter().enumerate() {
         if lir_block.instructions.is_empty() {
@@ -106,7 +165,19 @@ pub fn lower_lir_to_mir(
         )?);
     }
 
+    let entry_parameters = mir.entry_parameters.clone();
+    if let Some(entry_block) = mir.blocks_mut().first_mut() {
+        append_entry_parameters(entry_block, &entry_parameters);
+    }
+
     Ok(mir)
+}
+
+pub fn materialize_entry_parameters(mir: &mut MirFunction) {
+    let entry_parameters = mir.entry_parameters.clone();
+    if let Some(entry_block) = mir.blocks_mut().first_mut() {
+        append_entry_parameters(entry_block, &entry_parameters);
+    }
 }
 
 pub fn lower_lir_block_to_mir(
@@ -164,9 +235,24 @@ fn lower_lir_block_with_context(
 
     let mut block = MirBlock::new(block_name);
 
-    for semantic in &lir_block.instructions {
+    for (semantic_index, semantic) in lir_block.instructions.iter().enumerate() {
         for effect in &semantic.effects {
             lower_effect(effect, &mut block, context);
+        }
+
+        let is_last_instruction = semantic_index + 1 == lir_block.instructions.len();
+        if !is_last_instruction
+            && let LirTerminator::Call {
+                target,
+                does_return,
+                ..
+            } = &semantic.terminator
+        {
+            lower_call_operations(semantic, target, *does_return, function_abi, &mut block, context);
+            if matches!(does_return, Some(false)) {
+                block.set_terminator(MirTerminator::Unreachable);
+                return Ok(block);
+            }
         }
     }
 
@@ -183,6 +269,44 @@ fn lower_lir_block_with_context(
     );
     block.set_terminator(terminator);
     Ok(block)
+}
+
+fn lower_call_operations(
+    semantic: &Lir,
+    target: &LirExpression,
+    does_return: Option<bool>,
+    function_abi: Option<&LirAbi>,
+    block: &mut MirBlock,
+    context: &mut LoweringContext,
+) {
+    let (call_result, result_types, return_location) = if matches!(does_return, Some(false)) {
+        (None, Vec::new(), None)
+    } else {
+        call_result_binding(semantic, context)
+    };
+
+    let arguments = call_argument_values(semantic, function_abi, block, context);
+    let target = resolve_call_target(target, block, context);
+    block.append_operation(MirOperation::new(
+        call_result.clone(),
+        MirOperationKind::Call {
+            target,
+            arguments,
+            result_types: result_types.clone(),
+            clobbers: Vec::new(),
+            memory_effects: Vec::new(),
+        },
+    ));
+
+    if let (Some(call_result), Some((location, ty))) = (call_result, return_location) {
+        block.append_operation(MirOperation::new(
+            Some(context.location_name(&location)),
+            MirOperationKind::Copy {
+                value: MirValue::named(call_result, ty.clone()),
+                ty,
+            },
+        ));
+    }
 }
 
 fn build_block_names(blocks: &[LirBasicBlock]) -> Vec<String> {
@@ -258,7 +382,7 @@ fn lower_effect(effect: &LirEffect, block: &mut MirBlock, context: &mut Lowering
             }
             _ => {
                 let value = lower_expression(expression, block, context);
-                let result = location_name(dst);
+                let result = context.location_name(dst);
                 block.append_operation(MirOperation::new(
                     Some(result),
                     MirOperationKind::Copy {
@@ -345,7 +469,7 @@ fn lower_effect(effect: &LirEffect, block: &mut MirBlock, context: &mut Lowering
         }
         LirEffect::Pop { stack, dst } => {
             block.append_operation(MirOperation::new(
-                Some(location_name(dst)),
+                Some(context.location_name(dst)),
                 MirOperationKind::Intrinsic {
                     name: format!("lir.pop.{stack}"),
                     arguments: Vec::new(),
@@ -366,7 +490,7 @@ fn lower_effect(effect: &LirEffect, block: &mut MirBlock, context: &mut Lowering
                 .iter()
                 .map(|location| mir_type_for_bits(location.bits()))
                 .collect();
-            let result = outputs.first().map(location_name);
+            let result = outputs.first().map(|location| context.location_name(location));
             block.append_operation(MirOperation::new(
                 result,
                 MirOperationKind::Intrinsic {
@@ -430,35 +554,14 @@ fn lower_terminator(
             return_target,
             does_return,
         } => {
-            let (call_result, result_types, return_location) = if matches!(does_return, Some(false))
-            {
-                (None, Vec::new(), None)
-            } else {
-                call_result_binding(semantic, context)
-            };
-
-            let arguments = call_argument_values(semantic, function_abi, block, context);
-            let target = resolve_call_target(target, block, context);
-            block.append_operation(MirOperation::new(
-                call_result.clone(),
-                MirOperationKind::Call {
-                    target,
-                    arguments,
-                    result_types: result_types.clone(),
-                    clobbers: Vec::new(),
-                    memory_effects: Vec::new(),
-                },
-            ));
-
-            if let (Some(call_result), Some((location, ty))) = (call_result, return_location) {
-                block.append_operation(MirOperation::new(
-                    Some(location_name(&location)),
-                    MirOperationKind::Copy {
-                        value: MirValue::named(call_result, ty.clone()),
-                        ty,
-                    },
-                ));
-            }
+            lower_call_operations(
+                semantic,
+                target,
+                *does_return,
+                function_abi,
+                block,
+                context,
+            );
 
             if matches!(does_return, Some(false)) {
                 MirTerminator::Unreachable
@@ -494,11 +597,11 @@ fn lower_expression(
             MirValue::named(name.clone(), mir_type_for_bits(*bits))
         }
         LirExpression::AddressOf { location, bits } => MirValue::named(
-            format!("addr_of_{}", location_name(location)),
+            format!("addr_of_{}", context.location_name(location)),
             mir_type_for_bits(*bits),
         ),
         LirExpression::Read(location) => {
-            MirValue::named(location_name(location), mir_type_for_bits(location.bits()))
+            MirValue::named(context.location_name(location), mir_type_for_bits(location.bits()))
         }
         LirExpression::Load { space, addr, bits } => {
             let address = lower_expression(addr, block, context);
@@ -1175,11 +1278,10 @@ fn call_argument_values(
     let owned_abi;
     let abi = if let Some(abi) = semantic.abi.as_ref() {
         abi
-    } else if let Some(abi) = function_abi {
-        abi
     } else {
-        owned_abi = infer_call_abi(semantic, block);
-        let Some(abi) = owned_abi.as_ref() else {
+        owned_abi = infer_call_abi(semantic, function_abi, block);
+        let abi = owned_abi.as_ref().or(function_abi);
+        let Some(abi) = abi else {
             return Vec::new();
         };
         abi
@@ -1187,12 +1289,13 @@ fn call_argument_values(
 
     abi.function_arguments
         .iter()
-        .map(|location| lower_call_argument_location(location, block, context))
+        .map(|location| lower_call_argument_location(location, abi, block, context))
         .collect()
 }
 
 fn lower_call_argument_location(
     location: &LirLocation,
+    call_abi: &LirAbi,
     block: &mut MirBlock,
     context: &mut LoweringContext,
 ) -> MirValue {
@@ -1201,7 +1304,10 @@ fn lower_call_argument_location(
         | LirLocation::Flag { .. }
         | LirLocation::ProgramCounter { .. }
         | LirLocation::Temporary { .. } => {
-            MirValue::named(location_name(location), mir_type_for_bits(location.bits()))
+            MirValue::named(
+                context.location_name_with_abi(location, Some(call_abi)),
+                mir_type_for_bits(location.bits()),
+            )
         }
         LirLocation::StackMemory { name, offset, bits } => {
             let ty = mir_type_for_bits(*bits);
@@ -1247,27 +1353,31 @@ fn lower_call_argument_location(
     }
 }
 
-fn infer_call_abi(semantic: &Lir, block: &MirBlock) -> Option<LirAbi> {
+fn infer_call_abi(
+    semantic: &Lir,
+    function_abi: Option<&LirAbi>,
+    block: &MirBlock,
+) -> Option<LirAbi> {
     let architecture = semantic
         .encoding
         .as_ref()
         .map(|encoding| encoding.architecture.as_str())?;
 
     match architecture {
-        "amd64" => infer_amd64_call_abi(block),
-        "i386" => infer_i386_call_abi(block),
+        "amd64" => infer_amd64_call_abi(function_abi, block),
+        "i386" => infer_i386_call_abi(function_abi, block),
         "arm64" => LirCpu::arm64().ok().and_then(|cpu| LirAbi::sysv(&cpu).ok()),
         _ => None,
     }
 }
 
-fn infer_amd64_call_abi(block: &MirBlock) -> Option<LirAbi> {
+fn infer_amd64_call_abi(function_abi: Option<&LirAbi>, block: &MirBlock) -> Option<LirAbi> {
     let cpu = LirCpu::amd64().ok()?;
     let windows = LirAbi::windows64(&cpu).ok()?;
     let sysv = LirAbi::sysv(&cpu).ok()?;
 
-    let windows_score = score_call_abi_candidates(block, &windows);
-    let sysv_score = score_call_abi_candidates(block, &sysv);
+    let windows_score = score_call_abi_candidates(block, function_abi, &windows);
+    let sysv_score = score_call_abi_candidates(block, function_abi, &sysv);
 
     if windows_score >= sysv_score {
         Some(windows)
@@ -1276,16 +1386,20 @@ fn infer_amd64_call_abi(block: &MirBlock) -> Option<LirAbi> {
     }
 }
 
-fn infer_i386_call_abi(block: &MirBlock) -> Option<LirAbi> {
+fn infer_i386_call_abi(function_abi: Option<&LirAbi>, block: &MirBlock) -> Option<LirAbi> {
     let cpu = LirCpu::i386().ok()?;
     let fastcall = LirAbi::fastcall(&cpu).ok()?;
-    if score_call_abi_candidates(block, &fastcall) > 0 {
+    if score_call_abi_candidates(block, function_abi, &fastcall) > 0 {
         return Some(fastcall);
     }
     LirAbi::cdecl(&cpu).ok()
 }
 
-fn score_call_abi_candidates(block: &MirBlock, abi: &LirAbi) -> usize {
+fn score_call_abi_candidates(
+    block: &MirBlock,
+    function_abi: Option<&LirAbi>,
+    abi: &LirAbi,
+) -> usize {
     let mut defined = HashSet::new();
     for operation in &block.operations {
         if let Some(result) = operation.result.as_ref() {
@@ -1296,10 +1410,12 @@ fn score_call_abi_candidates(block: &MirBlock, abi: &LirAbi) -> usize {
     abi.function_arguments
         .iter()
         .filter_map(|location| match location {
-            LirLocation::Register { name, .. } => Some(name.as_str()),
+            LirLocation::Register { name, .. } => {
+                Some(canonical_register_role(name, function_abi).unwrap_or(name.clone()))
+            }
             _ => None,
         })
-        .filter(|name| defined.contains(name))
+        .filter(|name| defined.contains(name.as_str()))
         .count()
 }
 
@@ -1332,14 +1448,335 @@ fn mir_type_for_bits(bits: u16) -> MirType {
     MirType::integer(bits.max(1))
 }
 
-fn location_name(location: &LirLocation) -> String {
-    match location {
-        LirLocation::Register { name, .. }
-        | LirLocation::Flag { name, .. }
-        | LirLocation::IndexedMemory { name, .. }
-        | LirLocation::StackMemory { name, .. } => name.clone(),
-        LirLocation::ProgramCounter { .. } => "pc".to_string(),
-        LirLocation::Temporary { id, .. } => format!("tmp_{id}"),
-        LirLocation::Memory { space, .. } => format!("mem_{:?}", space).to_lowercase(),
+fn default_function_abi(lir: &LirFunction) -> Option<LirAbi> {
+    let architecture = lir
+        .instructions()
+        .into_iter()
+        .find_map(|instruction| instruction.encoding.as_ref())
+        .map(|encoding| encoding.architecture.as_str())?;
+
+    match architecture {
+        "amd64" => LirCpu::amd64().ok().and_then(|cpu| LirAbi::sysv(&cpu).ok()),
+        "i386" => LirCpu::i386().ok().and_then(|cpu| LirAbi::cdecl(&cpu).ok()),
+        "arm64" => LirCpu::arm64().ok().and_then(|cpu| LirAbi::sysv(&cpu).ok()),
+        _ => None,
     }
+}
+
+fn append_entry_parameters(block: &mut MirBlock, parameters: &[MirBlockParameter]) {
+    for parameter in parameters {
+        let exists = block.parameters.iter().any(|existing| existing == parameter);
+        if !exists {
+            block.append_parameter(parameter.clone());
+        }
+    }
+}
+
+fn build_entry_parameters(
+    lir: &LirFunction,
+    abi: Option<&LirAbi>,
+    explicit_abi: bool,
+    context: &mut LoweringContext,
+) -> Vec<MirBlockParameter> {
+    let Some(abi) = abi else {
+        return Vec::new();
+    };
+
+    let locations = if explicit_abi {
+        abi.function_arguments.clone()
+    } else {
+        detect_entry_parameter_locations(lir, abi)
+    };
+
+    locations
+        .iter()
+        .filter_map(|location| lower_entry_parameter(location, context))
+        .collect()
+}
+
+fn lower_entry_parameter(location: &LirLocation, context: &mut LoweringContext) -> Option<MirBlockParameter> {
+    match location {
+        LirLocation::Register { .. }
+        | LirLocation::Flag { .. }
+        | LirLocation::ProgramCounter { .. }
+        | LirLocation::Temporary { .. } => Some(MirBlockParameter::new(
+            Some(context.location_name(location)),
+            mir_type_for_bits(location.bits()),
+        )),
+        LirLocation::StackMemory { name, bits, .. } | LirLocation::IndexedMemory { name, bits, .. } => {
+            Some(MirBlockParameter::new(
+                Some(name.clone()),
+                mir_type_for_bits(*bits),
+            ))
+        }
+        LirLocation::Memory { .. } => None,
+    }
+}
+
+fn detect_entry_parameter_locations(lir: &LirFunction, abi: &LirAbi) -> Vec<LirLocation> {
+    let mut defined = std::collections::BTreeSet::<String>::new();
+    let mut used = std::collections::BTreeSet::<String>::new();
+    let candidates = abi
+        .function_arguments
+        .iter()
+        .map(|location| (candidate_location_key(location, &abi.cpu), location.clone()))
+        .collect::<Vec<_>>();
+
+    for block in &lir.blocks {
+        for instruction in &block.instructions {
+            for effect in &instruction.effects {
+                collect_effect_reads(effect, &abi.cpu, &candidates, &defined, &mut used);
+                collect_effect_defs(effect, &abi.cpu, &mut defined);
+            }
+            collect_terminator_reads(
+                &instruction.terminator,
+                &abi.cpu,
+                &candidates,
+                &defined,
+                &mut used,
+            );
+        }
+    }
+
+    candidates
+        .into_iter()
+        .filter_map(|(key, location)| used.contains(&key).then_some(location))
+        .collect()
+}
+
+fn collect_effect_reads(
+    effect: &LirEffect,
+    cpu: &LirCpu,
+    candidates: &[(String, LirLocation)],
+    defined: &std::collections::BTreeSet<String>,
+    used: &mut std::collections::BTreeSet<String>,
+) {
+    match effect {
+        LirEffect::Set { expression, .. } => {
+            collect_expression_reads(expression, cpu, candidates, defined, used)
+        }
+        LirEffect::Store {
+            addr, expression, ..
+        } => {
+            collect_expression_reads(addr, cpu, candidates, defined, used);
+            collect_expression_reads(expression, cpu, candidates, defined, used);
+        }
+        LirEffect::MemoryCopy {
+            src_addr,
+            dst_addr,
+            count,
+            decrement,
+            ..
+        } => {
+            collect_expression_reads(src_addr, cpu, candidates, defined, used);
+            collect_expression_reads(dst_addr, cpu, candidates, defined, used);
+            collect_expression_reads(count, cpu, candidates, defined, used);
+            collect_expression_reads(decrement, cpu, candidates, defined, used);
+        }
+        LirEffect::Push { expression, .. } => {
+            collect_expression_reads(expression, cpu, candidates, defined, used);
+        }
+        LirEffect::Intrinsic { args, .. } => {
+            for arg in args {
+                collect_expression_reads(arg, cpu, candidates, defined, used);
+            }
+        }
+        LirEffect::Pop { .. }
+        | LirEffect::Trap { .. }
+        | LirEffect::Fence { .. }
+        | LirEffect::Nop
+        | LirEffect::MemorySet { .. }
+        | LirEffect::AtomicCmpXchg { .. }
+        | LirEffect::WriteProperty { .. }
+        | LirEffect::WriteElement { .. } => {}
+    }
+}
+
+fn collect_effect_defs(
+    effect: &LirEffect,
+    cpu: &LirCpu,
+    defined: &mut std::collections::BTreeSet<String>,
+) {
+    match effect {
+        LirEffect::Set { dst, .. } | LirEffect::Pop { dst, .. } => {
+            defined.insert(candidate_location_key(dst, cpu));
+        }
+        LirEffect::Intrinsic { outputs, .. } => {
+            for output in outputs {
+                defined.insert(candidate_location_key(output, cpu));
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_terminator_reads(
+    terminator: &LirTerminator,
+    cpu: &LirCpu,
+    candidates: &[(String, LirLocation)],
+    defined: &std::collections::BTreeSet<String>,
+    used: &mut std::collections::BTreeSet<String>,
+) {
+    match terminator {
+        LirTerminator::Jump { target } => {
+            collect_expression_reads(target, cpu, candidates, defined, used)
+        }
+        LirTerminator::Branch {
+            condition,
+            true_target,
+            false_target,
+        } => {
+            collect_expression_reads(condition, cpu, candidates, defined, used);
+            collect_expression_reads(true_target, cpu, candidates, defined, used);
+            collect_expression_reads(false_target, cpu, candidates, defined, used);
+        }
+        LirTerminator::Call {
+            target,
+            return_target,
+            ..
+        } => {
+            collect_expression_reads(target, cpu, candidates, defined, used);
+            if let Some(return_target) = return_target {
+                collect_expression_reads(return_target, cpu, candidates, defined, used);
+            }
+        }
+        LirTerminator::Return { expression } => {
+            if let Some(expression) = expression {
+                collect_expression_reads(expression, cpu, candidates, defined, used);
+            }
+        }
+        LirTerminator::FallThrough | LirTerminator::Unreachable | LirTerminator::Trap => {}
+    }
+}
+
+fn collect_expression_reads(
+    expression: &LirExpression,
+    cpu: &LirCpu,
+    candidates: &[(String, LirLocation)],
+    defined: &std::collections::BTreeSet<String>,
+    used: &mut std::collections::BTreeSet<String>,
+) {
+    match expression {
+        LirExpression::Read(location) => {
+            let key = candidate_location_key(location, cpu);
+            if !defined.contains(&key) && candidates.iter().any(|(candidate, _)| candidate == &key) {
+                used.insert(key);
+            }
+        }
+        LirExpression::AddressOf { location, .. } => {
+            let key = candidate_location_key(location, cpu);
+            if !defined.contains(&key) && candidates.iter().any(|(candidate, _)| candidate == &key) {
+                used.insert(key);
+            }
+        }
+        LirExpression::Load { addr, .. }
+        | LirExpression::Cast { arg: addr, .. }
+        | LirExpression::Unary { arg: addr, .. }
+        | LirExpression::Extract { arg: addr, .. }
+        | LirExpression::ReadProperty {
+            reference: addr, ..
+        } => collect_expression_reads(addr, cpu, candidates, defined, used),
+        LirExpression::Binary { left, right, .. }
+        | LirExpression::Compare { left, right, .. } => {
+            collect_expression_reads(left, cpu, candidates, defined, used);
+            collect_expression_reads(right, cpu, candidates, defined, used);
+        }
+        LirExpression::Select {
+            condition,
+            when_true,
+            when_false,
+            ..
+        } => {
+            collect_expression_reads(condition, cpu, candidates, defined, used);
+            collect_expression_reads(when_true, cpu, candidates, defined, used);
+            collect_expression_reads(when_false, cpu, candidates, defined, used);
+        }
+        LirExpression::Concat { parts, .. } | LirExpression::Intrinsic { args: parts, .. } => {
+            for part in parts {
+                collect_expression_reads(part, cpu, candidates, defined, used);
+            }
+        }
+        LirExpression::ReadElement {
+            reference, index, ..
+        } => {
+            collect_expression_reads(reference, cpu, candidates, defined, used);
+            collect_expression_reads(index, cpu, candidates, defined, used);
+        }
+        LirExpression::Const { .. }
+        | LirExpression::Function { .. }
+        | LirExpression::DataAddress { .. }
+        | LirExpression::Undefined { .. }
+        | LirExpression::Poison { .. }
+        | LirExpression::Null { .. }
+        | LirExpression::Allocate { .. } => {}
+    }
+}
+
+fn candidate_location_key(location: &LirLocation, cpu: &LirCpu) -> String {
+    match location {
+        LirLocation::Register { name, .. } => cpu
+            .resolve_register(name)
+            .map(|resolution| format!("reg:{}", resolution.storage_name))
+            .unwrap_or_else(|| format!("reg:{name}")),
+        LirLocation::Flag { name, .. } => format!("flag:{name}"),
+        LirLocation::ProgramCounter { .. } => "pc".to_string(),
+        LirLocation::Temporary { id, .. } => format!("tmp:{id}"),
+        LirLocation::Memory { space, bits, .. } => format!("mem:{space:?}:{bits}"),
+        LirLocation::IndexedMemory { name, bits, .. } => format!("indexed:{name}:{bits}"),
+        LirLocation::StackMemory { name, bits, offset } => format!("stack:{name}:{offset}:{bits}"),
+    }
+}
+
+fn canonical_register_role(raw_name: &str, abi: Option<&LirAbi>) -> Option<String> {
+    if matches!(raw_name, "rip" | "eip" | "pc") {
+        return Some("pc".to_string());
+    }
+    if matches!(raw_name, "rsp" | "esp" | "sp" | "sp_el0" | "sp_el1") {
+        return Some("sp".to_string());
+    }
+    if matches!(raw_name, "rbp" | "ebp" | "bp" | "fp" | "x29" | "w29") {
+        return Some("fp".to_string());
+    }
+    if let Some(abi) = abi {
+        for (index, location) in abi.function_arguments.iter().enumerate() {
+            if matches_register_role_location(location, raw_name, &abi.cpu) {
+                return Some(format!("arg{index}"));
+            }
+        }
+        for (index, location) in abi.return_locations.iter().enumerate() {
+            if matches_register_role_location(location, raw_name, &abi.cpu) {
+                return Some(format!("ret{index}"));
+            }
+        }
+    }
+    None
+}
+
+fn canonical_flag_name(raw_name: &str) -> Option<String> {
+    match raw_name {
+        "zf" | "z" => Some("zero".to_string()),
+        "cf" | "c" => Some("carry".to_string()),
+        "of" | "v" => Some("overflow".to_string()),
+        "sf" | "n" => Some("sign".to_string()),
+        "pf" => Some("parity".to_string()),
+        "af" => Some("adjust".to_string()),
+        _ => None,
+    }
+}
+
+fn matches_register_role_location(location: &LirLocation, raw_name: &str, cpu: &LirCpu) -> bool {
+    let LirLocation::Register { name, .. } = location else {
+        return false;
+    };
+    match (
+        canonical_register_storage_name(cpu, name),
+        canonical_register_storage_name(cpu, raw_name),
+    ) {
+        (Some(expected), Some(actual)) => expected == actual,
+        _ => name == raw_name,
+    }
+}
+
+fn canonical_register_storage_name(cpu: &LirCpu, name: &str) -> Option<String> {
+    cpu.resolve_register(name).map(|resolution| resolution.storage_name)
 }

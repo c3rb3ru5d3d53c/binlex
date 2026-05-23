@@ -2460,7 +2460,7 @@ impl Lir {
         self.inner.lock().unwrap().text()
     }
     pub fn print(&self) -> PyResult<()> {
-        println!("{}", self.text());
+        self.inner.lock().unwrap().print();
         Ok(())
     }
     pub fn __str__(&self) -> PyResult<String> {
@@ -2634,6 +2634,11 @@ impl LirBlock {
         self.inner.lock().unwrap().text()
     }
 
+    pub fn print(&self) -> PyResult<()> {
+        self.inner.lock().unwrap().print();
+        Ok(())
+    }
+
     pub fn __hash__(&self) -> isize {
         self.value_hash()
     }
@@ -2762,6 +2767,11 @@ impl LirFunction {
 
     pub fn text(&self) -> String {
         self.inner.lock().unwrap().text()
+    }
+
+    pub fn print(&self) -> PyResult<()> {
+        self.inner.lock().unwrap().print();
+        Ok(())
     }
 
     pub fn __hash__(&self) -> isize {
@@ -2907,7 +2917,7 @@ impl LirModule {
     }
 
     pub fn print(&self) -> PyResult<()> {
-        println!("{}", self.text());
+        self.inner.lock().unwrap().print();
         Ok(())
     }
 

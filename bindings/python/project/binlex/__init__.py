@@ -31,6 +31,8 @@ from importlib import import_module
 from .clients import Server, Web
 from .config import Configuration
 from .core import Architecture, Magic
+from .decompilers import Decompiler, DecompilerBackend
+from .disassemblers import Disassembler, DisassemblerBackend
 
 _LAZY_SUBMODULES = {
     "assemblers",
@@ -67,6 +69,10 @@ def __getattr__(name):
 __all__ = [
     "Architecture",
     "Configuration",
+    "Decompiler",
+    "DecompilerBackend",
+    "Disassembler",
+    "DisassemblerBackend",
     "Magic",
     "Server",
     "Web",

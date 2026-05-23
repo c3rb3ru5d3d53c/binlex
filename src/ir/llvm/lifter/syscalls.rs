@@ -785,13 +785,7 @@ mod tests {
 
         let mut lifter = Lifter::from_architecture(Architecture::ARM64, Configuration::default());
         lifter
-            .lift_function_semantics(
-                &LirModule {
-                    semantics: vec![semantics],
-                    data: Vec::new(),
-                },
-                Some(&abi),
-            )
+            .lift_function_semantics(&LirModule::from_instructions(vec![semantics]), Some(&abi))
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -829,13 +823,7 @@ mod tests {
 
         let mut lifter = Lifter::from_architecture(Architecture::AMD64, Configuration::default());
         lifter
-            .lift_function_semantics(
-                &LirModule {
-                    semantics: vec![semantics],
-                    data: Vec::new(),
-                },
-                Some(&abi),
-            )
+            .lift_function_semantics(&LirModule::from_instructions(vec![semantics]), Some(&abi))
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -877,10 +865,7 @@ mod tests {
         let mut lifter = Lifter::from_architecture(Architecture::AMD64, Configuration::default());
         lifter
             .lift_function_semantics(
-                &LirModule {
-                    semantics: vec![semantics],
-                    data: Vec::new(),
-                },
+                &LirModule::from_instructions(vec![semantics]),
                 Some(&function_abi),
             )
             .expect("lift semantics");
@@ -923,13 +908,7 @@ mod tests {
 
         let mut lifter = Lifter::from_architecture(Architecture::AMD64, Configuration::default());
         lifter
-            .lift_function_semantics(
-                &LirModule {
-                    semantics: vec![semantics],
-                    data: Vec::new(),
-                },
-                Some(&abi),
-            )
+            .lift_function_semantics(&LirModule::from_instructions(vec![semantics]), Some(&abi))
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -987,13 +966,7 @@ mod tests {
 
         let mut lifter = Lifter::from_architecture(Architecture::AMD64, Configuration::default());
         lifter
-            .lift_function_semantics(
-                &LirModule {
-                    semantics: vec![semantics],
-                    data: Vec::new(),
-                },
-                Some(&abi),
-            )
+            .lift_function_semantics(&LirModule::from_instructions(vec![semantics]), Some(&abi))
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -1043,13 +1016,7 @@ mod tests {
 
         let mut lifter = Lifter::from_architecture(Architecture::AMD64, Configuration::default());
         lifter
-            .lift_function_semantics(
-                &LirModule {
-                    semantics: vec![semantics],
-                    data: Vec::new(),
-                },
-                Some(&abi),
-            )
+            .lift_function_semantics(&LirModule::from_instructions(vec![semantics]), Some(&abi))
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -1087,13 +1054,7 @@ mod tests {
 
         let mut lifter = Lifter::from_architecture(Architecture::I386, Configuration::default());
         lifter
-            .lift_function_semantics(
-                &LirModule {
-                    semantics: vec![semantics],
-                    data: Vec::new(),
-                },
-                Some(&abi),
-            )
+            .lift_function_semantics(&LirModule::from_instructions(vec![semantics]), Some(&abi))
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -1134,13 +1095,7 @@ mod tests {
 
         let mut lifter = Lifter::from_architecture(Architecture::I386, Configuration::default());
         lifter
-            .lift_function_semantics(
-                &LirModule {
-                    semantics: vec![semantics],
-                    data: Vec::new(),
-                },
-                Some(&abi),
-            )
+            .lift_function_semantics(&LirModule::from_instructions(vec![semantics]), Some(&abi))
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -1180,13 +1135,7 @@ mod tests {
 
         let mut lifter = Lifter::from_architecture(Architecture::I386, Configuration::default());
         lifter
-            .lift_function_semantics(
-                &LirModule {
-                    semantics: vec![semantics],
-                    data: Vec::new(),
-                },
-                Some(&abi),
-            )
+            .lift_function_semantics(&LirModule::from_instructions(vec![semantics]), Some(&abi))
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -1229,13 +1178,7 @@ mod tests {
 
         let mut lifter = Lifter::from_architecture(Architecture::I386, Configuration::default());
         lifter
-            .lift_function_semantics(
-                &LirModule {
-                    semantics: vec![semantics],
-                    data: Vec::new(),
-                },
-                Some(&abi),
-            )
+            .lift_function_semantics(&LirModule::from_instructions(vec![semantics]), Some(&abi))
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();
@@ -1280,13 +1223,7 @@ mod tests {
 
         let mut lifter = Lifter::from_architecture(Architecture::ARM64, Configuration::default());
         lifter
-            .lift_function_semantics(
-                &LirModule {
-                    semantics: vec![semantics],
-                    data: Vec::new(),
-                },
-                Some(&abi),
-            )
+            .lift_function_semantics(&LirModule::from_instructions(vec![semantics]), Some(&abi))
             .expect("lift semantics");
         lifter.verify().expect("verify");
         let text = lifter.text();

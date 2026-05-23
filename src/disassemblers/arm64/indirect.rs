@@ -23,15 +23,13 @@
 use crate::disassemblers::arm64::decoded::{
     Arm64DecodedInstruction, Arm64DecodedOperand, canonical_register_family,
 };
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::BTreeSet;
 
 use ::capstone::Insn;
 
-use crate::{
-    controlflow::graph::Graph,
-    disassemblers::arm64::{
-        backends::capstone as arm64_capstone, classify as arm64_classify, flow as arm64_flow,
-    },
+use crate::disassemblers::arm64::{
+    backends::capstone as arm64_capstone, classify as arm64_classify, context::DisassemblyContext,
+    flow as arm64_flow,
 };
 
 pub fn resolve_register_value_from_history_by_family(
@@ -226,21 +224,14 @@ pub fn has_indirect_controlflow_target(instruction: &Insn) -> bool {
     arm64_classify::has_indirect_controlflow_target_mnemonic(instruction.mnemonic().unwrap_or(""))
 }
 
-pub fn recent_decoded_instructions(
+pub(crate) fn recent_decoded_instructions(
     disassembler: &arm64_capstone::Disassembler<'_>,
     address: u64,
-    cfg: &Graph,
+    cfg: &impl DisassemblyContext,
     max_count: usize,
 ) -> Vec<Arm64DecodedInstruction> {
-    let mut addresses = VecDeque::with_capacity(max_count);
-    for entry in cfg.listing.range(..address) {
-        if addresses.len() == max_count {
-            addresses.pop_front();
-        }
-        addresses.push_back(*entry.key());
-    }
     let mut decoded = Vec::new();
-    for address in addresses {
+    for address in cfg.prior_instruction_addresses(address, max_count) {
         if let Some(instruction) = decoded_instruction(disassembler, address) {
             decoded.push(instruction);
         }
@@ -258,7 +249,7 @@ fn decoded_instruction(
 fn indirect_controlflow_target(
     disassembler: &arm64_capstone::Disassembler<'_>,
     instruction: &Insn,
-    cfg: &Graph,
+    cfg: &impl DisassemblyContext,
 ) -> Option<u64> {
     let operand_index =
         arm64_flow::indirect_target_operand_index(has_indirect_controlflow_target(instruction))?;
@@ -272,10 +263,10 @@ fn indirect_controlflow_target(
     disassembler.is_executable_address(target).then_some(target)
 }
 
-pub fn indirect_controlflow_targets(
+pub(crate) fn indirect_controlflow_targets(
     disassembler: &arm64_capstone::Disassembler<'_>,
     instruction: &Insn,
-    cfg: &Graph,
+    cfg: &impl DisassemblyContext,
 ) -> BTreeSet<u64> {
     let indirect_started_at = std::time::Instant::now();
     disassembler.metric_inc(&disassembler.metrics.indirect_target_calls, 1);

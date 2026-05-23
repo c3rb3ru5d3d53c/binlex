@@ -71,10 +71,7 @@ fn is_stack_derived_with_depth(value: &MirValue, defs: &DefMap, depth: usize) ->
 }
 
 fn is_stack_pointer_name(name: &str) -> bool {
-    matches!(
-        name,
-        "rsp" | "esp" | "sp" | "rbp" | "ebp" | "bp" | "fp" | "sp_el0" | "sp_el1"
-    )
+    matches!(name, "sp" | "fp")
 }
 
 fn is_constant(value: &MirValue) -> bool {

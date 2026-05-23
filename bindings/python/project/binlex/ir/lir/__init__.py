@@ -243,6 +243,9 @@ class LirInstruction:
     def text(self):
         return self._inner.text()
 
+    def print(self):
+        self._inner.print()
+
     def __str__(self):
         return self.text()
 
@@ -322,6 +325,9 @@ class LirBlock:
     def text(self):
         return self._inner.text()
 
+    def print(self):
+        self._inner.print()
+
     def __str__(self):
         return self.text()
 
@@ -391,6 +397,9 @@ class LirFunction:
 
     def text(self):
         return self._inner.text()
+
+    def print(self):
+        self._inner.print()
 
     def __str__(self):
         return self.text()
@@ -462,6 +471,9 @@ class LirModule:
 
     def text(self):
         return self._inner.text()
+
+    def print(self):
+        self._inner.print()
 
     def __str__(self):
         return self.text()

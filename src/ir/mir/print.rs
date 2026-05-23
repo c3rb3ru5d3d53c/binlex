@@ -450,6 +450,21 @@ fn format_value(value: &MirValue) -> String {
     }
 }
 
+fn format_typed_value(value: &MirValue) -> String {
+    match value {
+        MirValue::Named { name, ty } => {
+            let rendered = format_named_value(name);
+            match ty {
+                MirType::Pointer { .. } | MirType::Custom { .. } => {
+                    format!("{rendered}:{}", format_type(ty))
+                }
+                _ => rendered,
+            }
+        }
+        _ => format_value(value),
+    }
+}
+
 fn format_named_value(name: &str) -> String {
     if let Some(pointer) = format_pointer_name(name) {
         return pointer;
@@ -469,10 +484,10 @@ fn format_control_target(target: &MirControlTarget) -> String {
     match target {
         MirControlTarget::Direct(name) => format_code_location(name),
         MirControlTarget::FunctionIndirect(value) => {
-            format!("function_indirect {}", format_value(value))
+            format!("function_indirect {}", format_typed_value(value))
         }
         MirControlTarget::BlockIndirect(value) => {
-            format!("block_indirect {}", format_value(value))
+            format!("block_indirect {}", format_typed_value(value))
         }
     }
 }
@@ -504,6 +519,27 @@ fn format_type(ty: &MirType) -> String {
         MirType::Integer(bits) => format!("i{bits}"),
         MirType::Float(bits) => format!("f{bits}"),
         MirType::Pointer { pointee } => format!("ptr<{}>", format_type(pointee)),
+        MirType::Function {
+            parameters,
+            returns,
+        } => {
+            let parameters = parameters
+                .iter()
+                .map(format_type)
+                .collect::<Vec<_>>()
+                .join(", ");
+            let returns = if returns.is_empty() {
+                "void".to_string()
+            } else if returns.len() == 1 {
+                format_type(&returns[0])
+            } else {
+                format!(
+                    "({})",
+                    returns.iter().map(format_type).collect::<Vec<_>>().join(", ")
+                )
+            };
+            format!("fn({parameters})->{returns}")
+        }
         MirType::Memory => "mem".to_string(),
         MirType::Custom { name } => name.clone(),
     }

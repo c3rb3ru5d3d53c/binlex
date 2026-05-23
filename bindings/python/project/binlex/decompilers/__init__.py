@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
-import os
+
+from binlex_bindings.binlex.decompilers import Decompiler as _DecompilerBinding
 
 from binlex.config import Configuration
+from binlex.ir.lir import LirFunction
+from binlex.ir.mir import MirFunction
 
 
 class DecompilerBackend(str, Enum):
@@ -16,18 +18,17 @@ class DecompilerBackend(str, Enum):
 class Decompiler:
     """Coordinate staged decompilation over a graph."""
 
-    def __init__(self, graph, configuration, symbols=None, backend=DecompilerBackend.DEFAULT):
+    def __init__(self, graph, configuration, backend=DecompilerBackend.DEFAULT):
         if not isinstance(backend, DecompilerBackend):
             raise TypeError("backend must be a DecompilerBackend")
         if not isinstance(configuration, Configuration):
             raise TypeError("configuration must be a Configuration")
         self._graph = graph
         self._configuration = configuration
-        self._symbols = [] if symbols is None else [_freeze_symbol(symbol) for symbol in symbols]
         self._backend = backend
         self._graph._decompiler = self
         self._graph._decompilation_cache = {"lir": {}, "mir": {}, "hir": {}}
-        self._symbol_address_map = None
+        self._inner = _DecompilerBinding(graph._inner, configuration, backend.value)
 
     @property
     def graph(self):
@@ -38,61 +39,41 @@ class Decompiler:
         return self._configuration
 
     @property
-    def symbols(self):
-        return list(self._symbols)
-
-    @property
     def backend(self):
         return self._backend
 
     def function(self, address):
         return self._graph.function(address)
 
+    def _cache_lir(self, address, lir):
+        lir = LirFunction._from_inner(lir)
+        if self._configuration.decompiler.lir.optimize.enabled:
+            setattr(lir, "_binlex_decompiler_lir_optimized", True)
+        self._graph._decompilation_cache["lir"][address] = lir
+        return lir
+
+    def _cache_mir(self, address, mir):
+        mir = MirFunction._from_inner(mir)
+        if self._configuration.decompiler.mir.optimize.enabled:
+            setattr(mir, "_binlex_decompiler_mir_optimized", True)
+        self._graph._decompilation_cache["mir"][address] = mir
+        return mir
+
+    def _cache_artifacts(self, address, lir, mir):
+        self._cache_lir(address, lir)
+        self._cache_mir(address, mir)
+
     def decompile_function(self, address):
-        function = self._graph.function(address)
-        if function is None:
+        result = self._inner.decompile_function_artifacts(address)
+        if result is None:
             return None
-        self._decompile_function(function)
-        return function
+        lir, mir = result
+        self._cache_artifacts(address, lir, mir)
+        return self._graph.function(address)
 
     def decompile(self):
-        functions = self._graph.functions()
-        worker_count = max(1, os.cpu_count() or 1)
-        if self._configuration.threads > 0:
-            worker_count = self._configuration.threads
-        if worker_count <= 1 or len(functions) <= 1:
-            for function in functions:
-                self._decompile_function(function)
-            return self
-
-        target_batches = max(1, worker_count * 4)
-        chunk_size = max(1, (len(functions) + target_batches - 1) // target_batches)
-        batches = [functions[index:index + chunk_size] for index in range(0, len(functions), chunk_size)]
-        with ThreadPoolExecutor(max_workers=worker_count) as executor:
-            list(executor.map(self._decompile_batch, batches))
+        for address, lir, mir in self._inner.decompile_artifacts():
+            self._cache_artifacts(address, lir, mir)
         return self
 
-    def _decompile_function(self, function):
-        if self._backend != DecompilerBackend.DEFAULT:
-            raise ValueError(f"unsupported decompiler backend: {self._backend!r}")
-        function.lir()
-        function.mir()
-        return function
-
-    def _decompile_batch(self, functions):
-        for function in functions:
-            self._decompile_function(function)
-        return functions
-
 __all__ = ["Decompiler", "DecompilerBackend"]
-
-
-def _freeze_symbol(symbol):
-    if isinstance(symbol, dict):
-        return dict(symbol)
-    return {
-        "name": symbol.name(),
-        "virtual_address": symbol.virtual_address(),
-        "relative_virtual_address": symbol.relative_virtual_address(),
-        "kind": str(symbol.kind()),
-    }

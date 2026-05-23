@@ -74,11 +74,59 @@ fn caller_saved_registers(abi: &LirAbi) -> Vec<MirCallClobber> {
 
     registers
         .into_iter()
-        .map(|(register, bits)| MirCallClobber {
-            register,
+        .enumerate()
+        .map(|(index, (register, bits))| MirCallClobber {
+            register: canonical_register_name(&register, abi)
+                .unwrap_or_else(|| format!("scratch{index}")),
             ty: MirType::integer(bits),
         })
         .collect()
+}
+
+fn canonical_register_name(raw_name: &str, abi: &LirAbi) -> Option<String> {
+    if matches!(raw_name, "rip" | "eip" | "pc") {
+        return Some("pc".to_string());
+    }
+    if matches!(raw_name, "rsp" | "esp" | "sp" | "sp_el0" | "sp_el1") {
+        return Some("sp".to_string());
+    }
+    if matches!(raw_name, "rbp" | "ebp" | "bp" | "fp" | "x29" | "w29") {
+        return Some("fp".to_string());
+    }
+    for (index, location) in abi.function_arguments.iter().enumerate() {
+        if matches_register_role_location(location, raw_name, &abi.cpu)
+        {
+            return Some(format!("arg{index}"));
+        }
+    }
+    for (index, location) in abi.return_locations.iter().enumerate() {
+        if matches_register_role_location(location, raw_name, &abi.cpu)
+        {
+            return Some(format!("ret{index}"));
+        }
+    }
+    None
+}
+
+fn matches_register_role_location(
+    location: &crate::ir::lir::LirLocation,
+    raw_name: &str,
+    cpu: &crate::ir::lir::LirCpu,
+) -> bool {
+    let crate::ir::lir::LirLocation::Register { name, .. } = location else {
+        return false;
+    };
+    match (
+        canonical_register_storage_name(cpu, name),
+        canonical_register_storage_name(cpu, raw_name),
+    ) {
+        (Some(expected), Some(actual)) => expected == actual,
+        _ => name == raw_name,
+    }
+}
+
+fn canonical_register_storage_name(cpu: &crate::ir::lir::LirCpu, name: &str) -> Option<String> {
+    cpu.resolve_register(name).map(|resolution| resolution.storage_name)
 }
 
 fn call_memory_effects(abi: &LirAbi) -> Vec<MirAddressSpace> {

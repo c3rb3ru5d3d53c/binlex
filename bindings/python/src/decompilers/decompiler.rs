@@ -1,0 +1,192 @@
+// MIT License
+//
+// Copyright (c) [2025] [c3rb3ru5d3d53c]
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+use crate::controlflow::{Function, Graph};
+use crate::ir::lir::LirFunction as PyLirFunction;
+use crate::ir::mir::PyMirFunction;
+use crate::Configuration;
+use binlex::decompilers::{DecompiledFunction, Decompiler as InnerDecompiler, DecompilerBackend};
+use pyo3::exceptions::{PyRuntimeError, PyTypeError};
+use pyo3::prelude::*;
+use std::sync::Arc;
+use std::sync::Mutex;
+
+#[pyclass]
+pub struct Decompiler {
+    graph: Py<Graph>,
+    graph_inner: Arc<Mutex<binlex::controlflow::Graph>>,
+    configuration: Py<Configuration>,
+    inner_configuration: binlex::Configuration,
+    backend: DecompilerBackend,
+}
+
+impl Decompiler {
+    fn decompile_artifact_to_python(
+        py: Python<'_>,
+        artifact: DecompiledFunction,
+    ) -> PyResult<(u64, Py<PyLirFunction>, Py<PyMirFunction>)> {
+        Ok((
+            artifact.address,
+            Py::new(py, PyLirFunction::from_inner(artifact.lir))?,
+            Py::new(py, PyMirFunction::from_inner(artifact.mir))?,
+        ))
+    }
+}
+
+#[pymethods]
+impl Decompiler {
+    #[new]
+    #[pyo3(text_signature = "(graph, configuration, backend='default')")]
+    pub fn new(
+        py: Python<'_>,
+        graph: Py<Graph>,
+        configuration: Py<Configuration>,
+        backend: Option<String>,
+    ) -> PyResult<Self> {
+        let graph_inner = graph.borrow(py).inner.clone();
+        let inner_configuration = configuration.borrow(py).inner.lock().unwrap().clone();
+        let backend = match backend.as_deref().unwrap_or("default") {
+            "default" => DecompilerBackend::Default,
+            other => {
+                return Err(PyTypeError::new_err(format!(
+                    "unsupported decompiler backend: {other}"
+                )));
+            }
+        };
+        Ok(Self {
+            graph,
+            graph_inner,
+            configuration,
+            inner_configuration,
+            backend,
+        })
+    }
+
+    #[getter]
+    pub fn get_graph(&self, py: Python<'_>) -> Py<Graph> {
+        self.graph.clone_ref(py)
+    }
+
+    #[getter]
+    pub fn get_configuration(&self, py: Python<'_>) -> Py<Configuration> {
+        self.configuration.clone_ref(py)
+    }
+
+    #[getter]
+    pub fn get_backend(&self) -> String {
+        match self.backend {
+            DecompilerBackend::Default => "default".to_string(),
+        }
+    }
+
+    #[pyo3(text_signature = "($self, address)")]
+    pub fn function(&self, py: Python<'_>, address: u64) -> PyResult<Option<Function>> {
+        let cfg = self.graph.clone_ref(py);
+        if self
+            .graph_inner
+            .lock()
+            .unwrap()
+            .get_function(address)
+            .is_none()
+        {
+            return Ok(None);
+        }
+        Ok(Some(Function::new(address, cfg)?))
+    }
+
+    #[pyo3(text_signature = "($self, address)")]
+    pub fn decompile_function_artifacts(
+        &self,
+        py: Python<'_>,
+        address: u64,
+    ) -> PyResult<Option<(Py<PyLirFunction>, Py<PyMirFunction>)>> {
+        let graph_inner = self.graph_inner.clone();
+        let configuration = self.inner_configuration.clone();
+        let backend = self.backend;
+        let artifact = py
+            .detach(move || {
+                let graph = graph_inner.lock().unwrap();
+                InnerDecompiler::new(&graph, configuration, backend).decompile_function(address)
+            })
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        let Some(artifact) = artifact else {
+            return Ok(None);
+        };
+        let (_, lir, mir) = Self::decompile_artifact_to_python(py, artifact)?;
+        Ok(Some((lir, mir)))
+    }
+
+    #[pyo3(text_signature = "($self, address)")]
+    pub fn decompile_function(&self, py: Python<'_>, address: u64) -> PyResult<Option<Function>> {
+        if self.decompile_function_artifacts(py, address)?.is_none() {
+            return Ok(None);
+        }
+        Ok(Some(Function::new(address, self.graph.clone_ref(py))?))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn decompile_artifacts(
+        &self,
+        py: Python<'_>,
+    ) -> PyResult<Vec<(u64, Py<PyLirFunction>, Py<PyMirFunction>)>> {
+        let graph_inner = self.graph_inner.clone();
+        let configuration = self.inner_configuration.clone();
+        let backend = self.backend;
+        let artifacts = py
+            .detach(move || {
+                let graph = graph_inner.lock().unwrap();
+                InnerDecompiler::new(&graph, configuration, backend).decompile()
+            })
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+
+        artifacts
+            .into_iter()
+            .map(|artifact| Self::decompile_artifact_to_python(py, artifact))
+            .collect()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn decompile(&self, py: Python<'_>) -> PyResult<Py<Self>> {
+        let _ = self.decompile_artifacts(py)?;
+        Ok(Py::new(
+            py,
+            Self {
+                graph: self.graph.clone_ref(py),
+                graph_inner: self.graph_inner.clone(),
+                configuration: self.configuration.clone_ref(py),
+                inner_configuration: self.inner_configuration.clone(),
+                backend: self.backend,
+            },
+        )?)
+    }
+}
+
+#[pymodule]
+#[pyo3(name = "decompiler")]
+pub fn decompiler_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<Decompiler>()?;
+    py.import("sys")?
+        .getattr("modules")?
+        .set_item("binlex_bindings.binlex.decompilers.decompiler", m)?;
+    m.setattr("__name__", "binlex_bindings.binlex.decompilers.decompiler")?;
+    Ok(())
+}

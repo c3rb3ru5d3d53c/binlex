@@ -24,16 +24,13 @@ use std::collections::BTreeSet;
 
 use ::capstone::{Insn, RegId, arch::ArchOperand, arch::x86::X86OpMem, arch::x86::X86OperandType};
 
-use crate::{
-    controlflow::graph::Graph,
-    disassemblers::x86::{
-        backends::capstone as x86_capstone,
-        decoded::{
-            X86DecodedInstruction, X86DecodedMemoryOperand, X86DecodedOperand,
-            canonical_register_name,
-        },
-        flow as x86_flow, targets as x86_targets,
+use crate::disassemblers::x86::{
+    backends::capstone as x86_capstone,
+    context::DisassemblyContext,
+    decoded::{
+        X86DecodedInstruction, X86DecodedMemoryOperand, X86DecodedOperand, canonical_register_name,
     },
+    flow as x86_flow, targets as x86_targets,
 };
 
 pub fn is_register_jump_table_load(instruction: &X86DecodedInstruction, register: &str) -> bool {
@@ -120,20 +117,15 @@ pub fn resolve_jump_table_base_from_history(
         .and_then(|base| base.checked_add(mem.displacement as u64))
 }
 
-pub fn recent_decoded_instructions(
+pub(crate) fn recent_decoded_instructions(
     disassembler: &x86_capstone::Disassembler<'_>,
     address: u64,
-    cfg: &Graph,
+    cfg: &impl DisassemblyContext,
     max_count: usize,
 ) -> Vec<X86DecodedInstruction> {
-    let mut addresses = Vec::new();
-    for entry in cfg.listing.range(..address) {
-        addresses.push(*entry.key());
-    }
-    let start = addresses.len().saturating_sub(max_count);
     let mut decoded = Vec::new();
-    for address in &addresses[start..] {
-        let Ok(insns) = disassembler.disassemble_instructions(*address, 1) else {
+    for address in cfg.prior_instruction_addresses(address, max_count) {
+        let Ok(insns) = disassembler.disassemble_instructions(address, 1) else {
             continue;
         };
         let Some(insn) = insns.iter().next() else {
@@ -217,10 +209,10 @@ fn indirect_controlflow_target(
     disassembler.resolve_memory_operand_target(instruction, mem)
 }
 
-pub fn indirect_controlflow_targets(
+pub(crate) fn indirect_controlflow_targets(
     disassembler: &x86_capstone::Disassembler<'_>,
     instruction: &Insn,
-    cfg: &Graph,
+    cfg: &impl DisassemblyContext,
 ) -> BTreeSet<u64> {
     let mut targets = BTreeSet::new();
 

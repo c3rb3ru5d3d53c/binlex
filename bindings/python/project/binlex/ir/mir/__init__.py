@@ -128,6 +128,9 @@ class MirFunction:
     def text(self):
         return self._inner.text()
 
+    def print(self):
+        self._inner.print()
+
     def json(self):
         return self._inner.json()
 
@@ -246,6 +249,9 @@ class MirModule:
 
     def text(self):
         return self._inner.text()
+
+    def print(self):
+        self._inner.print()
 
     def json(self):
         return self._inner.json()

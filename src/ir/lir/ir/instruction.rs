@@ -129,6 +129,10 @@ impl LirBlock {
         crate::ir::lir::format_lir_block(self)
     }
 
+    pub fn print(&self) {
+        println!("{}", self.text());
+    }
+
     pub fn optimize_constants(&mut self) {
         for instruction in &mut self.instructions {
             instruction.optimize_constants();
@@ -217,6 +221,10 @@ impl LirFunction {
         crate::ir::lir::format_lir_function(self)
     }
 
+    pub fn print(&self) {
+        println!("{}", self.text());
+    }
+
     pub fn optimize_constants(&mut self) {
         for block in &mut self.blocks {
             block.optimize_constants();
@@ -269,6 +277,28 @@ impl LirModule {
         }
     }
 
+    pub fn from_instructions(instructions: Vec<LirInstruction>) -> Self {
+        Self::from_instructions_with_data(instructions, Vec::new())
+    }
+
+    pub fn from_instructions_with_data(
+        instructions: Vec<LirInstruction>,
+        data: Vec<LirData>,
+    ) -> Self {
+        Self {
+            name: None,
+            functions: vec![LirFunction {
+                name: None,
+                abi: None,
+                blocks: vec![LirBlock {
+                    name: None,
+                    instructions,
+                }],
+            }],
+            data,
+        }
+    }
+
     pub fn functions(&self) -> &[LirFunction] {
         &self.functions
     }
@@ -302,6 +332,10 @@ impl LirModule {
 
     pub fn text(&self) -> String {
         crate::ir::lir::format_lir_module(self)
+    }
+
+    pub fn print(&self) {
+        println!("{}", self.text());
     }
 
     pub fn optimize_constants(&mut self) {
@@ -870,6 +904,10 @@ impl LirInstruction {
 
     pub fn text(&self) -> String {
         crate::ir::lir::format_lir_instruction(self)
+    }
+
+    pub fn print(&self) {
+        println!("{}", self.text());
     }
 
     pub fn optimize_constants(&mut self) {

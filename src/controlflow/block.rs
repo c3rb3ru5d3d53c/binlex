@@ -275,6 +275,21 @@ pub struct Block<'block> {
 }
 
 impl<'block> Block<'block> {
+    fn payload_bytes_and_mask(&self) -> (Vec<u8>, Vec<u8>) {
+        let mut raw_bytes = Vec::new();
+        let mut wildcard_mask = Vec::new();
+        for entry in self.cfg.listing.range(self.address..self.end()) {
+            let instruction = entry.value();
+            raw_bytes.extend_from_slice(&instruction.bytes);
+            if instruction.chromosome_mask.len() == instruction.bytes.len() {
+                wildcard_mask.extend_from_slice(&instruction.chromosome_mask);
+            } else {
+                wildcard_mask.extend(std::iter::repeat_n(0, instruction.bytes.len()));
+            }
+        }
+        (raw_bytes, wildcard_mask)
+    }
+
     /// Creates a new `Block` instance for the given address in the control flow graph.
     ///
     /// # Arguments
@@ -293,46 +308,17 @@ impl<'block> Block<'block> {
                 address
             )));
         }
-
-        let mut terminator: Option<Instruction<'block>> = None;
-
-        let mut previous_address: Option<u64> = None;
-        let mut previous_instruction: Option<Instruction<'block>> = None;
-        for entry in cfg.listing.range(address..) {
-            let record = entry.value();
-            let instruction =
-                Instruction::new(record.address, cfg).expect("failed to retrieve instruction");
-            if let Some(prev_addr) = previous_address {
-                if instruction.address != prev_addr {
-                    return Err(Error::other(format!(
-                        "Block -> 0x{:x}: is not contiguous",
-                        address
-                    )));
-                }
-            }
-            if address != instruction.address && instruction.is_block_start {
-                terminator = previous_instruction.clone();
-                break;
-            }
-            previous_address = Some(instruction.address + instruction.size() as u64);
-            if instruction.is_jump || instruction.is_trap || instruction.is_return {
-                terminator = Some(instruction.clone());
-                break;
-            }
-            previous_instruction = Some(instruction.clone());
-        }
-
-        if terminator.is_none() {
-            return Err(Error::other(format!(
-                "Block -> 0x{:x}: has no end instruction",
-                address
-            )));
-        }
+        let terminator_address = cfg.block_terminator_address(address).ok_or_else(|| {
+            Error::other(format!("Block -> 0x{:x}: has no end instruction", address))
+        })?;
+        let terminator = Instruction::new(terminator_address, cfg).map_err(|_| {
+            Error::other(format!("Block -> 0x{:x}: has no end instruction", address))
+        })?;
 
         Ok(Self {
             address,
             cfg,
-            terminator: terminator.unwrap(),
+            terminator,
         })
     }
 
@@ -413,35 +399,48 @@ impl<'block> Block<'block> {
     ///
     /// Returns a `BlockJson` instance containing the block's metadata and related information.
     pub fn process_base(&self) -> BlockJson {
-        let bytes = self.bytes();
-        let chromosome = self.chromosome();
+        let (bytes, wildcard_mask) = self.payload_bytes_and_mask();
+        let chromosome = Chromosome::new(bytes.clone(), wildcard_mask, self.cfg.config.clone())
+            .expect("failed to build block chromosome");
         let size = bytes.len();
         let instructions = self.instruction_addresses();
         let callee_references = self.callee_references();
         let successor_references = self.successor_references();
         let predecessor_references = self.predecessor_references();
         let entropy = if self.cfg.config.blocks.entropy.enabled {
-            self.entropy()
+            entropy::shannon(&bytes)
         } else {
             None
         };
         let sha256 = if self.cfg.config.blocks.sha256.enabled {
-            self.sha256().and_then(|hash| hash.hexdigest())
+            SHA256::new(&bytes).hexdigest()
         } else {
             None
         };
         let ssdeep = if self.cfg.config.blocks.ssdeep.enabled {
-            self.ssdeep().and_then(|hash| hash.hexdigest())
+            SSDeep::new(&bytes).hexdigest()
         } else {
             None
         };
         let minhash = if self.cfg.config.blocks.minhash.enabled {
-            self.minhash().and_then(|hash| hash.hexdigest())
+            if bytes.len() > self.cfg.config.blocks.minhash.maximum_byte_size
+                && self.cfg.config.blocks.minhash.maximum_byte_size_enabled
+            {
+                None
+            } else {
+                MinHash32::new(
+                    &bytes,
+                    self.cfg.config.blocks.minhash.number_of_hashes,
+                    self.cfg.config.blocks.minhash.shingle_size,
+                    self.cfg.config.blocks.minhash.seed,
+                )
+                .hexdigest()
+            }
         } else {
             None
         };
         let tlsh = if self.cfg.config.blocks.tlsh.enabled {
-            self.tlsh().and_then(|hash| hash.hexdigest())
+            TLSH::new(&bytes, self.cfg.config.blocks.tlsh.minimum_byte_size).hexdigest()
         } else {
             None
         };
@@ -729,12 +728,8 @@ impl<'block> Block<'block> {
         self.terminator.branches()
     }
 
-    fn successor_addresses(&self) -> BTreeSet<u64> {
-        let mut result = BTreeSet::new();
-        for item in self.branches().iter().copied().chain(self.fallthrough()) {
-            result.insert(item);
-        }
-        result
+    pub(crate) fn successor_addresses(&self) -> BTreeSet<u64> {
+        self.cfg.block_successor_addresses(self.address)
     }
 
     /// Retrieves the direct outgoing control-flow references from this block.
@@ -747,20 +742,11 @@ impl<'block> Block<'block> {
 
     /// Retrieves the direct incoming control-flow references into this block.
     pub fn predecessor_references(&self) -> Vec<Reference> {
-        let mut result = Vec::<Reference>::new();
-        for block_address in self.cfg.blocks.valid_addresses() {
-            if block_address == self.address {
-                continue;
-            }
-            let Ok(block) = Block::new(block_address, self.cfg) else {
-                continue;
-            };
-            if block.successor_addresses().contains(&self.address) {
-                result.push(Reference::new(block_address, self.address));
-            }
-        }
-        result.sort();
-        result
+        self.cfg
+            .block_predecessor_addresses(self.address)
+            .into_iter()
+            .map(|address| Reference::new(address, self.address))
+            .collect()
     }
 
     /// Retrieves the direct successor blocks.
@@ -785,21 +771,7 @@ impl<'block> Block<'block> {
     ///
     /// Returns a `Chromosome` representing this block.
     pub fn chromosome(&self) -> Chromosome {
-        let mut raw_bytes = Vec::new();
-        let mut wildcard_mask = Vec::new();
-        for entry in self
-            .cfg
-            .listing
-            .range(self.address..self.address + self.size() as u64)
-        {
-            let instruction = entry.value();
-            raw_bytes.extend_from_slice(&instruction.bytes);
-            if instruction.chromosome_mask.len() == instruction.bytes.len() {
-                wildcard_mask.extend_from_slice(&instruction.chromosome_mask);
-            } else {
-                wildcard_mask.extend(std::iter::repeat_n(0, instruction.bytes.len()));
-            }
-        }
+        let (raw_bytes, wildcard_mask) = self.payload_bytes_and_mask();
         Chromosome::new(raw_bytes, wildcard_mask, self.cfg.config.clone())
             .expect("failed to build block chromosome")
     }
@@ -929,12 +901,7 @@ impl<'block> Block<'block> {
     ///
     /// Returns a `Vec<u8>` containing the bytes of the block.
     pub fn bytes(&self) -> Vec<u8> {
-        let mut result = Vec::<u8>::new();
-        for entry in self.cfg.listing.range(self.address..self.end()) {
-            let instruction = entry.value();
-            result.extend(instruction.bytes.clone());
-        }
-        result
+        self.payload_bytes_and_mask().0
     }
 
     /// Counts the number of instructions in the block.

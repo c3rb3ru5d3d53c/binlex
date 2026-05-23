@@ -4,6 +4,8 @@ from . import assemblers
 from .clients import Server, Web
 from binlex.config import Configuration
 from binlex.core import Architecture
+from .decompilers import Decompiler, DecompilerBackend
+from .disassemblers import Disassembler, DisassemblerBackend
 from . import clients
 from . import compression
 from . import decompilers
@@ -24,6 +26,10 @@ from . import controlflow, disassemblers, formats, storage
 __all__ = [
     "Architecture",
     "Configuration",
+    "Decompiler",
+    "DecompilerBackend",
+    "Disassembler",
+    "DisassemblerBackend",
     "Magic",
     "Server",
     "Web",

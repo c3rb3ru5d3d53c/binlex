@@ -47,6 +47,19 @@ pub struct ELF {
 }
 
 impl ELF {
+    fn symbol_name(symbol: &lief::elf::Symbol<'_>) -> String {
+        let base = symbol.name();
+        if let Some(version) = symbol.symbol_version()
+            && let Some(aux) = version.symbol_version_auxiliary()
+        {
+            let provider = aux.name();
+            if !provider.is_empty() {
+                return format!("{base}!{provider}");
+            }
+        }
+        base
+    }
+
     fn symbol_file_offset(&self, symbol: &lief::elf::Symbol<'_>) -> u64 {
         let virtual_address = symbol.value();
         if let Some(offset) = self.virtual_address_to_file_offset(virtual_address) {
@@ -82,15 +95,12 @@ impl ELF {
     }
 
     pub fn imagebase(&self) -> u64 {
-        for segment in self.elf.segments() {
-            if segment.p_type() == SegmentType::LOAD {
-                if segment.virtual_address() != 0 {
-                    return segment.virtual_address();
-                }
-                return DEFAULT_IMAGEBASE;
-            }
-        }
-        DEFAULT_IMAGEBASE
+        self.elf
+            .segments()
+            .filter(|segment| segment.p_type() == SegmentType::LOAD)
+            .map(|segment| segment.virtual_address())
+            .min()
+            .unwrap_or(DEFAULT_IMAGEBASE)
     }
 
     pub fn size(&self) -> u64 {
@@ -110,7 +120,8 @@ impl ELF {
     }
 
     pub fn symbols(&self) -> BTreeMap<u64, BlSymbol> {
-        self.elf
+        let mut symbols = self
+            .elf
             .dynamic_symbols()
             .chain(self.elf.exported_symbols())
             .chain(self.elf.imported_symbols())
@@ -119,10 +130,11 @@ impl ELF {
             .map(|symbol| {
                 let virtual_address = symbol.value();
                 let offset = self.symbol_file_offset(&symbol);
+                let name = Self::symbol_name(&symbol);
                 (
                     virtual_address,
                     BlSymbol {
-                        name: symbol.name(),
+                        name,
                         file_offset: offset,
                         virtual_address: Some(virtual_address),
                         relative_virtual_address: Some(virtual_address - self.imagebase()),
@@ -130,7 +142,67 @@ impl ELF {
                     },
                 )
             })
-            .collect()
+            .collect::<BTreeMap<_, _>>();
+
+        for (virtual_address, symbol) in self.plt_symbols() {
+            symbols.entry(virtual_address).or_insert(symbol);
+        }
+
+        symbols
+    }
+
+    fn plt_symbols(&self) -> BTreeMap<u64, BlSymbol> {
+        let Some(plt_section) = self.elf.section_by_name(".plt") else {
+            return BTreeMap::new();
+        };
+
+        let relocations = self.elf.pltgot_relocations().collect::<Vec<_>>();
+        if relocations.is_empty() {
+            return BTreeMap::new();
+        }
+
+        let (entry_size, reserved_size) = match self.architecture() {
+            Architecture::AMD64 | Architecture::I386 => (16u64, 16u64),
+            Architecture::ARM64 => (16u64, 32u64),
+            _ => return BTreeMap::new(),
+        };
+
+        if plt_section.size() < reserved_size + entry_size {
+            return BTreeMap::new();
+        }
+
+        let plt_start = plt_section.virtual_address();
+        let mut result = BTreeMap::new();
+
+        for (index, relocation) in relocations.into_iter().enumerate() {
+            let Some(symbol) = relocation.symbol() else {
+                continue;
+            };
+
+            let name = Self::symbol_name(&symbol);
+            if name.is_empty() {
+                continue;
+            }
+
+            let virtual_address = plt_start + reserved_size + (index as u64 * entry_size);
+            let file_offset = match self.virtual_address_to_file_offset(virtual_address) {
+                Some(offset) => offset,
+                None => continue,
+            };
+
+            result.insert(
+                virtual_address,
+                BlSymbol {
+                    name,
+                    file_offset,
+                    virtual_address: Some(virtual_address),
+                    relative_virtual_address: Some(virtual_address - self.imagebase()),
+                    kind: SymbolKind::Function,
+                },
+            );
+        }
+
+        result
     }
 
     pub fn virtual_address_to_symbol(&self, virtual_address: u64) -> Option<BlSymbol> {
@@ -138,15 +210,31 @@ impl ELF {
     }
 
     pub fn symbol_name_to_virtual_address(&self, name: &str) -> Option<u64> {
-        self.symbols()
-            .into_iter()
-            .find_map(|(virtual_address, symbol)| (symbol.name == name).then_some(virtual_address))
+        let mut fallback = None;
+        for (virtual_address, symbol) in self.symbols() {
+            if symbol.name != name {
+                continue;
+            }
+            if virtual_address != 0 {
+                return Some(virtual_address);
+            }
+            fallback = Some(virtual_address);
+        }
+        fallback
     }
 
     pub fn symbol_name_to_file_offset(&self, name: &str) -> Option<u64> {
-        self.symbols()
-            .into_values()
-            .find_map(|symbol| (symbol.name == name).then_some(symbol.file_offset))
+        let mut fallback = None;
+        for symbol in self.symbols().into_values() {
+            if symbol.name != name {
+                continue;
+            }
+            if symbol.virtual_address != Some(0) {
+                return Some(symbol.file_offset);
+            }
+            fallback = Some(symbol.file_offset);
+        }
+        fallback
     }
 
     pub fn relative_virtual_address_to_symbol(

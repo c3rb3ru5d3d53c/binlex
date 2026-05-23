@@ -22,9 +22,11 @@
 
 use crate::Architecture;
 use crate::Configuration;
+use crate::config::RAYON_WORKER_STACK_SIZE;
 use crate::controlflow::InstructionRecord;
 use crate::controlflow::{Block, Function, Graph, Instruction};
 use crate::disassemblers::x86::classify as x86_classify;
+use crate::disassemblers::x86::context::{DisassemblyContext, DisassemblyShard};
 use crate::disassemblers::x86::pattern::{
     X86PatternOperand, X86PatternOperandKind, displacement_size_bits, instruction_chromosome_mask,
     is_immutable_instruction_to_pattern, is_unsupported_pattern_mnemonic,
@@ -42,6 +44,7 @@ use rayon::ThreadPoolBuilder;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Error, ErrorKind};
+use std::time::Instant;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Backend {
@@ -299,6 +302,182 @@ impl<'a> Disassembler<'a> {
         Ok(address)
     }
 
+    fn disassemble_instruction_address_shard(
+        &self,
+        address: u64,
+        cfg: &mut DisassemblyShard,
+    ) -> Result<u64, Error> {
+        cfg.instructions.insert_processed(address);
+
+        if cfg.get_instruction_record(address).is_some() {
+            return Ok(address);
+        }
+
+        if !self.is_executable_address(address) {
+            cfg.instructions.insert_invalid(address);
+            let error = format!(
+                "Instruction -> 0x{:x}: it is not in executable memory",
+                address
+            );
+            Stderr::print_debug(cfg.config(), error.clone());
+            return Err(Error::new(ErrorKind::Other, error));
+        }
+
+        let instruction = self
+            .prepare_instruction(self.machine, address, cfg)
+            .map_err(|_| {
+                cfg.instructions.insert_invalid(address);
+                let error = format!("0x{:x}: failed to disassemble instruction", address);
+                Error::new(ErrorKind::Other, error)
+            })?;
+
+        Stderr::print_debug(
+            cfg.config(),
+            format!(
+                "0x{:x}: mnemonic: {:?}, fallthrough: {:?}, branches: {:?}, is_conditional: {:?}, is_jump: {:?}",
+                instruction.address,
+                instruction.mnemonic,
+                instruction.fallthrough(),
+                instruction.branches(),
+                instruction.is_conditional,
+                instruction.is_jump,
+            ),
+        );
+
+        cfg.functions.enqueue_extend(instruction.functions.clone());
+        cfg.insert_instruction(instruction);
+        cfg.instructions.insert_valid(address);
+
+        Ok(address)
+    }
+
+    fn disassemble_block_address_shard(
+        &self,
+        address: u64,
+        cfg: &mut DisassemblyShard,
+    ) -> Result<u64, Error> {
+        cfg.blocks.insert_processed(address);
+
+        if !self.is_executable_address(address) {
+            cfg.functions.insert_invalid(address);
+            return Err(Error::new(
+                ErrorKind::Other,
+                format!("Block -> 0x{:x}: it is not in executable memory", address),
+            ));
+        }
+
+        let mut pc = address;
+        let mut has_prologue = false;
+        let mut terminator = address;
+        let mut split_successor: Option<u64> = None;
+
+        while self.disassemble_instruction_address_shard(pc, cfg).is_ok() {
+            let mut instruction = match cfg.get_instruction_record(pc) {
+                Some(instr) => instr,
+                None => {
+                    cfg.blocks.insert_invalid(address);
+                    return Err(Error::new(
+                        ErrorKind::Other,
+                        "failed to disassemble instruction",
+                    ));
+                }
+            };
+
+            if instruction.address == address {
+                instruction.is_block_start = true;
+                cfg.update_instruction(instruction.clone());
+            }
+
+            if instruction.address == address && instruction.is_block_start {
+                instruction.is_prologue = self.is_function_prologue(instruction.address);
+                has_prologue = instruction.is_prologue;
+                cfg.update_instruction(instruction.clone());
+            }
+
+            let is_block_start = instruction.address != address && instruction.is_block_start;
+
+            if is_block_start {
+                split_successor = Some(instruction.address);
+                break;
+            }
+
+            terminator = instruction.address;
+
+            if instruction.is_trap || instruction.is_return || instruction.is_jump {
+                break;
+            }
+
+            pc += instruction.size() as u64;
+
+            if cfg.blocks.is_pending(pc) || cfg.blocks.is_processed(pc) || cfg.blocks.is_valid(pc) {
+                split_successor = Some(pc);
+                break;
+            }
+        }
+
+        if let Some(successor) = split_successor {
+            if let Some(mut instruction) = cfg.get_instruction_record(terminator) {
+                instruction.to.extend(BTreeSet::from([successor]));
+                instruction.edges = instruction.successors().len();
+                cfg.update_instruction(instruction);
+            }
+        }
+
+        if has_prologue {
+            cfg.functions.enqueue(address);
+        }
+        cfg.blocks.insert_valid(address);
+
+        Ok(terminator)
+    }
+
+    fn disassemble_function_address_shard(
+        &self,
+        address: u64,
+        cfg: &mut DisassemblyShard,
+    ) -> Result<u64, Error> {
+        if !self.is_executable_address(address) {
+            cfg.functions.insert_invalid(address);
+            return Err(Error::new(
+                ErrorKind::Other,
+                format!(
+                    "Function -> 0x{:x}: it is not in executable memory",
+                    address
+                ),
+            ));
+        }
+
+        cfg.functions.insert_processed(address);
+        cfg.blocks.enqueue(address);
+
+        while let Some(block_start_address) = cfg.blocks.dequeue() {
+            if cfg.blocks.is_processed(block_start_address) {
+                continue;
+            }
+
+            let block_end_address = self
+                .disassemble_block_address_shard(block_start_address, cfg)
+                .inspect_err(|_| {
+                    cfg.functions.insert_invalid(address);
+                })?;
+
+            if block_start_address == address {
+                if let Some(mut instruction) = cfg.get_instruction_record(block_start_address) {
+                    instruction.is_function_start = true;
+                    cfg.update_instruction(instruction);
+                }
+            }
+
+            if let Some(instruction) = cfg.get_instruction_record(block_end_address) {
+                cfg.blocks.enqueue_extend(instruction.successors());
+            }
+        }
+
+        cfg.functions.insert_valid(address);
+
+        Ok(address)
+    }
+
     pub fn disassemble_instruction<'g>(
         &self,
         address: u64,
@@ -336,6 +515,7 @@ impl<'a> Disassembler<'a> {
     pub fn disassemble(&self, addresses: BTreeSet<u64>, cfg: &mut Graph) -> Result<(), Error> {
         let pool = ThreadPoolBuilder::new()
             .num_threads(cfg.config.resolved_threads())
+            .stack_size(RAYON_WORKER_STACK_SIZE)
             .build()
             .map_err(|error| Error::new(ErrorKind::Other, format!("{}", error)))?;
 
@@ -352,23 +532,30 @@ impl<'a> Disassembler<'a> {
         let graph_config = cfg.config.clone();
         let selected_backend = self.selected_backend;
         let image_base = self.image_base;
+        let debug_enabled = cfg.config.debug;
+        let mut round = 0usize;
 
         pool.install(|| -> Result<(), Error> {
             while !cfg.functions.queue.is_empty() {
+                round += 1;
+                let dequeue_started_at = if debug_enabled {
+                    Some(Instant::now())
+                } else {
+                    None
+                };
                 let function_addresses = cfg.functions.dequeue_all();
+                let dequeue_elapsed_ms = dequeue_started_at
+                    .map(|started_at| started_at.elapsed().as_secs_f64() * 1000.0);
                 cfg.functions
                     .insert_processed_extend(function_addresses.clone());
-                let worker_count = cfg.config.resolved_threads().max(1);
-                let target_groups = worker_count.saturating_mul(4).max(1);
-                let chunk_size = (function_addresses.len().max(1)).div_ceil(target_groups);
-                let function_groups: Vec<Vec<u64>> = function_addresses
-                    .iter()
-                    .copied()
-                    .collect::<Vec<_>>()
-                    .chunks(chunk_size.max(1))
-                    .map(|chunk| chunk.to_vec())
-                    .collect();
-                let graphs: Vec<Graph> = function_groups
+                let function_addresses = function_addresses.into_iter().collect::<Vec<_>>();
+                let function_count = function_addresses.len();
+                let parallel_started_at = if debug_enabled {
+                    Some(Instant::now())
+                } else {
+                    None
+                };
+                let mut merged_graph = function_addresses
                     .par_iter()
                     .map_init(
                         || {
@@ -381,20 +568,49 @@ impl<'a> Disassembler<'a> {
                                 external_config.clone(),
                             )
                         },
-                        |disasm, addresses| {
+                        |disasm, address| {
                             let disasm = disasm
                                 .as_ref()
                                 .map_err(|error| Error::other(error.to_string()))?;
-                            let mut graph = Graph::new(external_machine, graph_config.clone());
-                            for address in addresses {
-                                let _ = disasm.disassemble_function(*address, &mut graph);
-                            }
-                            Ok::<Graph, Error>(graph)
+                            let mut shard =
+                                DisassemblyShard::new(external_machine, graph_config.clone());
+                            let _ = disasm.disassemble_function_address_shard(*address, &mut shard);
+                            Ok::<DisassemblyShard, Error>(shard)
                         },
                     )
-                    .collect::<Result<Vec<_>, Error>>()?;
-                for mut graph in graphs {
-                    cfg.merge(&mut graph);
+                    .reduce(
+                        || Ok(DisassemblyShard::new(external_machine, graph_config.clone())),
+                        |left, right| {
+                            let mut left = left?;
+                            let mut right = right?;
+                            left.merge(&mut right);
+                            Ok(left)
+                        },
+                    )?
+                    .into_graph();
+                let parallel_elapsed_ms = parallel_started_at
+                    .map(|started_at| started_at.elapsed().as_secs_f64() * 1000.0);
+                let merge_started_at = if debug_enabled {
+                    Some(Instant::now())
+                } else {
+                    None
+                };
+                cfg.merge(&mut merged_graph);
+                if let Some(merge_started_at) = merge_started_at {
+                    let merge_elapsed_ms = merge_started_at.elapsed().as_secs_f64() * 1000.0;
+                    let dequeue_elapsed_ms = dequeue_elapsed_ms.unwrap_or_default();
+                    let parallel_elapsed_ms = parallel_elapsed_ms.unwrap_or_default();
+                    Stderr::print_debug(
+                        &graph_config,
+                        format!(
+                            "[timing] x86.disassemble.round={} functions={} dequeue={:.3} ms parallel+reduce={:.3} ms final_merge={:.3} ms",
+                            round,
+                            function_count,
+                            dequeue_elapsed_ms,
+                            parallel_elapsed_ms,
+                            merge_elapsed_ms,
+                        ),
+                    );
                 }
             }
             Ok(())
@@ -419,11 +635,11 @@ impl<'a> Disassembler<'a> {
             .any(|(start, end)| address >= *start && address < *end)
     }
 
-    pub(crate) fn prepare_instruction(
+    pub(crate) fn prepare_instruction<C: DisassemblyContext>(
         &self,
         machine: Architecture,
         address: u64,
-        cfg: &Graph,
+        cfg: &C,
     ) -> Result<InstructionRecord, Error> {
         x86_translate::build_instruction(self, machine, address, cfg)
     }

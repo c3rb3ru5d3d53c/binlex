@@ -29,6 +29,7 @@ use binlex::controlflow::Graph as InnerGraph;
 use binlex::controlflow::GraphQueue as InnerGraphQueue;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -297,6 +298,36 @@ impl Graph {
     /// Return the number of graph mutations that have occurred.
     pub fn mutations(&self) -> u64 {
         self.inner.lock().unwrap().mutations()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the graph-owned symbol map keyed by address.
+    pub fn symbols(&self) -> BTreeMap<u64, String> {
+        self.inner.lock().unwrap().symbols()
+    }
+
+    #[pyo3(text_signature = "($self, address)")]
+    /// Return the symbol name registered for `address`, if present.
+    pub fn symbol(&self, address: u64) -> Option<String> {
+        self.inner.lock().unwrap().symbol(address)
+    }
+
+    #[pyo3(text_signature = "($self, address, name)")]
+    /// Insert or replace a single graph-owned symbol.
+    pub fn insert_symbol(&self, address: u64, name: String) -> Option<String> {
+        self.inner.lock().unwrap().insert_symbol(address, name)
+    }
+
+    #[pyo3(text_signature = "($self, symbols)")]
+    /// Replace all graph-owned symbols with the provided map.
+    pub fn replace_symbols(&self, symbols: BTreeMap<u64, String>) {
+        self.inner.lock().unwrap().replace_symbols(symbols);
+    }
+
+    #[pyo3(text_signature = "($self, symbols)")]
+    /// Merge symbols into the graph-owned symbol map.
+    pub fn extend_symbols(&self, symbols: BTreeMap<u64, String>) {
+        self.inner.lock().unwrap().extend_symbols(symbols);
     }
 
     #[getter]

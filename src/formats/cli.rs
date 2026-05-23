@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 use std::mem;
+use std::ptr;
 
 /// Represents a metadata token type in a .NET metadata structure.
 ///
@@ -87,6 +88,7 @@ pub enum MetadataToken {
 ///
 /// The `ImageDataDirectory` provides information about a specific data directory,
 /// including its virtual address and size.
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub struct ImageDataDirectory {
     /// A `u32` value representing the virtual address of the data directory.
@@ -99,6 +101,7 @@ pub struct ImageDataDirectory {
 ///
 /// The `Cor20Header0` union allows for two possible representations:
 /// an entry point token for managed code or an RVA for native code.
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub union Cor20Header0 {
     /// A `u32` value representing the entry point token for managed code.
@@ -111,6 +114,7 @@ pub union Cor20Header0 {
 ///
 /// The `Cor20Header` provides information about the Common Language Runtime (CLR)
 /// metadata, versioning, and related data structures required for .NET assemblies.
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub struct Cor20Header {
     /// A `u32` value representing the size of the header in bytes.
@@ -153,11 +157,11 @@ impl Cor20Header {
     ///
     /// * `Some(&Cor20Header)` - A reference to the parsed `Cor20Header` if the byte slice is valid.
     /// * `None` - If the byte slice is invalid, does not contain enough data, or is misaligned.
-    pub fn from_bytes(bytes: &[u8]) -> Option<&Self> {
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.len() != mem::size_of::<Self>() {
             return None;
         }
-        Some(unsafe { &*(bytes.as_ptr() as *const Self) })
+        Some(unsafe { ptr::read_unaligned(bytes.as_ptr() as *const Self) })
     }
 
     pub fn size() -> usize {
@@ -169,6 +173,7 @@ impl Cor20Header {
 ///
 /// The `StorageSignature` contains metadata about the storage, including its signature,
 /// version, and additional data fields.
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub struct StorageSignature {
     /// A `u32` value representing the storage signature.
@@ -199,11 +204,11 @@ impl StorageSignature {
     ///
     /// * `Some(&StorageSignature)` - A reference to the parsed `StorageSignature` if the byte slice is valid.
     /// * `None` - If the byte slice is invalid, does not contain enough data, or is misaligned.
-    pub fn from_bytes(bytes: &[u8]) -> Option<&Self> {
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.len() != mem::size_of::<Self>() {
             return None;
         }
-        Some(unsafe { &*(bytes.as_ptr() as *const Self) })
+        Some(unsafe { ptr::read_unaligned(bytes.as_ptr() as *const Self) })
     }
 
     pub fn size() -> usize {
@@ -215,6 +220,7 @@ impl StorageSignature {
 ///
 /// The `StorageHeader` provides metadata about the storage streams, including the number
 /// of streams and associated flags.
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub struct StorageHeader {
     /// A `u8` value representing the storage flags.
@@ -239,11 +245,11 @@ impl StorageHeader {
     ///
     /// * `Some(&StorageHeader)` - A reference to the parsed `StorageHeader` if the byte slice is valid.
     /// * `None` - If the byte slice is invalid, does not contain enough data, or is misaligned.
-    pub fn from_bytes(bytes: &[u8]) -> Option<&Self> {
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.len() != mem::size_of::<Self>() {
             return None;
         }
-        Some(unsafe { &*(bytes.as_ptr() as *const Self) })
+        Some(unsafe { ptr::read_unaligned(bytes.as_ptr() as *const Self) })
     }
 
     pub fn size() -> usize {
@@ -255,6 +261,7 @@ impl StorageHeader {
 ///
 /// The `StreamHeader` contains metadata about a stream, including its offset and size,
 /// and provides methods to retrieve its name and the total header size.
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub struct StreamHeader {
     /// The offset of the stream in the metadata section.
@@ -278,11 +285,11 @@ impl StreamHeader {
     /// * `Some(&StreamHeader)` - A reference to the parsed `StreamHeader` if the byte slice is valid.
     /// * `None` - If the byte slice is too short to contain a valid `StreamHeader`.
     ///
-    pub fn from_bytes(bytes: &[u8]) -> Option<&Self> {
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.len() < mem::size_of::<StreamHeader>() {
             return None;
         }
-        Some(unsafe { &*(bytes.as_ptr() as *const StreamHeader) })
+        Some(unsafe { ptr::read_unaligned(bytes.as_ptr() as *const StreamHeader) })
     }
 
     /// Retrieves the name of the stream as a byte slice, including any padding.
@@ -293,22 +300,18 @@ impl StreamHeader {
     /// # Returns
     ///
     /// * `&[u8]` - A slice containing the name of the stream with padding.
-    pub fn name(&self) -> &[u8] {
+    pub fn name<'a>(&self, bytes: &'a [u8]) -> Option<&'a [u8]> {
         let header_size = mem::size_of::<StreamHeader>();
-        let base_ptr = self as *const Self as *const u8;
-
-        unsafe {
-            let name_ptr = base_ptr.add(header_size);
-
-            let mut len = 0;
-            while *name_ptr.add(len) != 0 {
-                len += 1;
-            }
-
-            let padded_len = (len + 4) & !3;
-
-            std::slice::from_raw_parts(name_ptr, padded_len)
+        if bytes.len() < header_size {
+            return None;
         }
+        let name_bytes = &bytes[header_size..];
+        let len = name_bytes.iter().position(|byte| *byte == 0)?;
+        let padded_len = (len + 4) & !3;
+        if name_bytes.len() < padded_len {
+            return None;
+        }
+        Some(&name_bytes[..padded_len])
     }
 
     /// Calculates the total size of the `StreamHeader` including the name and padding.
@@ -330,6 +333,7 @@ impl StreamHeader {
 ///
 /// The `MetadataTable` provides information about the structure and versioning of
 /// the metadata, as well as the sizes and characteristics of various heaps.
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub struct MetadataTable {
     /// Reserved space, typically set to zero.
@@ -362,11 +366,11 @@ impl MetadataTable {
     ///
     /// * `Some(&MetadataTable)` - A reference to the parsed `MetadataTable` if the byte slice is valid.
     /// * `None` - If the byte slice is invalid, does not contain enough data, or is misaligned.
-    pub fn from_bytes(bytes: &[u8]) -> Option<&Self> {
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.len() != mem::size_of::<Self>() {
             return None;
         }
-        Some(unsafe { &*(bytes.as_ptr() as *const Self) })
+        Some(unsafe { ptr::read_unaligned(bytes.as_ptr() as *const Self) })
     }
 
     pub fn size() -> usize {
@@ -1054,6 +1058,7 @@ pub enum Entry {
 /// # Fields
 ///
 /// * `code_size` - The size of the method's executable code in bytes.
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub struct TinyHeader {
     /// The size of the method's executable code in bytes.
@@ -1074,11 +1079,11 @@ impl TinyHeader {
     ///
     /// * `Some(&TinyHeader)` - A reference to the parsed `TinyHeader` if the byte slice is valid.
     /// * `None` - If the byte slice is invalid or misaligned.
-    pub fn from_bytes(bytes: &[u8]) -> Option<&Self> {
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.len() != mem::size_of::<Self>() {
             return None;
         }
-        Some(unsafe { &*(bytes.as_ptr() as *const Self) })
+        Some(unsafe { ptr::read_unaligned(bytes.as_ptr() as *const Self) })
     }
 
     pub fn size(&self) -> usize {

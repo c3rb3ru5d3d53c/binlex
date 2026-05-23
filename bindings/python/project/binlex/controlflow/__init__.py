@@ -48,14 +48,22 @@ def _cpu_for_architecture(architecture):
 
 
 def _decompiler_symbol_map(graph):
-    decompiler = getattr(graph, "_decompiler", None)
-    if decompiler is None:
+    if graph is None:
         return {}
-    cached = getattr(decompiler, "_symbol_address_map", None)
-    if cached is not None:
-        return cached
+    return graph.symbols()
+
+
+def _coerce_symbol_map(symbols):
+    if isinstance(symbols, dict):
+        symbol_map = {}
+        for virtual_address, name in symbols.items():
+            if virtual_address is None or not name:
+                continue
+            symbol_map[int(virtual_address)] = str(name)
+        return symbol_map
+
     symbol_map = {}
-    for symbol in decompiler.symbols:
+    for symbol in symbols or []:
         try:
             if isinstance(symbol, dict):
                 virtual_address = symbol.get("virtual_address")
@@ -68,7 +76,6 @@ def _decompiler_symbol_map(graph):
         if virtual_address is None or not name:
             continue
         symbol_map[int(virtual_address)] = name
-    decompiler._symbol_address_map = symbol_map
     return symbol_map
 
 
@@ -854,13 +861,7 @@ class Function:
             cached = cache["mir"].get(self.address())
             if cached is not None:
                 return _maybe_optimize_decompiler_stage(self._graph, "mir", cached)
-        decompiler = getattr(self._graph, "_decompiler", None)
-        if decompiler is not None and decompiler.symbols:
-            result = MirFunction._from_inner(
-                self._inner.mir_with_symbols(_decompiler_symbol_map(self._graph))
-            )
-        else:
-            result = MirFunction._from_inner(self._inner.mir())
+        result = MirFunction._from_inner(self._inner.mir())
         result = _maybe_optimize_decompiler_stage(self._graph, "mir", result)
         if cache is not None:
             cache["mir"][self.address()] = result
@@ -1405,6 +1406,26 @@ class Graph:
         if result is None:
             return None
         return Function._from_binding(result, self._config, self)
+
+    def symbols(self):
+        """Return the graph-owned symbol map keyed by address."""
+        return dict(self._inner.symbols())
+
+    def symbol(self, address):
+        """Return the graph-owned symbol name for `address`, if present."""
+        return self._inner.symbol(address)
+
+    def insert_symbol(self, address, name):
+        """Insert or replace a single graph-owned symbol."""
+        return self._inner.insert_symbol(address, name)
+
+    def replace_symbols(self, symbols):
+        """Replace the graph-owned symbol map."""
+        return self._inner.replace_symbols(_coerce_symbol_map(symbols))
+
+    def extend_symbols(self, symbols):
+        """Merge symbols into the graph-owned symbol map."""
+        return self._inner.extend_symbols(_coerce_symbol_map(symbols))
 
     def __getattr__(self, name):
         """Delegate unknown attributes to the underlying native graph object."""

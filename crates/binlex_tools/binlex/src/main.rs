@@ -30,7 +30,7 @@ use binlex::Architecture;
 use binlex::Configuration;
 use binlex::Magic;
 use binlex::VERSION;
-use binlex::compression::LZ4String;
+use binlex::config::RAYON_WORKER_STACK_SIZE;
 use binlex::disassemblers::capstone::Disassembler;
 use binlex::disassemblers::cil::Disassembler as CILDisassembler;
 use binlex::formats::ELF;
@@ -42,20 +42,20 @@ use binlex::formats::pe::PE;
 use binlex::io::JSON;
 use binlex::io::Stderr;
 use binlex::io::Stdin;
-use binlex::io::Stdout;
 use binlex::metadata::Attributes;
 use binlex::metadata::Tag;
 use binlex::processor::{ProcessorTarget, apply_output};
 use clap::Parser;
 use rayon::ThreadPoolBuilder;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rayon::prelude::*;
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::fs::File;
-use std::io::Write;
+use std::io::{self, BufWriter, Write};
 use std::process;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 fn colocated_processor_directory(processors: &[String]) -> Option<String> {
@@ -207,6 +207,21 @@ fn print_stage_timing(config: &Configuration, stage: &str, started_at: Instant) 
             started_at.elapsed().as_secs_f64() * 1000.0
         ));
     }
+}
+
+fn entity_attributes(
+    attributes: &Attributes,
+    function_symbols: &BTreeMap<u64, Symbol>,
+    address: u64,
+) -> Attributes {
+    let mut result = Attributes::new();
+    if let Some(symbol) = function_symbols.get(&address) {
+        result.push(symbol.attribute());
+    }
+    for attribute in &attributes.values {
+        result.push(attribute.clone());
+    }
+    result
 }
 
 fn get_elf_function_symbols(elf: &ELF, read_stdin: bool) -> BTreeMap<u64, Symbol> {
@@ -517,7 +532,45 @@ fn process_output(
     attributes: &Attributes,
     function_symbols: &BTreeMap<u64, Symbol>,
 ) {
-    let mut instructions = Vec::<LZ4String>::new();
+    enum OutputWriter {
+        Stdout(BufWriter<io::Stdout>),
+        File(BufWriter<File>),
+    }
+
+    impl OutputWriter {
+        fn write_line(&mut self, line: &str) {
+            let result = match self {
+                OutputWriter::Stdout(writer) => writeln!(writer, "{}", line),
+                OutputWriter::File(writer) => writeln!(writer, "{}", line),
+            };
+            if let Err(error) = result {
+                eprintln!("{}", error);
+                std::process::exit(1);
+            }
+        }
+
+        fn flush(&mut self) {
+            let result = match self {
+                OutputWriter::Stdout(writer) => writer.flush(),
+                OutputWriter::File(writer) => writer.flush(),
+            };
+            if let Err(error) = result {
+                eprintln!("{}", error);
+                std::process::exit(1);
+            }
+        }
+    }
+
+    let mut writer = match output {
+        Some(output_file) => match File::create(output_file) {
+            Ok(file) => OutputWriter::File(BufWriter::new(file)),
+            Err(error) => {
+                eprintln!("{}", error);
+                std::process::exit(1);
+            }
+        },
+        None => OutputWriter::Stdout(BufWriter::new(io::stdout())),
+    };
 
     if !binlex::processor::enabled_processors_for_target(
         &cfg.config,
@@ -560,31 +613,32 @@ fn process_output(
         })
         .count();
     if cfg.config.instructions.enabled {
+        let process_instructions_started_at = Instant::now();
         let _ = cfg.process_instructions();
-        instructions = cfg
+        print_stage_timing(
+            &cfg.config,
+            "cli.process_output.instructions.process",
+            process_instructions_started_at,
+        );
+        let instruction_addresses = cfg
             .instructions
             .valid()
             .iter()
             .map(|entry| *entry)
-            .collect::<Vec<u64>>()
-            .par_iter()
-            .filter_map(|address| Instruction::new(*address, cfg).ok())
-            .filter_map(|instruction| {
-                let mut instruction_attributes = Attributes::new();
-                let symbol = function_symbols.get(&instruction.address);
-                if let Some(symbol) = symbol {
-                    instruction_attributes.push(symbol.attribute());
-                }
-                for attribute in &attributes.values {
-                    instruction_attributes.push(attribute.clone());
-                }
-                let mut raw = instruction.process_with_attributes(instruction_attributes.clone());
-                if let Some(outputs) = cfg.processor_outputs(
-                    binlex::processor::ProcessorTarget::Instruction,
-                    instruction.address,
-                ) {
+            .collect::<Vec<_>>();
+        let materialize_instructions_started_at = Instant::now();
+        let instruction_lines = instruction_addresses
+            .into_par_iter()
+            .filter_map(|address| {
+                let instruction = Instruction::new(address, cfg).ok()?;
+                let instruction_attributes =
+                    entity_attributes(attributes, function_symbols, instruction.address);
+                let mut raw = instruction.process_with_attributes(instruction_attributes);
+                if let Some(outputs) =
+                    cfg.processor_outputs(ProcessorTarget::Instruction, instruction.address)
+                {
                     for (processor_name, output) in &outputs {
-                        binlex::processor::apply_output(
+                        apply_output(
                             raw.processors.get_or_insert_with(Default::default),
                             processor_name,
                             output,
@@ -593,14 +647,32 @@ fn process_output(
                 }
                 serde_json::to_string(&raw).ok()
             })
-            .map(|js| LZ4String::new(&js))
-            .collect();
+            .collect::<Vec<_>>();
+        print_stage_timing(
+            &cfg.config,
+            "cli.process_output.instructions.materialize",
+            materialize_instructions_started_at,
+        );
+        let write_instructions_started_at = Instant::now();
+        for json in instruction_lines {
+            writer.write_line(&json);
+        }
+        writer.flush();
+        print_stage_timing(
+            &cfg.config,
+            "cli.process_output.instructions.write",
+            write_instructions_started_at,
+        );
     }
 
-    let mut blocks = Vec::<LZ4String>::new();
-
     if cfg.config.blocks.enabled {
+        let process_blocks_started_at = Instant::now();
         let _ = cfg.process_blocks();
+        print_stage_timing(
+            &cfg.config,
+            "cli.process_output.blocks.process",
+            process_blocks_started_at,
+        );
         Stderr::print_debug(
             &cfg.config,
             format!(
@@ -608,23 +680,19 @@ fn process_output(
                 block_output_count
             ),
         );
-        blocks = cfg
+        let block_addresses = cfg
             .blocks
             .valid()
             .iter()
             .map(|entry| *entry)
-            .collect::<Vec<u64>>()
-            .par_iter()
-            .filter_map(|address| Block::new(*address, cfg).ok())
-            .map(|block| {
-                let mut block_attributes = Attributes::new();
-                let symbol = function_symbols.get(&block.address);
-                if let Some(symbol) = symbol {
-                    block_attributes.push(symbol.attribute());
-                }
-                for attribute in &attributes.values {
-                    block_attributes.push(attribute.clone());
-                }
+            .collect::<Vec<_>>();
+        let materialize_blocks_started_at = Instant::now();
+        let block_lines = block_addresses
+            .into_par_iter()
+            .filter_map(|address| {
+                let block = Block::new(address, cfg).ok()?;
+                let block_attributes =
+                    entity_attributes(attributes, function_symbols, block.address);
                 let mut raw = block.process_with_attributes(block_attributes);
                 if let Some(outputs) = cfg.processor_outputs(ProcessorTarget::Block, block.address)
                 {
@@ -636,17 +704,34 @@ fn process_output(
                         );
                     }
                 }
-                raw
+                serde_json::to_string(&raw).ok()
             })
-            .filter_map(|raw| serde_json::to_string(&raw).ok())
-            .map(|js| LZ4String::new(&js))
-            .collect();
+            .collect::<Vec<_>>();
+        print_stage_timing(
+            &cfg.config,
+            "cli.process_output.blocks.materialize",
+            materialize_blocks_started_at,
+        );
+        let write_blocks_started_at = Instant::now();
+        for json in block_lines {
+            writer.write_line(&json);
+        }
+        writer.flush();
+        print_stage_timing(
+            &cfg.config,
+            "cli.process_output.blocks.write",
+            write_blocks_started_at,
+        );
     }
 
-    let mut functions = Vec::<LZ4String>::new();
-
     if cfg.config.functions.enabled {
+        let process_functions_started_at = Instant::now();
         let _ = cfg.process_functions();
+        print_stage_timing(
+            &cfg.config,
+            "cli.process_output.functions.process",
+            process_functions_started_at,
+        );
         Stderr::print_debug(
             &cfg.config,
             format!(
@@ -654,24 +739,42 @@ fn process_output(
                 function_output_count
             ),
         );
-        let function_outputs = cfg
+        let function_addresses = cfg
             .functions
             .valid()
             .iter()
             .map(|entry| *entry)
-            .collect::<Vec<u64>>()
-            .par_iter()
-            .filter_map(|address| Function::new(*address, cfg).ok())
-            .map(|function| {
-                let mut function_attributes = Attributes::new();
-                let symbol = function_symbols.get(&function.address);
-                if let Some(symbol) = symbol {
-                    function_attributes.push(symbol.attribute());
+            .collect::<Vec<_>>();
+        let debug = cfg.config.debug;
+        let function_new_nanos = AtomicU64::new(0);
+        let function_attributes_nanos = AtomicU64::new(0);
+        let function_process_nanos = AtomicU64::new(0);
+        let function_processor_output_nanos = AtomicU64::new(0);
+        let function_serialize_nanos = AtomicU64::new(0);
+        let materialize_functions_started_at = Instant::now();
+        let function_lines = function_addresses
+            .into_par_iter()
+            .filter_map(|address| {
+                let function_new_started_at = debug.then(Instant::now);
+                let function = Function::new(address, cfg).ok()?;
+                if let Some(started_at) = function_new_started_at {
+                    function_new_nanos
+                        .fetch_add(started_at.elapsed().as_nanos() as u64, Ordering::Relaxed);
                 }
-                for attribute in &attributes.values {
-                    function_attributes.push(attribute.clone());
+                let function_attributes_started_at = debug.then(Instant::now);
+                let function_attributes =
+                    entity_attributes(attributes, function_symbols, function.address);
+                if let Some(started_at) = function_attributes_started_at {
+                    function_attributes_nanos
+                        .fetch_add(started_at.elapsed().as_nanos() as u64, Ordering::Relaxed);
                 }
+                let function_process_started_at = debug.then(Instant::now);
                 let mut raw = function.process_with_attributes(function_attributes);
+                if let Some(started_at) = function_process_started_at {
+                    function_process_nanos
+                        .fetch_add(started_at.elapsed().as_nanos() as u64, Ordering::Relaxed);
+                }
+                let function_processor_output_started_at = debug.then(Instant::now);
                 if let Some(outputs) =
                     cfg.processor_outputs(ProcessorTarget::Function, function.address)
                 {
@@ -683,63 +786,47 @@ fn process_output(
                         );
                     }
                 }
-                raw
-            })
-            .filter_map(|raw| serde_json::to_string(&raw).ok())
-            .collect::<Vec<String>>();
-
-        functions = function_outputs
-            .iter()
-            .map(|js| LZ4String::new(js))
-            .collect();
-    }
-
-    if output.is_none() {
-        instructions.iter().for_each(|result| {
-            Stdout::print(result);
-        });
-
-        blocks.iter().for_each(|result| {
-            Stdout::print(result);
-        });
-
-        functions.iter().for_each(|result| {
-            Stdout::print(result);
-        });
-    }
-
-    if let Some(output_file) = output {
-        let mut file = match File::create(output_file) {
-            Ok(file) => file,
-            Err(error) => {
-                eprintln!("{}", error);
-                std::process::exit(1);
-            }
-        };
-
-        if cfg.config.instructions.enabled {
-            for instruction in instructions {
-                if let Err(error) = writeln!(file, "{}", instruction) {
-                    eprintln!("{}", error);
-                    std::process::exit(1);
+                if let Some(started_at) = function_processor_output_started_at {
+                    function_processor_output_nanos
+                        .fetch_add(started_at.elapsed().as_nanos() as u64, Ordering::Relaxed);
                 }
-            }
+                let function_serialize_started_at = debug.then(Instant::now);
+                let json = serde_json::to_string(&raw).ok();
+                if let Some(started_at) = function_serialize_started_at {
+                    function_serialize_nanos
+                        .fetch_add(started_at.elapsed().as_nanos() as u64, Ordering::Relaxed);
+                }
+                json
+            })
+            .collect::<Vec<_>>();
+        print_stage_timing(
+            &cfg.config,
+            "cli.process_output.functions.materialize",
+            materialize_functions_started_at,
+        );
+        if debug {
+            Stderr::print(format!(
+                "[timing] cli.process_output.functions.breakdown count={} new={:.3} ms attributes={:.3} ms process={:.3} ms processor_outputs={:.3} ms serialize={:.3} ms",
+                function_lines.len(),
+                function_new_nanos.load(Ordering::Relaxed) as f64 / 1_000_000.0,
+                function_attributes_nanos.load(Ordering::Relaxed) as f64 / 1_000_000.0,
+                function_process_nanos.load(Ordering::Relaxed) as f64 / 1_000_000.0,
+                function_processor_output_nanos.load(Ordering::Relaxed) as f64 / 1_000_000.0,
+                function_serialize_nanos.load(Ordering::Relaxed) as f64 / 1_000_000.0,
+            ));
         }
-
-        for block in blocks {
-            if let Err(error) = writeln!(file, "{}", block) {
-                eprintln!("{}", error);
-                std::process::exit(1);
-            }
+        let write_functions_started_at = Instant::now();
+        for json in function_lines {
+            writer.write_line(&json);
         }
-
-        for function in functions {
-            if let Err(error) = writeln!(file, "{}", function) {
-                eprintln!("{}", error);
-                std::process::exit(1);
-            }
-        }
+        print_stage_timing(
+            &cfg.config,
+            "cli.process_output.functions.write",
+            write_functions_started_at,
+        );
     }
+
+    writer.flush();
 }
 
 fn process_pe(
@@ -800,6 +887,7 @@ fn process_pe(
         eprintln!("failed to map pe image: {}", error);
         process::exit(1)
     });
+    let image_base = mapped_file.base();
 
     Stderr::print_debug(&config, "mapped pe image");
 
@@ -823,8 +911,6 @@ fn process_pe(
         _ => entrypoints.extend(pe.entrypoint_virtual_addresses()),
     }
 
-    entrypoints.extend(function_symbols.keys());
-
     let runtime_config = config.clone();
     let mut cfg = Graph::new(pe.architecture(), runtime_config.clone());
 
@@ -832,9 +918,10 @@ fn process_pe(
         Stderr::print_debug(&config, "starting pe disassembler");
         let disassembly_started_at = Instant::now();
 
-        let disassembler = match Disassembler::new(
+        let disassembler = match Disassembler::new_with_image_base(
             pe.architecture(),
             image,
+            image_base,
             executable_address_ranges.clone(),
             runtime_config.clone(),
         ) {
@@ -856,9 +943,10 @@ fn process_pe(
         Stderr::print_debug(&config, "starting pe dotnet disassembler");
         let disassembly_started_at = Instant::now();
 
-        let disassembler = match CILDisassembler::new(
+        let disassembler = match CILDisassembler::new_with_image_base(
             pe.architecture(),
             image,
+            image_base,
             executable_address_ranges.clone(),
             runtime_config.clone(),
         ) {
@@ -1283,6 +1371,7 @@ fn main() {
     let thread_pool_started_at = Instant::now();
     ThreadPoolBuilder::new()
         .num_threads(config.resolved_threads())
+        .stack_size(RAYON_WORKER_STACK_SIZE)
         .build_global()
         .unwrap_or_else(|error| {
             eprintln!("{}", error);

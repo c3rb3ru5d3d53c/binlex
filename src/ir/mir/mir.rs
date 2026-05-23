@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use super::block::MirBlock;
+use super::block::{MirBlock, MirBlockParameter};
 use super::optimizers::{
     optimize, optimize_abi, optimize_blocks, optimize_branches, optimize_call_clobbers,
     optimize_calls, optimize_constants, optimize_copy_propagation, optimize_cse,
@@ -31,7 +31,7 @@ use super::optimizers::{
 };
 use super::print::{format_mir_function, format_mir_module};
 use crate::ir::lir::{LirAbi, LirFunction, LirModule};
-use crate::ir::mir::lower::{MirLowerError, lower_lir_to_mir};
+use crate::ir::mir::lower::{MirLowerError, lower_lir_to_mir, materialize_entry_parameters};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
@@ -40,6 +40,8 @@ pub struct MirFunction {
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub abi: Option<LirAbi>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub entry_parameters: Vec<MirBlockParameter>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub blocks: Vec<MirBlock>,
 }
@@ -53,6 +55,7 @@ impl MirFunction {
         Self {
             name,
             abi: None,
+            entry_parameters: Vec::new(),
             blocks: Vec::new(),
         }
     }
@@ -167,10 +170,15 @@ impl MirFunction {
 
     pub fn optimize(&mut self) {
         optimize(self);
+        materialize_entry_parameters(self);
     }
 
     pub fn text(&self) -> String {
         format_mir_function(self)
+    }
+
+    pub fn print(&self) {
+        println!("{}", self.text());
     }
 }
 
@@ -363,5 +371,9 @@ impl MirModule {
 
     pub fn text(&self) -> String {
         format_mir_module(self)
+    }
+
+    pub fn print(&self) {
+        println!("{}", self.text());
     }
 }

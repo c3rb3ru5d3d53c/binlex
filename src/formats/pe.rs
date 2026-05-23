@@ -62,9 +62,15 @@ pub struct PE {
     pub config: Configuration,
 }
 
+#[derive(Clone)]
+pub struct ParsedStreamHeader {
+    pub header: StreamHeader,
+    pub name: Vec<u8>,
+}
+
 impl PE {
-    fn dotnet_stream_name(header: &StreamHeader) -> String {
-        let bytes = header.name();
+    fn dotnet_stream_name(header: &ParsedStreamHeader) -> String {
+        let bytes = &header.name;
         let end = bytes
             .iter()
             .position(|byte| *byte == 0)
@@ -77,11 +83,11 @@ impl PE {
         let metadata_rva = self.dotnet_cor20_header()?.meta_data.virtual_address as u64;
         let metadata_offset = self.relative_virtual_address_to_file_offset(metadata_rva)? as usize;
         for header in self.dotnet_stream_headers() {
-            if Self::dotnet_stream_name(header) != stream_name {
+            if Self::dotnet_stream_name(&header) != stream_name {
                 continue;
             }
-            let start = metadata_offset.checked_add(header.offset as usize)?;
-            let end = start.checked_add(header.size as usize)?;
+            let start = metadata_offset.checked_add(header.header.offset as usize)?;
+            let end = start.checked_add(header.header.size as usize)?;
             if end > self.file.data.len() {
                 return None;
             }
@@ -299,7 +305,7 @@ impl PE {
     ///   * The file offset of the header as `u64`.
     ///   * A reference to the parsed `Cor20Header` structure.
     /// * `None` - If the file is not a .NET executable or the header cannot be parsed.
-    fn dotnet_parse_cor20_header(&self) -> Option<(u64, &Cor20Header)> {
+    fn dotnet_parse_cor20_header(&self) -> Option<(u64, Cor20Header)> {
         let clr_runtime_header = self.dotnet_clr_runtime_directory()?;
         let start = self.relative_virtual_address_to_file_offset(clr_runtime_header.rva() as u64)?;
         let end = start + Cor20Header::size() as u64;
@@ -307,7 +313,7 @@ impl PE {
             return None;
         }
         let data = &self.file.data[start as usize..end as usize];
-        let header = &Cor20Header::from_bytes(data)?;
+        let header = Cor20Header::from_bytes(data)?;
         Some((start, header))
     }
 
@@ -320,7 +326,7 @@ impl PE {
     ///
     /// * `Option<&Cor20Header>` - A reference to the parsed `Cor20Header` structure.
     /// * `None` - If the file is not a .NET executable or the header cannot be parsed.
-    pub fn dotnet_cor20_header(&self) -> Option<&Cor20Header> {
+    pub fn dotnet_cor20_header(&self) -> Option<Cor20Header> {
         Some(self.dotnet_parse_cor20_header()?.1)
     }
 
@@ -337,7 +343,7 @@ impl PE {
     ///   * A reference to the parsed `StorageSignature` structure.
     /// * `None` - If the file is not a .NET executable or the storage signature
     ///   cannot be parsed.
-    fn dotnet_parse_storage_signature(&self) -> Option<(u64, &StorageSignature)> {
+    fn dotnet_parse_storage_signature(&self) -> Option<(u64, StorageSignature)> {
         let (_, image_cor20_header) = self.dotnet_parse_cor20_header()?;
         let rva = image_cor20_header.meta_data.virtual_address as u64;
         let start = self.relative_virtual_address_to_file_offset(rva)? as usize;
@@ -359,7 +365,7 @@ impl PE {
     ///
     /// * `Option<&StorageSignature>` - A reference to the parsed `StorageSignature` structure.
     /// * `None` - If the file is not a .NET executable or the storage signature cannot be parsed.
-    pub fn dotnet_storage_signature(&self) -> Option<&StorageSignature> {
+    pub fn dotnet_storage_signature(&self) -> Option<StorageSignature> {
         Some(self.dotnet_parse_storage_signature()?.1)
     }
 
@@ -376,7 +382,7 @@ impl PE {
     ///   * The file offset of the storage header as `u64`.
     ///   * A reference to the fparsed `StorageHeader` structure.
     /// * `None` - If the file is not a .NET executable or the storage header cannot be parsed.
-    fn dotnet_parse_storage_header(&self) -> Option<(u64, &StorageHeader)> {
+    fn dotnet_parse_storage_header(&self) -> Option<(u64, StorageHeader)> {
         let (mut start, cor20_storage_signaure_header) = self.dotnet_parse_storage_signature()?;
         start += StorageSignature::size() as u64;
         start += cor20_storage_signaure_header.version_string_size as u64;
@@ -399,7 +405,7 @@ impl PE {
     ///
     /// * `Option<&StorageHeader>` - A reference to the parsed `StorageHeader` structure.
     /// * `None` - If the file is not a .NET executable or the storage header cannot be parsed.
-    pub fn dotnet_storage_header(&self) -> Option<&StorageHeader> {
+    pub fn dotnet_storage_header(&self) -> Option<StorageHeader> {
         Some(self.dotnet_parse_storage_header()?.1)
     }
 
@@ -417,19 +423,26 @@ impl PE {
     ///   * The values are references to the parsed `StreamHeader` structures.
     /// * `None` - If the file is not a .NET executable, the storage header cannot be parsed,
     ///   or no stream headers are found.
-    fn dotnet_parse_stream_headers(&self) -> Option<BTreeMap<u64, &StreamHeader>> {
+    fn dotnet_parse_stream_headers(&self) -> Option<BTreeMap<u64, ParsedStreamHeader>> {
         let (cor20_storage_header_offset, cor20_storage_header) =
             self.dotnet_parse_storage_header()?;
         let mut offset = cor20_storage_header_offset as usize + StorageHeader::size();
-        let mut result = BTreeMap::<u64, &StreamHeader>::new();
+        let mut result = BTreeMap::<u64, ParsedStreamHeader>::new();
         for _ in 0..cor20_storage_header.number_of_streams {
             if offset + StreamHeader::size() > self.file.data.len() {
                 return None;
             }
-            let data = &self.file.data[offset..offset + StreamHeader::size()];
+            let data = &self.file.data[offset..];
             let header = StreamHeader::from_bytes(data)?;
-            result.insert(offset as u64, header);
-            offset += StreamHeader::size() + header.name().len();
+            let name = header.name(data)?.to_vec();
+            result.insert(
+                offset as u64,
+                ParsedStreamHeader {
+                    header,
+                    name: name.clone(),
+                },
+            );
+            offset += StreamHeader::size() + name.len();
         }
         if result.is_empty() {
             return None;
@@ -448,8 +461,8 @@ impl PE {
     /// * `Vec<&StreamHeader>` - A vector of references to the parsed `StreamHeader` structures.
     /// * An empty vector - If the file is not a .NET executable or the stream headers cannot
     ///   be parsed.
-    pub fn dotnet_stream_headers(&self) -> Vec<&StreamHeader> {
-        let mut result = Vec::<&StreamHeader>::new();
+    pub fn dotnet_stream_headers(&self) -> Vec<ParsedStreamHeader> {
+        let mut result = Vec::<ParsedStreamHeader>::new();
         let headers = self.dotnet_parse_stream_headers();
         if headers.is_none() {
             return result;
@@ -473,11 +486,11 @@ impl PE {
     ///   * A reference to the parsed `MetadataTable` structure.
     /// * `None` - If the file is not a .NET executable, the relevant stream header cannot
     ///   be found, or the metadata table cannot be parsed.
-    fn dotnet_parse_metadata_table(&self) -> Option<(u64, &MetadataTable)> {
+    fn dotnet_parse_metadata_table(&self) -> Option<(u64, MetadataTable)> {
         let (mut start, _) = self.dotnet_parse_storage_signature()?;
         for (_, header) in self.dotnet_parse_stream_headers()? {
-            if header.name() == vec![0x23, 0x7e, 0x00, 0x00] {
-                start += header.offset as u64;
+            if header.name == vec![0x23, 0x7e, 0x00, 0x00] {
+                start += header.header.offset as u64;
             }
         }
         if start as usize + MetadataTable::size() > self.file.data.len() {
@@ -496,7 +509,7 @@ impl PE {
     ///
     /// * `Option<&MetadataTable>` - A reference to the parsed `MetadataTable` structure.
     /// * `None` - If the file is not a .NET executable or the metadata table cannot be parsed.
-    pub fn dotnet_metadata_table(&self) -> Option<&MetadataTable> {
+    pub fn dotnet_metadata_table(&self) -> Option<MetadataTable> {
         Some(self.dotnet_parse_metadata_table()?.1)
     }
 

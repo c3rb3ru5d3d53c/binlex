@@ -1201,8 +1201,7 @@ mod jit_tests {
         let abi = LirAbi::sysv(&cpu).expect("sysv abi");
         let mut lifter = Lifter::new(cpu, Configuration::default(), None).expect("lifter");
 
-        let semantics = LirModule {
-            semantics: vec![Lir {
+        let semantics = LirModule::from_instructions(vec![Lir {
                 version: 1,
                 status: LirStatus::Complete,
                 abi: None,
@@ -1228,9 +1227,7 @@ mod jit_tests {
                 }],
                 terminator: LirTerminator::Return { expression: None },
                 diagnostics: Vec::new(),
-            }],
-            data: Vec::new(),
-        };
+            }]);
 
         lifter
             .lift_function_semantics_named(&semantics, Some(&abi), "add_two")

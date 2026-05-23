@@ -253,45 +253,86 @@ impl Chromosome {
 
     /// Processes the chromosome into its JSON-serializable representation.
     pub fn process(&self) -> ChromosomeJson {
+        let needs_masked = self.config.chromosomes.masked.enabled
+            || self.config.chromosomes.vector.enabled
+            || self.config.chromosomes.sha256.enabled
+            || self.config.chromosomes.ssdeep.enabled
+            || self.config.chromosomes.entropy.enabled
+            || self.config.chromosomes.minhash.enabled
+            || self.config.chromosomes.tlsh.enabled;
+        let masked = needs_masked.then(|| self.masked());
         ChromosomeJson {
             pattern: self.pattern(),
             mask: if self.config.chromosomes.mask.enabled {
-                hex::encode(&self.mask())
+                hex::encode(&self.wildcard_mask)
             } else {
                 String::new()
             },
             masked: if self.config.chromosomes.masked.enabled {
-                hex::encode(&self.masked())
+                masked
+                    .as_ref()
+                    .map(|masked| hex::encode(masked))
+                    .unwrap_or_default()
             } else {
                 String::new()
             },
             vector: if self.config.chromosomes.vector.enabled {
-                self.vector()
+                masked
+                    .as_ref()
+                    .map(|masked| {
+                        let mut result = Vec::with_capacity(masked.len() * 2);
+                        for value in masked {
+                            result.push((value >> 4) & 0xF);
+                            result.push(value & 0xF);
+                        }
+                        result
+                    })
+                    .unwrap_or_default()
             } else {
                 Vec::new()
             },
             sha256: if self.config.chromosomes.sha256.enabled {
-                self.sha256().and_then(|hash| hash.hexdigest())
+                masked
+                    .as_ref()
+                    .and_then(|masked| SHA256::new(masked).hexdigest())
             } else {
                 None
             },
             ssdeep: if self.config.chromosomes.ssdeep.enabled {
-                self.ssdeep().and_then(|hash| hash.hexdigest())
+                masked
+                    .as_ref()
+                    .and_then(|masked| SSDeep::new(masked).hexdigest())
             } else {
                 None
             },
             entropy: if self.config.chromosomes.entropy.enabled {
-                self.entropy()
+                masked.as_ref().and_then(|masked| entropy::shannon(masked))
             } else {
                 None
             },
             minhash: if self.config.chromosomes.minhash.enabled {
-                self.minhash().and_then(|hash| hash.hexdigest())
+                masked.as_ref().and_then(|masked| {
+                    if masked.len() > self.config.chromosomes.minhash.maximum_byte_size
+                        && self.config.chromosomes.minhash.maximum_byte_size_enabled
+                    {
+                        None
+                    } else {
+                        MinHash32::new(
+                            masked,
+                            self.config.chromosomes.minhash.number_of_hashes,
+                            self.config.chromosomes.minhash.shingle_size,
+                            self.config.chromosomes.minhash.seed,
+                        )
+                        .hexdigest()
+                    }
+                })
             } else {
                 None
             },
             tlsh: if self.config.chromosomes.tlsh.enabled {
-                self.tlsh().and_then(|hash| hash.hexdigest())
+                masked.as_ref().and_then(|masked| {
+                    TLSH::new(masked, self.config.chromosomes.tlsh.minimum_byte_size).hexdigest()
+                })
             } else {
                 None
             },

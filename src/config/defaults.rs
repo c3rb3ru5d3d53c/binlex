@@ -36,6 +36,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const AUTHOR: &str = "@c3rb3ru5d3d53c";
 pub const DIRECTORY: &str = "binlex";
 pub const FILE_NAME: &str = "binlex.toml";
+pub const RAYON_WORKER_STACK_SIZE: usize = 16 * 1024 * 1024;
 
 impl Configuration {
     pub fn resolved_threads(&self) -> usize {

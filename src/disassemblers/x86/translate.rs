@@ -27,11 +27,10 @@ use ::capstone::{Insn, arch::ArchOperand, arch::x86::X86OperandType};
 
 use crate::{
     Architecture,
-    controlflow::graph::Graph,
     controlflow::{Instruction, InstructionDetail, InstructionRecord, Operand, OperandKind},
     disassemblers::x86::{
-        backends::capstone as x86_capstone, flow as x86_flow, indirect as x86_indirect,
-        targets as x86_targets,
+        backends::capstone as x86_capstone, context::DisassemblyContext, flow as x86_flow,
+        indirect as x86_indirect, targets as x86_targets,
     },
     genetics::Chromosome,
     ir::lir::x86::{InstructionDetailX86, X86MemoryOperandView, X86OperandKind, X86OperandView},
@@ -174,11 +173,11 @@ fn disassembly_text(instruction: &Insn) -> String {
     }
 }
 
-pub fn build_instruction(
+pub(crate) fn build_instruction(
     disassembler: &x86_capstone::Disassembler<'_>,
     machine: Architecture,
     address: u64,
-    cfg: &Graph,
+    cfg: &impl DisassemblyContext,
 ) -> Result<InstructionRecord, Error> {
     let instruction_container = disassembler.disassemble_instructions(address, 1)?;
     let instruction = instruction_container.iter().next().ok_or_else(|| {
@@ -192,7 +191,7 @@ pub fn build_instruction(
     let pattern = Chromosome::new(
         instruction.bytes().to_vec(),
         instruction_mask.clone(),
-        cfg.config.clone(),
+        cfg.config().clone(),
     )?
     .pattern();
     let operands = disassembler
@@ -232,8 +231,11 @@ pub fn build_instruction(
     let mnemonic = instruction.mnemonic().unwrap_or("").to_string();
     let disassembly = disassembly_text(instruction);
     let semantic_view = semantic_instruction_view(disassembler, machine, instruction, &operands);
-    let mut blinstruction =
-        Instruction::create(instruction.address(), cfg.architecture, cfg.config.clone());
+    let mut blinstruction = Instruction::create(
+        instruction.address(),
+        cfg.architecture(),
+        cfg.config().clone(),
+    );
 
     blinstruction.is_jump = is_jump;
     blinstruction.is_call = is_call;
@@ -265,7 +267,7 @@ pub fn build_instruction(
         blinstruction.edges = blinstruction.successors().len();
     }
 
-    if cfg.config.semantics.enabled {
+    if cfg.config().semantics.enabled {
         blinstruction.semantics = blinstruction.build_and_log_semantics();
     }
 

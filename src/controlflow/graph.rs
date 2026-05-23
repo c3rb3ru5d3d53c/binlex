@@ -31,6 +31,7 @@ use crate::processor::{ProcessorOutputs, ProcessorTarget};
 use crossbeam::queue::SegQueue;
 use crossbeam_skiplist::SkipMap;
 use crossbeam_skiplist::SkipSet;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -49,6 +50,8 @@ pub struct GraphQueueSnapshot {
 pub struct GraphSnapshot {
     pub architecture: String,
     pub instructions: Vec<crate::controlflow::InstructionJson>,
+    #[serde(default)]
+    pub symbols: BTreeMap<u64, String>,
     pub instruction_queue: GraphQueueSnapshot,
     pub block_queue: GraphQueueSnapshot,
     pub function_queue: GraphQueueSnapshot,
@@ -333,6 +336,37 @@ impl GraphQueue {
         }
         set
     }
+
+    pub(crate) fn merge_processed_from(&mut self, other: &GraphQueue) {
+        for entry in other.processed() {
+            self.processed.insert(*entry.value());
+        }
+    }
+
+    pub(crate) fn merge_valid_from(&mut self, other: &GraphQueue) {
+        for entry in other.valid() {
+            self.insert_valid(*entry.value());
+        }
+    }
+
+    pub(crate) fn merge_invalid_from(&mut self, other: &GraphQueue) {
+        for entry in other.invalid() {
+            self.insert_invalid(*entry.value());
+        }
+    }
+
+    pub(crate) fn merge_pending_from(&mut self, other: &mut GraphQueue) {
+        while let Some(address) = other.dequeue() {
+            let _ = self.enqueue(address);
+        }
+    }
+
+    pub(crate) fn merge_from(&mut self, other: &mut GraphQueue) {
+        self.merge_processed_from(other);
+        self.merge_pending_from(other);
+        self.merge_valid_from(other);
+        self.merge_invalid_from(other);
+    }
 }
 
 impl Default for GraphQueue {
@@ -355,6 +389,20 @@ struct GraphCallgraphState {
     caller_references: BTreeMap<u64, BTreeMap<u64, u64>>,
 }
 
+#[derive(Default)]
+struct GraphBlockLayoutState {
+    revision: Option<u64>,
+    terminators: BTreeMap<u64, u64>,
+    successors: BTreeMap<u64, BTreeSet<u64>>,
+    predecessors: BTreeMap<u64, BTreeSet<u64>>,
+}
+
+#[derive(Default)]
+struct GraphFunctionLayoutState {
+    revision: Option<u64>,
+    blocks: BTreeMap<u64, Vec<u64>>,
+}
+
 pub struct Graph {
     /// The Instruction Architecture
     pub architecture: Architecture,
@@ -368,9 +416,12 @@ pub struct Graph {
     pub instructions: GraphQueue,
     /// Configuration
     pub config: Configuration,
+    symbols: Mutex<BTreeMap<u64, String>>,
     revision: AtomicU64,
     processor_state: Mutex<GraphProcessorState>,
     callgraph_state: Mutex<GraphCallgraphState>,
+    block_layout_state: Mutex<GraphBlockLayoutState>,
+    function_layout_state: Mutex<GraphFunctionLayoutState>,
 }
 
 impl Graph {
@@ -388,9 +439,12 @@ impl Graph {
             functions: GraphQueue::new(),
             instructions: GraphQueue::new(),
             config,
+            symbols: Mutex::new(BTreeMap::new()),
             revision: AtomicU64::new(0),
             processor_state: Mutex::new(GraphProcessorState::default()),
             callgraph_state: Mutex::new(GraphCallgraphState::default()),
+            block_layout_state: Mutex::new(GraphBlockLayoutState::default()),
+            function_layout_state: Mutex::new(GraphFunctionLayoutState::default()),
         }
     }
 
@@ -430,6 +484,7 @@ impl Graph {
         GraphSnapshot {
             architecture: self.architecture.to_string(),
             instructions,
+            symbols: self.symbols(),
             instruction_queue: Self::snapshot_queue(&self.instructions),
             block_queue: Self::snapshot_queue(&self.blocks),
             function_queue: Self::snapshot_queue(&self.functions),
@@ -440,6 +495,7 @@ impl Graph {
     pub fn from_snapshot(snapshot: GraphSnapshot, config: Configuration) -> Result<Self, Error> {
         let architecture = Architecture::from_string(&snapshot.architecture)?;
         let mut graph = Self::new(architecture, config.clone());
+        graph.replace_symbols(snapshot.symbols);
 
         for json in snapshot.instructions {
             let instruction_architecture = Architecture::from_string(&json.architecture)?;
@@ -568,6 +624,26 @@ impl Graph {
         &self.listing
     }
 
+    pub fn symbols(&self) -> BTreeMap<u64, String> {
+        self.symbols.lock().unwrap().clone()
+    }
+
+    pub fn symbol(&self, address: u64) -> Option<String> {
+        self.symbols.lock().unwrap().get(&address).cloned()
+    }
+
+    pub fn replace_symbols(&mut self, symbols: BTreeMap<u64, String>) {
+        *self.symbols.lock().unwrap() = symbols;
+    }
+
+    pub fn extend_symbols(&mut self, symbols: BTreeMap<u64, String>) {
+        self.symbols.lock().unwrap().extend(symbols);
+    }
+
+    pub fn insert_symbol(&mut self, address: u64, name: String) -> Option<String> {
+        self.symbols.lock().unwrap().insert(address, name)
+    }
+
     pub fn mutations(&self) -> u64 {
         self.revision.load(Ordering::SeqCst)
     }
@@ -620,14 +696,7 @@ impl Graph {
     pub fn insert_instruction<T: Into<InstructionRecord>>(&mut self, instruction: T) {
         let instruction = instruction.into();
         self.invalidate_processor_state();
-        if let Some(existing) = self.get_instruction_record(instruction.address) {
-            self.listing.insert(
-                instruction.address,
-                Graph::merge_instruction(existing, instruction),
-            );
-            return;
-        }
-        self.listing.insert(instruction.address, instruction);
+        self.insert_instruction_merged(instruction);
     }
 
     pub fn update_instruction<T: Into<InstructionRecord>>(&mut self, instruction: T) {
@@ -670,7 +739,7 @@ impl Graph {
         Function::new(address, self).ok()
     }
 
-    fn merge_instruction(
+    pub(crate) fn merge_instruction(
         mut existing: InstructionRecord,
         incoming: InstructionRecord,
     ) -> InstructionRecord {
@@ -713,6 +782,17 @@ impl Graph {
         existing
     }
 
+    fn insert_instruction_merged(&mut self, instruction: InstructionRecord) {
+        if let Some(existing) = self.get_instruction_record(instruction.address) {
+            self.listing.insert(
+                instruction.address,
+                Graph::merge_instruction(existing, instruction),
+            );
+        } else {
+            self.listing.insert(instruction.address, instruction);
+        }
+    }
+
     fn merge_instruction_semantics(existing: Option<Lir>, incoming: Option<Lir>) -> Option<Lir> {
         match (existing, incoming) {
             (None, None) => None,
@@ -730,52 +810,18 @@ impl Graph {
 
     pub fn merge(&mut self, graph: &mut Graph) {
         self.invalidate_processor_state();
-        for entry in graph.instruction_map() {
-            self.insert_instruction(entry.value().clone());
+        if self.listing.iter().next().is_none() {
+            self.listing = std::mem::take(&mut graph.listing);
+        } else {
+            for entry in graph.instruction_map() {
+                self.insert_instruction_merged(entry.value().clone());
+            }
         }
-
-        for entry in graph.instructions.processed() {
-            self.instructions.insert_processed(*entry.value());
-        }
-
-        self.instructions
-            .enqueue_extend(graph.instructions.dequeue_all());
-
-        for entry in graph.blocks.processed() {
-            self.blocks.insert_processed(*entry.value());
-        }
-
-        self.blocks.enqueue_extend(graph.blocks.dequeue_all());
-
-        for entry in graph.functions.processed() {
-            self.functions.insert_processed(*entry.value());
-        }
-
-        self.functions.enqueue_extend(graph.functions.dequeue_all());
-
-        for entry in graph.instructions.valid() {
-            self.instructions.insert_valid(*entry.value());
-        }
-
-        for entry in graph.instructions.invalid() {
-            self.instructions.insert_invalid(*entry.value());
-        }
-
-        for entry in graph.blocks.valid() {
-            self.blocks.insert_valid(*entry.value());
-        }
-
-        for entry in graph.blocks.invalid() {
-            self.blocks.insert_invalid(*entry.value());
-        }
-
-        for entry in graph.functions.valid() {
-            self.functions.insert_valid(*entry.value());
-        }
-
-        for entry in graph.functions.invalid() {
-            self.functions.insert_invalid(*entry.value());
-        }
+        self.instructions.merge_from(&mut graph.instructions);
+        self.blocks.merge_from(&mut graph.blocks);
+        self.functions.merge_from(&mut graph.functions);
+        let symbols = std::mem::take(&mut *graph.symbols.lock().unwrap());
+        self.extend_symbols(symbols);
     }
 
     pub fn process(&self) -> Result<(), Error> {
@@ -848,14 +894,24 @@ impl Graph {
             }
         }
 
+        self.ensure_function_layouts();
+
+        let callee_entries = self
+            .functions
+            .valid_addresses()
+            .into_iter()
+            .collect::<Vec<_>>()
+            .into_par_iter()
+            .filter_map(|function_address| {
+                let function = Function::new(function_address, self).ok()?;
+                Some((function_address, function.compute_callee_references()))
+            })
+            .collect::<Vec<_>>();
+
         let mut callee_references = BTreeMap::<u64, BTreeMap<u64, u64>>::new();
         let mut caller_references = BTreeMap::<u64, BTreeMap<u64, u64>>::new();
 
-        for function_address in self.functions.valid_addresses() {
-            let Ok(function) = Function::new(function_address, self) else {
-                continue;
-            };
-            let function_callees = function.compute_callee_references();
+        for (function_address, function_callees) in callee_entries {
             for (callsite, callee) in &function_callees {
                 caller_references
                     .entry(*callee)
@@ -893,6 +949,194 @@ impl Graph {
             .get(&address)
             .cloned()
             .unwrap_or_default()
+    }
+
+    fn compute_block_terminator_address(&self, address: u64) -> Option<u64> {
+        if !self.blocks.is_valid(address) {
+            return None;
+        }
+
+        let mut previous_address: Option<u64> = None;
+        let mut previous_instruction: Option<u64> = None;
+
+        for entry in self.listing.range(address..) {
+            let record = entry.value();
+            let instruction = self.get_instruction(record.address)?;
+            if let Some(prev_addr) = previous_address {
+                if instruction.address != prev_addr {
+                    return None;
+                }
+            }
+            if address != instruction.address && instruction.is_block_start {
+                return previous_instruction;
+            }
+            previous_address = Some(instruction.address + instruction.size() as u64);
+            if instruction.is_jump || instruction.is_trap || instruction.is_return {
+                return Some(instruction.address);
+            }
+            previous_instruction = Some(instruction.address);
+        }
+
+        None
+    }
+
+    fn ensure_block_layouts(&self) {
+        let revision = self.revision.load(Ordering::SeqCst);
+        {
+            let state = self.block_layout_state.lock().unwrap();
+            if state.revision == Some(revision) {
+                return;
+            }
+        }
+
+        let addresses = self
+            .blocks
+            .valid_addresses()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let terminator_entries = addresses
+            .into_par_iter()
+            .filter_map(|address| {
+                self.compute_block_terminator_address(address)
+                    .map(|terminator| (address, terminator))
+            })
+            .collect::<Vec<_>>();
+
+        let mut terminators = BTreeMap::new();
+        let mut successors = BTreeMap::<u64, BTreeSet<u64>>::new();
+        let mut predecessors = BTreeMap::<u64, BTreeSet<u64>>::new();
+
+        for (address, terminator_address) in terminator_entries {
+            terminators.insert(address, terminator_address);
+            let Some(terminator) = self.get_instruction(terminator_address) else {
+                continue;
+            };
+            let mut targets = terminator.branches();
+            if !terminator.is_return
+                && !terminator.is_trap
+                && (!terminator.is_jump || terminator.is_conditional)
+            {
+                let fallthrough = if terminator.is_block_start && address != terminator.address {
+                    Some(terminator.address)
+                } else {
+                    terminator.fallthrough()
+                };
+                if let Some(target) = fallthrough {
+                    targets.insert(target);
+                }
+            }
+            for target in &targets {
+                predecessors.entry(*target).or_default().insert(address);
+            }
+            successors.insert(address, targets);
+        }
+
+        let mut state = self.block_layout_state.lock().unwrap();
+        if self.revision.load(Ordering::SeqCst) == revision {
+            state.terminators = terminators;
+            state.successors = successors;
+            state.predecessors = predecessors;
+            state.revision = Some(revision);
+        }
+    }
+
+    pub(crate) fn block_terminator_address(&self, address: u64) -> Option<u64> {
+        self.ensure_block_layouts();
+        self.block_layout_state
+            .lock()
+            .unwrap()
+            .terminators
+            .get(&address)
+            .copied()
+    }
+
+    pub(crate) fn block_successor_addresses(&self, address: u64) -> BTreeSet<u64> {
+        self.ensure_block_layouts();
+        self.block_layout_state
+            .lock()
+            .unwrap()
+            .successors
+            .get(&address)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn block_predecessor_addresses(&self, address: u64) -> BTreeSet<u64> {
+        self.ensure_block_layouts();
+        self.block_layout_state
+            .lock()
+            .unwrap()
+            .predecessors
+            .get(&address)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    fn compute_function_block_addresses(&self, address: u64) -> Option<Vec<u64>> {
+        if !self.functions.is_valid(address) {
+            return None;
+        }
+
+        let mut blocks = BTreeSet::<u64>::new();
+        let mut queue = GraphQueue::new();
+        queue.enqueue(address);
+
+        while let Some(block_address) = queue.dequeue() {
+            queue.insert_processed(block_address);
+            if self.blocks.is_invalid(block_address) {
+                return None;
+            }
+            let block = Block::new(block_address, self).ok()?;
+            queue.enqueue_extend(block.successor_addresses());
+            blocks.insert(block_address);
+        }
+
+        if blocks.is_empty() {
+            return None;
+        }
+
+        Some(blocks.into_iter().collect())
+    }
+
+    fn ensure_function_layouts(&self) {
+        let revision = self.revision.load(Ordering::SeqCst);
+        {
+            let state = self.function_layout_state.lock().unwrap();
+            if state.revision == Some(revision) {
+                return;
+            }
+        }
+
+        self.ensure_block_layouts();
+
+        let addresses = self
+            .functions
+            .valid_addresses()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let blocks = addresses
+            .into_par_iter()
+            .filter_map(|address| {
+                self.compute_function_block_addresses(address)
+                    .map(|blocks| (address, blocks))
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        let mut state = self.function_layout_state.lock().unwrap();
+        if self.revision.load(Ordering::SeqCst) == revision {
+            state.blocks = blocks;
+            state.revision = Some(revision);
+        }
+    }
+
+    pub(crate) fn function_block_addresses(&self, address: u64) -> Option<Vec<u64>> {
+        self.ensure_function_layouts();
+        self.function_layout_state
+            .lock()
+            .unwrap()
+            .blocks
+            .get(&address)
+            .cloned()
     }
 
     fn process_target(&self, target: ProcessorTarget) -> Result<(), Error> {
@@ -937,38 +1181,52 @@ impl Graph {
                 }
             }
             ProcessorTarget::Block => {
-                for address in self.blocks.valid_addresses() {
-                    let block = match Block::new(address, self) {
-                        Ok(block) => block,
-                        Err(_) => continue,
-                    };
-                    let mut entity_outputs = Vec::new();
-                    for processor in &remote_processors {
-                        if let Some(output) = processor.process_block(&block) {
-                            entity_outputs.push((processor.name().to_string(), output));
+                self.ensure_block_layouts();
+                outputs = self
+                    .blocks
+                    .valid_addresses()
+                    .into_iter()
+                    .collect::<Vec<_>>()
+                    .into_par_iter()
+                    .filter_map(|address| {
+                        let block = Block::new(address, self).ok()?;
+                        let mut entity_outputs = Vec::new();
+                        for processor in &remote_processors {
+                            if let Some(output) = processor.process_block(&block) {
+                                entity_outputs.push((processor.name().to_string(), output));
+                            }
                         }
-                    }
-                    if !entity_outputs.is_empty() {
-                        outputs.insert(address, entity_outputs);
-                    }
-                }
+                        if entity_outputs.is_empty() {
+                            None
+                        } else {
+                            Some((address, entity_outputs))
+                        }
+                    })
+                    .collect();
             }
             ProcessorTarget::Function => {
-                for address in self.functions.valid_addresses() {
-                    let function = match Function::new(address, self) {
-                        Ok(function) => function,
-                        Err(_) => continue,
-                    };
-                    let mut entity_outputs = Vec::new();
-                    for processor in &remote_processors {
-                        if let Some(output) = processor.process_function(&function) {
-                            entity_outputs.push((processor.name().to_string(), output));
+                self.ensure_function_layouts();
+                outputs = self
+                    .functions
+                    .valid_addresses()
+                    .into_iter()
+                    .collect::<Vec<_>>()
+                    .into_par_iter()
+                    .filter_map(|address| {
+                        let function = Function::new(address, self).ok()?;
+                        let mut entity_outputs = Vec::new();
+                        for processor in &remote_processors {
+                            if let Some(output) = processor.process_function(&function) {
+                                entity_outputs.push((processor.name().to_string(), output));
+                            }
                         }
-                    }
-                    if !entity_outputs.is_empty() {
-                        outputs.insert(address, entity_outputs);
-                    }
-                }
+                        if entity_outputs.is_empty() {
+                            None
+                        } else {
+                            Some((address, entity_outputs))
+                        }
+                    })
+                    .collect();
             }
             ProcessorTarget::Graph => {
                 let mut instruction_outputs = HashMap::new();
@@ -1091,6 +1349,14 @@ impl Graph {
         callgraph_state.revision = None;
         callgraph_state.callee_references.clear();
         callgraph_state.caller_references.clear();
+        let mut block_layout_state = self.block_layout_state.lock().unwrap();
+        block_layout_state.revision = None;
+        block_layout_state.terminators.clear();
+        block_layout_state.successors.clear();
+        block_layout_state.predecessors.clear();
+        let mut function_layout_state = self.function_layout_state.lock().unwrap();
+        function_layout_state.revision = None;
+        function_layout_state.blocks.clear();
     }
 
     fn snapshot_queue(queue: &GraphQueue) -> GraphQueueSnapshot {
@@ -1143,8 +1409,8 @@ mod tests {
     use crate::processor::ProcessorTarget;
     use crate::{Architecture, Configuration};
     use serde_json::json;
-    use std::collections::BTreeSet;
     use std::collections::HashMap;
+    use std::collections::{BTreeMap, BTreeSet};
 
     #[test]
     fn snapshot_roundtrip_preserves_processor_outputs() {
@@ -1158,6 +1424,7 @@ mod tests {
         let snapshot = GraphSnapshot {
             architecture: "amd64".to_string(),
             instructions: graph.snapshot().instructions,
+            symbols: BTreeMap::new(),
             instruction_queue: GraphQueueSnapshot {
                 valid: BTreeSet::from([0x1000]),
                 invalid: BTreeSet::new(),

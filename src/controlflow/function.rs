@@ -25,7 +25,6 @@ use crate::Configuration;
 use crate::controlflow::Block;
 use crate::controlflow::EntityKind;
 use crate::controlflow::Graph;
-use crate::controlflow::GraphQueue;
 use crate::controlflow::Instruction;
 use crate::embeddings::{Embedding, EmbeddingBackend, EmbeddingsJson};
 use crate::entropy;
@@ -41,7 +40,10 @@ use crate::ir::lir::{
     LirTerminator,
 };
 use crate::ir::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
-use crate::ir::mir::MirFunction;
+use crate::ir::mir::{
+    MirAddressSpace, MirBlockParameter, MirControlTarget, MirFunction, MirOperationKind, MirType,
+    MirValue,
+};
 #[cfg(not(target_os = "windows"))]
 use crate::ir::vex::{Lifter as VexLifter, VexJson};
 use crate::metadata::Attributes;
@@ -286,6 +288,22 @@ pub struct Function<'function> {
 }
 
 impl<'function> Function<'function> {
+    fn contiguous_payload_bytes_and_mask(&self) -> Option<(Vec<u8>, Vec<u8>, u64)> {
+        let end = self.effective_end()?;
+        let mut bytes = Vec::new();
+        let mut wildcard_mask = Vec::new();
+        for entry in self.cfg.listing.range(self.address..end) {
+            let instruction = entry.value();
+            bytes.extend_from_slice(&instruction.bytes);
+            if instruction.chromosome_mask.len() == instruction.bytes.len() {
+                wildcard_mask.extend_from_slice(&instruction.chromosome_mask);
+            } else {
+                wildcard_mask.extend(std::iter::repeat_n(0, instruction.bytes.len()));
+            }
+        }
+        Some((bytes, wildcard_mask, end))
+    }
+
     /// Creates a new `Function` instance for the given address in the control flow graph.
     ///
     /// # Arguments
@@ -306,13 +324,13 @@ impl<'function> Function<'function> {
         }
 
         let mut blocks = BTreeMap::<u64, Block>::new();
-
-        let mut queue = GraphQueue::new();
-
-        queue.enqueue(address);
-
-        while let Some(block_address) = queue.dequeue() {
-            queue.insert_processed(block_address);
+        let block_addresses = cfg.function_block_addresses(address).ok_or_else(|| {
+            Error::other(format!(
+                "Function -> 0x{:x}: contains no valid blocks",
+                address
+            ))
+        })?;
+        for block_address in block_addresses {
             if cfg.blocks.is_invalid(block_address) {
                 return Err(Error::other(format!(
                     "Function -> 0x{:x} -> Block -> 0x{:x}: is invalid",
@@ -320,13 +338,6 @@ impl<'function> Function<'function> {
                 )));
             }
             if let Ok(block) = Block::new(block_address, cfg) {
-                queue.enqueue_extend(
-                    block
-                        .successors()
-                        .into_iter()
-                        .map(|successor| successor.address())
-                        .collect(),
-                );
                 blocks.insert(block_address, block);
             }
         }
@@ -384,37 +395,85 @@ impl<'function> Function<'function> {
     ///
     /// Returns a `FunctionJson` struct containing metadata about the function.
     pub fn process_base(&self) -> FunctionJson {
-        let contiguous = self.contiguous();
-        let size = self.size();
-        let bytes = if contiguous { self.bytes() } else { None };
+        let contiguous_payload = self.contiguous_payload_bytes_and_mask();
+        let contiguous = contiguous_payload.is_some();
+        let block_addresses = self.block_addresses();
+        let number_of_blocks = block_addresses.len();
+        let number_of_instructions: usize = self
+            .blocks
+            .values()
+            .map(|block| block.number_of_instructions())
+            .sum();
+        let edges: usize = self.blocks.values().map(|block| block.edges()).sum();
+        let size = contiguous_payload
+            .as_ref()
+            .map(|(_, _, end)| (*end - self.address) as usize)
+            .unwrap_or(0);
+        let bytes = contiguous_payload
+            .as_ref()
+            .map(|(bytes, _, _)| bytes.clone());
         let bytes_hex = bytes.as_ref().map(|bytes| hex::encode(bytes));
         let chromosome = if contiguous {
-            self.chromosome().map(|chromosome| chromosome.process())
+            contiguous_payload
+                .as_ref()
+                .and_then(|(bytes, wildcard_mask, _)| {
+                    Chromosome::new(
+                        bytes.clone(),
+                        wildcard_mask.clone(),
+                        self.cfg.config.clone(),
+                    )
+                    .ok()
+                    .map(|chromosome| chromosome.process())
+                })
         } else {
             None
         };
         let entropy = if self.cfg.config.functions.entropy.enabled {
-            self.entropy()
+            if let Some((bytes, _, _)) = &contiguous_payload {
+                entropy::shannon(bytes)
+            } else {
+                self.entropy()
+            }
         } else {
             None
         };
         let sha256 = if self.cfg.config.functions.sha256.enabled {
-            self.sha256().and_then(|hash| hash.hexdigest())
+            bytes
+                .as_ref()
+                .and_then(|bytes| SHA256::new(bytes).hexdigest())
         } else {
             None
         };
         let ssdeep = if self.cfg.config.functions.ssdeep.enabled {
-            self.ssdeep().and_then(|hash| hash.hexdigest())
+            bytes
+                .as_ref()
+                .and_then(|bytes| SSDeep::new(bytes).hexdigest())
         } else {
             None
         };
         let tlsh = if self.cfg.config.functions.tlsh.enabled {
-            self.tlsh().and_then(|hash| hash.hexdigest())
+            bytes.as_ref().and_then(|bytes| {
+                TLSH::new(bytes, self.cfg.config.functions.tlsh.minimum_byte_size).hexdigest()
+            })
         } else {
             None
         };
         let minhash = if self.cfg.config.functions.minhash.enabled {
-            self.minhash().and_then(|hash| hash.hexdigest())
+            bytes.as_ref().and_then(|bytes| {
+                if bytes.len() > self.cfg.config.functions.minhash.maximum_byte_size
+                    && self.cfg.config.functions.minhash.maximum_byte_size_enabled
+                {
+                    None
+                } else {
+                    MinHash32::new(
+                        bytes,
+                        self.cfg.config.functions.minhash.number_of_hashes,
+                        self.cfg.config.functions.minhash.shingle_size,
+                        self.cfg.config.functions.minhash.seed,
+                    )
+                    .hexdigest()
+                }
+            })
         } else {
             None
         };
@@ -427,17 +486,25 @@ impl<'function> Function<'function> {
         FunctionJson {
             address: self.address,
             kind: EntityKind::Function,
-            edges: self.edges(),
+            edges,
             chromosome,
             bytes: bytes_hex,
             size,
             callee_references: self.callee_references(),
             caller_references: self.caller_references(),
-            blocks: self.block_addresses(),
-            number_of_blocks: self.number_of_blocks(),
-            number_of_instructions: self.number_of_instructions(),
-            cyclomatic_complexity: self.cyclomatic_complexity(),
-            average_instructions_per_block: self.average_instructions_per_block(),
+            blocks: block_addresses,
+            number_of_blocks,
+            number_of_instructions,
+            cyclomatic_complexity: if edges < number_of_blocks {
+                0
+            } else {
+                edges - number_of_blocks + 2
+            },
+            average_instructions_per_block: if number_of_blocks == 0 {
+                0.0
+            } else {
+                number_of_instructions as f64 / number_of_blocks as f64
+            },
             entropy,
             sha256,
             ssdeep,
@@ -656,20 +723,7 @@ impl<'function> Function<'function> {
     ///
     /// Returns `Some(Chromosome)` if the function is contiguous; otherwise, `None`.
     pub fn chromosome(&self) -> Option<Chromosome> {
-        if !self.contiguous() {
-            return None;
-        }
-        let bytes = self.bytes()?;
-        let end = self.end()?;
-        let mut wildcard_mask = Vec::with_capacity(bytes.len());
-        for entry in self.cfg.listing.range(self.address..end) {
-            let instruction = entry.value();
-            if instruction.chromosome_mask.len() == instruction.bytes.len() {
-                wildcard_mask.extend_from_slice(&instruction.chromosome_mask);
-            } else {
-                wildcard_mask.extend(std::iter::repeat_n(0, instruction.bytes.len()));
-            }
-        }
+        let (bytes, wildcard_mask, _) = self.contiguous_payload_bytes_and_mask()?;
         Chromosome::new(bytes, wildcard_mask, self.cfg.config.clone()).ok()
     }
 
@@ -736,10 +790,7 @@ impl<'function> Function<'function> {
     ///
     /// Returns a `Vec<Block>` representing the blocks associated with this function.
     pub fn blocks(&self) -> Vec<Block<'_>> {
-        self.blocks
-            .keys()
-            .filter_map(|&block_address| Block::new(block_address, self.cfg).ok())
-            .collect()
+        self.blocks.values().cloned().collect()
     }
 
     fn const_u64_value(expression: &LirExpression) -> Option<u64> {
@@ -833,6 +884,21 @@ impl<'function> Function<'function> {
         symbol_map.get(&address).cloned()
     }
 
+    fn resolve_symbol_name(
+        encoding: Option<&crate::ir::lir::LirEncoding>,
+        target: &LirExpression,
+        symbol_map: &BTreeMap<u64, String>,
+        register_map: &BTreeMap<String, LirExpression>,
+    ) -> Option<String> {
+        if let Some(address) = Self::const_u64_value(target) {
+            if let Some(name) = symbol_map.get(&address) {
+                return Some(name.clone());
+            }
+        }
+
+        Self::resolve_indirect_symbol_name(encoding, target, symbol_map, register_map, 0)
+    }
+
     fn rewrite_lir_function_symbols(
         lir: &mut LirFunction,
         symbol_map: &BTreeMap<u64, String>,
@@ -860,14 +926,16 @@ impl<'function> Function<'function> {
 
                 match &mut instruction.terminator {
                     LirTerminator::Call { target, .. } | LirTerminator::Jump { target } => {
-                        if let Some(name) = Self::resolve_indirect_symbol_name(
+                        if let Some(name) = Self::resolve_symbol_name(
                             encoding,
                             target,
                             symbol_map,
                             &register_map,
-                            0,
                         ) {
-                            *target = LirExpression::Function { name, bits: 64 };
+                            *target = LirExpression::Function {
+                                name,
+                                bits: target.bits(),
+                            };
                             changed = true;
                         }
                     }
@@ -876,24 +944,28 @@ impl<'function> Function<'function> {
                         false_target,
                         ..
                     } => {
-                        if let Some(name) = Self::resolve_indirect_symbol_name(
+                        if let Some(name) = Self::resolve_symbol_name(
                             encoding,
                             true_target,
                             symbol_map,
                             &register_map,
-                            0,
                         ) {
-                            *true_target = LirExpression::Function { name, bits: 64 };
+                            *true_target = LirExpression::Function {
+                                name,
+                                bits: true_target.bits(),
+                            };
                             changed = true;
                         }
-                        if let Some(name) = Self::resolve_indirect_symbol_name(
+                        if let Some(name) = Self::resolve_symbol_name(
                             encoding,
                             false_target,
                             symbol_map,
                             &register_map,
-                            0,
                         ) {
-                            *false_target = LirExpression::Function { name, bits: 64 };
+                            *false_target = LirExpression::Function {
+                                name,
+                                bits: false_target.bits(),
+                            };
                             changed = true;
                         }
                     }
@@ -905,7 +977,14 @@ impl<'function> Function<'function> {
         changed
     }
 
-    pub fn lir(&self) -> Result<LirFunction, Error> {
+    fn lir_name_with_symbols(&self, symbol_map: &BTreeMap<u64, String>) -> String {
+        symbol_map
+            .get(&self.address)
+            .cloned()
+            .unwrap_or_else(|| format!("function_{:x}", self.address))
+    }
+
+    fn build_lir(&self, symbol_map: &BTreeMap<u64, String>) -> Result<LirFunction, Error> {
         let blocks = self
             .blocks()
             .into_iter()
@@ -915,27 +994,175 @@ impl<'function> Function<'function> {
             .iter()
             .flat_map(|block| block.instructions.iter())
             .find_map(|instruction| instruction.abi.clone());
-        Ok(LirFunction {
-            name: Some(format!("function_{:x}", self.address)),
+        let mut lir = LirFunction {
+            name: Some(self.lir_name_with_symbols(symbol_map)),
             abi,
             blocks,
-        })
+        };
+        Self::rewrite_lir_function_symbols(&mut lir, symbol_map);
+        Ok(lir)
+    }
+
+    pub fn lir(&self) -> Result<LirFunction, Error> {
+        self.build_lir(&self.cfg.symbols())
     }
 
     pub fn mir(&self) -> Result<MirFunction, Error> {
         let mut lir = self.lir()?;
         lir.optimize();
-        MirFunction::from_lir(None, &lir).map_err(|error| Error::other(error.to_string()))
+        let mut mir =
+            MirFunction::from_lir(None, &lir).map_err(|error| Error::other(error.to_string()))?;
+        mir.optimize();
+        self.trim_mir_call_arguments(&mut mir, &self.cfg.symbols())?;
+        self.apply_observed_import_signature(&mut mir, &self.cfg.symbols())?;
+        apply_observed_call_argument_types(&mut mir);
+        Ok(mir)
     }
 
     pub fn mir_with_symbols(
         &self,
         symbol_map: &BTreeMap<u64, String>,
     ) -> Result<MirFunction, Error> {
-        let mut lir = self.lir()?;
-        Self::rewrite_lir_function_symbols(&mut lir, symbol_map);
+        let mut lir = self.build_lir(symbol_map)?;
         lir.optimize();
-        MirFunction::from_lir(None, &lir).map_err(|error| Error::other(error.to_string()))
+        let mut mir =
+            MirFunction::from_lir(None, &lir).map_err(|error| Error::other(error.to_string()))?;
+        mir.optimize();
+        self.trim_mir_call_arguments(&mut mir, symbol_map)?;
+        self.apply_observed_import_signature(&mut mir, symbol_map)?;
+        apply_observed_call_argument_types(&mut mir);
+        Ok(mir)
+    }
+
+    pub(crate) fn trim_mir_call_arguments(
+        &self,
+        mir: &mut MirFunction,
+        symbol_map: &BTreeMap<u64, String>,
+    ) -> Result<(), Error> {
+        let entry_parameter_names = mir
+            .entry_parameters
+            .iter()
+            .filter_map(|parameter| parameter.name.clone())
+            .collect::<BTreeSet<_>>();
+        let symbol_to_address = symbol_map
+            .iter()
+            .map(|(address, name)| (name.clone(), *address))
+            .collect::<BTreeMap<_, _>>();
+
+        for block in mir.blocks_mut() {
+            for operation in &mut block.operations {
+                let MirOperationKind::Call { target, .. } = &mut operation.kind
+                else {
+                    continue;
+                };
+
+                match target {
+                    MirControlTarget::Direct(target) => {
+                        let Some(address) = symbol_to_address.get(target).copied() else {
+                            trim_external_call_arguments(operation, &entry_parameter_names);
+                            continue;
+                        };
+                        if target.contains('!') {
+                            trim_external_call_arguments(operation, &entry_parameter_names);
+                            continue;
+                        }
+                        if address == self.address {
+                            continue;
+                        }
+                        let Some(callee) = self.cfg.get_function(address) else {
+                            trim_external_call_arguments(operation, &entry_parameter_names);
+                            continue;
+                        };
+                        let mut callee_lir = callee.lir()?;
+                        callee_lir.optimize();
+                        let callee_mir = MirFunction::from_lir(None, &callee_lir)
+                            .map_err(|error| Error::other(error.to_string()))?;
+                        let keep = callee_mir.entry_parameters.len();
+                        trim_local_call_metadata(operation, keep);
+                    }
+                    MirControlTarget::FunctionIndirect(_) | MirControlTarget::BlockIndirect(_) => {
+                        trim_external_call_arguments(operation, &entry_parameter_names);
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn apply_observed_import_signature(
+        &self,
+        mir: &mut MirFunction,
+        symbol_map: &BTreeMap<u64, String>,
+    ) -> Result<(), Error> {
+        let Some(symbol_name) = symbol_map.get(&self.address) else {
+            return Ok(());
+        };
+        if !symbol_name.contains('!') || !mir.entry_parameters.is_empty() {
+            return Ok(());
+        }
+
+        let mut observed = Vec::<Option<MirType>>::new();
+        let callers = self
+            .caller_references()
+            .values()
+            .copied()
+            .collect::<BTreeSet<_>>();
+
+        for caller_address in callers {
+            if caller_address == self.address {
+                continue;
+            }
+            let Some(caller) = self.cfg.get_function(caller_address) else {
+                continue;
+            };
+            let caller_mir = caller.mir_with_symbols(symbol_map)?;
+            let defs = build_mir_defs(&caller_mir);
+            for block in caller_mir.blocks() {
+                for operation in &block.operations {
+                    let MirOperationKind::Call {
+                        target: MirControlTarget::Direct(target),
+                        arguments,
+                        ..
+                    } = &operation.kind
+                    else {
+                        continue;
+                    };
+                    if target != symbol_name {
+                        continue;
+                    }
+                    for (index, argument) in arguments.iter().enumerate() {
+                        let ty = observed_argument_type(argument, &defs, 0);
+                        if observed.len() <= index {
+                            observed.resize(index + 1, None);
+                        }
+                        merge_observed_type(&mut observed[index], ty);
+                    }
+                }
+            }
+        }
+
+        if observed.is_empty() {
+            return Ok(());
+        }
+
+        let entry_parameters = observed
+            .into_iter()
+            .enumerate()
+            .filter_map(|(index, ty)| {
+                ty.map(|ty| MirBlockParameter::new(Some(format!("arg{index}")), ty))
+            })
+            .collect::<Vec<_>>();
+
+        if entry_parameters.is_empty() {
+            return Ok(());
+        }
+
+        mir.entry_parameters = entry_parameters.clone();
+        if let Some(entry_block) = mir.blocks_mut().first_mut() {
+            entry_block.parameters = entry_parameters;
+        }
+        Ok(())
     }
 
     /// Retrieves all blocks that fall within the contiguous reconstruction region.
@@ -1357,5 +1584,545 @@ impl<'function> Function<'function> {
     /// Returns `true` if the function is contiguous; otherwise, `false`.
     pub fn contiguous(&self) -> bool {
         self.effective_end().is_some()
+    }
+}
+
+fn trim_local_call_metadata(operation: &mut crate::ir::mir::MirOperation, keep: usize) {
+    let MirOperationKind::Call {
+        arguments,
+        clobbers,
+        memory_effects,
+        ..
+    } = &mut operation.kind
+    else {
+        return;
+    };
+
+    if keep < arguments.len() {
+        arguments.truncate(keep);
+    }
+
+    clobbers.retain(|clobber| match clobber
+        .register
+        .trim_start_matches('%')
+        .strip_prefix("arg")
+    {
+        Some(index) => index.parse::<usize>().ok().is_some_and(|index| index < keep),
+        None => true,
+    });
+
+    if keep == 0 {
+        memory_effects.retain(
+            |effect| !matches!(effect, MirAddressSpace::Incoming { name } if name == "args"),
+        );
+    }
+}
+
+fn trim_external_call_arguments(
+    operation: &mut crate::ir::mir::MirOperation,
+    entry_parameter_names: &BTreeSet<String>,
+) {
+    let MirOperationKind::Call {
+        arguments,
+        clobbers,
+        memory_effects,
+        ..
+    } = &mut operation.kind
+    else {
+        return;
+    };
+
+    let mut filtered_arguments = Vec::with_capacity(arguments.len());
+    let mut uses_entry_arguments = false;
+    for argument in arguments.iter() {
+        if is_meaningful_external_argument(argument, entry_parameter_names) {
+            filtered_arguments.push(argument.clone());
+        }
+        if argument_uses_entry_parameter(argument, entry_parameter_names) {
+            uses_entry_arguments = true;
+        }
+    }
+
+    *arguments = filtered_arguments;
+    let keep = arguments.len();
+    clobbers.retain(|clobber| match clobber
+        .register
+        .trim_start_matches('%')
+        .strip_prefix("arg")
+    {
+        Some(index) => index.parse::<usize>().ok().is_some_and(|index| index < keep),
+        None => true,
+    });
+
+    if !uses_entry_arguments {
+        memory_effects
+            .retain(|effect| !matches!(effect, MirAddressSpace::Incoming { name } if name == "args"));
+    }
+}
+
+fn is_meaningful_external_argument(
+    argument: &crate::ir::mir::MirValue,
+    entry_parameter_names: &BTreeSet<String>,
+) -> bool {
+    match argument {
+        crate::ir::mir::MirValue::Named { name, .. } => {
+            if name.starts_with("arg") && !entry_parameter_names.contains(name) {
+                return false;
+            }
+            true
+        }
+        crate::ir::mir::MirValue::Undef { .. } => false,
+        crate::ir::mir::MirValue::Integer { .. }
+        | crate::ir::mir::MirValue::Boolean(_)
+        | crate::ir::mir::MirValue::Null { .. } => true,
+    }
+}
+
+fn argument_uses_entry_parameter(
+    argument: &crate::ir::mir::MirValue,
+    entry_parameter_names: &BTreeSet<String>,
+) -> bool {
+    match argument {
+        crate::ir::mir::MirValue::Named { name, .. } => entry_parameter_names.contains(name),
+        _ => false,
+    }
+}
+
+fn mir_value_type(value: &MirValue) -> MirType {
+    match value {
+        MirValue::Named { ty, .. } | MirValue::Null { ty } | MirValue::Undef { ty } => ty.clone(),
+        MirValue::Integer { bits, .. } => MirType::integer(*bits),
+        MirValue::Boolean(_) => MirType::integer(1),
+    }
+}
+
+fn observed_argument_type(
+    value: &MirValue,
+    defs: &BTreeMap<String, MirOperationKind>,
+    depth: usize,
+) -> MirType {
+    if depth > 16 {
+        return mir_value_type(value);
+    }
+
+    if is_pointer_like_value(value, defs, depth) {
+        return MirType::pointer(MirType::integer(8));
+    }
+
+    match value {
+        MirValue::Named { name, ty } => match defs.get(name) {
+            Some(MirOperationKind::Copy { value, .. })
+            | Some(MirOperationKind::Cast { value, .. }) => {
+                observed_argument_type(value, defs, depth + 1)
+            }
+            _ => ty.clone(),
+        },
+        _ => mir_value_type(value),
+    }
+}
+
+fn is_pointer_like_value(
+    value: &MirValue,
+    defs: &BTreeMap<String, MirOperationKind>,
+    depth: usize,
+) -> bool {
+    if depth > 16 {
+        return false;
+    }
+
+    match value {
+        MirValue::Named { name, ty } => {
+            if matches!(ty, MirType::Pointer { .. }) || name.starts_with("ptr.") {
+                return true;
+            }
+            if matches!(name.as_str(), "pc" | "sp" | "fp") {
+                return true;
+            }
+            match defs.get(name) {
+                Some(MirOperationKind::Copy { value, .. })
+                | Some(MirOperationKind::Cast { value, .. }) => {
+                    is_pointer_like_value(value, defs, depth + 1)
+                }
+                Some(MirOperationKind::Load { address, .. }) => {
+                    is_pointer_like_value(address, defs, depth + 1)
+                }
+                Some(MirOperationKind::Add { lhs, rhs, .. })
+                | Some(MirOperationKind::Sub { lhs, rhs, .. }) => {
+                    (is_pointer_like_value(lhs, defs, depth + 1)
+                        && is_integer_like_value(rhs, defs, depth + 1))
+                        || (is_pointer_like_value(rhs, defs, depth + 1)
+                            && is_integer_like_value(lhs, defs, depth + 1))
+                }
+                _ => false,
+            }
+        }
+        MirValue::Null { ty } => matches!(ty, MirType::Pointer { .. }),
+        _ => false,
+    }
+}
+
+fn is_integer_like_value(
+    value: &MirValue,
+    defs: &BTreeMap<String, MirOperationKind>,
+    depth: usize,
+) -> bool {
+    if depth > 16 {
+        return matches!(
+            mir_value_type(value),
+            MirType::Integer(_) | MirType::Float(_) | MirType::Custom { .. }
+        );
+    }
+
+    match value {
+        MirValue::Integer { .. } | MirValue::Boolean(_) => true,
+        MirValue::Named { name, ty } => {
+            if matches!(ty, MirType::Integer(_) | MirType::Float(_) | MirType::Custom { .. }) {
+                return true;
+            }
+            match defs.get(name) {
+                Some(MirOperationKind::Copy { value, .. })
+                | Some(MirOperationKind::Cast { value, .. }) => {
+                    is_integer_like_value(value, defs, depth + 1)
+                }
+                _ => false,
+            }
+        }
+        MirValue::Null { .. } | MirValue::Undef { .. } => false,
+    }
+}
+
+fn build_mir_defs(mir: &MirFunction) -> BTreeMap<String, MirOperationKind> {
+    mir.blocks()
+        .iter()
+        .flat_map(|block| block.operations.iter())
+        .filter_map(|operation| {
+            operation
+                .result
+                .clone()
+                .map(|result| (result, operation.kind.clone()))
+        })
+        .collect()
+}
+
+fn apply_observed_call_argument_types(mir: &mut MirFunction) {
+    let defs = build_mir_defs(mir);
+    let mut updates = BTreeMap::<String, Option<MirType>>::new();
+
+    for block in mir.blocks() {
+        for operation in &block.operations {
+            let MirOperationKind::Call {
+                target,
+                arguments,
+                result_types,
+                ..
+            } = &operation.kind
+            else {
+                continue;
+            };
+            match target {
+                MirControlTarget::Direct(target) => {
+                    if !target.contains('!') {
+                        continue;
+                    }
+                }
+                MirControlTarget::FunctionIndirect(value)
+                | MirControlTarget::BlockIndirect(value) => {
+                    if let MirValue::Named { name, .. } = value {
+                        let slot = updates.entry(name.clone()).or_insert(None);
+                        merge_observed_type(
+                            slot,
+                            indirect_code_pointer_type(arguments, result_types, &defs),
+                        );
+                    }
+                }
+            }
+            for argument in arguments {
+                let MirValue::Named { name, .. } = argument else {
+                    continue;
+                };
+                let ty = observed_argument_type(argument, &defs, 0);
+                if matches!(ty, MirType::Pointer { .. }) {
+                    let slot = updates.entry(name.clone()).or_insert(None);
+                    merge_observed_type(slot, ty);
+                }
+            }
+        }
+    }
+
+    for (name, ty) in updates {
+        if let Some(ty) = ty {
+            rewrite_named_type(mir, &name, &ty);
+        }
+    }
+}
+
+fn indirect_code_pointer_type(
+    arguments: &[MirValue],
+    result_types: &[MirType],
+    defs: &BTreeMap<String, MirOperationKind>,
+) -> MirType {
+    let argument_types = arguments
+        .iter()
+        .map(|argument| observed_argument_type(argument, defs, 0))
+        .collect::<Vec<_>>();
+    MirType::pointer(MirType::function(argument_types, result_types.to_vec()))
+}
+
+fn rewrite_named_type(mir: &mut MirFunction, name: &str, ty: &MirType) {
+    for parameter in &mut mir.entry_parameters {
+        if parameter.name.as_deref() == Some(name) {
+            parameter.ty = ty.clone();
+        }
+    }
+    for block in mir.blocks_mut() {
+        for parameter in &mut block.parameters {
+            if parameter.name.as_deref() == Some(name) {
+                parameter.ty = ty.clone();
+            }
+        }
+        for operation in &mut block.operations {
+            if operation.result.as_deref() == Some(name) {
+                rewrite_operation_result_type(&mut operation.kind, ty);
+            }
+            rewrite_value_types_in_operation(&mut operation.kind, name, ty);
+        }
+        if let Some(terminator) = &mut block.terminator {
+            rewrite_value_types_in_terminator(terminator, name, ty);
+        }
+    }
+}
+
+fn rewrite_operation_result_type(kind: &mut MirOperationKind, ty: &MirType) {
+    match kind {
+        MirOperationKind::Copy { ty: result_ty, .. }
+        | MirOperationKind::Add { ty: result_ty, .. }
+        | MirOperationKind::Sub { ty: result_ty, .. }
+        | MirOperationKind::Mul { ty: result_ty, .. }
+        | MirOperationKind::FAdd { ty: result_ty, .. }
+        | MirOperationKind::FSub { ty: result_ty, .. }
+        | MirOperationKind::FMul { ty: result_ty, .. }
+        | MirOperationKind::FDiv { ty: result_ty, .. }
+        | MirOperationKind::And { ty: result_ty, .. }
+        | MirOperationKind::Or { ty: result_ty, .. }
+        | MirOperationKind::Xor { ty: result_ty, .. }
+        | MirOperationKind::Shl { ty: result_ty, .. }
+        | MirOperationKind::LShr { ty: result_ty, .. }
+        | MirOperationKind::AShr { ty: result_ty, .. }
+        | MirOperationKind::UDiv { ty: result_ty, .. }
+        | MirOperationKind::SDiv { ty: result_ty, .. }
+        | MirOperationKind::URem { ty: result_ty, .. }
+        | MirOperationKind::SRem { ty: result_ty, .. }
+        | MirOperationKind::RotateLeft { ty: result_ty, .. }
+        | MirOperationKind::RotateRight { ty: result_ty, .. }
+        | MirOperationKind::Select { ty: result_ty, .. }
+        | MirOperationKind::Concat { ty: result_ty, .. }
+        | MirOperationKind::Extract { ty: result_ty, .. }
+        | MirOperationKind::Not { ty: result_ty, .. }
+        | MirOperationKind::Neg { ty: result_ty, .. }
+        | MirOperationKind::Popcount { ty: result_ty, .. }
+        | MirOperationKind::CountLeadingZeros { ty: result_ty, .. }
+        | MirOperationKind::CountTrailingZeros { ty: result_ty, .. }
+        | MirOperationKind::Load { ty: result_ty, .. }
+        | MirOperationKind::Cast { ty: result_ty, .. }
+        | MirOperationKind::Icmp { ty: result_ty, .. }
+        | MirOperationKind::Fcmp { ty: result_ty, .. } => *result_ty = ty.clone(),
+        MirOperationKind::Call { result_types, .. }
+        | MirOperationKind::Intrinsic { result_types, .. } => {
+            if let Some(first) = result_types.first_mut() {
+                *first = ty.clone();
+            }
+        }
+        MirOperationKind::Store { .. } | MirOperationKind::MemoryCopy { .. } => {}
+    }
+}
+
+fn rewrite_value_types_in_operation(kind: &mut MirOperationKind, name: &str, ty: &MirType) {
+    match kind {
+        MirOperationKind::Copy { value, .. }
+        | MirOperationKind::Extract { value, .. }
+        | MirOperationKind::Not { value, .. }
+        | MirOperationKind::Neg { value, .. }
+        | MirOperationKind::Popcount { value, .. }
+        | MirOperationKind::CountLeadingZeros { value, .. }
+        | MirOperationKind::CountTrailingZeros { value, .. }
+        | MirOperationKind::Load { address: value, .. }
+        | MirOperationKind::Cast { value, .. } => rewrite_named_value_type(value, name, ty),
+        MirOperationKind::Add { lhs, rhs, .. }
+        | MirOperationKind::Sub { lhs, rhs, .. }
+        | MirOperationKind::Mul { lhs, rhs, .. }
+        | MirOperationKind::FAdd { lhs, rhs, .. }
+        | MirOperationKind::FSub { lhs, rhs, .. }
+        | MirOperationKind::FMul { lhs, rhs, .. }
+        | MirOperationKind::FDiv { lhs, rhs, .. }
+        | MirOperationKind::And { lhs, rhs, .. }
+        | MirOperationKind::Or { lhs, rhs, .. }
+        | MirOperationKind::Xor { lhs, rhs, .. }
+        | MirOperationKind::Shl { lhs, rhs, .. }
+        | MirOperationKind::LShr { lhs, rhs, .. }
+        | MirOperationKind::AShr { lhs, rhs, .. }
+        | MirOperationKind::UDiv { lhs, rhs, .. }
+        | MirOperationKind::SDiv { lhs, rhs, .. }
+        | MirOperationKind::URem { lhs, rhs, .. }
+        | MirOperationKind::SRem { lhs, rhs, .. }
+        | MirOperationKind::RotateLeft { lhs, rhs, .. }
+        | MirOperationKind::RotateRight { lhs, rhs, .. }
+        | MirOperationKind::Icmp { lhs, rhs, .. }
+        | MirOperationKind::Fcmp { lhs, rhs, .. } => {
+            rewrite_named_value_type(lhs, name, ty);
+            rewrite_named_value_type(rhs, name, ty);
+        }
+        MirOperationKind::Select {
+            condition,
+            when_true,
+            when_false,
+            ..
+        } => {
+            rewrite_named_value_type(condition, name, ty);
+            rewrite_named_value_type(when_true, name, ty);
+            rewrite_named_value_type(when_false, name, ty);
+        }
+        MirOperationKind::Concat { parts, .. }
+        | MirOperationKind::Intrinsic {
+            arguments: parts, ..
+        } => {
+            for part in parts {
+                rewrite_named_value_type(part, name, ty);
+            }
+        }
+        MirOperationKind::Store { address, value, .. } => {
+            rewrite_named_value_type(address, name, ty);
+            rewrite_named_value_type(value, name, ty);
+        }
+        MirOperationKind::MemoryCopy {
+            src_address,
+            dst_address,
+            count,
+            decrement,
+            ..
+        } => {
+            rewrite_named_value_type(src_address, name, ty);
+            rewrite_named_value_type(dst_address, name, ty);
+            rewrite_named_value_type(count, name, ty);
+            rewrite_named_value_type(decrement, name, ty);
+        }
+        MirOperationKind::Call {
+            target, arguments, ..
+        } => {
+            match target {
+                MirControlTarget::FunctionIndirect(value)
+                | MirControlTarget::BlockIndirect(value) => rewrite_named_value_type(value, name, ty),
+                MirControlTarget::Direct(_) => {}
+            }
+            for argument in arguments {
+                rewrite_named_value_type(argument, name, ty);
+            }
+        }
+    }
+}
+
+fn rewrite_value_types_in_terminator(
+    terminator: &mut crate::ir::mir::MirTerminator,
+    name: &str,
+    ty: &MirType,
+) {
+    match terminator {
+        crate::ir::mir::MirTerminator::Jump { target, arguments } => {
+            rewrite_control_target_value_type(target, name, ty);
+            for argument in arguments {
+                rewrite_named_value_type(argument, name, ty);
+            }
+        }
+        crate::ir::mir::MirTerminator::CondBr {
+            condition,
+            then_target,
+            then_arguments,
+            else_target,
+            else_arguments,
+        } => {
+            rewrite_named_value_type(condition, name, ty);
+            rewrite_control_target_value_type(then_target, name, ty);
+            rewrite_control_target_value_type(else_target, name, ty);
+            for argument in then_arguments {
+                rewrite_named_value_type(argument, name, ty);
+            }
+            for argument in else_arguments {
+                rewrite_named_value_type(argument, name, ty);
+            }
+        }
+        crate::ir::mir::MirTerminator::Return { values } => {
+            for value in values {
+                rewrite_named_value_type(value, name, ty);
+            }
+        }
+        crate::ir::mir::MirTerminator::Trap | crate::ir::mir::MirTerminator::Unreachable => {}
+    }
+}
+
+fn rewrite_control_target_value_type(target: &mut MirControlTarget, name: &str, ty: &MirType) {
+    match target {
+        MirControlTarget::FunctionIndirect(value) | MirControlTarget::BlockIndirect(value) => {
+            rewrite_named_value_type(value, name, ty);
+        }
+        MirControlTarget::Direct(_) => {}
+    }
+}
+
+fn rewrite_named_value_type(value: &mut MirValue, name: &str, ty: &MirType) {
+    if let MirValue::Named {
+        name: value_name,
+        ty: value_ty,
+    } = value
+        && value_name == name
+    {
+        *value_ty = ty.clone();
+    }
+}
+
+fn merge_observed_type(slot: &mut Option<MirType>, ty: MirType) {
+    match slot {
+        None => *slot = Some(ty),
+        Some(existing) if *existing == ty => {}
+        Some(existing) => merge_mir_type(existing, ty),
+    }
+}
+
+fn merge_mir_type(existing: &mut MirType, ty: MirType) {
+    match (existing, ty) {
+        (MirType::Integer(existing_bits), MirType::Integer(bits)) => {
+            *existing_bits = (*existing_bits).max(bits);
+        }
+        (MirType::Float(existing_bits), MirType::Float(bits)) => {
+            *existing_bits = (*existing_bits).max(bits);
+        }
+        (MirType::Pointer { pointee: existing }, MirType::Pointer { pointee }) => {
+            merge_mir_type(existing.as_mut(), *pointee);
+        }
+        (
+            MirType::Function {
+                parameters: existing_parameters,
+                returns: existing_returns,
+            },
+            MirType::Function {
+                parameters,
+                returns,
+            },
+        ) => {
+            merge_mir_type_lists(existing_parameters, parameters);
+            merge_mir_type_lists(existing_returns, returns);
+        }
+        (existing, ty) => {
+            if matches!(existing, MirType::Void) {
+                *existing = ty;
+            }
+        }
+    }
+}
+
+fn merge_mir_type_lists(existing: &mut Vec<MirType>, incoming: Vec<MirType>) {
+    if existing.len() < incoming.len() {
+        existing.resize(incoming.len(), MirType::void());
+    }
+    for (index, ty) in incoming.into_iter().enumerate() {
+        merge_mir_type(&mut existing[index], ty);
     }
 }

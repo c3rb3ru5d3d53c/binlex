@@ -28,6 +28,7 @@ pub enum MirTypeKind {
     Integer,
     Float,
     Pointer,
+    Function,
     Memory,
     Custom,
 }
@@ -38,6 +39,10 @@ pub enum MirType {
     Integer(u16),
     Float(u16),
     Pointer { pointee: Box<MirType> },
+    Function {
+        parameters: Vec<MirType>,
+        returns: Vec<MirType>,
+    },
     Memory,
     Custom { name: String },
 }
@@ -49,6 +54,7 @@ impl MirType {
             Self::Integer(_) => MirTypeKind::Integer,
             Self::Float(_) => MirTypeKind::Float,
             Self::Pointer { .. } => MirTypeKind::Pointer,
+            Self::Function { .. } => MirTypeKind::Function,
             Self::Memory => MirTypeKind::Memory,
             Self::Custom { .. } => MirTypeKind::Custom,
         }
@@ -69,6 +75,13 @@ impl MirType {
     pub fn pointer(pointee: MirType) -> Self {
         Self::Pointer {
             pointee: Box::new(pointee),
+        }
+    }
+
+    pub fn function(parameters: Vec<MirType>, returns: Vec<MirType>) -> Self {
+        Self::Function {
+            parameters,
+            returns,
         }
     }
 

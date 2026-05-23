@@ -111,6 +111,7 @@ impl LocalIndex {
         let snapshot = GraphSnapshot {
             architecture,
             instructions,
+            symbols: Default::default(),
             instruction_queue: GraphQueueSnapshot {
                 valid: instruction_addresses.clone(),
                 invalid: BTreeSet::new(),
