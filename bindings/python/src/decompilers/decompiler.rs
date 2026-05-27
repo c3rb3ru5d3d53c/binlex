@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 use crate::controlflow::{Function, Graph};
+use crate::ir::hir::PyHirFunction;
 use crate::ir::lir::LirFunction as PyLirFunction;
 use crate::ir::mir::PyMirFunction;
 use crate::Configuration;
@@ -43,11 +44,12 @@ impl Decompiler {
     fn decompile_artifact_to_python(
         py: Python<'_>,
         artifact: DecompiledFunction,
-    ) -> PyResult<(u64, Py<PyLirFunction>, Py<PyMirFunction>)> {
+    ) -> PyResult<(u64, Py<PyLirFunction>, Py<PyMirFunction>, Py<PyHirFunction>)> {
         Ok((
             artifact.address,
             Py::new(py, PyLirFunction::from_inner(artifact.lir))?,
             Py::new(py, PyMirFunction::from_inner(artifact.mir))?,
+            Py::new(py, PyHirFunction::from_inner(artifact.hir))?,
         ))
     }
 }
@@ -118,7 +120,7 @@ impl Decompiler {
         &self,
         py: Python<'_>,
         address: u64,
-    ) -> PyResult<Option<(Py<PyLirFunction>, Py<PyMirFunction>)>> {
+    ) -> PyResult<Option<(Py<PyLirFunction>, Py<PyMirFunction>, Py<PyHirFunction>)>> {
         let graph_inner = self.graph_inner.clone();
         let configuration = self.inner_configuration.clone();
         let backend = self.backend;
@@ -131,8 +133,8 @@ impl Decompiler {
         let Some(artifact) = artifact else {
             return Ok(None);
         };
-        let (_, lir, mir) = Self::decompile_artifact_to_python(py, artifact)?;
-        Ok(Some((lir, mir)))
+        let (_, lir, mir, hir) = Self::decompile_artifact_to_python(py, artifact)?;
+        Ok(Some((lir, mir, hir)))
     }
 
     #[pyo3(text_signature = "($self, address)")]
@@ -147,7 +149,7 @@ impl Decompiler {
     pub fn decompile_artifacts(
         &self,
         py: Python<'_>,
-    ) -> PyResult<Vec<(u64, Py<PyLirFunction>, Py<PyMirFunction>)>> {
+    ) -> PyResult<Vec<(u64, Py<PyLirFunction>, Py<PyMirFunction>, Py<PyHirFunction>)>> {
         let graph_inner = self.graph_inner.clone();
         let configuration = self.inner_configuration.clone();
         let backend = self.backend;

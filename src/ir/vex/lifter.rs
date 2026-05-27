@@ -7,8 +7,9 @@ use crate::Configuration;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::core::Architecture;
 use crate::ir::lir::{
-    LirAbi, LirAddressSpace, LirDiagnostic, LirEffect, LirExpression, LirJson, LirLocation,
-    LirOperationBinary, LirOperationCast, LirOperationCompare, LirOperationUnary, LirTerminator,
+    LirAbi, LirAddressSpace, LirBlock, LirDiagnostic, LirEffect, LirExpression, LirFunction,
+    LirInstruction, LirJson, LirLocation, LirModule, LirOperationBinary, LirOperationCast,
+    LirOperationCompare, LirOperationUnary, LirTerminator,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -79,6 +80,14 @@ impl Lifter {
             _config: config,
             artifacts: BTreeMap::new(),
             rendered_override: None,
+        }
+    }
+
+    pub(crate) fn from_rendered_override(config: Configuration, rendered_override: String) -> Self {
+        Self {
+            _config: config,
+            artifacts: BTreeMap::new(),
+            rendered_override: Some(rendered_override),
         }
     }
 
@@ -251,6 +260,80 @@ impl Lifter {
                 .collect::<Result<Vec<_>, _>>()?,
         })
     }
+}
+
+pub(crate) fn render_lir_module(name: Option<&str>, module: &LirModule) -> String {
+    let mut sections = Vec::new();
+    for (index, function) in module.functions.iter().enumerate() {
+        let function_name = function
+            .name
+            .as_deref()
+            .or(name)
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("function_{index}"));
+        sections.push(render_lir_function(&function_name, function));
+    }
+    sections.join("\n\n")
+}
+
+fn render_lir_function(name: &str, function: &LirFunction) -> String {
+    let mut lines = vec![format!("; function {name}")];
+    for (index, block) in function.blocks.iter().enumerate() {
+        let block_name = block
+            .name
+            .clone()
+            .unwrap_or_else(|| format!("block_{index}"));
+        lines.push(format!("; block {block_name}"));
+        lines.extend(render_lir_block_body(block));
+    }
+    lines.join("\n")
+}
+
+fn render_lir_block_body(block: &LirBlock) -> Vec<String> {
+    let mut lines = vec!["IRSB {".to_string()];
+    for instruction in &block.instructions {
+        lines.extend(render_lir_instruction_body(instruction));
+    }
+    lines.push("}".to_string());
+    lines
+}
+
+fn render_lir_instruction_body(instruction: &LirInstruction) -> Vec<String> {
+    let semantics = instruction.process();
+    let address = instruction
+        .encoding
+        .as_ref()
+        .map(|encoding| encoding.address)
+        .unwrap_or(0);
+    let byte_len = instruction
+        .encoding
+        .as_ref()
+        .map(|encoding| encoding.bytes.len())
+        .unwrap_or(0);
+    let mut lines = vec![format!(
+        "   ------ IMark(0x{:016x}, {}, 0) ------",
+        address, byte_len
+    )];
+
+    for temp in &semantics.temporaries {
+        let name = temp
+            .name
+            .as_deref()
+            .map(|value| format!(" ; {}", value))
+            .unwrap_or_default();
+        lines.push(format!("   t{}:{}{}", temp.id, temp.bits, name));
+    }
+
+    for effect in &semantics.effects {
+        lines.push(format!("   {}", render_effect(effect)));
+    }
+
+    for diagnostic in &semantics.diagnostics {
+        lines.push(format!("   ; diag {}", render_diagnostic(diagnostic)));
+    }
+
+    lines.push(format!("   {}", render_terminator(&semantics.terminator)));
+    lines
 }
 
 fn render_function_artifact(address: u64, blocks: &[BlockRequest]) -> String {

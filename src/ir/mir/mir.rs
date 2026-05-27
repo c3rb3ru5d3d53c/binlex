@@ -48,7 +48,9 @@ pub struct MirFunction {
 
 impl MirFunction {
     pub fn from_lir(name: Option<String>, lir: &LirFunction) -> Result<Self, MirLowerError> {
-        lower_lir_to_mir(name.or_else(|| lir.name.clone()), lir)
+        let mut lir = lir.clone();
+        lir.optimize();
+        lower_lir_to_mir(name.or_else(|| lir.name.clone()), &lir)
     }
 
     pub fn new(name: Option<String>) -> Self {

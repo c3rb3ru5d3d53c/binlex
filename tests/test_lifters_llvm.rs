@@ -3,9 +3,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use binlex::assemblers::{Assembler, AssemblerBackend};
 use binlex::controlflow::{Block, Function, Graph, Instruction};
 use binlex::ir::lir::{
-    LirAbi, LirAbiKind, LirBlock, LirCpu, LirCpuKind, LirDiagnosticKind, LirEffect,
-    LirExpression, LirFunction, LirInstruction, LirLocation, LirModule, LirOperationBinary,
-    LirStatus, LirTerminator,
+    LirAbi, LirAbiKind, LirBlock, LirCpu, LirCpuKind, LirDiagnosticKind, LirEffect, LirExpression,
+    LirFunction, LirInstruction, LirLocation, LirModule, LirOperationBinary, LirStatus,
+    LirTerminator,
 };
 use binlex::ir::llvm::Lifter;
 use binlex::{Architecture, Configuration};

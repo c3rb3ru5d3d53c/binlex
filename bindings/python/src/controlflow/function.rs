@@ -26,6 +26,7 @@ use crate::controlflow::EntityKind;
 use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
 use crate::hashing::{MinHash32, SSDeep, SHA256, TLSH};
+use crate::ir::hir::PyHirFunction;
 use crate::ir::lir::LirFunction as PyLirFunction;
 use crate::ir::mir::PyMirFunction;
 use crate::Architecture;
@@ -388,15 +389,11 @@ impl Function {
         })
     }
 
-    #[pyo3(text_signature = "($self, symbols)")]
-    pub fn mir_with_symbols(
-        &self,
-        py: Python<'_>,
-        symbols: BTreeMap<u64, String>,
-    ) -> PyResult<Py<PyMirFunction>> {
+    #[pyo3(text_signature = "($self)")]
+    pub fn hir(&self, py: Python<'_>) -> PyResult<Py<PyHirFunction>> {
         self.with_inner_function(py, |function| {
-            let inner = py.detach(|| function.mir_with_symbols(&symbols))?;
-            Py::new(py, PyMirFunction::from_inner(inner))
+            let inner = py.detach(|| function.hir())?;
+            Py::new(py, PyHirFunction::from_inner(inner))
         })
     }
 

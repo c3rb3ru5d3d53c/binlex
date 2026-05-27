@@ -23,6 +23,7 @@
 use crate::Configuration;
 use crate::config::RAYON_WORKER_STACK_SIZE;
 use crate::controlflow::{Function, Graph};
+use crate::ir::hir::HirFunction;
 use crate::ir::lir::LirFunction;
 use crate::ir::mir::MirFunction;
 use rayon::ThreadPoolBuilder;
@@ -42,6 +43,7 @@ pub struct DecompiledFunction {
     pub address: u64,
     pub lir: LirFunction,
     pub mir: MirFunction,
+    pub hir: HirFunction,
 }
 
 pub struct Decompiler<'a> {
@@ -95,10 +97,12 @@ impl<'a> Decompiler<'a> {
                 let mut mir = function.mir()?;
                 self.optimize_mir(&mut mir);
                 function.trim_mir_call_arguments(&mut mir, &self.graph.symbols())?;
+                let hir = function.hir()?;
                 Ok(DecompiledFunction {
                     address: function.address(),
                     lir,
                     mir,
+                    hir,
                 })
             }
         }

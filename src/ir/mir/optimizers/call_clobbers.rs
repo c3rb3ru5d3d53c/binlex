@@ -94,14 +94,12 @@ fn canonical_register_name(raw_name: &str, abi: &LirAbi) -> Option<String> {
         return Some("fp".to_string());
     }
     for (index, location) in abi.function_arguments.iter().enumerate() {
-        if matches_register_role_location(location, raw_name, &abi.cpu)
-        {
+        if matches_register_role_location(location, raw_name, &abi.cpu) {
             return Some(format!("arg{index}"));
         }
     }
     for (index, location) in abi.return_locations.iter().enumerate() {
-        if matches_register_role_location(location, raw_name, &abi.cpu)
-        {
+        if matches_register_role_location(location, raw_name, &abi.cpu) {
             return Some(format!("ret{index}"));
         }
     }
@@ -126,7 +124,8 @@ fn matches_register_role_location(
 }
 
 fn canonical_register_storage_name(cpu: &crate::ir::lir::LirCpu, name: &str) -> Option<String> {
-    cpu.resolve_register(name).map(|resolution| resolution.storage_name)
+    cpu.resolve_register(name)
+        .map(|resolution| resolution.storage_name)
 }
 
 fn call_memory_effects(abi: &LirAbi) -> Vec<MirAddressSpace> {

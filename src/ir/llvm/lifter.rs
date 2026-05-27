@@ -1202,32 +1202,32 @@ mod jit_tests {
         let mut lifter = Lifter::new(cpu, Configuration::default(), None).expect("lifter");
 
         let semantics = LirModule::from_instructions(vec![Lir {
-                version: 1,
-                status: LirStatus::Complete,
-                abi: None,
-                encoding: None,
-                temporaries: Vec::new(),
-                effects: vec![LirEffect::Set {
-                    dst: LirLocation::Register {
-                        name: "rax".to_string(),
+            version: 1,
+            status: LirStatus::Complete,
+            abi: None,
+            encoding: None,
+            temporaries: Vec::new(),
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
+                    name: "rax".to_string(),
+                    bits: 64,
+                },
+                expression: LirExpression::Binary {
+                    op: LirOperationBinary::Add,
+                    left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "rdi".to_string(),
                         bits: 64,
-                    },
-                    expression: LirExpression::Binary {
-                        op: LirOperationBinary::Add,
-                        left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
-                            name: "rdi".to_string(),
-                            bits: 64,
-                        }))),
-                        right: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
-                            name: "rsi".to_string(),
-                            bits: 64,
-                        }))),
+                    }))),
+                    right: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                        name: "rsi".to_string(),
                         bits: 64,
-                    },
-                }],
-                terminator: LirTerminator::Return { expression: None },
-                diagnostics: Vec::new(),
-            }]);
+                    }))),
+                    bits: 64,
+                },
+            }],
+            terminator: LirTerminator::Return { expression: None },
+            diagnostics: Vec::new(),
+        }]);
 
         lifter
             .lift_function_semantics_named(&semantics, Some(&abi), "add_two")

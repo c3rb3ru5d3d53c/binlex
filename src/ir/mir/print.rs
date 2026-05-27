@@ -535,7 +535,11 @@ fn format_type(ty: &MirType) -> String {
             } else {
                 format!(
                     "({})",
-                    returns.iter().map(format_type).collect::<Vec<_>>().join(", ")
+                    returns
+                        .iter()
+                        .map(format_type)
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 )
             };
             format!("fn({parameters})->{returns}")

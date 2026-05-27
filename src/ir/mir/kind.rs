@@ -38,13 +38,17 @@ pub enum MirType {
     Void,
     Integer(u16),
     Float(u16),
-    Pointer { pointee: Box<MirType> },
+    Pointer {
+        pointee: Box<MirType>,
+    },
     Function {
         parameters: Vec<MirType>,
         returns: Vec<MirType>,
     },
     Memory,
-    Custom { name: String },
+    Custom {
+        name: String,
+    },
 }
 
 impl MirType {

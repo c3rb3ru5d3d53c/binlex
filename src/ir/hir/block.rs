@@ -20,31 +20,27 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod hir;
-pub mod lir;
-pub mod llvm;
-pub mod mir;
-#[cfg(not(target_os = "windows"))]
-pub mod vex;
+use super::statement::HirStatement;
+use serde::{Deserialize, Serialize};
 
-use crate::ir::llvm::llvm_init;
-#[cfg(not(target_os = "windows"))]
-use crate::ir::vex::vex_init;
-use pyo3::prelude::*;
-use pyo3::types::PyModule;
-use pyo3::wrap_pymodule;
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+pub struct HirBlock {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub statements: Vec<HirStatement>,
+}
 
-#[pymodule(name = "ir")]
-pub fn ir_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pymodule!(hir::hir_init))?;
-    m.add_wrapped(wrap_pymodule!(lir::lir_init))?;
-    m.add_wrapped(wrap_pymodule!(mir::mir_init))?;
-    m.add_wrapped(wrap_pymodule!(llvm_init))?;
-    #[cfg(not(target_os = "windows"))]
-    m.add_wrapped(wrap_pymodule!(vex_init))?;
-    py.import("sys")?
-        .getattr("modules")?
-        .set_item("binlex_bindings.binlex.ir", m)?;
-    m.setattr("__name__", "binlex_bindings.binlex.ir")?;
-    Ok(())
+impl HirBlock {
+    pub fn new() -> Self {
+        Self {
+            statements: Vec::new(),
+        }
+    }
+
+    pub fn statements(&self) -> &[HirStatement] {
+        &self.statements
+    }
+
+    pub fn append_statement(&mut self, statement: HirStatement) {
+        self.statements.push(statement);
+    }
 }

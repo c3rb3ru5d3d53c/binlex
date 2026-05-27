@@ -20,31 +20,42 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod hir;
-pub mod lir;
-pub mod llvm;
-pub mod mir;
-#[cfg(not(target_os = "windows"))]
-pub mod vex;
+pub type HirAddressSpace = crate::ir::mir::MirAddressSpace;
+pub type HirType = crate::ir::mir::MirType;
+pub type HirTypeKind = crate::ir::mir::MirTypeKind;
+pub type HirCompareOperation = crate::ir::mir::MirCompareOperation;
+pub type HirFloatCompareOperation = crate::ir::mir::MirFloatCompareOperation;
+pub type HirCastOperation = crate::ir::mir::MirCastOperation;
 
-use crate::ir::llvm::llvm_init;
-#[cfg(not(target_os = "windows"))]
-use crate::ir::vex::vex_init;
-use pyo3::prelude::*;
-use pyo3::types::PyModule;
-use pyo3::wrap_pymodule;
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum HirUnaryOperation {
+    LogicalNot,
+    BitNot,
+    Neg,
+    Popcount,
+    CountLeadingZeros,
+    CountTrailingZeros,
+}
 
-#[pymodule(name = "ir")]
-pub fn ir_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pymodule!(hir::hir_init))?;
-    m.add_wrapped(wrap_pymodule!(lir::lir_init))?;
-    m.add_wrapped(wrap_pymodule!(mir::mir_init))?;
-    m.add_wrapped(wrap_pymodule!(llvm_init))?;
-    #[cfg(not(target_os = "windows"))]
-    m.add_wrapped(wrap_pymodule!(vex_init))?;
-    py.import("sys")?
-        .getattr("modules")?
-        .set_item("binlex_bindings.binlex.ir", m)?;
-    m.setattr("__name__", "binlex_bindings.binlex.ir")?;
-    Ok(())
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum HirBinaryOperation {
+    Add,
+    Sub,
+    Mul,
+    FAdd,
+    FSub,
+    FMul,
+    FDiv,
+    And,
+    Or,
+    Xor,
+    Shl,
+    LShr,
+    AShr,
+    UDiv,
+    SDiv,
+    URem,
+    SRem,
+    RotateLeft,
+    RotateRight,
 }

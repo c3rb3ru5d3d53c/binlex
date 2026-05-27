@@ -66,6 +66,7 @@ pub use disassemblers::Disassembler;
 pub use disassemblers::DisassemblerBackend;
 pub use embeddings::Embedding;
 pub use embeddings::EmbeddingBackend;
+pub use ir::hir::{HirFunction, HirModule};
 pub use ir::lir::{LirAbi, LirAbiKind, LirAbiTrap, LirCpuKind};
 pub use math::entropy;
 pub use query::Query;

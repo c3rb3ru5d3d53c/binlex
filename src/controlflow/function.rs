@@ -35,6 +35,7 @@ use crate::hashing::SHA256;
 use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
 use crate::hex;
+use crate::ir::hir::HirFunction;
 use crate::ir::lir::{
     LirAbi, LirCpu, LirEffect, LirExpression, LirFunction, LirLocation, LirOperationBinary,
     LirTerminator,
@@ -926,12 +927,9 @@ impl<'function> Function<'function> {
 
                 match &mut instruction.terminator {
                     LirTerminator::Call { target, .. } | LirTerminator::Jump { target } => {
-                        if let Some(name) = Self::resolve_symbol_name(
-                            encoding,
-                            target,
-                            symbol_map,
-                            &register_map,
-                        ) {
+                        if let Some(name) =
+                            Self::resolve_symbol_name(encoding, target, symbol_map, &register_map)
+                        {
                             *target = LirExpression::Function {
                                 name,
                                 bits: target.bits(),
@@ -1008,30 +1006,17 @@ impl<'function> Function<'function> {
     }
 
     pub fn mir(&self) -> Result<MirFunction, Error> {
-        let mut lir = self.lir()?;
-        lir.optimize();
-        let mut mir =
-            MirFunction::from_lir(None, &lir).map_err(|error| Error::other(error.to_string()))?;
-        mir.optimize();
+        let mut mir = MirFunction::from_lir(None, &self.lir()?)
+            .map_err(|error| Error::other(error.to_string()))?;
         self.trim_mir_call_arguments(&mut mir, &self.cfg.symbols())?;
         self.apply_observed_import_signature(&mut mir, &self.cfg.symbols())?;
         apply_observed_call_argument_types(&mut mir);
         Ok(mir)
     }
 
-    pub fn mir_with_symbols(
-        &self,
-        symbol_map: &BTreeMap<u64, String>,
-    ) -> Result<MirFunction, Error> {
-        let mut lir = self.build_lir(symbol_map)?;
-        lir.optimize();
-        let mut mir =
-            MirFunction::from_lir(None, &lir).map_err(|error| Error::other(error.to_string()))?;
-        mir.optimize();
-        self.trim_mir_call_arguments(&mut mir, symbol_map)?;
-        self.apply_observed_import_signature(&mut mir, symbol_map)?;
-        apply_observed_call_argument_types(&mut mir);
-        Ok(mir)
+    pub fn hir(&self) -> Result<HirFunction, Error> {
+        let mir = self.mir()?;
+        HirFunction::from_mir(None, &mir).map_err(|error| Error::other(error.to_string()))
     }
 
     pub(crate) fn trim_mir_call_arguments(
@@ -1051,8 +1036,7 @@ impl<'function> Function<'function> {
 
         for block in mir.blocks_mut() {
             for operation in &mut block.operations {
-                let MirOperationKind::Call { target, .. } = &mut operation.kind
-                else {
+                let MirOperationKind::Call { target, .. } = &mut operation.kind else {
                     continue;
                 };
 
@@ -1116,7 +1100,7 @@ impl<'function> Function<'function> {
             let Some(caller) = self.cfg.get_function(caller_address) else {
                 continue;
             };
-            let caller_mir = caller.mir_with_symbols(symbol_map)?;
+            let caller_mir = caller.mir()?;
             let defs = build_mir_defs(&caller_mir);
             for block in caller_mir.blocks() {
                 for operation in &block.operations {
@@ -1602,14 +1586,15 @@ fn trim_local_call_metadata(operation: &mut crate::ir::mir::MirOperation, keep: 
         arguments.truncate(keep);
     }
 
-    clobbers.retain(|clobber| match clobber
-        .register
-        .trim_start_matches('%')
-        .strip_prefix("arg")
-    {
-        Some(index) => index.parse::<usize>().ok().is_some_and(|index| index < keep),
-        None => true,
-    });
+    clobbers.retain(
+        |clobber| match clobber.register.trim_start_matches('%').strip_prefix("arg") {
+            Some(index) => index
+                .parse::<usize>()
+                .ok()
+                .is_some_and(|index| index < keep),
+            None => true,
+        },
+    );
 
     if keep == 0 {
         memory_effects.retain(
@@ -1645,18 +1630,20 @@ fn trim_external_call_arguments(
 
     *arguments = filtered_arguments;
     let keep = arguments.len();
-    clobbers.retain(|clobber| match clobber
-        .register
-        .trim_start_matches('%')
-        .strip_prefix("arg")
-    {
-        Some(index) => index.parse::<usize>().ok().is_some_and(|index| index < keep),
-        None => true,
-    });
+    clobbers.retain(
+        |clobber| match clobber.register.trim_start_matches('%').strip_prefix("arg") {
+            Some(index) => index
+                .parse::<usize>()
+                .ok()
+                .is_some_and(|index| index < keep),
+            None => true,
+        },
+    );
 
     if !uses_entry_arguments {
-        memory_effects
-            .retain(|effect| !matches!(effect, MirAddressSpace::Incoming { name } if name == "args"));
+        memory_effects.retain(
+            |effect| !matches!(effect, MirAddressSpace::Incoming { name } if name == "args"),
+        );
     }
 }
 
@@ -1776,7 +1763,10 @@ fn is_integer_like_value(
     match value {
         MirValue::Integer { .. } | MirValue::Boolean(_) => true,
         MirValue::Named { name, ty } => {
-            if matches!(ty, MirType::Integer(_) | MirType::Float(_) | MirType::Custom { .. }) {
+            if matches!(
+                ty,
+                MirType::Integer(_) | MirType::Float(_) | MirType::Custom { .. }
+            ) {
                 return true;
             }
             match defs.get(name) {
@@ -2010,7 +2000,9 @@ fn rewrite_value_types_in_operation(kind: &mut MirOperationKind, name: &str, ty:
         } => {
             match target {
                 MirControlTarget::FunctionIndirect(value)
-                | MirControlTarget::BlockIndirect(value) => rewrite_named_value_type(value, name, ty),
+                | MirControlTarget::BlockIndirect(value) => {
+                    rewrite_named_value_type(value, name, ty)
+                }
                 MirControlTarget::Direct(_) => {}
             }
             for argument in arguments {

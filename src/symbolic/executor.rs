@@ -413,28 +413,28 @@ mod tests {
         state.map_image(&image);
 
         let semantics = LirModule::from_instructions(vec![Lir {
-                version: 1,
-                status: LirStatus::Complete,
-                abi: None,
-                encoding: None,
-                temporaries: Vec::new(),
-                effects: vec![LirEffect::Set {
-                    dst: LirLocation::Register {
-                        name: "rax".to_string(),
-                        bits: 32,
-                    },
-                    expression: LirExpression::Load {
-                        space: LirAddressSpace::Global,
-                        addr: Box::new(LirExpression::Const {
-                            value: 0x1234,
-                            bits: 64,
-                        }),
-                        bits: 32,
-                    },
-                }],
-                terminator: LirTerminator::Return { expression: None },
-                diagnostics: Vec::new(),
-            }]);
+            version: 1,
+            status: LirStatus::Complete,
+            abi: None,
+            encoding: None,
+            temporaries: Vec::new(),
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
+                    name: "rax".to_string(),
+                    bits: 32,
+                },
+                expression: LirExpression::Load {
+                    space: LirAddressSpace::Global,
+                    addr: Box::new(LirExpression::Const {
+                        value: 0x1234,
+                        bits: 64,
+                    }),
+                    bits: 32,
+                },
+            }],
+            terminator: LirTerminator::Return { expression: None },
+            diagnostics: Vec::new(),
+        }]);
 
         let states = executor.run(&semantics, &state, None).expect("run");
         let state = states.first().expect("state");
@@ -1439,11 +1439,7 @@ mod tests {
             .write_memory(0x3000, &0x9000u32.to_le_bytes())
             .expect("write memory");
         let states = executor
-            .run(
-                &LirModule::from_instructions(semantics),
-                &state,
-                None,
-            )
+            .run(&LirModule::from_instructions(semantics), &state, None)
             .expect("run");
         assert_eq!(states.len(), 1);
         assert_eq!(
@@ -1484,11 +1480,7 @@ mod tests {
             .write_memory(0x3000, &0x9000u64.to_le_bytes())
             .expect("write memory");
         let states = executor
-            .run(
-                &LirModule::from_instructions(semantics),
-                &state,
-                None,
-            )
+            .run(&LirModule::from_instructions(semantics), &state, None)
             .expect("run");
         assert_eq!(states.len(), 1);
         assert_eq!(
@@ -1525,11 +1517,7 @@ mod tests {
         let state =
             SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         let states = executor
-            .run(
-                &LirModule::from_instructions(semantics),
-                &state,
-                None,
-            )
+            .run(&LirModule::from_instructions(semantics), &state, None)
             .expect("run");
         assert_eq!(states.len(), 1);
         assert_eq!(

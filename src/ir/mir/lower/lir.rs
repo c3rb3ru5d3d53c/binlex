@@ -96,7 +96,8 @@ impl LoweringContext {
         }
         let name = format!("reg{}", self.next_register);
         self.next_register += 1;
-        self.location_names.insert(raw_name.to_string(), name.clone());
+        self.location_names
+            .insert(raw_name.to_string(), name.clone());
         name
     }
 
@@ -248,7 +249,14 @@ fn lower_lir_block_with_context(
                 ..
             } = &semantic.terminator
         {
-            lower_call_operations(semantic, target, *does_return, function_abi, &mut block, context);
+            lower_call_operations(
+                semantic,
+                target,
+                *does_return,
+                function_abi,
+                &mut block,
+                context,
+            );
             if matches!(does_return, Some(false)) {
                 block.set_terminator(MirTerminator::Unreachable);
                 return Ok(block);
@@ -490,7 +498,9 @@ fn lower_effect(effect: &LirEffect, block: &mut MirBlock, context: &mut Lowering
                 .iter()
                 .map(|location| mir_type_for_bits(location.bits()))
                 .collect();
-            let result = outputs.first().map(|location| context.location_name(location));
+            let result = outputs
+                .first()
+                .map(|location| context.location_name(location));
             block.append_operation(MirOperation::new(
                 result,
                 MirOperationKind::Intrinsic {
@@ -554,14 +564,7 @@ fn lower_terminator(
             return_target,
             does_return,
         } => {
-            lower_call_operations(
-                semantic,
-                target,
-                *does_return,
-                function_abi,
-                block,
-                context,
-            );
+            lower_call_operations(semantic, target, *does_return, function_abi, block, context);
 
             if matches!(does_return, Some(false)) {
                 MirTerminator::Unreachable
@@ -600,9 +603,10 @@ fn lower_expression(
             format!("addr_of_{}", context.location_name(location)),
             mir_type_for_bits(*bits),
         ),
-        LirExpression::Read(location) => {
-            MirValue::named(context.location_name(location), mir_type_for_bits(location.bits()))
-        }
+        LirExpression::Read(location) => MirValue::named(
+            context.location_name(location),
+            mir_type_for_bits(location.bits()),
+        ),
         LirExpression::Load { space, addr, bits } => {
             let address = lower_expression(addr, block, context);
             let ty = mir_type_for_bits(*bits);
@@ -1303,12 +1307,10 @@ fn lower_call_argument_location(
         LirLocation::Register { .. }
         | LirLocation::Flag { .. }
         | LirLocation::ProgramCounter { .. }
-        | LirLocation::Temporary { .. } => {
-            MirValue::named(
-                context.location_name_with_abi(location, Some(call_abi)),
-                mir_type_for_bits(location.bits()),
-            )
-        }
+        | LirLocation::Temporary { .. } => MirValue::named(
+            context.location_name_with_abi(location, Some(call_abi)),
+            mir_type_for_bits(location.bits()),
+        ),
         LirLocation::StackMemory { name, offset, bits } => {
             let ty = mir_type_for_bits(*bits);
             let result = context.next_name("arg");
@@ -1465,7 +1467,10 @@ fn default_function_abi(lir: &LirFunction) -> Option<LirAbi> {
 
 fn append_entry_parameters(block: &mut MirBlock, parameters: &[MirBlockParameter]) {
     for parameter in parameters {
-        let exists = block.parameters.iter().any(|existing| existing == parameter);
+        let exists = block
+            .parameters
+            .iter()
+            .any(|existing| existing == parameter);
         if !exists {
             block.append_parameter(parameter.clone());
         }
@@ -1494,7 +1499,10 @@ fn build_entry_parameters(
         .collect()
 }
 
-fn lower_entry_parameter(location: &LirLocation, context: &mut LoweringContext) -> Option<MirBlockParameter> {
+fn lower_entry_parameter(
+    location: &LirLocation,
+    context: &mut LoweringContext,
+) -> Option<MirBlockParameter> {
     match location {
         LirLocation::Register { .. }
         | LirLocation::Flag { .. }
@@ -1503,12 +1511,11 @@ fn lower_entry_parameter(location: &LirLocation, context: &mut LoweringContext) 
             Some(context.location_name(location)),
             mir_type_for_bits(location.bits()),
         )),
-        LirLocation::StackMemory { name, bits, .. } | LirLocation::IndexedMemory { name, bits, .. } => {
-            Some(MirBlockParameter::new(
-                Some(name.clone()),
-                mir_type_for_bits(*bits),
-            ))
-        }
+        LirLocation::StackMemory { name, bits, .. }
+        | LirLocation::IndexedMemory { name, bits, .. } => Some(MirBlockParameter::new(
+            Some(name.clone()),
+            mir_type_for_bits(*bits),
+        )),
         LirLocation::Memory { .. } => None,
     }
 }
@@ -1659,13 +1666,15 @@ fn collect_expression_reads(
     match expression {
         LirExpression::Read(location) => {
             let key = candidate_location_key(location, cpu);
-            if !defined.contains(&key) && candidates.iter().any(|(candidate, _)| candidate == &key) {
+            if !defined.contains(&key) && candidates.iter().any(|(candidate, _)| candidate == &key)
+            {
                 used.insert(key);
             }
         }
         LirExpression::AddressOf { location, .. } => {
             let key = candidate_location_key(location, cpu);
-            if !defined.contains(&key) && candidates.iter().any(|(candidate, _)| candidate == &key) {
+            if !defined.contains(&key) && candidates.iter().any(|(candidate, _)| candidate == &key)
+            {
                 used.insert(key);
             }
         }
@@ -1676,8 +1685,7 @@ fn collect_expression_reads(
         | LirExpression::ReadProperty {
             reference: addr, ..
         } => collect_expression_reads(addr, cpu, candidates, defined, used),
-        LirExpression::Binary { left, right, .. }
-        | LirExpression::Compare { left, right, .. } => {
+        LirExpression::Binary { left, right, .. } | LirExpression::Compare { left, right, .. } => {
             collect_expression_reads(left, cpu, candidates, defined, used);
             collect_expression_reads(right, cpu, candidates, defined, used);
         }
@@ -1778,5 +1786,6 @@ fn matches_register_role_location(location: &LirLocation, raw_name: &str, cpu: &
 }
 
 fn canonical_register_storage_name(cpu: &LirCpu, name: &str) -> Option<String> {
-    cpu.resolve_register(name).map(|resolution| resolution.storage_name)
+    cpu.resolve_register(name)
+        .map(|resolution| resolution.storage_name)
 }

@@ -20,31 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod hir;
-pub mod lir;
-pub mod llvm;
-pub mod mir;
-#[cfg(not(target_os = "windows"))]
-pub mod vex;
+mod mir;
 
-use crate::ir::llvm::llvm_init;
-#[cfg(not(target_os = "windows"))]
-use crate::ir::vex::vex_init;
-use pyo3::prelude::*;
-use pyo3::types::PyModule;
-use pyo3::wrap_pymodule;
-
-#[pymodule(name = "ir")]
-pub fn ir_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pymodule!(hir::hir_init))?;
-    m.add_wrapped(wrap_pymodule!(lir::lir_init))?;
-    m.add_wrapped(wrap_pymodule!(mir::mir_init))?;
-    m.add_wrapped(wrap_pymodule!(llvm_init))?;
-    #[cfg(not(target_os = "windows"))]
-    m.add_wrapped(wrap_pymodule!(vex_init))?;
-    py.import("sys")?
-        .getattr("modules")?
-        .set_item("binlex_bindings.binlex.ir", m)?;
-    m.setattr("__name__", "binlex_bindings.binlex.ir")?;
-    Ok(())
-}
+pub use mir::{
+    HirLowerError, lower_mir_block_to_hir, lower_mir_function_to_hir, lower_mir_module_to_hir,
+};

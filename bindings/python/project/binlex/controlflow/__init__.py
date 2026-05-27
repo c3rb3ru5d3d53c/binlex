@@ -37,6 +37,7 @@ from binlex_bindings.binlex.controlflow.instruction import OperandKind as Operan
 
 from binlex.core.architecture import _coerce_architecture
 from binlex.hashing import MinHash32, SHA256, SSDeep, TLSH
+from binlex.ir.hir import HirFunction
 from binlex.ir.lir import LirBlock, LirCpu, LirFunction, LirInstruction, _cpu_kind_from_architecture
 from binlex.ir.mir import MirBlock, MirFunction
 
@@ -77,29 +78,6 @@ def _coerce_symbol_map(symbols):
             continue
         symbol_map[int(virtual_address)] = name
     return symbol_map
-
-
-def _decompiler_optimize_enabled(graph, stage):
-    decompiler = getattr(graph, "_decompiler", None)
-    if decompiler is None:
-        return False
-    try:
-        return bool(getattr(getattr(decompiler.configuration.decompiler, stage).optimize, "enabled"))
-    except Exception:
-        return False
-
-
-def _maybe_optimize_decompiler_stage(graph, stage, value):
-    if value is None:
-        return value
-    if not _decompiler_optimize_enabled(graph, stage):
-        return value
-    marker = f"_binlex_decompiler_{stage}_optimized"
-    if getattr(value, marker, False):
-        return value
-    value.optimize()
-    setattr(value, marker, True)
-    return value
 
 
 def _const_u64_value(expression):
@@ -842,39 +820,40 @@ class Function:
         return vex
 
     def lir(self):
-        """Return canonical LIR for this function."""
+        """Return raw LIR for this function."""
         cache = getattr(self._graph, "_decompilation_cache", None)
         if cache is not None:
             cached = cache["lir"].get(self.address())
             if cached is not None:
-                return _maybe_optimize_decompiler_stage(self._graph, "lir", cached)
+                return cached
         result = LirFunction._from_inner(self._inner.lir())
-        result = _maybe_optimize_decompiler_stage(self._graph, "lir", result)
         if cache is not None:
             cache["lir"][self.address()] = result
         return result
 
     def mir(self):
-        """Return MIR for this function."""
+        """Return raw MIR for this function."""
         cache = getattr(self._graph, "_decompilation_cache", None)
         if cache is not None:
             cached = cache["mir"].get(self.address())
             if cached is not None:
-                return _maybe_optimize_decompiler_stage(self._graph, "mir", cached)
+                return cached
         result = MirFunction._from_inner(self._inner.mir())
-        result = _maybe_optimize_decompiler_stage(self._graph, "mir", result)
         if cache is not None:
             cache["mir"][self.address()] = result
         return result
 
     def hir(self):
-        """Return cached HIR for this function when available."""
+        """Return raw HIR for this function."""
         cache = getattr(self._graph, "_decompilation_cache", None)
         if cache is not None:
             cached = cache["hir"].get(self.address())
             if cached is not None:
                 return cached
-        raise NotImplementedError("HIR decompilation is not implemented yet")
+        result = HirFunction._from_inner(self._inner.hir())
+        if cache is not None:
+            cache["hir"][self.address()] = result
+        return result
 
     def tlsh(self):
         """Return the TLSH object for this function, if available."""

@@ -19,3 +19,30 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
+
+pub mod block;
+pub mod expression;
+pub mod hir;
+pub mod kind;
+pub mod lower;
+pub mod optimizers;
+pub mod place;
+pub mod print;
+pub mod statement;
+pub mod target;
+pub mod value;
+pub mod verify;
+
+pub use block::HirBlock;
+pub use expression::HirExpression;
+pub use hir::{HirFunction, HirModule};
+pub use kind::{
+    HirAddressSpace, HirBinaryOperation, HirCastOperation, HirCompareOperation,
+    HirFloatCompareOperation, HirType, HirTypeKind, HirUnaryOperation,
+};
+pub use place::HirPlace;
+pub use print::{format_hir_function, format_hir_module};
+pub use statement::{HirLocal, HirParameter, HirStatement, HirSwitchCase};
+pub use target::HirTarget;
+pub use value::HirValue;
+pub use verify::{verify_hir_function, verify_hir_module};
