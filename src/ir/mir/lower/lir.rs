@@ -30,6 +30,7 @@ use crate::ir::mir::{
     MirOperationKind, MirTerminator, MirType, MirValue,
 };
 use crate::ir::mir::{MirCastOperation, MirCompareOperation, MirFloatCompareOperation};
+use crate::ir::storage::IrStorage;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 
@@ -52,6 +53,7 @@ struct LoweringContext {
     next_register: usize,
     next_flag: usize,
     location_names: BTreeMap<String, String>,
+    local_storage: BTreeMap<String, IrStorage>,
     abi: Option<LirAbi>,
 }
 
@@ -89,6 +91,9 @@ impl LoweringContext {
 
     fn register_name_with_abi(&mut self, raw_name: &str, abi: Option<&LirAbi>) -> String {
         if let Some(name) = canonical_register_role(raw_name, abi) {
+            if let Some(storage) = register_storage(raw_name, abi) {
+                self.local_storage.entry(name.clone()).or_insert(storage);
+            }
             return name;
         }
         let key = abi
@@ -100,6 +105,9 @@ impl LoweringContext {
         let name = format!("reg{}", self.next_register);
         self.next_register += 1;
         self.location_names.insert(key, name.clone());
+        if let Some(storage) = register_storage(raw_name, abi) {
+            self.local_storage.entry(name.clone()).or_insert(storage);
+        }
         name
     }
 
@@ -181,6 +189,7 @@ pub fn lower_lir_to_mir(
     if let Some(entry_block) = mir.blocks_mut().first_mut() {
         append_entry_parameters(entry_block, &entry_parameters);
     }
+    mir.local_storage = context.local_storage.clone();
 
     Ok(mir)
 }
@@ -1988,6 +1997,15 @@ fn matches_register_role_location(location: &LirLocation, raw_name: &str, cpu: &
 fn canonical_register_storage_name(cpu: &LirCpu, name: &str) -> Option<String> {
     cpu.resolve_register(name)
         .map(|resolution| resolution.storage_name)
+}
+
+fn register_storage(raw_name: &str, abi: Option<&LirAbi>) -> Option<IrStorage> {
+    let abi = abi?;
+    let resolution = abi.cpu.resolve_register(raw_name)?;
+    Some(IrStorage::register(
+        resolution.storage_name,
+        resolution.storage_bits,
+    ))
 }
 
 #[cfg(test)]

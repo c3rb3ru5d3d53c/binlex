@@ -25,5 +25,6 @@ pub mod hir;
 pub mod lir;
 pub mod llvm;
 pub mod mir;
+pub mod storage;
 #[cfg(not(target_os = "windows"))]
 pub mod vex;

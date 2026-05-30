@@ -18,6 +18,6 @@ pub use kind::{
     AstFloatCompareOperation, AstType, AstUnaryOperation,
 };
 pub use place::AstPlace;
-pub use statement::{AstLocal, AstParameter, AstStackStorage, AstStatement, AstSwitchCase};
+pub use statement::{AstLocal, AstParameter, AstStatement, AstSwitchCase};
 pub use target::AstTarget;
 pub use value::AstValue;

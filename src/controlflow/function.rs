@@ -1093,19 +1093,32 @@ impl<'function> Function<'function> {
 
                 match target {
                     MirControlTarget::Direct(target) => {
+                        let target_name = target.clone();
                         let Some(address) = symbol_to_address.get(target).copied() else {
-                            trim_external_call_arguments(operation, &entry_parameter_names);
+                            trim_import_or_external_call_arguments(
+                                operation,
+                                &target_name,
+                                &entry_parameter_names,
+                            );
                             continue;
                         };
                         if target.contains('!') {
-                            trim_external_call_arguments(operation, &entry_parameter_names);
+                            trim_import_or_external_call_arguments(
+                                operation,
+                                &target_name,
+                                &entry_parameter_names,
+                            );
                             continue;
                         }
                         if address == self.address {
                             continue;
                         }
                         let Some(callee) = self.cfg.get_function(address) else {
-                            trim_external_call_arguments(operation, &entry_parameter_names);
+                            trim_import_or_external_call_arguments(
+                                operation,
+                                &target_name,
+                                &entry_parameter_names,
+                            );
                             continue;
                         };
                         let mut callee_lir = callee.lir()?;
@@ -1620,6 +1633,32 @@ impl<'function> Function<'function> {
     /// Returns `true` if the function is contiguous; otherwise, `false`.
     pub fn contiguous(&self) -> bool {
         self.contiguous_payload_bytes_and_mask().is_some()
+    }
+}
+
+fn trim_import_or_external_call_arguments(
+    operation: &mut crate::ir::mir::MirOperation,
+    target: &str,
+    entry_parameter_names: &BTreeSet<String>,
+) {
+    if let Some(arity) = import_prototype_arity(target) {
+        trim_local_call_metadata(operation, arity);
+    } else {
+        trim_external_call_arguments(operation, entry_parameter_names);
+    }
+}
+
+fn import_prototype_arity(target: &str) -> Option<usize> {
+    let name = target
+        .rsplit_once('!')
+        .map(|(_, symbol)| symbol)
+        .unwrap_or(target);
+    match name {
+        "GetLastError" => Some(0),
+        "KernelBaseGetGlobalData" => Some(0),
+        "CloseHandle" | "NtClose" | "RtlSetLastWin32Error" | "SetLastError" => Some(1),
+        "RtlAllocateHeap" | "RtlFreeHeap" => Some(3),
+        _ => None,
     }
 }
 

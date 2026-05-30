@@ -32,6 +32,7 @@ use crate::ir::mir::{
     MirBlock, MirControlTarget, MirFunction, MirModule, MirOperation, MirOperationKind,
     MirTerminator, MirValue,
 };
+use crate::ir::storage::IrStorage;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Display, Formatter};
 
@@ -741,11 +742,23 @@ fn collect_locals(mir: &MirFunction, parameters: &[HirParameter]) -> Vec<HirLoca
     locals
         .into_iter()
         .map(|(name, ty)| HirLocal {
+            storage: local_storage(mir, &name),
             name,
             ty,
             init: None,
         })
         .collect()
+}
+
+fn local_storage(mir: &MirFunction, name: &str) -> Option<IrStorage> {
+    mir.local_storage
+        .get(name)
+        .cloned()
+        .or_else(|| mir.local_storage.get(base_name(name)).cloned())
+}
+
+fn base_name(name: &str) -> &str {
+    name.split_once('.').map(|(base, _)| base).unwrap_or(name)
 }
 
 fn collect_named_values_from_operation(

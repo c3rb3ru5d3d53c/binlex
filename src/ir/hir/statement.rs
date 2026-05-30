@@ -25,6 +25,7 @@ use super::kind::HirType;
 use super::place::HirPlace;
 use super::target::HirTarget;
 use super::value::HirValue;
+use crate::ir::storage::IrStorage;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -39,6 +40,8 @@ pub struct HirLocal {
     pub ty: HirType,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub init: Option<HirExpression>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage: Option<IrStorage>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

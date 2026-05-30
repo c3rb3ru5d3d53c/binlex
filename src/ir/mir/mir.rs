@@ -32,7 +32,9 @@ use super::optimizers::{
 use super::print::{format_mir_function, format_mir_module};
 use crate::ir::lir::{LirAbi, LirFunction, LirModule};
 use crate::ir::mir::lower::{MirLowerError, lower_lir_to_mir, materialize_entry_parameters};
+use crate::ir::storage::IrStorage;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub struct MirFunction {
@@ -42,6 +44,8 @@ pub struct MirFunction {
     pub abi: Option<LirAbi>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub entry_parameters: Vec<MirBlockParameter>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub local_storage: BTreeMap<String, IrStorage>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub blocks: Vec<MirBlock>,
 }
@@ -58,6 +62,7 @@ impl MirFunction {
             name,
             abi: None,
             entry_parameters: Vec::new(),
+            local_storage: BTreeMap::new(),
             blocks: Vec::new(),
         }
     }

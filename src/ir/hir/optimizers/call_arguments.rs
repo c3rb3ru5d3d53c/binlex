@@ -104,6 +104,7 @@ fn extract_complex_call_arguments_from_expression(
                         name: name.clone(),
                         ty: ty.clone(),
                         init: None,
+                        storage: None,
                     });
                     prepend.push(HirStatement::Assign {
                         target: HirPlace::Named {

@@ -5,6 +5,7 @@ use super::place::AstPlace;
 use super::target::AstTarget;
 use super::value::AstValue;
 use crate::ir::hir::{HirLocal, HirParameter, HirStatement, HirSwitchCase};
+use crate::ir::storage::IrStorage;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -23,24 +24,13 @@ impl AstParameter {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct AstStackStorage {
-    pub offset: i64,
-}
-
-impl AstStackStorage {
-    pub fn new(offset: i64) -> Self {
-        Self { offset }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AstLocal {
     pub name: String,
     pub ty: AstType,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub init: Option<AstExpression>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub stack: Option<AstStackStorage>,
+    pub storage: Option<IrStorage>,
 }
 
 impl AstLocal {
@@ -49,7 +39,7 @@ impl AstLocal {
             name: local.name.clone(),
             ty: local.ty.clone(),
             init: local.init.as_ref().map(AstExpression::from_hir),
-            stack: None,
+            storage: local.storage.clone(),
         }
     }
 }

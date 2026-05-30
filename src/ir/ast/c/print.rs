@@ -3,6 +3,7 @@ use crate::ir::ast::{
     AstFunction, AstLocal, AstModule, AstPlace, AstStatement, AstTarget, AstType,
     AstUnaryOperation, AstValue,
 };
+use crate::ir::storage::IrStorage;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub fn format_c_module(module: &AstModule) -> String {
@@ -49,10 +50,11 @@ pub fn format_c_function(function: &AstFunction) -> String {
             output.push_str(&format_expression(init, &context));
         }
         output.push(';');
-        if let Some(stack) = &local.stack {
-            output.push_str(" // stack[");
-            output.push_str(&format_stack_offset(stack.offset));
-            output.push(']');
+        if let Some(storage) = &local.storage
+            && let Some(comment) = format_storage(storage, &local.ty)
+        {
+            output.push_str(" // ");
+            output.push_str(&comment);
         }
         output.push('\n');
     }
@@ -472,6 +474,9 @@ fn format_value(value: &AstValue, context: &CPrintContext) -> String {
     match value {
         AstValue::Named { name, .. } => context.local_name(name),
         AstValue::Integer { value, bits } => {
+            if *value == 0 {
+                return "0".to_string();
+            }
             format!("{value}{suffix}", suffix = integer_suffix(*bits))
         }
         AstValue::Boolean(value) => {
@@ -568,11 +573,63 @@ fn format_type(ty: &AstType) -> String {
     }
 }
 
+fn type_bits(ty: &AstType) -> u16 {
+    match ty {
+        AstType::Integer(bits) | AstType::Float(bits) => *bits,
+        AstType::Pointer { .. } | AstType::Function { .. } | AstType::Memory => 64,
+        AstType::Void | AstType::Custom { .. } => 0,
+    }
+}
+
 fn format_stack_offset(offset: i64) -> String {
     if offset < 0 {
-        format!("-0x{:x}", offset.unsigned_abs())
+        format!("-{:x}h", offset.unsigned_abs())
     } else {
-        format!("+0x{:x}", offset)
+        format!("+{offset:x}h")
+    }
+}
+
+fn format_storage(storage: &IrStorage, ty: &AstType) -> Option<String> {
+    match storage {
+        IrStorage::Register { name, .. } => Some(format_register_storage(name, type_bits(ty))),
+        IrStorage::Stack { base, offset, .. } => {
+            if *offset == 0 {
+                Some(format!("[{base}]"))
+            } else {
+                Some(format!("[{}{}]", base, format_stack_offset(*offset)))
+            }
+        }
+        IrStorage::Memory { .. } | IrStorage::Expression { .. } | IrStorage::CallReturn { .. } => {
+            None
+        }
+    }
+}
+
+fn format_register_storage(name: &str, bits: u16) -> String {
+    match (name, bits) {
+        ("rax", 32) => "eax".to_string(),
+        ("rbx", 32) => "ebx".to_string(),
+        ("rcx", 32) => "ecx".to_string(),
+        ("rdx", 32) => "edx".to_string(),
+        ("rsi", 32) => "esi".to_string(),
+        ("rdi", 32) => "edi".to_string(),
+        ("rbp", 32) => "ebp".to_string(),
+        ("rsp", 32) => "esp".to_string(),
+        ("rax", 16) => "ax".to_string(),
+        ("rbx", 16) => "bx".to_string(),
+        ("rcx", 16) => "cx".to_string(),
+        ("rdx", 16) => "dx".to_string(),
+        ("rsi", 16) => "si".to_string(),
+        ("rdi", 16) => "di".to_string(),
+        ("rbp", 16) => "bp".to_string(),
+        ("rsp", 16) => "sp".to_string(),
+        (name, 32) if name.starts_with('r') && name[1..].chars().all(|ch| ch.is_ascii_digit()) => {
+            format!("{name}d")
+        }
+        (name, 16) if name.starts_with('r') && name[1..].chars().all(|ch| ch.is_ascii_digit()) => {
+            format!("{name}w")
+        }
+        _ => name.to_string(),
     }
 }
 

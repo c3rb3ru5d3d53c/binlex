@@ -45,6 +45,7 @@ fn hoist_repeated_loads_in_block(
             name: name.clone(),
             ty: ty.clone(),
             init: None,
+            storage: None,
         });
         replacements.insert(expression, name);
     }
