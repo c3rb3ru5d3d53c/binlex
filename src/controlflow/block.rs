@@ -399,14 +399,23 @@ impl<'block> Block<'block> {
     ///
     /// Returns a `BlockJson` instance containing the block's metadata and related information.
     pub fn process_base(&self) -> BlockJson {
+        self.process_base_with_references(
+            self.successor_references(),
+            self.predecessor_references(),
+        )
+    }
+
+    pub fn process_base_with_references(
+        &self,
+        successor_references: Vec<Reference>,
+        predecessor_references: Vec<Reference>,
+    ) -> BlockJson {
         let (bytes, wildcard_mask) = self.payload_bytes_and_mask();
         let chromosome = Chromosome::new(bytes.clone(), wildcard_mask, self.cfg.config.clone())
             .expect("failed to build block chromosome");
         let size = bytes.len();
         let instructions = self.instruction_addresses();
         let callee_references = self.callee_references();
-        let successor_references = self.successor_references();
-        let predecessor_references = self.predecessor_references();
         let entropy = if self.cfg.config.blocks.entropy.enabled {
             entropy::shannon(&bytes)
         } else {
@@ -476,6 +485,22 @@ impl<'block> Block<'block> {
 
     pub fn process(&self) -> BlockJson {
         let mut json = self.process_base();
+        self.apply_processors(&mut json);
+        json
+    }
+
+    pub fn process_with_references(
+        &self,
+        successor_references: Vec<Reference>,
+        predecessor_references: Vec<Reference>,
+    ) -> BlockJson {
+        let mut json =
+            self.process_base_with_references(successor_references, predecessor_references);
+        self.apply_processors(&mut json);
+        json
+    }
+
+    fn apply_processors(&self, json: &mut BlockJson) {
         if crate::processor::enabled_processors_for_target(
             &self.cfg.config,
             crate::processor::ProcessorTarget::Graph,
@@ -522,8 +547,6 @@ impl<'block> Block<'block> {
                 json.embeddings = Some(EmbeddingsJson::llvm(vector));
             }
         }
-
-        json
     }
 
     /// Return all processor outputs attached to this block.
@@ -664,6 +687,17 @@ impl<'block> Block<'block> {
     /// Returns a `BlockJson` instance containing the block's metadata and `Attributes`.
     pub fn process_with_attributes(&self, attributes: Attributes) -> BlockJson {
         let mut result = self.process();
+        result.attributes = Some(attributes.process());
+        result
+    }
+
+    pub fn process_with_attributes_and_references(
+        &self,
+        attributes: Attributes,
+        successor_references: Vec<Reference>,
+        predecessor_references: Vec<Reference>,
+    ) -> BlockJson {
+        let mut result = self.process_with_references(successor_references, predecessor_references);
         result.attributes = Some(attributes.process());
         result
     }

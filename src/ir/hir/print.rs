@@ -142,8 +142,30 @@ impl HirFormatter {
     }
 
     fn format_block(&mut self, block: &HirBlock, indent: usize, lines: &mut Vec<String>) {
+        let inherited_cloneable_regions = BTreeMap::new();
+        self.format_block_with_regions(block, indent, lines, &inherited_cloneable_regions);
+    }
+
+    fn format_block_with_regions(
+        &mut self,
+        block: &HirBlock,
+        indent: usize,
+        lines: &mut Vec<String>,
+        inherited_cloneable_regions: &BTreeMap<String, HirBlock>,
+    ) {
         let inlineable_regions = find_inlineable_label_regions(&block.statements);
         let cloneable_regions = find_cloneable_label_regions(&block.statements);
+        let cloneable_fallthrough_regions =
+            find_cloneable_fallthrough_label_regions(&block.statements);
+        let mut nested_cloneable_regions = inherited_cloneable_regions.clone();
+        nested_cloneable_regions.extend(collect_cloneable_region_bodies(
+            &block.statements,
+            &cloneable_regions,
+        ));
+        nested_cloneable_regions.extend(collect_cloneable_region_bodies(
+            &block.statements,
+            &cloneable_fallthrough_regions,
+        ));
         let mut skipped_region_starts = BTreeMap::new();
         let mut index = 0;
         while index < block.statements.len() {
@@ -160,7 +182,7 @@ impl HirFormatter {
             if let Some((body, label_index, end_index)) =
                 inlineable_region_for_goto(&block.statements, index, &inlineable_regions)
             {
-                self.format_block(&body, indent, lines);
+                self.format_block_with_regions(&body, indent, lines, inherited_cloneable_regions);
                 skipped_region_starts.insert(label_index, end_index);
                 index += 1;
                 continue;
@@ -171,7 +193,12 @@ impl HirFormatter {
             {
                 let prefix = "  ".repeat(indent);
                 lines.push(format!("{prefix}if ({}) {{", format_expression(&condition)));
-                self.format_block(&body, indent + 1, lines);
+                self.format_block_with_regions(
+                    &body,
+                    indent + 1,
+                    lines,
+                    inherited_cloneable_regions,
+                );
                 lines.push(format!("{prefix}}}"));
                 skipped_region_starts.insert(label_index, end_index);
                 index += 1;
@@ -181,7 +208,7 @@ impl HirFormatter {
             if let Some(body) =
                 cloneable_region_for_goto(&block.statements, index, &cloneable_regions)
             {
-                self.format_block(&body, indent, lines);
+                self.format_block_with_regions(&body, indent, lines, inherited_cloneable_regions);
                 index += 1;
                 continue;
             }
@@ -191,7 +218,63 @@ impl HirFormatter {
             {
                 let prefix = "  ".repeat(indent);
                 lines.push(format!("{prefix}if ({}) {{", format_expression(&condition)));
-                self.format_block(&body, indent + 1, lines);
+                self.format_block_with_regions(
+                    &body,
+                    indent + 1,
+                    lines,
+                    inherited_cloneable_regions,
+                );
+                lines.push(format!("{prefix}}}"));
+                index += 1;
+                continue;
+            }
+
+            if let Some(body) = cloneable_fallthrough_region_for_goto(
+                &block.statements,
+                index,
+                &cloneable_fallthrough_regions,
+            ) {
+                self.format_block_with_regions(&body, indent, lines, inherited_cloneable_regions);
+                index += 1;
+                continue;
+            }
+
+            if let Some((condition, body)) = cloneable_fallthrough_region_for_if_goto(
+                &block.statements,
+                index,
+                &cloneable_fallthrough_regions,
+            ) {
+                let prefix = "  ".repeat(indent);
+                lines.push(format!("{prefix}if ({}) {{", format_expression(&condition)));
+                self.format_block_with_regions(
+                    &body,
+                    indent + 1,
+                    lines,
+                    inherited_cloneable_regions,
+                );
+                lines.push(format!("{prefix}}}"));
+                index += 1;
+                continue;
+            }
+
+            if let Some(body) = external_cloneable_region_for_goto(
+                &block.statements[index],
+                inherited_cloneable_regions,
+            ) {
+                let empty_regions = BTreeMap::new();
+                self.format_block_with_regions(&body, indent, lines, &empty_regions);
+                index += 1;
+                continue;
+            }
+
+            if let Some((condition, body)) = external_cloneable_region_for_if_goto(
+                &block.statements[index],
+                inherited_cloneable_regions,
+            ) {
+                let prefix = "  ".repeat(indent);
+                lines.push(format!("{prefix}if ({}) {{", format_expression(&condition)));
+                let empty_regions = BTreeMap::new();
+                self.format_block_with_regions(&body, indent + 1, lines, &empty_regions);
                 lines.push(format!("{prefix}}}"));
                 index += 1;
                 continue;
@@ -212,7 +295,12 @@ impl HirFormatter {
             {
                 let prefix = "  ".repeat(indent);
                 lines.push(format!("{prefix}loop {{"));
-                self.format_block(&loop_body, indent + 1, lines);
+                self.format_block_with_regions(
+                    &loop_body,
+                    indent + 1,
+                    lines,
+                    inherited_cloneable_regions,
+                );
                 lines.push(format!("{prefix}}}"));
                 index += consumed;
                 continue;
@@ -229,7 +317,12 @@ impl HirFormatter {
                 let guarded = HirBlock {
                     statements: block.statements[(index + consumed)..label_index].to_vec(),
                 };
-                self.format_block(&guarded, indent + 1, lines);
+                self.format_block_with_regions(
+                    &guarded,
+                    indent + 1,
+                    lines,
+                    inherited_cloneable_regions,
+                );
                 lines.push(format!("{prefix}}}"));
                 index = label_index;
                 continue;
@@ -244,12 +337,22 @@ impl HirFormatter {
             }
 
             if let Some(rewritten) = rewrite_if_tail_guard_to_next_label(&block.statements, index) {
-                self.format_statement(&rewritten, indent, lines);
+                self.format_statement_with_regions(
+                    &rewritten,
+                    indent,
+                    lines,
+                    &nested_cloneable_regions,
+                );
                 index += 1;
                 continue;
             }
 
-            self.format_statement(&block.statements[index], indent, lines);
+            self.format_statement_with_regions(
+                &block.statements[index],
+                indent,
+                lines,
+                &nested_cloneable_regions,
+            );
             index += 1;
         }
     }
@@ -259,6 +362,17 @@ impl HirFormatter {
         statement: &HirStatement,
         indent: usize,
         lines: &mut Vec<String>,
+    ) {
+        let inherited_cloneable_regions = BTreeMap::new();
+        self.format_statement_with_regions(statement, indent, lines, &inherited_cloneable_regions);
+    }
+
+    fn format_statement_with_regions(
+        &mut self,
+        statement: &HirStatement,
+        indent: usize,
+        lines: &mut Vec<String>,
+        inherited_cloneable_regions: &BTreeMap<String, HirBlock>,
     ) {
         let prefix = "  ".repeat(indent);
         match statement {
@@ -307,10 +421,20 @@ impl HirFormatter {
                     unreachable!();
                 };
                 lines.push(format!("{prefix}if ({}) {{", format_expression(condition)));
-                self.format_block(then_body, indent + 1, lines);
+                self.format_block_with_regions(
+                    then_body,
+                    indent + 1,
+                    lines,
+                    inherited_cloneable_regions,
+                );
                 if let Some(else_body) = else_body {
                     lines.push(format!("{prefix}}} else {{"));
-                    self.format_block(else_body, indent + 1, lines);
+                    self.format_block_with_regions(
+                        else_body,
+                        indent + 1,
+                        lines,
+                        inherited_cloneable_regions,
+                    );
                 }
                 lines.push(format!("{prefix}}}"));
             }
@@ -319,12 +443,22 @@ impl HirFormatter {
                     "{prefix}while ({}) {{",
                     format_expression(condition)
                 ));
-                self.format_block(body, indent + 1, lines);
+                self.format_block_with_regions(
+                    body,
+                    indent + 1,
+                    lines,
+                    inherited_cloneable_regions,
+                );
                 lines.push(format!("{prefix}}}"));
             }
             HirStatement::Loop { body } => {
                 lines.push(format!("{prefix}loop {{"));
-                self.format_block(body, indent + 1, lines);
+                self.format_block_with_regions(
+                    body,
+                    indent + 1,
+                    lines,
+                    inherited_cloneable_regions,
+                );
                 lines.push(format!("{prefix}}}"));
             }
             HirStatement::Switch {
@@ -338,7 +472,12 @@ impl HirFormatter {
                 }
                 if let Some(default) = default {
                     lines.push(format!("{}default {{", "  ".repeat(indent + 1)));
-                    self.format_block(default, indent + 2, lines);
+                    self.format_block_with_regions(
+                        default,
+                        indent + 2,
+                        lines,
+                        inherited_cloneable_regions,
+                    );
                     lines.push(format!("{}}}", "  ".repeat(indent + 1)));
                 }
                 lines.push(format!("{prefix}}}"));
@@ -553,8 +692,9 @@ fn find_inlineable_label_regions(statements: &[HirStatement]) -> BTreeMap<String
 }
 
 fn find_cloneable_label_regions(statements: &[HirStatement]) -> BTreeMap<String, (usize, usize)> {
-    const MAX_CLONEABLE_REGION_STATEMENTS: usize = 3;
+    const MAX_CLONEABLE_REGION_STATEMENTS: usize = 8;
 
+    let label_counts = count_label_references_in_statements(statements);
     let mut regions = BTreeMap::new();
     let label_positions = statements
         .iter()
@@ -565,6 +705,10 @@ fn find_cloneable_label_regions(statements: &[HirStatement]) -> BTreeMap<String,
         .collect::<Vec<_>>();
 
     for (position, (index, label)) in label_positions.iter().enumerate() {
+        let ref_count = label_counts.get(label).copied().unwrap_or(0);
+        if ref_count == 0 || ref_count > 2 {
+            continue;
+        }
         let end = label_positions
             .get(position + 1)
             .map(|(next_index, _)| *next_index)
@@ -573,7 +717,56 @@ fn find_cloneable_label_regions(statements: &[HirStatement]) -> BTreeMap<String,
         if body.is_empty() || body.len() > MAX_CLONEABLE_REGION_STATEMENTS {
             continue;
         }
+        if printable_clone_cost(body) > 14 {
+            continue;
+        }
         if !cloneable_terminal_region(body) {
+            continue;
+        }
+        regions.insert(label.clone(), (*index, end));
+    }
+
+    regions
+}
+
+fn find_cloneable_fallthrough_label_regions(
+    statements: &[HirStatement],
+) -> BTreeMap<String, (usize, usize)> {
+    const MAX_CLONEABLE_FALLTHROUGH_STATEMENTS: usize = 16;
+
+    let label_counts = count_label_references_in_statements(statements);
+    let mut regions = BTreeMap::new();
+    let label_positions = statements
+        .iter()
+        .enumerate()
+        .filter_map(|(index, statement)| {
+            label_name(statement).map(|name| (index, name.to_string()))
+        })
+        .collect::<Vec<_>>();
+
+    for (position, (index, label)) in label_positions.iter().enumerate() {
+        if *index == 0 {
+            continue;
+        }
+        let ref_count = label_counts.get(label).copied().unwrap_or(0);
+        if ref_count == 0 || ref_count > 2 {
+            continue;
+        }
+        if statement_blocks_fallthrough(&statements[index - 1]) {
+            continue;
+        }
+        let end = label_positions
+            .get(position + 1)
+            .map(|(next_index, _)| *next_index)
+            .unwrap_or(statements.len());
+        let body = &statements[(*index + 1)..end];
+        if body.is_empty() || body.len() > MAX_CLONEABLE_FALLTHROUGH_STATEMENTS {
+            continue;
+        }
+        if printable_clone_cost(body) > 14 {
+            continue;
+        }
+        if !cloneable_fallthrough_region(body) {
             continue;
         }
         regions.insert(label.clone(), (*index, end));
@@ -680,6 +873,113 @@ fn cloneable_region_for_if_goto(
     ))
 }
 
+fn cloneable_fallthrough_region_for_goto(
+    statements: &[HirStatement],
+    index: usize,
+    regions: &BTreeMap<String, (usize, usize)>,
+) -> Option<HirBlock> {
+    let HirStatement::Goto(HirTarget::Direct(target)) = statements.get(index)? else {
+        return None;
+    };
+    let (label_index, end_index) = *regions.get(target)?;
+    if label_index <= index {
+        return None;
+    }
+    Some(HirBlock {
+        statements: statements[(label_index + 1)..end_index].to_vec(),
+    })
+}
+
+fn cloneable_fallthrough_region_for_if_goto(
+    statements: &[HirStatement],
+    index: usize,
+    regions: &BTreeMap<String, (usize, usize)>,
+) -> Option<(HirExpression, HirBlock)> {
+    let HirStatement::If {
+        condition,
+        then_body,
+        else_body,
+    } = statements.get(index)?
+    else {
+        return None;
+    };
+    if else_body.is_some() {
+        return None;
+    }
+    let target = single_direct_goto_target(then_body)?;
+    let (label_index, end_index) = *regions.get(target)?;
+    if label_index <= index {
+        return None;
+    }
+    Some((
+        condition.clone(),
+        HirBlock {
+            statements: statements[(label_index + 1)..end_index].to_vec(),
+        },
+    ))
+}
+
+fn collect_cloneable_region_bodies(
+    statements: &[HirStatement],
+    regions: &BTreeMap<String, (usize, usize)>,
+) -> BTreeMap<String, HirBlock> {
+    let mut bodies = BTreeMap::new();
+    for (label, (label_index, end_index)) in regions {
+        bodies.insert(
+            label.clone(),
+            HirBlock {
+                statements: statements[(label_index + 1)..*end_index].to_vec(),
+            },
+        );
+    }
+    bodies
+}
+
+fn external_cloneable_region_for_goto(
+    statement: &HirStatement,
+    regions: &BTreeMap<String, HirBlock>,
+) -> Option<HirBlock> {
+    let HirStatement::Goto(HirTarget::Direct(target)) = statement else {
+        return None;
+    };
+    let body = regions.get(target)?;
+    if !externally_cloneable_terminal_region(body) {
+        return None;
+    }
+    Some(body.clone())
+}
+
+fn external_cloneable_region_for_if_goto(
+    statement: &HirStatement,
+    regions: &BTreeMap<String, HirBlock>,
+) -> Option<(HirExpression, HirBlock)> {
+    let HirStatement::If {
+        condition,
+        then_body,
+        else_body,
+    } = statement
+    else {
+        return None;
+    };
+    if else_body.is_some() {
+        return None;
+    }
+    let target = single_direct_goto_target(then_body)?;
+    let body = regions.get(target)?;
+    if !externally_cloneable_terminal_region(body) {
+        return None;
+    }
+    Some((condition.clone(), body.clone()))
+}
+
+fn externally_cloneable_terminal_region(block: &HirBlock) -> bool {
+    let statements = &block.statements;
+    if statements.is_empty() || statements.len() > 4 {
+        return false;
+    }
+    cloneable_terminal_region(statements)
+}
+
 fn cloneable_terminal_region(statements: &[HirStatement]) -> bool {
     match statements.last() {
         Some(HirStatement::Return { .. } | HirStatement::Trap | HirStatement::Unreachable) => {}
@@ -698,6 +998,54 @@ fn cloneable_terminal_region(statements: &[HirStatement]) -> bool {
     })
 }
 
+fn cloneable_fallthrough_region(statements: &[HirStatement]) -> bool {
+    match statements.last() {
+        Some(
+            HirStatement::Goto(_)
+            | HirStatement::Return { .. }
+            | HirStatement::Trap
+            | HirStatement::Unreachable,
+        ) => {}
+        _ => return false,
+    }
+
+    statements.iter().all(|statement| {
+        matches!(
+            statement,
+            HirStatement::Assign { .. }
+                | HirStatement::Expr(_)
+                | HirStatement::If { .. }
+                | HirStatement::Goto(_)
+                | HirStatement::Return { .. }
+                | HirStatement::Trap
+                | HirStatement::Unreachable
+        )
+    })
+}
+
+fn printable_clone_cost(statements: &[HirStatement]) -> usize {
+    statements.iter().map(printable_statement_clone_cost).sum()
+}
+
+fn printable_statement_clone_cost(statement: &HirStatement) -> usize {
+    match statement {
+        HirStatement::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            2 + printable_clone_cost(&then_body.statements)
+                + else_body
+                    .as_ref()
+                    .map(|else_body| printable_clone_cost(&else_body.statements))
+                    .unwrap_or(0)
+        }
+        HirStatement::While { .. } | HirStatement::Loop { .. } | HirStatement::Switch { .. } => 100,
+        HirStatement::Label(_) => 100,
+        _ => 1,
+    }
+}
+
 fn statement_blocks_fallthrough(statement: &HirStatement) -> bool {
     matches!(
         statement,
@@ -711,8 +1059,31 @@ fn statement_blocks_fallthrough(statement: &HirStatement) -> bool {
 }
 
 fn collect_printed_label_references_in_block(block: &HirBlock, labels: &mut BTreeSet<String>) {
+    let inherited_cloneable_regions = BTreeMap::new();
+    collect_printed_label_references_in_block_with_regions(
+        block,
+        labels,
+        &inherited_cloneable_regions,
+    );
+}
+
+fn collect_printed_label_references_in_block_with_regions(
+    block: &HirBlock,
+    labels: &mut BTreeSet<String>,
+    inherited_cloneable_regions: &BTreeMap<String, HirBlock>,
+) {
     let inlineable_regions = find_inlineable_label_regions(&block.statements);
     let cloneable_regions = find_cloneable_label_regions(&block.statements);
+    let cloneable_fallthrough_regions = find_cloneable_fallthrough_label_regions(&block.statements);
+    let mut nested_cloneable_regions = inherited_cloneable_regions.clone();
+    nested_cloneable_regions.extend(collect_cloneable_region_bodies(
+        &block.statements,
+        &cloneable_regions,
+    ));
+    nested_cloneable_regions.extend(collect_cloneable_region_bodies(
+        &block.statements,
+        &cloneable_fallthrough_regions,
+    ));
     let mut skipped_region_starts = BTreeMap::new();
     let mut index = 0;
 
@@ -725,7 +1096,11 @@ fn collect_printed_label_references_in_block(block: &HirBlock, labels: &mut BTre
         if let Some((body, label_index, end_index)) =
             inlineable_region_for_goto(&block.statements, index, &inlineable_regions)
         {
-            collect_printed_label_references_in_block(&body, labels);
+            collect_printed_label_references_in_block_with_regions(
+                &body,
+                labels,
+                inherited_cloneable_regions,
+            );
             skipped_region_starts.insert(label_index, end_index);
             index += 1;
             continue;
@@ -734,7 +1109,11 @@ fn collect_printed_label_references_in_block(block: &HirBlock, labels: &mut BTre
         if let Some((_condition, body, label_index, end_index)) =
             inlineable_region_for_if_goto(&block.statements, index, &inlineable_regions)
         {
-            collect_printed_label_references_in_block(&body, labels);
+            collect_printed_label_references_in_block_with_regions(
+                &body,
+                labels,
+                inherited_cloneable_regions,
+            );
             skipped_region_starts.insert(label_index, end_index);
             index += 1;
             continue;
@@ -742,7 +1121,11 @@ fn collect_printed_label_references_in_block(block: &HirBlock, labels: &mut BTre
 
         if let Some(body) = cloneable_region_for_goto(&block.statements, index, &cloneable_regions)
         {
-            collect_printed_label_references_in_block(&body, labels);
+            collect_printed_label_references_in_block_with_regions(
+                &body,
+                labels,
+                inherited_cloneable_regions,
+            );
             index += 1;
             continue;
         }
@@ -750,7 +1133,59 @@ fn collect_printed_label_references_in_block(block: &HirBlock, labels: &mut BTre
         if let Some((_condition, body)) =
             cloneable_region_for_if_goto(&block.statements, index, &cloneable_regions)
         {
-            collect_printed_label_references_in_block(&body, labels);
+            collect_printed_label_references_in_block_with_regions(
+                &body,
+                labels,
+                inherited_cloneable_regions,
+            );
+            index += 1;
+            continue;
+        }
+
+        if let Some(body) = cloneable_fallthrough_region_for_goto(
+            &block.statements,
+            index,
+            &cloneable_fallthrough_regions,
+        ) {
+            collect_printed_label_references_in_block_with_regions(
+                &body,
+                labels,
+                inherited_cloneable_regions,
+            );
+            index += 1;
+            continue;
+        }
+
+        if let Some((_condition, body)) = cloneable_fallthrough_region_for_if_goto(
+            &block.statements,
+            index,
+            &cloneable_fallthrough_regions,
+        ) {
+            collect_printed_label_references_in_block_with_regions(
+                &body,
+                labels,
+                inherited_cloneable_regions,
+            );
+            index += 1;
+            continue;
+        }
+
+        if let Some(body) = external_cloneable_region_for_goto(
+            &block.statements[index],
+            inherited_cloneable_regions,
+        ) {
+            let empty_regions = BTreeMap::new();
+            collect_printed_label_references_in_block_with_regions(&body, labels, &empty_regions);
+            index += 1;
+            continue;
+        }
+
+        if let Some((_condition, body)) = external_cloneable_region_for_if_goto(
+            &block.statements[index],
+            inherited_cloneable_regions,
+        ) {
+            let empty_regions = BTreeMap::new();
+            collect_printed_label_references_in_block_with_regions(&body, labels, &empty_regions);
             index += 1;
             continue;
         }
@@ -762,7 +1197,11 @@ fn collect_printed_label_references_in_block(block: &HirBlock, labels: &mut BTre
         }
 
         if let Some((loop_body, consumed)) = find_printable_loop_region(&block.statements, index) {
-            collect_printed_label_references_in_block(&loop_body, labels);
+            collect_printed_label_references_in_block_with_regions(
+                &loop_body,
+                labels,
+                inherited_cloneable_regions,
+            );
             index += consumed;
             continue;
         }
@@ -773,7 +1212,11 @@ fn collect_printed_label_references_in_block(block: &HirBlock, labels: &mut BTre
             let guarded = HirBlock {
                 statements: block.statements[(index + consumed)..label_index].to_vec(),
             };
-            collect_printed_label_references_in_block(&guarded, labels);
+            collect_printed_label_references_in_block_with_regions(
+                &guarded,
+                labels,
+                inherited_cloneable_regions,
+            );
             index = label_index;
             continue;
         }
@@ -781,18 +1224,30 @@ fn collect_printed_label_references_in_block(block: &HirBlock, labels: &mut BTre
         if let Some((guard_statement, consumed)) =
             merge_printable_guard_jump_run(&block.statements, index)
         {
-            collect_printed_label_references_in_statement(&guard_statement, labels);
+            collect_printed_label_references_in_statement_with_regions(
+                &guard_statement,
+                labels,
+                &nested_cloneable_regions,
+            );
             index += consumed;
             continue;
         }
 
         if let Some(rewritten) = rewrite_if_tail_guard_to_next_label(&block.statements, index) {
-            collect_printed_label_references_in_statement(&rewritten, labels);
+            collect_printed_label_references_in_statement_with_regions(
+                &rewritten,
+                labels,
+                &nested_cloneable_regions,
+            );
             index += 1;
             continue;
         }
 
-        collect_printed_label_references_in_statement(&block.statements[index], labels);
+        collect_printed_label_references_in_statement_with_regions(
+            &block.statements[index],
+            labels,
+            &nested_cloneable_regions,
+        );
         index += 1;
     }
 }
@@ -801,26 +1256,59 @@ fn collect_printed_label_references_in_statement(
     statement: &HirStatement,
     labels: &mut BTreeSet<String>,
 ) {
+    let inherited_cloneable_regions = BTreeMap::new();
+    collect_printed_label_references_in_statement_with_regions(
+        statement,
+        labels,
+        &inherited_cloneable_regions,
+    );
+}
+
+fn collect_printed_label_references_in_statement_with_regions(
+    statement: &HirStatement,
+    labels: &mut BTreeSet<String>,
+    inherited_cloneable_regions: &BTreeMap<String, HirBlock>,
+) {
     match statement {
         HirStatement::If {
             then_body,
             else_body,
             ..
         } => {
-            collect_printed_label_references_in_block(then_body, labels);
+            collect_printed_label_references_in_block_with_regions(
+                then_body,
+                labels,
+                inherited_cloneable_regions,
+            );
             if let Some(else_body) = else_body {
-                collect_printed_label_references_in_block(else_body, labels);
+                collect_printed_label_references_in_block_with_regions(
+                    else_body,
+                    labels,
+                    inherited_cloneable_regions,
+                );
             }
         }
         HirStatement::While { body, .. } | HirStatement::Loop { body } => {
-            collect_printed_label_references_in_block(body, labels);
+            collect_printed_label_references_in_block_with_regions(
+                body,
+                labels,
+                inherited_cloneable_regions,
+            );
         }
         HirStatement::Switch { cases, default, .. } => {
             for case in cases {
-                collect_printed_label_references_in_block(&case.body, labels);
+                collect_printed_label_references_in_block_with_regions(
+                    &case.body,
+                    labels,
+                    inherited_cloneable_regions,
+                );
             }
             if let Some(default) = default {
-                collect_printed_label_references_in_block(default, labels);
+                collect_printed_label_references_in_block_with_regions(
+                    default,
+                    labels,
+                    inherited_cloneable_regions,
+                );
             }
         }
         HirStatement::Goto(HirTarget::Direct(target)) => {

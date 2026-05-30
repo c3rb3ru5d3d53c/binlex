@@ -26,6 +26,7 @@ use crate::controlflow::Block;
 use crate::controlflow::Function;
 use crate::controlflow::Instruction;
 use crate::controlflow::InstructionRecord;
+use crate::controlflow::Reference;
 use crate::ir::lir::Lir;
 use crate::processor::{ProcessorOutputs, ProcessorTarget};
 use crossbeam::queue::SegQueue;
@@ -951,6 +952,20 @@ impl Graph {
             .unwrap_or_default()
     }
 
+    pub fn function_reference_maps(
+        &self,
+    ) -> (
+        BTreeMap<u64, BTreeMap<u64, u64>>,
+        BTreeMap<u64, BTreeMap<u64, u64>>,
+    ) {
+        self.ensure_callgraph();
+        let state = self.callgraph_state.lock().unwrap();
+        (
+            state.callee_references.clone(),
+            state.caller_references.clone(),
+        )
+    }
+
     fn compute_block_terminator_address(&self, address: u64) -> Option<u64> {
         if !self.blocks.is_valid(address) {
             return None;
@@ -1070,6 +1085,40 @@ impl Graph {
             .get(&address)
             .cloned()
             .unwrap_or_default()
+    }
+
+    pub fn block_reference_maps(
+        &self,
+    ) -> (BTreeMap<u64, Vec<Reference>>, BTreeMap<u64, Vec<Reference>>) {
+        self.ensure_block_layouts();
+        let state = self.block_layout_state.lock().unwrap();
+        let successor_references = state
+            .successors
+            .iter()
+            .map(|(source, targets)| {
+                (
+                    *source,
+                    targets
+                        .iter()
+                        .map(|target| Reference::new(*source, *target))
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        let predecessor_references = state
+            .predecessors
+            .iter()
+            .map(|(target, sources)| {
+                (
+                    *target,
+                    sources
+                        .iter()
+                        .map(|source| Reference::new(*source, *target))
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        (successor_references, predecessor_references)
     }
 
     fn compute_function_block_addresses(&self, address: u64) -> Option<Vec<u64>> {

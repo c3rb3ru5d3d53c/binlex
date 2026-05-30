@@ -686,6 +686,7 @@ fn process_output(
             .iter()
             .map(|entry| *entry)
             .collect::<Vec<_>>();
+        let (block_successor_references, block_predecessor_references) = cfg.block_reference_maps();
         let materialize_blocks_started_at = Instant::now();
         let block_lines = block_addresses
             .into_par_iter()
@@ -693,7 +694,19 @@ fn process_output(
                 let block = Block::new(address, cfg).ok()?;
                 let block_attributes =
                     entity_attributes(attributes, function_symbols, block.address);
-                let mut raw = block.process_with_attributes(block_attributes);
+                let successor_references = block_successor_references
+                    .get(&block.address)
+                    .cloned()
+                    .unwrap_or_default();
+                let predecessor_references = block_predecessor_references
+                    .get(&block.address)
+                    .cloned()
+                    .unwrap_or_default();
+                let mut raw = block.process_with_attributes_and_references(
+                    block_attributes,
+                    successor_references,
+                    predecessor_references,
+                );
                 if let Some(outputs) = cfg.processor_outputs(ProcessorTarget::Block, block.address)
                 {
                     for (processor_name, output) in &outputs {
@@ -745,6 +758,8 @@ fn process_output(
             .iter()
             .map(|entry| *entry)
             .collect::<Vec<_>>();
+        let (function_callee_references, function_caller_references) =
+            cfg.function_reference_maps();
         let debug = cfg.config.debug;
         let function_new_nanos = AtomicU64::new(0);
         let function_attributes_nanos = AtomicU64::new(0);
@@ -769,7 +784,19 @@ fn process_output(
                         .fetch_add(started_at.elapsed().as_nanos() as u64, Ordering::Relaxed);
                 }
                 let function_process_started_at = debug.then(Instant::now);
-                let mut raw = function.process_with_attributes(function_attributes);
+                let callee_references = function_callee_references
+                    .get(&function.address)
+                    .cloned()
+                    .unwrap_or_default();
+                let caller_references = function_caller_references
+                    .get(&function.address)
+                    .cloned()
+                    .unwrap_or_default();
+                let mut raw = function.process_with_attributes_and_references(
+                    function_attributes,
+                    callee_references,
+                    caller_references,
+                );
                 if let Some(started_at) = function_process_started_at {
                     function_process_nanos
                         .fetch_add(started_at.elapsed().as_nanos() as u64, Ordering::Relaxed);

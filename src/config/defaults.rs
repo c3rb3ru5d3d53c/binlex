@@ -174,6 +174,7 @@ impl Configuration {
     pub fn enable_minimal(&mut self) {
         self.minimal = true;
         self.disable_hashing();
+        self.disable_heuristics();
         self.instructions.enabled = false;
         self.semantics.enabled = false;
     }

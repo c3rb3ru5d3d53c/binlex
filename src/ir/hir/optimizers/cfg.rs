@@ -10,6 +10,7 @@ pub fn optimize_cfg(function: &mut HirFunction) {
         loop {
             let mut changed = false;
             changed |= inline_single_entry_regions(block);
+            changed |= structure_top_level_regions(block);
             changed |= collapse_guard_jump_chains(block);
             changed |= fold_forward_guard_regions(block);
             changed |= recover_if_no_exit_regions(block);
@@ -49,6 +50,18 @@ struct InlineRegion {
     end: usize,
     label: String,
     statements: Vec<HirStatement>,
+}
+
+#[derive(Clone)]
+struct StructuredRegion {
+    label: Option<String>,
+    statements: Vec<HirStatement>,
+}
+
+#[derive(Clone)]
+struct BranchExit {
+    join_label: String,
+    body: Vec<HirStatement>,
 }
 
 fn inline_single_entry_regions(block: &mut HirBlock) -> bool {
@@ -92,6 +105,411 @@ fn inline_single_entry_regions(block: &mut HirBlock) -> bool {
     }
 
     changed
+}
+
+fn structure_top_level_regions(block: &mut HirBlock) -> bool {
+    let mut changed = false;
+    loop {
+        let Some(regions) = collect_top_level_regions(block) else {
+            break;
+        };
+        let Some(new_regions) = collapse_region_if_else_joins(&regions)
+            .or_else(|| collapse_small_single_ref_continuations(&regions))
+        else {
+            break;
+        };
+        block.statements = emit_top_level_regions(&new_regions);
+        changed = true;
+    }
+    changed
+}
+
+fn collect_top_level_regions(block: &HirBlock) -> Option<Vec<StructuredRegion>> {
+    if block.statements.is_empty() {
+        return None;
+    }
+    let mut regions = Vec::new();
+    let mut start = 0;
+    let mut current_label = None;
+
+    if let Some(HirStatement::Label(label)) = block.statements.first() {
+        current_label = Some(label.clone());
+        start = 1;
+    }
+
+    for index in start..block.statements.len() {
+        if let HirStatement::Label(label) = &block.statements[index] {
+            regions.push(StructuredRegion {
+                label: current_label.take(),
+                statements: block.statements[start..index].to_vec(),
+            });
+            current_label = Some(label.clone());
+            start = index + 1;
+        }
+    }
+
+    regions.push(StructuredRegion {
+        label: current_label,
+        statements: block.statements[start..].to_vec(),
+    });
+
+    Some(regions)
+}
+
+fn emit_top_level_regions(regions: &[StructuredRegion]) -> Vec<HirStatement> {
+    let mut statements = Vec::new();
+    for region in regions {
+        if let Some(label) = &region.label {
+            statements.push(HirStatement::Label(label.clone()));
+        }
+        statements.extend(region.statements.clone());
+    }
+    statements
+}
+
+fn collapse_region_if_else_joins(regions: &[StructuredRegion]) -> Option<Vec<StructuredRegion>> {
+    let label_to_index = regions
+        .iter()
+        .enumerate()
+        .filter_map(|(index, region)| region.label.as_ref().map(|label| (label.clone(), index)))
+        .collect::<BTreeMap<_, _>>();
+    let label_ref_counts = collect_region_label_reference_counts(regions);
+
+    for index in 0..regions.len() {
+        let (condition, then_target, else_target, prefix) =
+            region_terminal_if_else(&regions[index])?;
+        let then_index = *label_to_index.get(&then_target)?;
+        let else_index = *label_to_index.get(&else_target)?;
+        if then_index == else_index || then_index <= index || else_index <= index {
+            continue;
+        }
+        let first_index = then_index.min(else_index);
+        let second_index = then_index.max(else_index);
+        if second_index != first_index + 1 {
+            continue;
+        }
+
+        let join_then = branch_region_exit(
+            &regions[then_index],
+            regions
+                .get(then_index + 1)
+                .and_then(|region| region.label.as_deref()),
+            &label_ref_counts,
+        )?;
+        let join_else = branch_region_exit(
+            &regions[else_index],
+            regions
+                .get(else_index + 1)
+                .and_then(|region| region.label.as_deref()),
+            &label_ref_counts,
+        )?;
+        if join_then.join_label != join_else.join_label {
+            continue;
+        }
+        if label_ref_counts
+            .get(&join_then.join_label)
+            .copied()
+            .unwrap_or(0)
+            != 2
+        {
+            continue;
+        }
+
+        let (then_body, else_body) = if then_index < else_index {
+            (join_then.body, join_else.body)
+        } else {
+            (join_else.body, join_then.body)
+        };
+
+        let mut new_regions = Vec::with_capacity(regions.len() - 2);
+        for region in &regions[..index] {
+            new_regions.push(region.clone());
+        }
+
+        let mut merged_statements = prefix;
+        merged_statements.push(HirStatement::If {
+            condition,
+            then_body: HirBlock {
+                statements: then_body,
+            },
+            else_body: Some(HirBlock {
+                statements: else_body,
+            }),
+        });
+        new_regions.push(StructuredRegion {
+            label: regions[index].label.clone(),
+            statements: merged_statements,
+        });
+
+        for (candidate, region) in regions.iter().enumerate().skip(index + 1) {
+            if candidate == then_index || candidate == else_index {
+                continue;
+            }
+            new_regions.push(region.clone());
+        }
+        return Some(new_regions);
+    }
+
+    None
+}
+
+fn collapse_small_single_ref_continuations(
+    regions: &[StructuredRegion],
+) -> Option<Vec<StructuredRegion>> {
+    let label_ref_counts = collect_region_label_reference_counts(regions);
+
+    for target_index in 1..regions.len() {
+        let Some(label) = regions[target_index].label.as_ref() else {
+            continue;
+        };
+        if label_ref_counts.get(label).copied().unwrap_or(0) != 1 {
+            continue;
+        }
+        if !region_can_fallthrough(&regions[target_index - 1]) {
+            continue;
+        }
+        let body = &regions[target_index].statements;
+        if body.is_empty()
+            || body.len() > 16
+            || region_contains_label_refs(body)
+            || region_clone_cost(body) > 14
+        {
+            continue;
+        }
+
+        let continuation_label = regions
+            .get(target_index + 1)
+            .and_then(|region| region.label.as_ref())
+            .cloned();
+
+        let mut source_index = None;
+        let mut rewritten_source = None;
+        for (index, region) in regions.iter().enumerate() {
+            let Some((rewritten, _replaced)) = rewrite_region_target_tail(
+                &region.statements,
+                label,
+                body,
+                continuation_label.as_deref(),
+            ) else {
+                continue;
+            };
+            source_index = Some(index);
+            rewritten_source = Some(rewritten);
+            break;
+        }
+        let (source_index, rewritten_source) = match (source_index, rewritten_source) {
+            (Some(index), Some(statements)) => (index, statements),
+            _ => continue,
+        };
+
+        let mut new_regions = Vec::with_capacity(regions.len() - 1);
+        for region in &regions[..(target_index - 1)] {
+            new_regions.push(region.clone());
+        }
+
+        let mut merged_predecessor = regions[target_index - 1].clone();
+        merged_predecessor.statements.extend(body.clone());
+        new_regions.push(merged_predecessor);
+
+        for (index, region) in regions.iter().enumerate().skip(target_index + 1) {
+            let mut region = region.clone();
+            if index == source_index {
+                region.statements = rewritten_source.clone();
+            }
+            new_regions.push(region);
+        }
+
+        if source_index < target_index - 1 {
+            new_regions[source_index].statements = rewritten_source;
+        } else if source_index == target_index - 1 {
+            let current = new_regions[target_index - 1].statements.clone();
+            new_regions[target_index - 1].statements =
+                rewrite_region_target_tail(&current, label, body, continuation_label.as_deref())?.0;
+        }
+
+        return Some(new_regions);
+    }
+
+    None
+}
+
+fn region_can_fallthrough(region: &StructuredRegion) -> bool {
+    region
+        .statements
+        .last()
+        .is_none_or(|statement| !statement_prevents_fallthrough(statement))
+}
+
+fn region_clone_cost(statements: &[HirStatement]) -> usize {
+    statements.iter().map(statement_clone_cost).sum()
+}
+
+fn statement_clone_cost(statement: &HirStatement) -> usize {
+    match statement {
+        HirStatement::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            2 + region_clone_cost(&then_body.statements)
+                + else_body
+                    .as_ref()
+                    .map(|else_body| region_clone_cost(&else_body.statements))
+                    .unwrap_or(0)
+        }
+        HirStatement::While { .. } | HirStatement::Loop { .. } | HirStatement::Switch { .. } => 100,
+        HirStatement::Label(_) | HirStatement::Goto(_) => 100,
+        _ => 1,
+    }
+}
+
+fn rewrite_region_target_tail(
+    statements: &[HirStatement],
+    target_label: &str,
+    body: &[HirStatement],
+    continuation_label: Option<&str>,
+) -> Option<(Vec<HirStatement>, usize)> {
+    let last = statements.last()?;
+    let mut cloned_body = body.to_vec();
+    if let Some(continuation_label) = continuation_label {
+        if cloned_body
+            .last()
+            .is_none_or(|statement| !statement_prevents_fallthrough(statement))
+        {
+            cloned_body.push(HirStatement::Goto(HirTarget::Direct(
+                continuation_label.to_string(),
+            )));
+        }
+    }
+
+    match last {
+        HirStatement::Goto(HirTarget::Direct(target)) if target == target_label => {
+            let mut new_statements = statements[..(statements.len() - 1)].to_vec();
+            new_statements.extend(cloned_body);
+            Some((new_statements, 1))
+        }
+        HirStatement::If {
+            condition,
+            then_body,
+            else_body,
+        } => {
+            let then_replaced = if single_direct_goto_target(then_body) == Some(target_label) {
+                Some(HirBlock {
+                    statements: cloned_body.clone(),
+                })
+            } else {
+                None
+            };
+            let else_replaced = else_body.as_ref().and_then(|else_body| {
+                if single_direct_goto_target(else_body) == Some(target_label) {
+                    Some(HirBlock {
+                        statements: cloned_body.clone(),
+                    })
+                } else {
+                    None
+                }
+            });
+            if then_replaced.is_none() && else_replaced.is_none() {
+                return None;
+            }
+            let mut replaced_count = 0;
+            if then_replaced.is_some() {
+                replaced_count += 1;
+            }
+            if else_replaced.is_some() {
+                replaced_count += 1;
+            }
+            let mut new_statements = statements[..(statements.len() - 1)].to_vec();
+            new_statements.push(HirStatement::If {
+                condition: condition.clone(),
+                then_body: then_replaced.unwrap_or_else(|| then_body.clone()),
+                else_body: match (else_body, else_replaced) {
+                    (Some(_), Some(block)) => Some(block),
+                    (Some(existing), None) => Some(existing.clone()),
+                    (None, _) => None,
+                },
+            });
+            Some((new_statements, replaced_count))
+        }
+        _ => None,
+    }
+}
+
+fn collect_region_label_reference_counts(regions: &[StructuredRegion]) -> BTreeMap<String, usize> {
+    let mut counts = BTreeMap::new();
+    for region in regions {
+        let block = HirBlock {
+            statements: region.statements.clone(),
+        };
+        for (label, count) in collect_label_reference_counts(&block) {
+            *counts.entry(label).or_insert(0) += count;
+        }
+    }
+    counts
+}
+
+fn region_terminal_if_else(
+    region: &StructuredRegion,
+) -> Option<(HirExpression, String, String, Vec<HirStatement>)> {
+    let HirStatement::If {
+        condition,
+        then_body,
+        else_body,
+    } = region.statements.last()?
+    else {
+        return None;
+    };
+    let else_body = else_body.as_ref()?;
+    let then_target = single_direct_goto_target(then_body)?.to_string();
+    let else_target = single_direct_goto_target(else_body)?.to_string();
+    if then_target == else_target {
+        return None;
+    }
+    let prefix = region.statements[..(region.statements.len() - 1)].to_vec();
+    if region_contains_label_refs(&prefix) {
+        return None;
+    }
+    Some((condition.clone(), then_target, else_target, prefix))
+}
+
+fn branch_region_exit(
+    region: &StructuredRegion,
+    next_region_label: Option<&str>,
+    label_ref_counts: &BTreeMap<String, usize>,
+) -> Option<BranchExit> {
+    let label = region.label.as_ref()?;
+    if label_ref_counts.get(label).copied().unwrap_or(0) != 1 {
+        return None;
+    }
+    if region.statements.is_empty() || region.statements.len() > 16 {
+        return None;
+    }
+
+    let mut body = region.statements.clone();
+    if let Some(HirStatement::Goto(HirTarget::Direct(target))) = body.last() {
+        let join_label = target.clone();
+        body.pop();
+        if body.is_empty() || region_contains_label_refs(&body) {
+            return None;
+        }
+        return Some(BranchExit { join_label, body });
+    }
+
+    let next_region_label = next_region_label?;
+    if region_contains_label_refs(&body) {
+        return None;
+    }
+    Some(BranchExit {
+        join_label: next_region_label.to_string(),
+        body,
+    })
+}
+
+fn region_contains_label_refs(statements: &[HirStatement]) -> bool {
+    let block = HirBlock {
+        statements: statements.to_vec(),
+    };
+    !collect_label_reference_counts(&block).is_empty()
 }
 
 fn find_inlineable_region(block: &HirBlock) -> Option<InlineRegion> {
@@ -2156,6 +2574,10 @@ fn block_suffix_starts_with(statements: &[HirStatement], prefix: &[HirStatement]
 }
 
 fn collect_terminal_label_tails(block: &HirBlock) -> BTreeMap<String, Vec<HirStatement>> {
+    const MAX_SIMPLE_TERMINAL_TAIL_STATEMENTS: usize = 6;
+    const MAX_SIMPLE_TERMINAL_TAIL_CLONE_COST: usize = 8;
+
+    let label_ref_counts = collect_label_reference_counts(block);
     let mut result = BTreeMap::new();
     for index in 0..block.statements.len() {
         let Some(label) = block.statements.get(index).and_then(label_name) else {
@@ -2169,13 +2591,38 @@ fn collect_terminal_label_tails(block: &HirBlock) -> BTreeMap<String, Vec<HirSta
         {
             continue;
         }
-        if !matches!(tail.last(), Some(HirStatement::Return { .. })) {
+        let ref_count = label_ref_counts.get(label).copied().unwrap_or(0);
+        if ref_count == 0 || ref_count > 2 {
             continue;
         }
-        if tail.len() > 4 {
+        if matches!(tail.last(), Some(HirStatement::Return { .. })) {
+            if tail.len() <= 4 {
+                result.insert(label.to_string(), tail.to_vec());
+                continue;
+            }
+            if tail.len() > MAX_SIMPLE_TERMINAL_TAIL_STATEMENTS {
+                continue;
+            }
+            if region_clone_cost(tail) > MAX_SIMPLE_TERMINAL_TAIL_CLONE_COST {
+                continue;
+            }
+            if tail[..(tail.len() - 1)].iter().any(|statement| {
+                matches!(
+                    statement,
+                    HirStatement::Goto(_)
+                        | HirStatement::While { .. }
+                        | HirStatement::Loop { .. }
+                        | HirStatement::Switch { .. }
+                        | HirStatement::Trap
+                        | HirStatement::Unreachable
+                )
+            }) {
+                continue;
+            }
+            result.insert(label.to_string(), tail.to_vec());
             continue;
         }
-        result.insert(label.to_string(), tail.to_vec());
+        continue;
     }
     result
 }

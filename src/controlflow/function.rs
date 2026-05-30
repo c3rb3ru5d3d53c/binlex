@@ -396,6 +396,14 @@ impl<'function> Function<'function> {
     ///
     /// Returns a `FunctionJson` struct containing metadata about the function.
     pub fn process_base(&self) -> FunctionJson {
+        self.process_base_with_references(self.callee_references(), self.caller_references())
+    }
+
+    pub fn process_base_with_references(
+        &self,
+        callee_references: BTreeMap<u64, u64>,
+        caller_references: BTreeMap<u64, u64>,
+    ) -> FunctionJson {
         let contiguous_payload = self.contiguous_payload_bytes_and_mask();
         let contiguous = contiguous_payload.is_some();
         let block_addresses = self.block_addresses();
@@ -491,8 +499,8 @@ impl<'function> Function<'function> {
             chromosome,
             bytes: bytes_hex,
             size,
-            callee_references: self.callee_references(),
-            caller_references: self.caller_references(),
+            callee_references,
+            caller_references,
             blocks: block_addresses,
             number_of_blocks,
             number_of_instructions,
@@ -523,6 +531,21 @@ impl<'function> Function<'function> {
 
     pub fn process(&self) -> FunctionJson {
         let mut json = self.process_base();
+        self.apply_processors(&mut json);
+        json
+    }
+
+    pub fn process_with_references(
+        &self,
+        callee_references: BTreeMap<u64, u64>,
+        caller_references: BTreeMap<u64, u64>,
+    ) -> FunctionJson {
+        let mut json = self.process_base_with_references(callee_references, caller_references);
+        self.apply_processors(&mut json);
+        json
+    }
+
+    fn apply_processors(&self, json: &mut FunctionJson) {
         if crate::processor::enabled_processors_for_target(
             &self.cfg.config,
             crate::processor::ProcessorTarget::Graph,
@@ -569,8 +592,6 @@ impl<'function> Function<'function> {
                 json.embeddings = Some(EmbeddingsJson::llvm(vector));
             }
         }
-
-        json
     }
 
     /// Return all processor outputs attached to this function.
@@ -680,6 +701,17 @@ impl<'function> Function<'function> {
     /// Returns a `FunctionJson` instance containing the function's metadata and `Attributes`.
     pub fn process_with_attributes(&self, attributes: Attributes) -> FunctionJson {
         let mut result = self.process();
+        result.attributes = Some(attributes.process());
+        result
+    }
+
+    pub fn process_with_attributes_and_references(
+        &self,
+        attributes: Attributes,
+        callee_references: BTreeMap<u64, u64>,
+        caller_references: BTreeMap<u64, u64>,
+    ) -> FunctionJson {
+        let mut result = self.process_with_references(callee_references, caller_references);
         result.attributes = Some(attributes.process());
         result
     }
