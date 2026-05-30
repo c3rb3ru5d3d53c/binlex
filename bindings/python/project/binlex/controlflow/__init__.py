@@ -869,8 +869,14 @@ class Function:
             cache["ast"][self.address()] = result
         return result
 
-    def c(self):
+    def c(self, image=None):
         """Return C-like pseudocode for this function."""
+        if image is None:
+            decompiler = getattr(self._graph, "_decompiler", None)
+            image = getattr(decompiler, "image", None)
+        if image is not None:
+            image = getattr(image, "_inner", image)
+            return self._inner.c_with_image(image)
         return self._inner.c()
 
     def print_c(self):

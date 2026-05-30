@@ -24,6 +24,7 @@ use crate::controlflow::json_value_to_py;
 use crate::controlflow::Block;
 use crate::controlflow::EntityKind;
 use crate::controlflow::Graph;
+use crate::formats::image::Image;
 use crate::genetics::Chromosome;
 use crate::hashing::{MinHash32, SSDeep, SHA256, TLSH};
 use crate::ir::ast::PyAstFunction;
@@ -409,6 +410,12 @@ impl Function {
     #[pyo3(text_signature = "($self)")]
     pub fn c(&self, py: Python<'_>) -> PyResult<String> {
         self.with_inner_function(py, |function| Ok(py.detach(|| function.c())?))
+    }
+
+    #[pyo3(text_signature = "($self, image)")]
+    pub fn c_with_image(&self, py: Python<'_>, image: Py<Image>) -> PyResult<String> {
+        let image = image.borrow(py);
+        self.with_inner_function(py, |function| Ok(function.c_with_image(&image.inner)?))
     }
 
     #[pyo3(text_signature = "($self)")]

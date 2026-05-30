@@ -32,7 +32,10 @@ class AstFunction:
     def optimize(self):
         self._inner.optimize()
 
-    def c(self):
+    def c(self, image=None):
+        if image is not None:
+            image = getattr(image, "_inner", image)
+            return self._inner.c_with_image(image)
         return self._inner.c()
 
     def print_c(self):

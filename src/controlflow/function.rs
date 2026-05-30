@@ -1070,6 +1070,10 @@ impl<'function> Function<'function> {
         Ok(self.ast()?.c())
     }
 
+    pub fn c_with_image(&self, image: &crate::formats::Image) -> Result<String, Error> {
+        Ok(self.ast()?.c_with_image(image))
+    }
+
     pub(crate) fn trim_mir_call_arguments(
         &self,
         mir: &mut MirFunction,

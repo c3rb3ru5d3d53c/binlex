@@ -220,6 +220,30 @@ impl Image {
             Err(Error::other("File handle is closed"))
         }
     }
+
+    pub fn read_virtual_bytes(
+        &self,
+        address: u64,
+        max_len: usize,
+    ) -> Result<Option<Vec<u8>>, Error> {
+        let Some(offset) = address.checked_sub(self.base) else {
+            return Ok(None);
+        };
+        if max_len == 0 {
+            return Ok(Some(Vec::new()));
+        }
+        let mut handle = OpenOptions::new().read(true).open(&self.path)?;
+        let size = handle.metadata()?.len();
+        if offset >= size {
+            return Ok(None);
+        }
+        let len = max_len.min((size - offset) as usize);
+        let mut bytes = vec![0; len];
+        handle.seek(SeekFrom::Start(offset))?;
+        let read = handle.read(&mut bytes)?;
+        bytes.truncate(read);
+        Ok(Some(bytes))
+    }
 }
 
 impl Drop for Image {

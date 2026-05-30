@@ -1,3 +1,4 @@
+use crate::formats::Image;
 use binlex::ir::ast::{AstFunction, AstModule};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
@@ -111,6 +112,11 @@ impl PyAstFunction {
 
     pub fn c(&self) -> String {
         self.inner.lock().unwrap().c()
+    }
+
+    pub fn c_with_image(&self, py: Python<'_>, image: Py<Image>) -> String {
+        let image = image.borrow(py);
+        self.inner.lock().unwrap().c_with_image(&image.inner)
     }
 
     pub fn print_c(&self) -> PyResult<()> {

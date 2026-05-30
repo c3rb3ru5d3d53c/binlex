@@ -1,7 +1,8 @@
 use super::block::AstBlock;
-use super::c::{format_c_function, format_c_module};
+use super::c::{format_c_function, format_c_function_with_image, format_c_module};
 use super::optimizers::{optimize_ast_function, optimize_ast_module};
 use super::statement::{AstLocal, AstParameter};
+use crate::formats::Image;
 use crate::ir::hir::{
     HirAddressSpace, HirBinaryOperation, HirBlock, HirExpression, HirFunction, HirModule, HirPlace,
     HirStatement, HirTarget, HirValue,
@@ -62,6 +63,10 @@ impl AstFunction {
 
     pub fn c(&self) -> String {
         format_c_function(self)
+    }
+
+    pub fn c_with_image(&self, image: &Image) -> String {
+        format_c_function_with_image(self, image)
     }
 
     pub fn print_c(&self) {
