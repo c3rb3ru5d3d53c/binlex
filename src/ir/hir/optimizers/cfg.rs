@@ -5,9 +5,11 @@ use crate::ir::hir::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+const MAX_CFG_OPTIMIZE_ITERATIONS: usize = 64;
+
 pub fn optimize_cfg(function: &mut HirFunction) {
     for block in &mut function.blocks {
-        loop {
+        for _ in 0..MAX_CFG_OPTIMIZE_ITERATIONS {
             let mut changed = false;
             changed |= inline_single_entry_regions(block);
             changed |= structure_top_level_regions(block);

@@ -23,6 +23,7 @@
 use binlex::controlflow::{Function, Graph};
 use binlex::decompilers::{Decompiler, DecompilerBackend};
 use binlex::disassemblers::capstone::Disassembler;
+use binlex::formats::Image;
 use binlex::hex;
 use binlex::ir::mir::MirFunction;
 use binlex::{Architecture, Configuration};
@@ -53,8 +54,7 @@ fn test_block_split_pending() {
     let bytes = vec![0x74, 0x02, 0x90, 0x90, 0xc3];
     let mut ranges = BTreeMap::new();
     ranges.insert(0u64, bytes.len() as u64);
-    let mut config = Configuration::new();
-    config.semantics.enabled = false;
+    let config = Configuration::new();
     let disasm = Disassembler::new(Architecture::I386, &bytes, ranges.clone(), config.clone())
         .expect("disasm");
     let mut graph = Graph::new(Architecture::I386, config.clone());
@@ -78,8 +78,7 @@ fn test_full_function_disassembly() {
         .collect();
     let mut ranges = BTreeMap::new();
     ranges.insert(0u64, bytes.len() as u64);
-    let mut config = Configuration::new();
-    config.semantics.enabled = false;
+    let config = Configuration::new();
     let disasm = Disassembler::new(Architecture::I386, &bytes, ranges.clone(), config.clone())
         .expect("disasm");
     let mut graph = Graph::new(Architecture::I386, config.clone());
@@ -183,10 +182,17 @@ fn test_mir_lowering_preserves_mid_block_calls() {
     assert!(!optimized_mir.text().contains("%rax"));
     assert!(!optimized_mir.text().contains("%rcx"));
 
-    let decompiled = Decompiler::new(&graph, Configuration::new(), DecompilerBackend::Default)
-        .decompile_function(0)
-        .expect("decompile")
-        .expect("decompiled function");
+    let tempdir = tempfile::tempdir().expect("tempdir");
+    let image = Image::new(tempdir.path().join("image.bin"), false).expect("image");
+    let decompiled = Decompiler::new(
+        &graph,
+        &image,
+        Configuration::new(),
+        DecompilerBackend::Default,
+    )
+    .decompile_function(0)
+    .expect("decompile")
+    .expect("decompiled function");
     assert!(decompiled.mir.text().contains("mir.call @callee("));
 }
 

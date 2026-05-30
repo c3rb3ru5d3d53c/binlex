@@ -26,7 +26,6 @@ from binlex_bindings.binlex.disassemblers.cil import Disassembler as _Disassembl
 
 from binlex import Architecture, Configuration
 from binlex.controlflow import Block, Function, Graph, Instruction
-from binlex.controlflow import _coerce_symbol_map
 from binlex.core.architecture import _coerce_architecture
 from binlex.formats import Image
 
@@ -40,7 +39,6 @@ class Disassembler:
         image: Image | bytes | memoryview,
         executable_address_ranges: dict[int, int],
         configuration: Configuration,
-        symbols=None,
     ) -> None:
         """Create a disassembler for the given architecture and image source."""
         if isinstance(image, Image):
@@ -51,15 +49,9 @@ class Disassembler:
             executable_address_ranges,
             configuration,
         )
-        self._symbols = _coerce_symbol_map(symbols)
-
-    def _populate_graph_symbols(self, graph: Graph) -> None:
-        if self._symbols:
-            graph.extend_symbols(self._symbols)
 
     def disassemble_instruction(self, address: int, graph: Graph) -> Instruction:
         """Disassemble a single instruction into the provided graph."""
-        self._populate_graph_symbols(graph)
         return Instruction._from_binding(
             self._inner.disassemble_instruction(
                 address,
@@ -70,7 +62,6 @@ class Disassembler:
 
     def disassemble_function(self, address: int, graph: Graph) -> Function:
         """Disassemble the function that starts at `address` into the graph."""
-        self._populate_graph_symbols(graph)
         return Function._from_binding(
             self._inner.disassemble_function(
                 address,
@@ -81,7 +72,6 @@ class Disassembler:
 
     def disassemble_block(self, address: int, graph: Graph) -> Block:
         """Disassemble the basic block that starts at `address`."""
-        self._populate_graph_symbols(graph)
         return Block._from_binding(
             self._inner.disassemble_block(
                 address,
@@ -92,7 +82,6 @@ class Disassembler:
 
     def disassemble(self, addresses: set[int], graph: Graph) -> None:
         """Disassemble a set of entrypoint addresses into the graph."""
-        self._populate_graph_symbols(graph)
         return self._inner.disassemble(addresses, graph._inner)
 
     def __getattr__(self, name):

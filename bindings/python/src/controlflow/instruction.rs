@@ -748,13 +748,17 @@ impl Instruction {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the canonical LIR attached to this instruction, if present.
+    /// Return the canonical LIR for this instruction, building it on demand if possible.
     pub fn lir(&self, py: Python) -> PyResult<Option<Py<PyLir>>> {
         self.with_inner_instruction(py, |instruction| {
-            let Some(semantics) = instruction.semantics.as_ref() else {
+            let Some(semantics) = instruction
+                .semantics
+                .clone()
+                .or_else(|| instruction.build_semantics())
+            else {
                 return Ok(None);
             };
-            Ok(Some(Py::new(py, PyLir::from_inner(semantics.clone()))?))
+            Ok(Some(Py::new(py, PyLir::from_inner(semantics))?))
         })
     }
 

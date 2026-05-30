@@ -433,6 +433,14 @@ impl Graph {
     /// Returns a `Graph` instance with empty instructions, blocks, and functions.
     #[allow(dead_code)]
     pub fn new(architecture: Architecture, config: Configuration) -> Self {
+        Self::new_with_symbols(architecture, config, BTreeMap::new())
+    }
+
+    pub fn new_with_symbols(
+        architecture: Architecture,
+        config: Configuration,
+        symbols: BTreeMap<u64, String>,
+    ) -> Self {
         Self {
             architecture,
             listing: SkipMap::<u64, InstructionRecord>::new(),
@@ -440,7 +448,7 @@ impl Graph {
             functions: GraphQueue::new(),
             instructions: GraphQueue::new(),
             config,
-            symbols: Mutex::new(BTreeMap::new()),
+            symbols: Mutex::new(symbols),
             revision: AtomicU64::new(0),
             processor_state: Mutex::new(GraphProcessorState::default()),
             callgraph_state: Mutex::new(GraphCallgraphState::default()),

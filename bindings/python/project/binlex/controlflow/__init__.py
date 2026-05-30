@@ -855,6 +855,28 @@ class Function:
             cache["hir"][self.address()] = result
         return result
 
+    def ast(self):
+        """Return AST for this function."""
+        from binlex.ir.ast import AstFunction
+
+        cache = getattr(self._graph, "_decompilation_cache", None)
+        if cache is not None:
+            cached = cache["ast"].get(self.address())
+            if cached is not None:
+                return cached
+        result = AstFunction._from_inner(self._inner.ast())
+        if cache is not None:
+            cache["ast"][self.address()] = result
+        return result
+
+    def c(self):
+        """Return C-like pseudocode for this function."""
+        return self._inner.c()
+
+    def print_c(self):
+        """Print C-like pseudocode for this function."""
+        self._inner.print_c()
+
     def tlsh(self):
         """Return the TLSH object for this function, if available."""
         return self._inner.tlsh()
@@ -1297,12 +1319,16 @@ class GraphQueue:
 class Graph:
     """Mutable control-flow graph wrapper backed by the Rust implementation."""
 
-    def __init__(self, architecture, config):
+    def __init__(self, architecture, config, symbols=None):
         """Create a graph for the given architecture and configuration."""
-        self._inner = _GraphBinding(_coerce_architecture(architecture), config)
+        self._inner = _GraphBinding(
+            _coerce_architecture(architecture),
+            config,
+            _coerce_symbol_map(symbols),
+        )
         self._config = config
         self._decompiler = None
-        self._decompilation_cache = {"lir": {}, "mir": {}, "hir": {}}
+        self._decompilation_cache = {"lir": {}, "mir": {}, "hir": {}, "ast": {}}
 
     @classmethod
     def _from_binding(cls, binding, config=None):
@@ -1311,7 +1337,7 @@ class Graph:
         result._inner = binding
         result._config = config
         result._decompiler = None
-        result._decompilation_cache = {"lir": {}, "mir": {}, "hir": {}}
+        result._decompilation_cache = {"lir": {}, "mir": {}, "hir": {}, "ast": {}}
         return result
 
     def instructions(self):

@@ -25,8 +25,8 @@ pub(crate) fn disassemble_arm64_single(name: &str, bytes: &[u8]) -> InstructionR
 
 pub(crate) fn semantics(name: &str, bytes: &[u8]) -> Lir {
     disassemble_arm64_single(name, bytes)
-        .semantics
-        .expect("instruction should have semantics")
+        .build_semantics()
+        .expect("instruction should build semantics")
 }
 
 pub(crate) fn assert_semantics_status(name: &str, bytes: &[u8], expected_status: LirStatus) -> Lir {

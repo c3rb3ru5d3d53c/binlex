@@ -203,9 +203,6 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfginstruction.to = instruction.branches();
         cfginstruction.functions = function_targets;
         cfginstruction.set_instruction_detail(InstructionDetail::cil(semantic_view));
-        if cfg.config.semantics.enabled {
-            cfginstruction.semantics = cfginstruction.build_and_log_semantics();
-        }
 
         Stderr::print_debug(
             &cfg.config,
@@ -404,9 +401,6 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfginstruction.to = instruction.branches();
         cfginstruction.functions = function_targets;
         cfginstruction.set_instruction_detail(InstructionDetail::cil(semantic_view));
-        if cfg.config().semantics.enabled {
-            cfginstruction.semantics = cfginstruction.build_and_log_semantics();
-        }
 
         Stderr::print_debug(
             cfg.config(),

@@ -50,7 +50,6 @@ shellcode = bytes.fromhex(
 )
 def main():
     config = Configuration()
-    config.semantics.enabled = True
 
     graph = Graph(Architecture.AMD64, config)
     disassembler = Disassembler(

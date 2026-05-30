@@ -139,8 +139,8 @@ pub(crate) fn disassemble_x86_single(
 
 pub(crate) fn semantics(name: &str, architecture: Architecture, bytes: &[u8]) -> Lir {
     disassemble_x86_single(name, architecture, bytes)
-        .semantics
-        .expect("instruction should have semantics")
+        .build_semantics()
+        .expect("instruction should build semantics")
 }
 
 pub(crate) fn assert_semantics_status(

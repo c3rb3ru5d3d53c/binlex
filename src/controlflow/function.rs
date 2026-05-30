@@ -35,6 +35,7 @@ use crate::hashing::SHA256;
 use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
 use crate::hex;
+use crate::ir::ast::AstFunction;
 use crate::ir::hir::HirFunction;
 use crate::ir::lir::{
     LirAbi, LirCpu, LirEffect, LirExpression, LirFunction, LirLocation, LirOperationBinary,
@@ -75,10 +76,10 @@ pub struct FunctionJson {
     pub bytes: Option<String>,
     /// A map of callsite addresses to directly called function addresses.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub callee_references: BTreeMap<u64, u64>,
+    pub callees: BTreeMap<u64, u64>,
     /// A map of callsite addresses to caller function addresses.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub caller_references: BTreeMap<u64, u64>,
+    pub callers: BTreeMap<u64, u64>,
     /// The set of block addresses contained within the function.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub blocks: Vec<u64>,
@@ -182,12 +183,12 @@ impl FunctionJsonDeserializer {
 
     #[allow(dead_code)]
     pub fn callee_references(&self) -> BTreeMap<u64, u64> {
-        self.json.callee_references.clone()
+        self.json.callees.clone()
     }
 
     #[allow(dead_code)]
     pub fn caller_references(&self) -> BTreeMap<u64, u64> {
-        self.json.caller_references.clone()
+        self.json.callers.clone()
     }
 
     #[allow(dead_code)]
@@ -293,16 +294,26 @@ impl<'function> Function<'function> {
         let end = self.effective_end()?;
         let mut bytes = Vec::new();
         let mut wildcard_mask = Vec::new();
-        for entry in self.cfg.listing.range(self.address..end) {
-            let instruction = entry.value();
+        let mut pc = self.address;
+        while pc < end {
+            let instruction = self.cfg.get_instruction(pc)?;
             bytes.extend_from_slice(&instruction.bytes);
             if instruction.chromosome_mask.len() == instruction.bytes.len() {
                 wildcard_mask.extend_from_slice(&instruction.chromosome_mask);
             } else {
                 wildcard_mask.extend(std::iter::repeat_n(0, instruction.bytes.len()));
             }
+            let size = instruction.size();
+            if size == 0 {
+                return None;
+            }
+            pc += size as u64;
         }
         Some((bytes, wildcard_mask, end))
+    }
+
+    fn block_payload_size(&self) -> usize {
+        self.blocks.values().map(|block| block.size()).sum()
     }
 
     /// Creates a new `Function` instance for the given address in the control flow graph.
@@ -416,8 +427,8 @@ impl<'function> Function<'function> {
         let edges: usize = self.blocks.values().map(|block| block.edges()).sum();
         let size = contiguous_payload
             .as_ref()
-            .map(|(_, _, end)| (*end - self.address) as usize)
-            .unwrap_or(0);
+            .map(|(bytes, _, _)| bytes.len())
+            .unwrap_or_else(|| self.block_payload_size());
         let bytes = contiguous_payload
             .as_ref()
             .map(|(bytes, _, _)| bytes.clone());
@@ -499,8 +510,8 @@ impl<'function> Function<'function> {
             chromosome,
             bytes: bytes_hex,
             size,
-            callee_references,
-            caller_references,
+            callees: callee_references,
+            callers: caller_references,
             blocks: block_addresses,
             number_of_blocks,
             number_of_instructions,
@@ -1051,6 +1062,14 @@ impl<'function> Function<'function> {
         HirFunction::from_mir(None, &mir).map_err(|error| Error::other(error.to_string()))
     }
 
+    pub fn ast(&self) -> Result<AstFunction, Error> {
+        Ok(AstFunction::from_hir(&self.hir()?))
+    }
+
+    pub fn c(&self) -> Result<String, Error> {
+        Ok(self.ast()?.c())
+    }
+
     pub(crate) fn trim_mir_call_arguments(
         &self,
         mir: &mut MirFunction,
@@ -1244,15 +1263,16 @@ impl<'function> Function<'function> {
         self.blocks.values().map(|block| block.edges()).sum()
     }
 
-    /// Retrieves the size of the function in bytes, if contiguous.
+    /// Retrieves the function size in bytes.
     ///
     /// # Returns
     ///
-    /// Returns `Some(usize)` if the function is contiguous; otherwise, `None`.
+    /// Returns the contiguous byte size when the function is contiguous, otherwise
+    /// the aggregate size of the function's owned blocks.
     pub fn size(&self) -> usize {
-        self.effective_end()
-            .map(|end| (end - self.address) as usize)
-            .unwrap_or(0)
+        self.contiguous_payload_bytes_and_mask()
+            .map(|(bytes, _, _)| bytes.len())
+            .unwrap_or_else(|| self.block_payload_size())
     }
 
     /// Retrieves the address of the function's last instruction, if contiguous.
@@ -1599,7 +1619,7 @@ impl<'function> Function<'function> {
     ///
     /// Returns `true` if the function is contiguous; otherwise, `false`.
     pub fn contiguous(&self) -> bool {
-        self.effective_end().is_some()
+        self.contiguous_payload_bytes_and_mask().is_some()
     }
 }
 

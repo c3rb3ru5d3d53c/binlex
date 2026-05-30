@@ -325,6 +325,20 @@ impl PyHirFunction {
         self.inner.lock().unwrap().optimize();
     }
 
+    pub fn ast(&self, py: Python<'_>) -> PyResult<Py<crate::ir::ast::PyAstFunction>> {
+        let inner = self.inner.lock().unwrap().ast();
+        Py::new(py, crate::ir::ast::PyAstFunction::from_inner(inner))
+    }
+
+    pub fn c(&self) -> String {
+        self.inner.lock().unwrap().c()
+    }
+
+    pub fn print_c(&self) -> PyResult<()> {
+        self.inner.lock().unwrap().print_c();
+        Ok(())
+    }
+
     pub fn text(&self) -> String {
         format_hir_function(&self.inner.lock().unwrap())
     }
@@ -465,6 +479,20 @@ impl PyHirModule {
 
     pub fn optimize(&mut self) {
         self.inner.lock().unwrap().optimize();
+    }
+
+    pub fn ast(&self, py: Python<'_>) -> PyResult<Py<crate::ir::ast::PyAstModule>> {
+        let inner = self.inner.lock().unwrap().ast();
+        Py::new(py, crate::ir::ast::PyAstModule::from_inner(inner))
+    }
+
+    pub fn c(&self) -> String {
+        self.inner.lock().unwrap().c()
+    }
+
+    pub fn print_c(&self) -> PyResult<()> {
+        self.inner.lock().unwrap().print_c();
+        Ok(())
     }
 
     pub fn text(&self) -> String {

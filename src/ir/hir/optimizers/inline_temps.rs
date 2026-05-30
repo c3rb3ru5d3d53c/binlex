@@ -5,11 +5,7 @@ use crate::ir::hir::{
 
 pub fn optimize_inline_temps(function: &mut HirFunction) {
     for block in &mut function.blocks {
-        loop {
-            if !inline_single_use_temps_once(block) {
-                break;
-            }
-        }
+        optimize_inline_temps_in_block(block);
     }
 }
 
@@ -55,6 +51,52 @@ fn inline_single_use_temps_once(block: &mut HirBlock) -> bool {
         changed = true;
     }
     changed
+}
+
+fn optimize_inline_temps_in_block(block: &mut HirBlock) {
+    loop {
+        if !inline_single_use_temps_once(block) {
+            break;
+        }
+    }
+    for statement in &mut block.statements {
+        optimize_inline_temps_in_statement(statement);
+    }
+}
+
+fn optimize_inline_temps_in_statement(statement: &mut HirStatement) {
+    match statement {
+        HirStatement::If {
+            then_body,
+            else_body,
+            ..
+        } => {
+            optimize_inline_temps_in_block(then_body);
+            if let Some(else_body) = else_body {
+                optimize_inline_temps_in_block(else_body);
+            }
+        }
+        HirStatement::While { body, .. } | HirStatement::Loop { body } => {
+            optimize_inline_temps_in_block(body);
+        }
+        HirStatement::Switch { cases, default, .. } => {
+            for case in cases {
+                optimize_inline_temps_in_block(&mut case.body);
+            }
+            if let Some(default) = default {
+                optimize_inline_temps_in_block(default);
+            }
+        }
+        HirStatement::Assign { .. }
+        | HirStatement::Expr(_)
+        | HirStatement::Return { .. }
+        | HirStatement::Goto(_)
+        | HirStatement::Break
+        | HirStatement::Continue
+        | HirStatement::Label(_)
+        | HirStatement::Trap
+        | HirStatement::Unreachable => {}
+    }
 }
 
 fn assignment_candidate(statement: &HirStatement) -> Option<(String, HirExpression, HirType)> {

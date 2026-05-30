@@ -26,7 +26,7 @@ use super::lower::{HirLowerError, lower_mir_function_to_hir, lower_mir_module_to
 use super::optimizers::{
     optimize, optimize_algebraic, optimize_boolean, optimize_call_arguments, optimize_cfg,
     optimize_condition_idioms, optimize_inline_temps, optimize_load_hoisting, optimize_locals,
-    optimize_memory_forms, optimize_pointer_reads,
+    optimize_memory_forms, optimize_pointer_reads, optimize_undefs,
 };
 use super::print::{format_hir_function, format_hir_module};
 use super::statement::{HirLocal, HirParameter};
@@ -126,6 +126,10 @@ impl HirFunction {
         optimize_locals(self);
     }
 
+    pub fn optimize_undefs(&mut self) {
+        optimize_undefs(self);
+    }
+
     pub fn optimize(&mut self) {
         optimize(self);
     }
@@ -136,6 +140,18 @@ impl HirFunction {
 
     pub fn print(&self) {
         println!("{}", self.text());
+    }
+
+    pub fn ast(&self) -> crate::ir::ast::AstFunction {
+        crate::ir::ast::AstFunction::from_hir(self)
+    }
+
+    pub fn c(&self) -> String {
+        self.ast().c()
+    }
+
+    pub fn print_c(&self) {
+        println!("{}", self.c());
     }
 }
 
@@ -239,6 +255,12 @@ impl HirModule {
         }
     }
 
+    pub fn optimize_undefs(&mut self) {
+        for function in &mut self.functions {
+            function.optimize_undefs();
+        }
+    }
+
     pub fn optimize(&mut self) {
         for function in &mut self.functions {
             function.optimize();
@@ -251,5 +273,17 @@ impl HirModule {
 
     pub fn print(&self) {
         println!("{}", self.text());
+    }
+
+    pub fn ast(&self) -> crate::ir::ast::AstModule {
+        crate::ir::ast::AstModule::from_hir(self)
+    }
+
+    pub fn c(&self) -> String {
+        self.ast().c()
+    }
+
+    pub fn print_c(&self) {
+        println!("{}", self.c());
     }
 }

@@ -117,8 +117,11 @@ fn fold_trivial_block_parameters(
 
         let mut replacements = Vec::<(usize, MirValue)>::new();
         for param_index in 0..param_len {
-            let incoming =
-                incoming_argument_values(mir, indices, predecessors, &block_name, param_index);
+            let Some(incoming) =
+                incoming_argument_values(mir, indices, predecessors, &block_name, param_index)
+            else {
+                continue;
+            };
             if incoming.is_empty() {
                 continue;
             }
@@ -162,28 +165,22 @@ fn incoming_argument_values(
     predecessors: &HashMap<String, Vec<String>>,
     target: &str,
     param_index: usize,
-) -> Vec<MirValue> {
+) -> Option<Vec<MirValue>> {
     let mut values = Vec::new();
     let Some(preds) = predecessors.get(target) else {
-        return values;
+        return Some(values);
     };
     for predecessor in preds {
-        let Some(index) = indices.get(predecessor).copied() else {
-            continue;
-        };
+        let index = indices.get(predecessor).copied()?;
         let block = &mir.blocks()[index];
-        let Some(terminator) = block.terminator.as_ref() else {
-            continue;
-        };
+        let terminator = block.terminator.as_ref()?;
         match terminator {
             MirTerminator::Jump {
                 target: edge_target,
                 arguments,
             } => {
                 if direct_target_name(edge_target) == Some(target) {
-                    if let Some(value) = arguments.get(param_index) {
-                        values.push(value.clone());
-                    }
+                    values.push(arguments.get(param_index)?.clone());
                 }
             }
             MirTerminator::CondBr {
@@ -194,20 +191,16 @@ fn incoming_argument_values(
                 ..
             } => {
                 if matches!(then_target, MirControlTarget::Direct(name) if name == target) {
-                    if let Some(value) = then_arguments.get(param_index) {
-                        values.push(value.clone());
-                    }
+                    values.push(then_arguments.get(param_index)?.clone());
                 }
                 if matches!(else_target, MirControlTarget::Direct(name) if name == target) {
-                    if let Some(value) = else_arguments.get(param_index) {
-                        values.push(value.clone());
-                    }
+                    values.push(else_arguments.get(param_index)?.clone());
                 }
             }
             _ => {}
         }
     }
-    values
+    Some(values)
 }
 
 fn replace_block_uses(block: &mut crate::ir::mir::MirBlock, name: &str, replacement: &MirValue) {
@@ -371,5 +364,60 @@ fn direct_target_name(target: &MirControlTarget) -> Option<&str> {
     match target {
         MirControlTarget::Direct(name) => Some(name.as_str()),
         MirControlTarget::FunctionIndirect(_) | MirControlTarget::BlockIndirect(_) => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ir::mir::{MirBlock, MirBlockParameter, MirOperation, MirOperationKind, MirType};
+
+    #[test]
+    fn does_not_fold_parameter_when_any_predecessor_lacks_argument() {
+        let ty = MirType::integer(64);
+        let mut mir = Mir::new(Some("test".to_string()));
+
+        let mut entry = MirBlock::new("entry".to_string());
+        entry.set_terminator(MirTerminator::CondBr {
+            condition: MirValue::boolean(true),
+            then_target: MirControlTarget::direct("merge".to_string()),
+            then_arguments: vec![MirValue::integer(0, 64)],
+            else_target: MirControlTarget::direct("loop".to_string()),
+            else_arguments: Vec::new(),
+        });
+        mir.append_block(entry);
+
+        let mut merge = MirBlock::new("merge".to_string());
+        merge.append_parameter(MirBlockParameter::new(
+            Some("value.phi.merge".to_string()),
+            ty.clone(),
+        ));
+        merge.append_operation(MirOperation::new(
+            Some("use_value".to_string()),
+            MirOperationKind::Copy {
+                value: MirValue::named("value.phi.merge".to_string(), ty.clone()),
+                ty: ty.clone(),
+            },
+        ));
+        merge.set_terminator(MirTerminator::Return {
+            values: vec![MirValue::named("use_value".to_string(), ty.clone())],
+        });
+        mir.append_block(merge);
+
+        let mut loop_block = MirBlock::new("loop".to_string());
+        loop_block.set_terminator(MirTerminator::Jump {
+            target: MirControlTarget::direct("merge".to_string()),
+            arguments: Vec::new(),
+        });
+        mir.append_block(loop_block);
+
+        optimize_ssa_liveness(&mut mir);
+
+        let merge = mir
+            .blocks()
+            .iter()
+            .find(|block| block.name == "merge")
+            .expect("merge block");
+        assert_eq!(merge.parameters.len(), 1);
     }
 }

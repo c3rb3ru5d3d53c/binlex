@@ -4,6 +4,7 @@ from enum import Enum
 
 from binlex.config import Configuration
 from binlex.controlflow import Function, Graph
+from binlex.formats import Image
 
 
 class DecompilerBackend(str, Enum):
@@ -13,11 +14,14 @@ class Decompiler:
     def __init__(
         self,
         graph: Graph,
+        image: Image,
         configuration: Configuration,
         backend: DecompilerBackend = DecompilerBackend.DEFAULT,
     ) -> None: ...
     @property
     def graph(self) -> Graph: ...
+    @property
+    def image(self) -> Image: ...
     @property
     def configuration(self) -> Configuration: ...
     @property

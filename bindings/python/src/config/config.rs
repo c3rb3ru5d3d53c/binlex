@@ -31,26 +31,6 @@ pub struct ConfigChromosomes {
     inner: Arc<Mutex<InnerConfig>>,
 }
 
-#[pyclass]
-pub struct ConfigSemantics {
-    inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigSemantics {
-    #[getter]
-    pub fn get_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.semantics.enabled
-    }
-
-    #[setter]
-    pub fn set_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.semantics.enabled = value;
-    }
-}
-
 #[pymethods]
 impl ConfigChromosomes {
     #[getter]
@@ -1738,14 +1718,6 @@ impl Configuration {
     }
 
     #[getter]
-    /// Return the semantics configuration group.
-    pub fn get_semantics(&self) -> PyResult<ConfigSemantics> {
-        Ok(ConfigSemantics {
-            inner: Arc::clone(&self.inner),
-        })
-    }
-
-    #[getter]
     /// Return the memory-mapping configuration group.
     pub fn get_mmap(&self) -> PyResult<ConfigMmap> {
         Ok(ConfigMmap {
@@ -2625,7 +2597,6 @@ impl ConfigProcessors {
 
 pub fn register_config(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Configuration>()?;
-    m.add_class::<ConfigSemantics>()?;
     m.add_class::<ConfigEntityEmbeddings>()?;
     m.add_class::<ConfigEntityEmbeddingsLLVM>()?;
     m.add_class::<ConfigEntityLifters>()?;

@@ -247,7 +247,7 @@ mod tests {
         instructions.sort_by_key(|instruction| instruction.address);
         instructions
             .into_iter()
-            .map(|instruction| instruction.semantics.clone().expect("LIR bindings"))
+            .map(|instruction| instruction.build_semantics().expect("LIR bindings"))
             .collect()
     }
 

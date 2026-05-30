@@ -23,6 +23,7 @@
 use crate::Configuration;
 use crate::config::RAYON_WORKER_STACK_SIZE;
 use crate::controlflow::{Function, Graph};
+use crate::formats::Image;
 use crate::ir::hir::HirFunction;
 use crate::ir::lir::LirFunction;
 use crate::ir::mir::MirFunction;
@@ -48,14 +49,21 @@ pub struct DecompiledFunction {
 
 pub struct Decompiler<'a> {
     graph: &'a Graph,
+    image: &'a Image,
     configuration: Configuration,
     backend: DecompilerBackend,
 }
 
 impl<'a> Decompiler<'a> {
-    pub fn new(graph: &'a Graph, configuration: Configuration, backend: DecompilerBackend) -> Self {
+    pub fn new(
+        graph: &'a Graph,
+        image: &'a Image,
+        configuration: Configuration,
+        backend: DecompilerBackend,
+    ) -> Self {
         Self {
             graph,
+            image,
             configuration,
             backend,
         }
@@ -63,6 +71,10 @@ impl<'a> Decompiler<'a> {
 
     pub fn graph(&self) -> &'a Graph {
         self.graph
+    }
+
+    pub fn image(&self) -> &'a Image {
+        self.image
     }
 
     pub fn configuration(&self) -> &Configuration {

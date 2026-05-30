@@ -20,15 +20,30 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::ir::mir::analysis::{MirRegisterAliases, incoming_register_aliases};
+use crate::ir::mir::analysis::{
+    MirRegisterAliases, incoming_register_aliases, mir_predecessors, mir_successors,
+};
 use crate::ir::mir::{Mir, MirOperation, MirOperationKind, MirTerminator, MirValue};
 use std::collections::HashMap;
 
 pub fn optimize_register_state(mir: &mut Mir) {
     let incoming = incoming_register_aliases(mir);
+    let predecessors = mir_predecessors(mir);
+    let successors = mir_successors(mir);
 
     for block in mir.blocks_mut() {
         let mut aliases = incoming.get(&block.name).cloned().unwrap_or_default();
+        let preserve_path_aliases =
+            matches!(block.terminator.as_ref(), Some(MirTerminator::Jump { .. }))
+                || successors
+                    .get(&block.name)
+                    .into_iter()
+                    .flatten()
+                    .any(|successor| {
+                        predecessors
+                            .get(successor)
+                            .is_some_and(|preds| preds.len() > 1)
+                    });
         let mut normalized = Vec::with_capacity(block.operations.len());
 
         for mut operation in std::mem::take(&mut block.operations) {
@@ -45,7 +60,9 @@ pub fn optimize_register_state(mir: &mut Mir) {
 
             if let Some((result, source)) = alias_from_operation(&operation) {
                 aliases.insert(result, source);
-                continue;
+                if !preserve_path_aliases {
+                    continue;
+                }
             }
 
             normalized.push(operation);

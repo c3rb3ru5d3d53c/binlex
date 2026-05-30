@@ -408,6 +408,10 @@ class PE:
         """Return executable ranges, using .NET ranges automatically when applicable."""
         return self._inner.executable_virtual_address_ranges()
 
+    def image(self):
+        """Return an `Image` wrapper over the PE contents."""
+        return Image._from_binding(self._inner.image())
+
     def native_entrypoint_virtual_addresses(self):
         """Return native PE entrypoints without .NET-specific remapping."""
         return self._inner.native_entrypoint_virtual_addresses()

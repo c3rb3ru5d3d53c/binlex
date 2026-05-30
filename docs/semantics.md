@@ -430,22 +430,9 @@ for function in graph.functions():
             )
 ```
 
-If you want a faster CLI-only or graph-only run, semantics can be disabled:
-
-```toml
-[binlex.ir.lir]
-enabled = false
-```
-
-or by using `--minimal` in the CLI.
-
-If you want semantics to remain available through `instruction.semantic()` but omit them from
-serialized instruction JSON:
-
-```toml
-[binlex.instructions.semantics]
-enabled = false
-```
+Disassembly does not eagerly collect LIR. Semantics are built on demand from the
+decoded instruction detail when an accessor, lifter, symbolic executor, or decompiler
+asks for them.
 
 ## Recommended Usage
 

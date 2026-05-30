@@ -81,6 +81,17 @@ class HirFunction:
     def optimize(self):
         self._inner.optimize()
 
+    def ast(self):
+        from binlex.ir.ast import AstFunction
+
+        return AstFunction._from_inner(self._inner.ast())
+
+    def c(self):
+        return self._inner.c()
+
+    def print_c(self):
+        self._inner.print_c()
+
     def text(self):
         return self._inner.text()
 
@@ -168,6 +179,17 @@ class HirModule:
 
     def optimize(self):
         self._inner.optimize()
+
+    def ast(self):
+        from binlex.ir.ast import AstModule
+
+        return AstModule._from_inner(self._inner.ast())
+
+    def c(self):
+        return self._inner.c()
+
+    def print_c(self):
+        self._inner.print_c()
 
     def text(self):
         return self._inner.text()

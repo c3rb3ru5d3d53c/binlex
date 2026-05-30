@@ -26,9 +26,9 @@ use super::{
     ConfigEntityEmbeddings, ConfigEntityLifters, ConfigFile, ConfigFormats, ConfigFunctions,
     ConfigHashEnabled, ConfigHeuristicEntropy, ConfigHeuristicFeatures, ConfigImaging,
     ConfigImagingMinhash, ConfigImagingTLSH, ConfigIndex, ConfigIndexLocal, ConfigInstructions,
-    ConfigInstructionsSemantics, ConfigLifters, ConfigLiftersLLVM, ConfigLiftersVex, ConfigMarkov,
-    ConfigMinhash, ConfigMmap, ConfigMmapCache, ConfigProcessors, ConfigSemantics, ConfigStorage,
-    ConfigStorageLocal, ConfigTLSH, Configuration,
+    ConfigLifters, ConfigLiftersLLVM, ConfigLiftersVex, ConfigMarkov, ConfigMinhash, ConfigMmap,
+    ConfigMmapCache, ConfigProcessors, ConfigStorage, ConfigStorageLocal, ConfigTLSH,
+    Configuration,
 };
 use std::env;
 
@@ -86,7 +86,6 @@ impl Configuration {
             },
             instructions: ConfigInstructions {
                 enabled: false,
-                semantics: ConfigInstructionsSemantics::default(),
                 lifters: ConfigEntityLifters::default(),
                 embeddings: ConfigEntityEmbeddings::default(),
             },
@@ -156,7 +155,6 @@ impl Configuration {
                 vector: ConfigHeuristicFeatures { enabled: false },
                 entropy: ConfigHeuristicEntropy { enabled: true },
             },
-            semantics: ConfigSemantics::default(),
             mmap: ConfigMmap {
                 directory: Configuration::default_file_mapping_directory(),
                 cache: ConfigMmapCache { enabled: false },
@@ -176,7 +174,6 @@ impl Configuration {
         self.disable_hashing();
         self.disable_heuristics();
         self.instructions.enabled = false;
-        self.semantics.enabled = false;
     }
 
     pub fn disable_hashing(&mut self) {
@@ -352,23 +349,5 @@ impl Default for ConfigLifters {
             llvm: ConfigLiftersLLVM::default(),
             vex: ConfigLiftersVex::default(),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::Configuration;
-
-    #[test]
-    fn semantics_enabled_by_default() {
-        let config = Configuration::default();
-        assert!(config.semantics.enabled);
-    }
-
-    #[test]
-    fn minimal_mode_disables_semantics() {
-        let mut config = Configuration::default();
-        config.enable_minimal();
-        assert!(!config.semantics.enabled);
     }
 }

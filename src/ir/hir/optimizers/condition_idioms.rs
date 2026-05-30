@@ -326,37 +326,23 @@ fn simplify_signed_sub_less_than_idiom(expression: &HirExpression) -> Option<Hir
     else {
         return None;
     };
-    let HirExpression::Extract {
-        value: negative_sub,
-        lsb: 31,
-        ..
-    } = &**lhs
-    else {
-        return None;
-    };
+    let negative_sub = signed_negative_operand(lhs)?;
     let HirExpression::Binary {
         op: HirBinaryOperation::Sub,
         lhs: sub_lhs,
         rhs: sub_rhs,
         ..
-    } = &**negative_sub
+    } = negative_sub
     else {
         return None;
     };
-    let HirExpression::Extract {
-        value: overflow_value,
-        lsb: 31,
-        ..
-    } = &**rhs
-    else {
-        return None;
-    };
+    let overflow_value = signed_negative_operand(rhs)?;
     let HirExpression::Binary {
         op: HirBinaryOperation::And,
         lhs: overflow_lhs,
         rhs: overflow_rhs,
         ..
-    } = &**overflow_value
+    } = overflow_value
     else {
         return None;
     };
@@ -379,25 +365,45 @@ fn simplify_signed_sub_less_than_idiom(expression: &HirExpression) -> Option<Hir
         return None;
     };
 
-    if **xor_lhs_l == **sub_lhs
-        && **xor_lhs_r == **sub_rhs
-        && **xor_rhs_l == **sub_lhs
-        && **xor_rhs_r
-            == (HirExpression::Binary {
-                op: HirBinaryOperation::Sub,
-                lhs: Box::new((**sub_lhs).clone()),
-                rhs: Box::new((**sub_rhs).clone()),
-                ty: value_type(negative_sub),
-            })
+    let expected_sub = HirExpression::Binary {
+        op: HirBinaryOperation::Sub,
+        lhs: Box::new(sub_lhs.as_ref().clone()),
+        rhs: Box::new(sub_rhs.as_ref().clone()),
+        ty: value_type(negative_sub),
+    };
+
+    if xor_lhs_l.as_ref() == sub_lhs.as_ref()
+        && xor_lhs_r.as_ref() == sub_rhs.as_ref()
+        && xor_rhs_l.as_ref() == sub_lhs.as_ref()
+        && xor_rhs_r.as_ref() == &expected_sub
     {
         return Some(HirExpression::Compare {
             op: HirCompareOperation::Slt,
-            lhs: Box::new((**sub_lhs).clone()),
-            rhs: Box::new((**sub_rhs).clone()),
+            lhs: Box::new(sub_lhs.as_ref().clone()),
+            rhs: Box::new(sub_rhs.as_ref().clone()),
             ty: HirType::integer(1),
         });
     }
     None
+}
+
+fn signed_negative_operand(expression: &HirExpression) -> Option<&HirExpression> {
+    match expression {
+        HirExpression::Extract { value, lsb, .. } => {
+            if *lsb + 1 == integer_bits(&value_type(value)).unwrap_or(0) {
+                Some(value)
+            } else {
+                None
+            }
+        }
+        HirExpression::Compare {
+            op: HirCompareOperation::Slt,
+            lhs,
+            rhs,
+            ..
+        } if is_zero_expression(rhs) => Some(lhs),
+        _ => None,
+    }
 }
 
 fn integer_bits(ty: &HirType) -> Option<u16> {
@@ -416,4 +422,68 @@ fn is_zero_expression(expression: &HirExpression) -> bool {
         expression,
         HirExpression::Value(crate::ir::hir::HirValue::Boolean(false))
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ir::hir::HirValue;
+
+    fn named(name: &str) -> HirExpression {
+        HirExpression::Value(HirValue::Named {
+            name: name.to_string(),
+            ty: HirType::integer(32),
+        })
+    }
+
+    fn zero32() -> HirExpression {
+        HirExpression::Value(HirValue::Integer { value: 0, bits: 32 })
+    }
+
+    fn binary(op: HirBinaryOperation, lhs: HirExpression, rhs: HirExpression) -> HirExpression {
+        HirExpression::Binary {
+            op,
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+            ty: HirType::integer(32),
+        }
+    }
+
+    fn slt_zero(value: HirExpression) -> HirExpression {
+        HirExpression::Compare {
+            op: HirCompareOperation::Slt,
+            lhs: Box::new(value),
+            rhs: Box::new(zero32()),
+            ty: HirType::integer(1),
+        }
+    }
+
+    #[test]
+    fn simplifies_compare_based_signed_less_than_overflow_idiom() {
+        let lhs = named("lhs");
+        let rhs = named("rhs");
+        let sub = binary(HirBinaryOperation::Sub, lhs.clone(), rhs.clone());
+        let overflow = binary(
+            HirBinaryOperation::And,
+            binary(HirBinaryOperation::Xor, lhs.clone(), rhs.clone()),
+            binary(HirBinaryOperation::Xor, lhs.clone(), sub.clone()),
+        );
+        let expression = HirExpression::Binary {
+            op: HirBinaryOperation::Xor,
+            lhs: Box::new(slt_zero(sub)),
+            rhs: Box::new(slt_zero(overflow)),
+            ty: HirType::integer(1),
+        };
+
+        let simplified = simplify_condition_idiom_expression_once(expression);
+        assert_eq!(
+            simplified,
+            HirExpression::Compare {
+                op: HirCompareOperation::Slt,
+                lhs: Box::new(lhs),
+                rhs: Box::new(rhs),
+                ty: HirType::integer(1),
+            }
+        );
+    }
 }

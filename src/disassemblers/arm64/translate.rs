@@ -556,9 +556,5 @@ pub(crate) fn build_instruction(
         blinstruction.edges = blinstruction.successors().len();
     }
 
-    if cfg.config().semantics.enabled {
-        blinstruction.semantics = blinstruction.build_and_log_semantics();
-    }
-
     Ok(blinstruction)
 }

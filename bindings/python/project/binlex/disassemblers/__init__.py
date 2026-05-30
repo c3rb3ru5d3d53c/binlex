@@ -46,7 +46,6 @@ class Disassembler:
         image: Image | bytes | memoryview,
         executable_address_ranges: dict[int, int],
         configuration: Configuration,
-        symbols=None,
         backend: DisassemblerBackend = DisassemblerBackend.Default,
     ) -> None:
         binding_architecture = _coerce_architecture(architecture)
@@ -73,7 +72,6 @@ class Disassembler:
                 image,
                 executable_address_ranges,
                 configuration,
-                symbols=symbols,
             )
         else:
             if resolved_backend != DisassemblerBackend.Capstone:
@@ -85,7 +83,6 @@ class Disassembler:
                 image,
                 executable_address_ranges,
                 configuration,
-                symbols=symbols,
             )
 
     def disassemble_instruction(self, address: int, graph: Graph) -> Instruction:

@@ -24,8 +24,8 @@ pub(super) fn disassemble_cil_single(name: &str, bytes: &[u8]) -> InstructionRec
 
 pub(super) fn semantics(name: &str, bytes: &[u8]) -> Lir {
     disassemble_cil_single(name, bytes)
-        .semantics
-        .expect("instruction should have semantics")
+        .build_semantics()
+        .expect("instruction should build semantics")
 }
 
 pub(super) fn assert_complete_semantics(name: &str, bytes: &[u8]) -> Lir {

@@ -10,6 +10,7 @@ pub mod locals;
 pub mod memory_forms;
 pub mod pointer_reads;
 pub mod simplify;
+pub mod undefs;
 
 pub use algebraic::optimize_algebraic;
 pub use boolean::optimize_boolean;
@@ -22,3 +23,4 @@ pub use locals::optimize_locals;
 pub use memory_forms::optimize_memory_forms;
 pub use pointer_reads::optimize_pointer_reads;
 pub use simplify::optimize;
+pub use undefs::optimize_undefs;

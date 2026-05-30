@@ -26,6 +26,7 @@ use crate::controlflow::EntityKind;
 use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
 use crate::hashing::{MinHash32, SSDeep, SHA256, TLSH};
+use crate::ir::ast::PyAstFunction;
 use crate::ir::hir::PyHirFunction;
 use crate::ir::lir::LirFunction as PyLirFunction;
 use crate::ir::mir::PyMirFunction;
@@ -395,6 +396,26 @@ impl Function {
             let inner = py.detach(|| function.hir())?;
             Py::new(py, PyHirFunction::from_inner(inner))
         })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn ast(&self, py: Python<'_>) -> PyResult<Py<PyAstFunction>> {
+        self.with_inner_function(py, |function| {
+            let inner = py.detach(|| function.ast())?;
+            Py::new(py, PyAstFunction::from_inner(inner))
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn c(&self, py: Python<'_>) -> PyResult<String> {
+        self.with_inner_function(py, |function| Ok(py.detach(|| function.c())?))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn print_c(&self, py: Python<'_>) -> PyResult<()> {
+        let text = self.c(py)?;
+        println!("{text}");
+        Ok(())
     }
 
     #[pyo3(text_signature = "($self)")]

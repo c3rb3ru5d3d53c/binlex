@@ -67,16 +67,9 @@ pub enum ConfigProcessorValue {
 pub struct ConfigInstructions {
     pub enabled: bool,
     #[serde(default)]
-    pub semantics: ConfigInstructionsSemantics,
-    #[serde(default)]
     pub lifters: ConfigEntityLifters,
     #[serde(default)]
     pub embeddings: ConfigEntityEmbeddings,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigInstructionsSemantics {
-    pub enabled: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -217,11 +210,6 @@ pub struct ConfigLiftersVex {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigSemantics {
-    pub enabled: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigData {
     pub threads: usize,
     pub minimal: bool,
@@ -238,8 +226,6 @@ pub struct ConfigData {
     pub blocks: ConfigBlocks,
     pub functions: ConfigFunctions,
     pub chromosomes: ConfigChromosomes,
-    #[serde(default)]
-    pub semantics: ConfigSemantics,
     pub mmap: ConfigMmap,
     pub disassembler: ConfigDisassembler,
     #[serde(default)]
@@ -380,12 +366,6 @@ impl Default for ConfigMarkov {
     }
 }
 
-impl Default for ConfigInstructionsSemantics {
-    fn default() -> Self {
-        Self { enabled: true }
-    }
-}
-
 impl Default for ConfigDecompilerOptimize {
     fn default() -> Self {
         Self { enabled: true }
@@ -482,12 +462,6 @@ impl Default for ConfigEmbeddings {
         Self {
             llvm: ConfigEmbeddingsLLVM::default(),
         }
-    }
-}
-
-impl Default for ConfigSemantics {
-    fn default() -> Self {
-        Self { enabled: true }
     }
 }
 

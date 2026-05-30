@@ -429,11 +429,11 @@ impl InstructionRecord {
     }
 
     pub fn prepared_semantics(&self) -> Result<Option<&LirInstruction>, Error> {
-        let Some(semantics) = self.semantics.as_ref() else {
+        let Some(semantics) = self.semantics.clone().or_else(|| self.build_semantics()) else {
             return Ok(None);
         };
         match self.prepared_semantics_cache.get_or_init(|| {
-            crate::ir::llvm::prepare::prepare_instruction_semantics(semantics)
+            crate::ir::llvm::prepare::prepare_instruction_semantics(&semantics)
                 .map_err(|error| error.to_string())
         }) {
             Ok(prepared) => Ok(Some(prepared)),
@@ -450,9 +450,11 @@ impl InstructionRecord {
     }
 
     pub fn build_semantics(&self) -> Option<LirInstruction> {
-        self.instruction_detail
-            .clone()
-            .map(InstructionDetail::build_lir)
+        if let Some(detail) = self.instruction_detail.clone() {
+            return Some(detail.build_lir());
+        }
+        self.fallthrough()
+            .map(|_| self.unsupported_fallthrough_semantics("instruction detail unavailable"))
     }
 
     pub fn build_and_log_semantics(&self) -> Option<LirInstruction> {
@@ -466,6 +468,32 @@ impl InstructionRecord {
             &semantics,
         );
         Some(semantics)
+    }
+
+    fn unsupported_fallthrough_semantics(&self, message: &str) -> LirInstruction {
+        LirInstruction {
+            version: 1,
+            status: LirStatus::Partial,
+            abi: None,
+            encoding: Some(LirEncoding {
+                architecture: self.architecture.to_string(),
+                mnemonic: self.mnemonic.clone(),
+                disassembly: if self.disassembly.is_empty() {
+                    self.mnemonic.clone()
+                } else {
+                    self.disassembly.clone()
+                },
+                address: self.address,
+                bytes: self.bytes.clone(),
+            }),
+            temporaries: Vec::new(),
+            effects: Vec::new(),
+            terminator: LirTerminator::FallThrough,
+            diagnostics: vec![diagnostic(
+                LirDiagnosticKind::UnsupportedInstruction,
+                format!("0x{:x}: {} ({})", self.address, message, self.mnemonic),
+            )],
+        }
     }
 
     /// Retrieves the address of the next sequential instruction.
@@ -549,11 +577,11 @@ impl InstructionRecord {
             fallthrough: self.fallthrough(),
             processors: None,
             embeddings: None,
-            semantics: if self.config.instructions.semantics.enabled {
-                self.semantics.as_ref().map(|semantics| semantics.process())
-            } else {
-                None
-            },
+            semantics: self
+                .semantics
+                .clone()
+                .or_else(|| self.build_semantics())
+                .map(|semantics| semantics.process()),
             attributes: None,
             lifters: None,
         }

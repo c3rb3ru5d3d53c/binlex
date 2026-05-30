@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 use crate::controlflow::{Function, Graph};
+use crate::formats::Image;
 use crate::ir::hir::PyHirFunction;
 use crate::ir::lir::LirFunction as PyLirFunction;
 use crate::ir::mir::PyMirFunction;
@@ -35,6 +36,7 @@ use std::sync::Mutex;
 pub struct Decompiler {
     graph: Py<Graph>,
     graph_inner: Arc<Mutex<binlex::controlflow::Graph>>,
+    image: Py<Image>,
     configuration: Py<Configuration>,
     inner_configuration: binlex::Configuration,
     backend: DecompilerBackend,
@@ -57,10 +59,11 @@ impl Decompiler {
 #[pymethods]
 impl Decompiler {
     #[new]
-    #[pyo3(text_signature = "(graph, configuration, backend='default')")]
+    #[pyo3(text_signature = "(graph, image, configuration, backend='default')")]
     pub fn new(
         py: Python<'_>,
         graph: Py<Graph>,
+        image: Py<Image>,
         configuration: Py<Configuration>,
         backend: Option<String>,
     ) -> PyResult<Self> {
@@ -77,6 +80,7 @@ impl Decompiler {
         Ok(Self {
             graph,
             graph_inner,
+            image,
             configuration,
             inner_configuration,
             backend,
@@ -86,6 +90,11 @@ impl Decompiler {
     #[getter]
     pub fn get_graph(&self, py: Python<'_>) -> Py<Graph> {
         self.graph.clone_ref(py)
+    }
+
+    #[getter]
+    pub fn get_image(&self, py: Python<'_>) -> Py<Image> {
+        self.image.clone_ref(py)
     }
 
     #[getter]
@@ -124,11 +133,10 @@ impl Decompiler {
         let graph_inner = self.graph_inner.clone();
         let configuration = self.inner_configuration.clone();
         let backend = self.backend;
-        let artifact = py
-            .detach(move || {
-                let graph = graph_inner.lock().unwrap();
-                InnerDecompiler::new(&graph, configuration, backend).decompile_function(address)
-            })
+        let graph = graph_inner.lock().unwrap();
+        let image = self.image.borrow(py);
+        let artifact = InnerDecompiler::new(&graph, &image.inner, configuration, backend)
+            .decompile_function(address)
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
         let Some(artifact) = artifact else {
             return Ok(None);
@@ -153,11 +161,10 @@ impl Decompiler {
         let graph_inner = self.graph_inner.clone();
         let configuration = self.inner_configuration.clone();
         let backend = self.backend;
-        let artifacts = py
-            .detach(move || {
-                let graph = graph_inner.lock().unwrap();
-                InnerDecompiler::new(&graph, configuration, backend).decompile()
-            })
+        let graph = graph_inner.lock().unwrap();
+        let image = self.image.borrow(py);
+        let artifacts = InnerDecompiler::new(&graph, &image.inner, configuration, backend)
+            .decompile()
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
 
         artifacts
@@ -174,6 +181,7 @@ impl Decompiler {
             Self {
                 graph: self.graph.clone_ref(py),
                 graph_inner: self.graph_inner.clone(),
+                image: self.image.clone_ref(py),
                 configuration: self.configuration.clone_ref(py),
                 inner_configuration: self.inner_configuration.clone(),
                 backend: self.backend,

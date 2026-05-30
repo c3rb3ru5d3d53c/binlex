@@ -1898,7 +1898,12 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         block_map: &HashMap<u64, BasicBlock<'ctx>>,
         exit_block: &mut Option<BasicBlock<'ctx>>,
     ) -> Result<(), Error> {
-        let Some(semantics) = block.terminator.semantics.as_ref() else {
+        let semantics = block
+            .terminator
+            .semantics
+            .clone()
+            .or_else(|| block.terminator.build_semantics());
+        let Some(semantics) = semantics.as_ref() else {
             if block.terminator.is_return {
                 let target = self.ensure_exit_block(exit_block);
                 self.builder

@@ -185,11 +185,20 @@ impl Graph {
 #[pymethods]
 impl Graph {
     #[new]
-    #[pyo3(text_signature = "(architecture, config)")]
+    #[pyo3(text_signature = "(architecture, config, symbols=None)")]
     /// Create a new graph for the supplied architecture and configuration.
-    pub fn new(py: Python, architecture: Py<Architecture>, config: Py<Configuration>) -> Self {
+    pub fn new(
+        py: Python,
+        architecture: Py<Architecture>,
+        config: Py<Configuration>,
+        symbols: Option<BTreeMap<u64, String>>,
+    ) -> Self {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
-        let inner = InnerGraph::new(architecture.borrow(py).inner, inner_config);
+        let inner = InnerGraph::new_with_symbols(
+            architecture.borrow(py).inner,
+            inner_config,
+            symbols.unwrap_or_default(),
+        );
         Self {
             inner: Arc::new(Mutex::new(inner)),
         }

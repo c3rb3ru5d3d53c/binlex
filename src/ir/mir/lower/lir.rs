@@ -91,13 +91,15 @@ impl LoweringContext {
         if let Some(name) = canonical_register_role(raw_name, abi) {
             return name;
         }
-        if let Some(name) = self.location_names.get(raw_name) {
+        let key = abi
+            .and_then(|abi| canonical_register_storage_name(&abi.cpu, raw_name))
+            .unwrap_or_else(|| raw_name.to_string());
+        if let Some(name) = self.location_names.get(&key) {
             return name.clone();
         }
         let name = format!("reg{}", self.next_register);
         self.next_register += 1;
-        self.location_names
-            .insert(raw_name.to_string(), name.clone());
+        self.location_names.insert(key, name.clone());
         name
     }
 
@@ -113,6 +115,15 @@ impl LoweringContext {
         self.next_flag += 1;
         self.location_names.insert(key, name.clone());
         name
+    }
+
+    fn register_zero_extend_write_bits(&self, location: &LirLocation) -> Option<u16> {
+        let LirLocation::Register { name, bits } = location else {
+            return None;
+        };
+        let resolution = self.abi.as_ref()?.cpu.resolve_register(name)?;
+        (resolution.zero_extend_on_write && resolution.storage_bits > *bits)
+            .then_some(resolution.storage_bits)
     }
 }
 
@@ -391,6 +402,26 @@ fn lower_effect(effect: &LirEffect, block: &mut MirBlock, context: &mut Lowering
             _ => {
                 let value = lower_expression(expression, block, context);
                 let result = context.location_name(dst);
+                if let Some(storage_bits) = context.register_zero_extend_write_bits(dst) {
+                    let ty = mir_type_for_bits(storage_bits);
+                    let extended = context.next_name("zext");
+                    block.append_operation(MirOperation::new(
+                        Some(extended.clone()),
+                        MirOperationKind::Cast {
+                            op: MirCastOperation::ZeroExtend,
+                            value,
+                            ty: ty.clone(),
+                        },
+                    ));
+                    block.append_operation(MirOperation::new(
+                        Some(result),
+                        MirOperationKind::Copy {
+                            value: MirValue::named(extended, ty.clone()),
+                            ty,
+                        },
+                    ));
+                    return;
+                }
                 block.append_operation(MirOperation::new(
                     Some(result),
                     MirOperationKind::Copy {
@@ -1458,10 +1489,179 @@ fn default_function_abi(lir: &LirFunction) -> Option<LirAbi> {
         .map(|encoding| encoding.architecture.as_str())?;
 
     match architecture {
-        "amd64" => LirCpu::amd64().ok().and_then(|cpu| LirAbi::sysv(&cpu).ok()),
+        "amd64" => default_amd64_function_abi(lir),
         "i386" => LirCpu::i386().ok().and_then(|cpu| LirAbi::cdecl(&cpu).ok()),
         "arm64" => LirCpu::arm64().ok().and_then(|cpu| LirAbi::sysv(&cpu).ok()),
         _ => None,
+    }
+}
+
+fn default_amd64_function_abi(lir: &LirFunction) -> Option<LirAbi> {
+    let cpu = LirCpu::amd64().ok()?;
+    if lir_references_windows_symbols(lir) {
+        LirAbi::windows64(&cpu).ok()
+    } else {
+        LirAbi::sysv(&cpu).ok()
+    }
+}
+
+fn lir_references_windows_symbols(lir: &LirFunction) -> bool {
+    lir.name.as_deref().is_some_and(is_windows_symbol_name)
+        || lir.blocks.iter().any(|block| {
+            block.instructions.iter().any(|instruction| {
+                instruction
+                    .effects
+                    .iter()
+                    .any(effect_references_windows_symbols)
+                    || terminator_references_windows_symbols(&instruction.terminator)
+            })
+        })
+}
+
+fn is_windows_symbol_name(name: &str) -> bool {
+    name.to_ascii_lowercase().contains(".dll!")
+}
+
+fn effect_references_windows_symbols(effect: &LirEffect) -> bool {
+    match effect {
+        LirEffect::Set { expression, .. } | LirEffect::Push { expression, .. } => {
+            expression_references_windows_symbols(expression)
+        }
+        LirEffect::Store {
+            addr, expression, ..
+        } => {
+            expression_references_windows_symbols(addr)
+                || expression_references_windows_symbols(expression)
+        }
+        LirEffect::MemorySet {
+            addr, value, count, ..
+        } => {
+            expression_references_windows_symbols(addr)
+                || expression_references_windows_symbols(value)
+                || expression_references_windows_symbols(count)
+        }
+        LirEffect::MemoryCopy {
+            src_addr,
+            dst_addr,
+            count,
+            decrement,
+            ..
+        } => {
+            expression_references_windows_symbols(src_addr)
+                || expression_references_windows_symbols(dst_addr)
+                || expression_references_windows_symbols(count)
+                || expression_references_windows_symbols(decrement)
+        }
+        LirEffect::AtomicCmpXchg {
+            addr,
+            expected,
+            desired,
+            ..
+        } => {
+            expression_references_windows_symbols(addr)
+                || expression_references_windows_symbols(expected)
+                || expression_references_windows_symbols(desired)
+        }
+        LirEffect::WriteProperty {
+            reference,
+            expression,
+            ..
+        } => {
+            expression_references_windows_symbols(reference)
+                || expression_references_windows_symbols(expression)
+        }
+        LirEffect::WriteElement {
+            reference,
+            index,
+            expression,
+            ..
+        } => {
+            expression_references_windows_symbols(reference)
+                || expression_references_windows_symbols(index)
+                || expression_references_windows_symbols(expression)
+        }
+        LirEffect::Intrinsic { args, .. } => args.iter().any(expression_references_windows_symbols),
+        LirEffect::Pop { .. }
+        | LirEffect::Fence { .. }
+        | LirEffect::Trap { .. }
+        | LirEffect::Nop => false,
+    }
+}
+
+fn terminator_references_windows_symbols(terminator: &LirTerminator) -> bool {
+    match terminator {
+        LirTerminator::FallThrough | LirTerminator::Unreachable | LirTerminator::Trap => false,
+        LirTerminator::Jump { target } => expression_references_windows_symbols(target),
+        LirTerminator::Branch {
+            condition,
+            true_target,
+            false_target,
+        } => {
+            expression_references_windows_symbols(condition)
+                || expression_references_windows_symbols(true_target)
+                || expression_references_windows_symbols(false_target)
+        }
+        LirTerminator::Call {
+            target,
+            return_target,
+            ..
+        } => {
+            expression_references_windows_symbols(target)
+                || return_target
+                    .as_ref()
+                    .is_some_and(expression_references_windows_symbols)
+        }
+        LirTerminator::Return { expression } => expression
+            .as_ref()
+            .is_some_and(expression_references_windows_symbols),
+    }
+}
+
+fn expression_references_windows_symbols(expression: &LirExpression) -> bool {
+    match expression {
+        LirExpression::Function { name, .. } | LirExpression::DataAddress { name, .. } => {
+            is_windows_symbol_name(name)
+        }
+        LirExpression::Load { addr, .. }
+        | LirExpression::Unary { arg: addr, .. }
+        | LirExpression::Cast { arg: addr, .. }
+        | LirExpression::Extract { arg: addr, .. }
+        | LirExpression::ReadProperty {
+            reference: addr, ..
+        } => expression_references_windows_symbols(addr),
+        LirExpression::Binary { left, right, .. } | LirExpression::Compare { left, right, .. } => {
+            expression_references_windows_symbols(left)
+                || expression_references_windows_symbols(right)
+        }
+        LirExpression::Select {
+            condition,
+            when_true,
+            when_false,
+            ..
+        } => {
+            expression_references_windows_symbols(condition)
+                || expression_references_windows_symbols(when_true)
+                || expression_references_windows_symbols(when_false)
+        }
+        LirExpression::Concat { parts, .. } => {
+            parts.iter().any(expression_references_windows_symbols)
+        }
+        LirExpression::Intrinsic { args, .. } => {
+            args.iter().any(expression_references_windows_symbols)
+        }
+        LirExpression::ReadElement {
+            reference, index, ..
+        } => {
+            expression_references_windows_symbols(reference)
+                || expression_references_windows_symbols(index)
+        }
+        LirExpression::Const { .. }
+        | LirExpression::AddressOf { .. }
+        | LirExpression::Read(_)
+        | LirExpression::Undefined { .. }
+        | LirExpression::Poison { .. }
+        | LirExpression::Null { .. }
+        | LirExpression::Allocate { .. } => false,
     }
 }
 
@@ -1788,4 +1988,119 @@ fn matches_register_role_location(location: &LirLocation, raw_name: &str, cpu: &
 fn canonical_register_storage_name(cpu: &LirCpu, name: &str) -> Option<String> {
     cpu.resolve_register(name)
         .map(|resolution| resolution.storage_name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ir::lir::{LirBlock, LirEncoding, LirInstruction, LirStatus};
+
+    fn amd64_instruction_with_terminator(terminator: LirTerminator) -> LirInstruction {
+        LirInstruction {
+            version: 1,
+            status: LirStatus::Complete,
+            abi: None,
+            encoding: Some(LirEncoding {
+                architecture: "amd64".to_string(),
+                mnemonic: "call".to_string(),
+                disassembly: String::new(),
+                address: 0x1000,
+                bytes: Vec::new(),
+            }),
+            temporaries: Vec::new(),
+            effects: Vec::new(),
+            terminator,
+            diagnostics: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn defaults_amd64_pe_import_references_to_windows64_abi() {
+        let lir = LirFunction {
+            name: Some("function_1000".to_string()),
+            abi: None,
+            blocks: vec![LirBlock {
+                name: Some("entry".to_string()),
+                instructions: vec![amd64_instruction_with_terminator(LirTerminator::Call {
+                    target: LirExpression::Function {
+                        name: "ntdll.dll!RtlFreeHeap".to_string(),
+                        bits: 64,
+                    },
+                    return_target: None,
+                    does_return: Some(true),
+                })],
+            }],
+        };
+
+        let abi = default_function_abi(&lir).expect("expected inferred ABI");
+        assert_eq!(abi.name, "windows64");
+    }
+
+    #[test]
+    fn defaults_amd64_without_pe_import_references_to_sysv_abi() {
+        let lir = LirFunction {
+            name: Some("function_1000".to_string()),
+            abi: None,
+            blocks: vec![LirBlock {
+                name: Some("entry".to_string()),
+                instructions: vec![amd64_instruction_with_terminator(LirTerminator::Return {
+                    expression: None,
+                })],
+            }],
+        };
+
+        let abi = default_function_abi(&lir).expect("expected inferred ABI");
+        assert_eq!(abi.name, "sysv");
+    }
+
+    #[test]
+    fn lowers_amd64_zero_extending_alias_write_to_parent_width() {
+        let cpu = LirCpu::amd64().expect("amd64 cpu");
+        let lir = LirFunction {
+            name: Some("function_1000".to_string()),
+            abi: Some(LirAbi::windows64(&cpu).expect("windows64 abi")),
+            blocks: vec![LirBlock {
+                name: Some("entry".to_string()),
+                instructions: vec![LirInstruction {
+                    effects: vec![LirEffect::Set {
+                        dst: LirLocation::Register {
+                            name: "esi".to_string(),
+                            bits: 32,
+                        },
+                        expression: LirExpression::Binary {
+                            op: LirOperationBinary::Xor,
+                            left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                                name: "esi".to_string(),
+                                bits: 32,
+                            }))),
+                            right: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
+                                name: "esi".to_string(),
+                                bits: 32,
+                            }))),
+                            bits: 32,
+                        },
+                    }],
+                    ..amd64_instruction_with_terminator(LirTerminator::Return { expression: None })
+                }],
+            }],
+        };
+
+        let mir = lower_lir_to_mir(None, &lir).expect("lowered mir");
+        let operations = &mir.blocks()[0].operations;
+        assert!(matches!(
+            operations[1].kind,
+            MirOperationKind::Cast {
+                op: MirCastOperation::ZeroExtend,
+                ty: MirType::Integer(64),
+                ..
+            }
+        ));
+        assert!(matches!(
+            operations[2].kind,
+            MirOperationKind::Copy {
+                ty: MirType::Integer(64),
+                ..
+            }
+        ));
+    }
 }

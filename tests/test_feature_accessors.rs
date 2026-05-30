@@ -360,6 +360,44 @@ fn function_number_of_blocks_accessor_matches_default_json() {
 }
 
 #[test]
+fn noncontiguous_function_json_reports_owned_block_size() {
+    let config = Configuration::default();
+    let mut graph = Graph::new(Architecture::I386, config.clone());
+
+    let mut jump = Instruction::create(0x1000, Architecture::I386, config.clone());
+    jump.bytes = vec![0xe9, 0xfb, 0x0f, 0x00, 0x00];
+    jump.pattern = "e9fb0f0000".to_string();
+    jump.is_jump = true;
+    jump.to.insert(0x2000);
+    jump.edges = jump.successors().len();
+    graph.insert_instruction(jump);
+
+    let mut ret = Instruction::create(0x2000, Architecture::I386, config);
+    ret.bytes = vec![0xc3];
+    ret.pattern = "c3".to_string();
+    ret.is_return = true;
+    graph.insert_instruction(ret);
+
+    assert!(graph.set_block(0x1000));
+    assert!(graph.set_block(0x2000));
+    assert!(graph.set_function(0x1000));
+
+    let function = Function::new(0x1000, &graph).expect("function should exist");
+    assert!(!function.contiguous());
+    assert_eq!(function.size(), 6);
+
+    let value: serde_json::Value =
+        serde_json::from_str(&function.json().expect("function json should serialize"))
+            .expect("function json should parse");
+    assert_eq!(value.get("size").and_then(|value| value.as_u64()), Some(6));
+    assert_eq!(
+        value.get("contiguous").and_then(|value| value.as_bool()),
+        Some(false)
+    );
+    assert!(value.get("bytes").is_none());
+}
+
+#[test]
 fn function_call_relationship_accessors_and_json_are_consistent() {
     let config = Configuration::default();
     let mut graph = Graph::new(Architecture::AMD64, config.clone());
@@ -481,7 +519,7 @@ fn function_call_relationship_accessors_and_json_are_consistent() {
             .expect("function json should parse");
     assert_eq!(
         value
-            .get("caller_references")
+            .get("callers")
             .and_then(|value| value.as_object())
             .and_then(|value| value.get("4096"))
             .and_then(|value| value.as_u64()),
@@ -489,7 +527,7 @@ fn function_call_relationship_accessors_and_json_are_consistent() {
     );
     assert_eq!(
         value
-            .get("caller_references")
+            .get("callers")
             .and_then(|value| value.as_object())
             .and_then(|value| value.get("8192"))
             .and_then(|value| value.as_u64()),

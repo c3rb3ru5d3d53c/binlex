@@ -17,6 +17,8 @@ pub fn optimize_stack(mir: &mut Mir) {
         let mut aliases = AliasMap::new();
         let mut defs = DefMap::new();
         let mut optimized = Vec::with_capacity(block.operations.len());
+        let preserve_path_aliases =
+            matches!(block.terminator.as_ref(), Some(MirTerminator::Jump { .. }));
 
         for mut operation in std::mem::take(&mut block.operations) {
             rewrite_operation(&mut operation, &aliases);
@@ -27,7 +29,9 @@ pub fn optimize_stack(mir: &mut Mir) {
 
             if let Some((result, alias)) = alias_from_operation(&operation) {
                 aliases.insert(result, alias);
-                continue;
+                if !preserve_path_aliases {
+                    continue;
+                }
             }
 
             if let Some(result) = operation.result.as_ref() {
