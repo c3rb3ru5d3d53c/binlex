@@ -528,6 +528,7 @@ impl PyMirOperation {
             result,
             MirOperationKind::Call {
                 target: MirControlTarget::direct(target),
+                abi: None,
                 arguments,
                 result_types,
                 clobbers: Vec::new(),
