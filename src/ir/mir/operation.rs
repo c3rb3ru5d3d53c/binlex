@@ -24,6 +24,7 @@ use super::kind::{MirCastOperation, MirCompareOperation, MirFloatCompareOperatio
 use super::memory::MirAddressSpace;
 use super::target::MirControlTarget;
 use super::value::MirValue;
+use crate::ir::lir::LirAbi;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -173,6 +174,12 @@ pub enum MirOperationKind {
         address: MirValue,
         ty: MirType,
     },
+    AddressOf {
+        address_space: MirAddressSpace,
+        address: MirValue,
+        pointee_ty: MirType,
+        ty: MirType,
+    },
     Store {
         address_space: MirAddressSpace,
         address: MirValue,
@@ -207,6 +214,8 @@ pub enum MirOperationKind {
     },
     Call {
         target: MirControlTarget,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        abi: Option<LirAbi>,
         arguments: Vec<MirValue>,
         result_types: Vec<MirType>,
         clobbers: Vec<MirCallClobber>,

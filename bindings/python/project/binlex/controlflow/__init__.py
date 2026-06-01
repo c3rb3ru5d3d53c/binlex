@@ -874,6 +874,18 @@ class Function:
         if image is None:
             decompiler = getattr(self._graph, "_decompiler", None)
             image = getattr(decompiler, "image", None)
+        cache = getattr(self._graph, "_decompilation_cache", None)
+        if cache is not None:
+            cached = cache["ast"].get(self.address())
+            if cached is None:
+                hir = cache["hir"].get(self.address())
+                if hir is not None:
+                    from binlex.ir.ast import AstFunction
+
+                    cached = AstFunction.from_hir(hir)
+                    cache["ast"][self.address()] = cached
+            if cached is not None:
+                return cached.c(image)
         if image is not None:
             image = getattr(image, "_inner", image)
             return self._inner.c_with_image(image)

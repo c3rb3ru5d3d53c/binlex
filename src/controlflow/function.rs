@@ -943,6 +943,33 @@ impl<'function> Function<'function> {
         Self::resolve_indirect_symbol_name(encoding, target, symbol_map, register_map, 0)
     }
 
+    fn canonicalize_indirect_target_address(
+        encoding: Option<&crate::ir::lir::LirEncoding>,
+        target: &mut LirExpression,
+        register_map: &BTreeMap<String, LirExpression>,
+    ) -> bool {
+        let LirExpression::Load { space, addr, .. } = target else {
+            return false;
+        };
+        if !matches!(space, crate::ir::lir::LirAddressSpace::Default) {
+            return false;
+        }
+        let Some(address) = Self::resolve_indirect_symbol_address(encoding, addr, register_map, 0)
+        else {
+            return false;
+        };
+        if matches!(addr.as_ref(), LirExpression::Const { value, .. } if *value == address as u128)
+        {
+            return false;
+        }
+        let bits = addr.bits();
+        *addr = Box::new(LirExpression::Const {
+            value: address as u128,
+            bits,
+        });
+        true
+    }
+
     fn rewrite_lir_function_symbols(
         lir: &mut LirFunction,
         symbol_map: &BTreeMap<u64, String>,
@@ -970,6 +997,11 @@ impl<'function> Function<'function> {
 
                 match &mut instruction.terminator {
                     LirTerminator::Call { target, .. } | LirTerminator::Jump { target } => {
+                        changed |= Self::canonicalize_indirect_target_address(
+                            encoding,
+                            target,
+                            &register_map,
+                        );
                         if let Some(name) =
                             Self::resolve_symbol_name(encoding, target, symbol_map, &register_map)
                         {
@@ -985,6 +1017,11 @@ impl<'function> Function<'function> {
                         false_target,
                         ..
                     } => {
+                        changed |= Self::canonicalize_indirect_target_address(
+                            encoding,
+                            true_target,
+                            &register_map,
+                        );
                         if let Some(name) = Self::resolve_symbol_name(
                             encoding,
                             true_target,
@@ -997,6 +1034,11 @@ impl<'function> Function<'function> {
                             };
                             changed = true;
                         }
+                        changed |= Self::canonicalize_indirect_target_address(
+                            encoding,
+                            false_target,
+                            &register_map,
+                        );
                         if let Some(name) = Self::resolve_symbol_name(
                             encoding,
                             false_target,
@@ -1098,6 +1140,14 @@ impl<'function> Function<'function> {
                 match target {
                     MirControlTarget::Direct(target) => {
                         let target_name = target.clone();
+                        if import_prototype_arity(&target_name).is_some() {
+                            trim_import_or_external_call_arguments(
+                                operation,
+                                &target_name,
+                                &entry_parameter_names,
+                            );
+                            continue;
+                        }
                         let Some(address) = symbol_to_address.get(target).copied() else {
                             trim_import_or_external_call_arguments(
                                 operation,
@@ -1658,10 +1708,14 @@ fn import_prototype_arity(target: &str) -> Option<usize> {
         .map(|(_, symbol)| symbol)
         .unwrap_or(target);
     match name {
+        "DeviceIoControl" => Some(8),
         "GetLastError" => Some(0),
         "KernelBaseGetGlobalData" => Some(0),
+        "CreateFileA" | "CreateFileW" => Some(7),
         "CloseHandle" | "NtClose" | "RtlSetLastWin32Error" | "SetLastError" => Some(1),
-        "RtlAllocateHeap" | "RtlFreeHeap" => Some(3),
+        "NtDeviceIoControlFile" | "ZwDeviceIoControlFile" => Some(10),
+        "RtlAllocateHeap" | "RtlFreeHeap" | "RtlMoveMemory" | "RtlCopyMemory" | "memcpy"
+        | "memmove" => Some(3),
         _ => None,
     }
 }
@@ -2008,6 +2062,7 @@ fn rewrite_operation_result_type(kind: &mut MirOperationKind, ty: &MirType) {
         | MirOperationKind::CountLeadingZeros { ty: result_ty, .. }
         | MirOperationKind::CountTrailingZeros { ty: result_ty, .. }
         | MirOperationKind::Load { ty: result_ty, .. }
+        | MirOperationKind::AddressOf { ty: result_ty, .. }
         | MirOperationKind::Cast { ty: result_ty, .. }
         | MirOperationKind::Icmp { ty: result_ty, .. }
         | MirOperationKind::Fcmp { ty: result_ty, .. } => *result_ty = ty.clone(),
@@ -2031,6 +2086,7 @@ fn rewrite_value_types_in_operation(kind: &mut MirOperationKind, name: &str, ty:
         | MirOperationKind::CountLeadingZeros { value, .. }
         | MirOperationKind::CountTrailingZeros { value, .. }
         | MirOperationKind::Load { address: value, .. }
+        | MirOperationKind::AddressOf { address: value, .. }
         | MirOperationKind::Cast { value, .. } => rewrite_named_value_type(value, name, ty),
         MirOperationKind::Add { lhs, rhs, .. }
         | MirOperationKind::Sub { lhs, rhs, .. }

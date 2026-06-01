@@ -280,6 +280,7 @@ fn operation_bases(kind: &MirOperationKind) -> Vec<String> {
         | MirOperationKind::CountLeadingZeros { value, .. }
         | MirOperationKind::CountTrailingZeros { value, .. }
         | MirOperationKind::Load { address: value, .. }
+        | MirOperationKind::AddressOf { address: value, .. }
         | MirOperationKind::Cast { value, .. } => vec_from_values([value]),
         MirOperationKind::Store { address, value, .. } => vec_from_values([address, value]),
         MirOperationKind::MemoryCopy {
@@ -289,8 +290,13 @@ fn operation_bases(kind: &MirOperationKind) -> Vec<String> {
             decrement,
             ..
         } => vec_from_values([src_address, dst_address, count, decrement]),
-        MirOperationKind::Call { arguments, .. }
-        | MirOperationKind::Intrinsic { arguments, .. } => {
+        MirOperationKind::Call {
+            target, arguments, ..
+        } => target_bases(target)
+            .into_iter()
+            .chain(arguments.iter().filter_map(value_base))
+            .collect(),
+        MirOperationKind::Intrinsic { arguments, .. } => {
             arguments.iter().filter_map(value_base).collect()
         }
     }
@@ -303,13 +309,17 @@ fn terminator_bases(terminator: &MirTerminator) -> Vec<String> {
         }
         MirTerminator::CondBr {
             condition,
+            then_target,
             then_arguments,
+            else_target,
             else_arguments,
             ..
         } => std::iter::once(condition)
             .chain(then_arguments.iter())
             .chain(else_arguments.iter())
             .filter_map(value_base)
+            .chain(target_bases(then_target))
+            .chain(target_bases(else_target))
             .collect(),
         MirTerminator::Trap | MirTerminator::Unreachable => Vec::new(),
     }
@@ -319,6 +329,15 @@ fn value_base(value: &MirValue) -> Option<String> {
     match value {
         MirValue::Named { name, .. } => Some(base_name(name)),
         _ => None,
+    }
+}
+
+fn target_bases(target: &MirControlTarget) -> Vec<String> {
+    match target {
+        MirControlTarget::Direct(_) => Vec::new(),
+        MirControlTarget::FunctionIndirect(value) | MirControlTarget::BlockIndirect(value) => {
+            value_base(value).into_iter().collect()
+        }
     }
 }
 
@@ -443,7 +462,7 @@ fn rewrite_operation(operation: &mut MirOperation, current: &VersionMap) {
         | MirOperationKind::Popcount { value, .. } => rewrite_value(value, current),
         MirOperationKind::CountLeadingZeros { value, .. }
         | MirOperationKind::CountTrailingZeros { value, .. } => rewrite_value(value, current),
-        MirOperationKind::Load { address, .. } => {
+        MirOperationKind::Load { address, .. } | MirOperationKind::AddressOf { address, .. } => {
             rewrite_value(address, current);
         }
         MirOperationKind::Store { address, value, .. } => {
@@ -465,8 +484,15 @@ fn rewrite_operation(operation: &mut MirOperation, current: &VersionMap) {
         MirOperationKind::Cast { value, .. } => {
             rewrite_value(value, current);
         }
-        MirOperationKind::Call { arguments, .. }
-        | MirOperationKind::Intrinsic { arguments, .. } => {
+        MirOperationKind::Call {
+            target, arguments, ..
+        } => {
+            rewrite_target(target, current);
+            for argument in arguments {
+                rewrite_value(argument, current);
+            }
+        }
+        MirOperationKind::Intrinsic { arguments, .. } => {
             for argument in arguments {
                 rewrite_value(argument, current);
             }
@@ -476,18 +502,23 @@ fn rewrite_operation(operation: &mut MirOperation, current: &VersionMap) {
 
 fn rewrite_terminator(terminator: &mut MirTerminator, current: &VersionMap) {
     match terminator {
-        MirTerminator::Jump { arguments, .. } => {
+        MirTerminator::Jump { target, arguments } => {
+            rewrite_target(target, current);
             for argument in arguments {
                 rewrite_value(argument, current);
             }
         }
         MirTerminator::CondBr {
             condition,
+            then_target,
             then_arguments,
+            else_target,
             else_arguments,
             ..
         } => {
             rewrite_value(condition, current);
+            rewrite_target(then_target, current);
+            rewrite_target(else_target, current);
             for argument in then_arguments {
                 rewrite_value(argument, current);
             }
@@ -510,6 +541,15 @@ fn rewrite_value(value: &mut MirValue, current: &VersionMap) {
         if let Some(versioned) = current.get(&base) {
             *value = versioned.clone();
         }
+    }
+}
+
+fn rewrite_target(target: &mut MirControlTarget, current: &VersionMap) {
+    match target {
+        MirControlTarget::FunctionIndirect(value) | MirControlTarget::BlockIndirect(value) => {
+            rewrite_value(value, current);
+        }
+        MirControlTarget::Direct(_) => {}
     }
 }
 
@@ -544,6 +584,7 @@ fn result_type(kind: &MirOperationKind) -> MirType {
         | MirOperationKind::CountLeadingZeros { ty, .. }
         | MirOperationKind::CountTrailingZeros { ty, .. }
         | MirOperationKind::Load { ty, .. }
+        | MirOperationKind::AddressOf { ty, .. }
         | MirOperationKind::Icmp { ty, .. }
         | MirOperationKind::Fcmp { ty, .. }
         | MirOperationKind::Cast { ty, .. } => ty.clone(),

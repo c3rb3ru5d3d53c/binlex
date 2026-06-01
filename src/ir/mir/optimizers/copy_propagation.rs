@@ -1,6 +1,7 @@
 use crate::ir::mir::analysis::{mir_predecessors, reverse_post_order};
 use crate::ir::mir::{
-    Mir, MirCastOperation, MirOperation, MirOperationKind, MirTerminator, MirValue,
+    Mir, MirCastOperation, MirControlTarget, MirOperation, MirOperationKind, MirTerminator,
+    MirValue,
 };
 use std::collections::HashMap;
 
@@ -185,6 +186,7 @@ fn alias_from_operation(operation: &MirOperation) -> Option<(String, MirValue)> 
             ..
         } => Some((result, value.clone())),
         MirOperationKind::Load { .. }
+        | MirOperationKind::AddressOf { .. }
         | MirOperationKind::Store { .. }
         | MirOperationKind::MemoryCopy { .. }
         | MirOperationKind::Icmp { .. }
@@ -261,7 +263,7 @@ fn rewrite_operation(operation: &mut MirOperation, aliases: &AliasMap) {
         | MirOperationKind::Popcount { value, .. }
         | MirOperationKind::CountLeadingZeros { value, .. }
         | MirOperationKind::CountTrailingZeros { value, .. } => rewrite_value(value, aliases),
-        MirOperationKind::Load { address, .. } => {
+        MirOperationKind::Load { address, .. } | MirOperationKind::AddressOf { address, .. } => {
             rewrite_value(address, aliases);
         }
         MirOperationKind::Store { address, value, .. } => {
@@ -283,8 +285,15 @@ fn rewrite_operation(operation: &mut MirOperation, aliases: &AliasMap) {
         MirOperationKind::Cast { value, .. } => {
             rewrite_value(value, aliases);
         }
-        MirOperationKind::Call { arguments, .. }
-        | MirOperationKind::Intrinsic { arguments, .. } => {
+        MirOperationKind::Call {
+            target, arguments, ..
+        } => {
+            rewrite_target(target, aliases);
+            for argument in arguments {
+                rewrite_value(argument, aliases);
+            }
+        }
+        MirOperationKind::Intrinsic { arguments, .. } => {
             for argument in arguments {
                 rewrite_value(argument, aliases);
             }
@@ -294,18 +303,23 @@ fn rewrite_operation(operation: &mut MirOperation, aliases: &AliasMap) {
 
 fn rewrite_terminator(terminator: &mut MirTerminator, aliases: &AliasMap) {
     match terminator {
-        MirTerminator::Jump { arguments, .. } => {
+        MirTerminator::Jump { target, arguments } => {
+            rewrite_target(target, aliases);
             for argument in arguments {
                 rewrite_value(argument, aliases);
             }
         }
         MirTerminator::CondBr {
             condition,
+            then_target,
             then_arguments,
+            else_target,
             else_arguments,
             ..
         } => {
             rewrite_value(condition, aliases);
+            rewrite_target(then_target, aliases);
+            rewrite_target(else_target, aliases);
             for argument in then_arguments {
                 rewrite_value(argument, aliases);
             }
@@ -327,5 +341,14 @@ fn rewrite_value(value: &mut MirValue, aliases: &AliasMap) {
         if let Some(replacement) = aliases.get(name) {
             *value = replacement.clone();
         }
+    }
+}
+
+fn rewrite_target(target: &mut MirControlTarget, aliases: &AliasMap) {
+    match target {
+        MirControlTarget::FunctionIndirect(value) | MirControlTarget::BlockIndirect(value) => {
+            rewrite_value(value, aliases);
+        }
+        MirControlTarget::Direct(_) => {}
     }
 }

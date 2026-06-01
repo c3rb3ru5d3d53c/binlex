@@ -23,6 +23,7 @@
 use crate::controlflow::Block;
 use crate::controlflow::Function;
 use crate::controlflow::Instruction;
+use crate::formats::Image;
 use crate::Architecture;
 use crate::Configuration;
 use binlex::controlflow::Graph as InnerGraph;
@@ -172,13 +173,34 @@ impl GraphQueue {
 #[pyclass]
 pub struct Graph {
     pub inner: Arc<Mutex<InnerGraph>>,
+    pub image: Arc<Mutex<Option<Py<Image>>>>,
 }
 
 impl Graph {
     pub fn from_inner(inner: InnerGraph) -> Self {
         Self {
             inner: Arc::new(Mutex::new(inner)),
+            image: Arc::new(Mutex::new(None)),
         }
+    }
+
+    pub(crate) fn clone_handle(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+            image: Arc::clone(&self.image),
+        }
+    }
+
+    pub(crate) fn set_image(&self, image: Py<Image>) {
+        *self.image.lock().unwrap() = Some(image);
+    }
+
+    pub(crate) fn image(&self, py: Python<'_>) -> Option<Py<Image>> {
+        self.image
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|image| image.clone_ref(py))
     }
 }
 
@@ -201,6 +223,7 @@ impl Graph {
         );
         Self {
             inner: Arc::new(Mutex::new(inner)),
+            image: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -209,9 +232,7 @@ impl Graph {
     pub fn instructions(&self, py: Python) -> Vec<Instruction> {
         let mut result = Vec::<Instruction>::new();
         for inner_instruction in self.inner.lock().unwrap().instructions() {
-            let cfg = Graph {
-                inner: Arc::clone(&self.inner),
-            };
+            let cfg = self.clone_handle();
             let pycfg = Py::new(py, cfg).ok();
             if pycfg.is_none() {
                 continue;
@@ -230,9 +251,7 @@ impl Graph {
     pub fn blocks(&self, py: Python) -> Vec<Block> {
         let mut result = Vec::<Block>::new();
         for inner_block in self.inner.lock().unwrap().blocks() {
-            let cfg = Graph {
-                inner: Arc::clone(&self.inner),
-            };
+            let cfg = self.clone_handle();
             let pycfg = Py::new(py, cfg).ok();
             if pycfg.is_none() {
                 continue;
@@ -257,9 +276,7 @@ impl Graph {
             )
         };
         for inner_function in inner_ref.functions() {
-            let cfg = Graph {
-                inner: Arc::clone(&self.inner),
-            };
+            let cfg = self.clone_handle();
             let pycfg = Py::new(py, cfg).ok();
             if pycfg.is_none() {
                 continue;
@@ -411,9 +428,7 @@ impl Graph {
         {
             return None;
         }
-        let cfg = Graph {
-            inner: Arc::clone(&self.inner),
-        };
+        let cfg = self.clone_handle();
         let pycfg = Py::new(py, cfg).ok();
         pycfg.as_ref()?;
         Instruction::new(address, pycfg.unwrap()).ok()
@@ -425,9 +440,7 @@ impl Graph {
         if self.inner.lock().unwrap().get_block(address).is_none() {
             return None;
         }
-        let cfg = Graph {
-            inner: Arc::clone(&self.inner),
-        };
+        let cfg = self.clone_handle();
         let pycfg = Py::new(py, cfg).ok();
         pycfg.as_ref()?;
         Block::new(address, pycfg.unwrap()).ok()
@@ -439,9 +452,7 @@ impl Graph {
         if self.inner.lock().unwrap().get_function(address).is_none() {
             return None;
         }
-        let cfg = Graph {
-            inner: Arc::clone(&self.inner),
-        };
+        let cfg = self.clone_handle();
         let pycfg = Py::new(py, cfg).ok();
         pycfg.as_ref()?;
         Function::new(address, pycfg.unwrap()).ok()

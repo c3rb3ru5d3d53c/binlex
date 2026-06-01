@@ -409,6 +409,12 @@ impl Function {
 
     #[pyo3(text_signature = "($self)")]
     pub fn c(&self, py: Python<'_>) -> PyResult<String> {
+        let image = self.cfg.borrow(py).image(py);
+        if let Some(image) = image {
+            let image = image.borrow(py);
+            return self
+                .with_inner_function(py, |function| Ok(function.c_with_image(&image.inner)?));
+        }
         self.with_inner_function(py, |function| Ok(py.detach(|| function.c())?))
     }
 

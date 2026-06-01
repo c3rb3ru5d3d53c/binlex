@@ -6,6 +6,7 @@ use super::place::AstPlace;
 use super::target::AstTarget;
 use super::value::AstValue;
 use crate::ir::hir::HirExpression;
+use crate::ir::lir::LirAbi;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -61,6 +62,8 @@ pub enum AstExpression {
     },
     Call {
         target: AstTarget,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        abi: Option<LirAbi>,
         arguments: Vec<AstExpression>,
         return_types: Vec<AstType>,
     },
@@ -147,10 +150,12 @@ impl AstExpression {
             },
             HirExpression::Call {
                 target,
+                abi,
                 arguments,
                 return_types,
             } => Self::Call {
                 target: AstTarget::from_hir(target),
+                abi: abi.clone(),
                 arguments: arguments.iter().map(Self::from_hir).collect(),
                 return_types: return_types.clone(),
             },

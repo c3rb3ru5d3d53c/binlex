@@ -909,7 +909,7 @@ fn operand_expr(machine: crate::Architecture, operand: &X86OperandView) -> Optio
             });
             let addr = common::memory_addr(machine, base, index, mem.displacement);
             Some(LirExpression::Load {
-                space: crate::ir::lir::LirAddressSpace::Default,
+                space: common::memory_space(mem.segment_register_name),
                 addr: Box::new(addr),
                 bits: operand.size_bits,
             })
@@ -937,7 +937,7 @@ fn operand_location(
             });
             let addr = common::memory_addr(machine, base, index, mem.displacement);
             Some(crate::ir::lir::LirLocation::Memory {
-                space: crate::ir::lir::LirAddressSpace::Default,
+                space: common::memory_space(mem.segment_register_name),
                 addr: Box::new(addr),
                 bits: operand.size_bits,
             })

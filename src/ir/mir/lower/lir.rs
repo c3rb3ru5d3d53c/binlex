@@ -313,12 +313,18 @@ fn lower_call_operations(
         call_result_binding(semantic, context)
     };
 
-    let arguments = call_argument_values(semantic, function_abi, block, context);
+    let call_abi = semantic
+        .abi
+        .clone()
+        .or_else(|| infer_call_abi(semantic, function_abi, block))
+        .or_else(|| function_abi.cloned());
+    let arguments = call_argument_values(semantic, call_abi.as_ref(), block, context);
     let target = resolve_call_target(target, block, context);
     block.append_operation(MirOperation::new(
         call_result.clone(),
         MirOperationKind::Call {
             target,
+            abi: call_abi,
             arguments,
             result_types: result_types.clone(),
             clobbers: Vec::new(),
@@ -639,10 +645,9 @@ fn lower_expression(
         LirExpression::Function { name, bits } | LirExpression::DataAddress { name, bits } => {
             MirValue::named(name.clone(), mir_type_for_bits(*bits))
         }
-        LirExpression::AddressOf { location, bits } => MirValue::named(
-            format!("addr_of_{}", context.location_name(location)),
-            mir_type_for_bits(*bits),
-        ),
+        LirExpression::AddressOf { location, bits } => {
+            lower_address_of_expression(location, *bits, block, context)
+        }
         LirExpression::Read(location) => MirValue::named(
             context.location_name(location),
             mir_type_for_bits(location.bits()),
@@ -770,6 +775,35 @@ fn lower_expression(
             MirValue::named(result, ty)
         }
     }
+}
+
+fn lower_address_of_expression(
+    location: &LirLocation,
+    bits: u16,
+    block: &mut MirBlock,
+    context: &mut LoweringContext,
+) -> MirValue {
+    let ty = mir_type_for_bits(bits);
+    let LirLocation::Memory {
+        space,
+        addr,
+        bits: pointee_bits,
+    } = location
+    else {
+        return MirValue::named(format!("addr_of_{}", context.location_name(location)), ty);
+    };
+    let address = lower_expression(addr, block, context);
+    let result = context.next_name("addr_of");
+    block.append_operation(MirOperation::new(
+        Some(result.clone()),
+        MirOperationKind::AddressOf {
+            address_space: lower_address_space(space),
+            address,
+            pointee_ty: mir_type_for_bits(*pointee_bits),
+            ty: ty.clone(),
+        },
+    ));
+    MirValue::named(result, ty)
 }
 
 fn lower_unary_expression(
@@ -1354,11 +1388,12 @@ fn lower_call_argument_location(
         LirLocation::StackMemory { name, offset, bits } => {
             let ty = mir_type_for_bits(*bits);
             let result = context.next_name("arg");
+            let (address_space, address) = stack_argument_location(name, *offset, *bits);
             block.append_operation(MirOperation::new(
                 Some(result.clone()),
                 MirOperationKind::Load {
-                    address_space: MirAddressSpace::named(name.clone()),
-                    address: MirValue::integer(*offset as i128, 64),
+                    address_space,
+                    address,
                     ty: ty.clone(),
                 },
             ));
@@ -1392,6 +1427,20 @@ fn lower_call_argument_location(
             ));
             MirValue::named(result, ty)
         }
+    }
+}
+
+fn stack_argument_location(name: &str, offset: u32, bits: u16) -> (MirAddressSpace, MirValue) {
+    if name == "stack" && offset > 0 {
+        (
+            MirAddressSpace::incoming(offset.to_string()),
+            MirValue::integer(0, bits),
+        )
+    } else {
+        (
+            MirAddressSpace::named(name.to_string()),
+            MirValue::integer(offset as i128, 64),
+        )
     }
 }
 

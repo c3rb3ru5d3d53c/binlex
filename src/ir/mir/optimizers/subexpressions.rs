@@ -72,6 +72,7 @@ fn is_pure(kind: &MirOperationKind) -> bool {
         | MirOperationKind::CountTrailingZeros { .. }
         | MirOperationKind::Icmp { .. }
         | MirOperationKind::Fcmp { .. }
+        | MirOperationKind::AddressOf { .. }
         | MirOperationKind::Cast { .. } => true,
         MirOperationKind::Intrinsic { name, .. } => {
             name.starts_with("lir.binary.")
@@ -135,7 +136,9 @@ fn rewrite_operation(operation: &mut MirOperation, aliases: &AliasMap) {
         | MirOperationKind::Popcount { value, .. }
         | MirOperationKind::CountLeadingZeros { value, .. }
         | MirOperationKind::CountTrailingZeros { value, .. } => rewrite_value(value, aliases),
-        MirOperationKind::Load { address, .. } => rewrite_value(address, aliases),
+        MirOperationKind::Load { address, .. } | MirOperationKind::AddressOf { address, .. } => {
+            rewrite_value(address, aliases)
+        }
         MirOperationKind::Store { address, value, .. } => {
             rewrite_value(address, aliases);
             rewrite_value(value, aliases);
@@ -231,6 +234,7 @@ fn result_type(kind: &MirOperationKind) -> MirType {
         | MirOperationKind::CountLeadingZeros { ty, .. }
         | MirOperationKind::CountTrailingZeros { ty, .. }
         | MirOperationKind::Load { ty, .. }
+        | MirOperationKind::AddressOf { ty, .. }
         | MirOperationKind::Icmp { ty, .. }
         | MirOperationKind::Fcmp { ty, .. }
         | MirOperationKind::Cast { ty, .. } => ty.clone(),

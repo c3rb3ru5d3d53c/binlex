@@ -136,6 +136,7 @@ fn operation_uses(kind: &MirOperationKind) -> Vec<String> {
         | MirOperationKind::CountLeadingZeros { value, .. }
         | MirOperationKind::CountTrailingZeros { value, .. }
         | MirOperationKind::Load { address: value, .. }
+        | MirOperationKind::AddressOf { address: value, .. }
         | MirOperationKind::Cast { value, .. } => vec_from_values([value]),
         MirOperationKind::Store { address, value, .. } => vec_from_values([address, value]),
         MirOperationKind::MemoryCopy {
@@ -230,6 +231,7 @@ fn is_dead_flag_producer(kind: &MirOperationKind) -> bool {
             | MirOperationKind::Icmp { .. }
             | MirOperationKind::Fcmp { .. }
             | MirOperationKind::Cast { .. }
+            | MirOperationKind::AddressOf { .. }
             | MirOperationKind::MemoryCopy { .. }
     )
 }

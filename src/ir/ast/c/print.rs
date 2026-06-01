@@ -1,15 +1,24 @@
 use crate::formats::Image;
 use crate::ir::ast::{
-    AstBinaryOperation, AstBlock, AstCompareOperation, AstExpression, AstFloatCompareOperation,
-    AstFunction, AstLocal, AstModule, AstPlace, AstStatement, AstTarget, AstType,
-    AstUnaryOperation, AstValue,
+    AstAddressSpace, AstBinaryOperation, AstBlock, AstCompareOperation, AstExpression,
+    AstFloatCompareOperation, AstFunction, AstLocal, AstModule, AstPlace, AstStatement, AstTarget,
+    AstType, AstUnaryOperation, AstValue,
 };
+use crate::ir::lir::LirAbi;
 use crate::ir::storage::IrStorage;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 
 const MAX_STRING_BYTES: usize = 512;
 const MIN_STRING_CHARS: usize = 4;
+const MAX_C_LINE_LEN: usize = 100;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum StringPreference {
+    Any,
+    Ascii,
+    WideModule,
+}
 
 pub fn format_c_module(module: &AstModule) -> String {
     module
@@ -32,6 +41,7 @@ fn format_c_function_inner(function: &AstFunction, image: Option<&Image>) -> Str
     let mut output = String::new();
     let context = CPrintContext::new(function, image);
     let returns = format_return_type(&function.returns);
+    let convention = format_abi_calling_convention(function.abi.as_ref());
     let name = sanitize_identifier(function.name.as_deref().unwrap_or("function"));
     let parameters = if function.parameters.is_empty() {
         "void".to_string()
@@ -49,7 +59,23 @@ fn format_c_function_inner(function: &AstFunction, image: Option<&Image>) -> Str
             .collect::<Vec<_>>()
             .join(", ")
     };
-    output.push_str(&format!("{returns} {name}({parameters}) {{\n"));
+    let header = format!("{returns}{convention} {name}({parameters}) {{\n");
+    if header.trim_end().chars().count() > MAX_C_LINE_LEN && !function.parameters.is_empty() {
+        output.push_str(&format!("{returns}{convention} {name}(\n"));
+        for (index, parameter) in function.parameters.iter().enumerate() {
+            output.push_str("    ");
+            output.push_str(&format_type(&parameter.ty));
+            output.push(' ');
+            output.push_str(&sanitize_identifier(&parameter.name));
+            if index + 1 != function.parameters.len() {
+                output.push(',');
+            }
+            output.push('\n');
+        }
+        output.push_str(") {\n");
+    } else {
+        output.push_str(&header);
+    }
     let mut declared = function
         .parameters
         .iter()
@@ -74,6 +100,7 @@ fn format_c_function_inner(function: &AstFunction, image: Option<&Image>) -> Str
     let mut implicit_locals = BTreeMap::new();
     for block in &function.blocks {
         collect_assigned_named_places(block, &mut implicit_locals);
+        collect_referenced_named_values(block, &mut implicit_locals);
     }
     for (name, ty) in implicit_locals {
         if declared.contains(&name) {
@@ -86,7 +113,21 @@ fn format_c_function_inner(function: &AstFunction, image: Option<&Image>) -> Str
         output.push_str(&context.local_name(&name));
         output.push_str(";\n");
     }
-    if !declared.is_empty() && !function.blocks.is_empty() {
+    for local in &context.synthetic_stack_locals {
+        output.push_str("    ");
+        output.push_str(&format_type(&local.ty));
+        output.push(' ');
+        output.push_str(&local.name);
+        output.push_str("; // ");
+        output.push_str(&format_stack_address_comment(
+            &local.base,
+            i128::from(local.offset),
+        ));
+        output.push('\n');
+    }
+    if (!declared.is_empty() || !context.synthetic_stack_locals.is_empty())
+        && !function.blocks.is_empty()
+    {
         output.push('\n');
     }
     for block in &function.blocks {
@@ -98,10 +139,22 @@ fn format_c_function_inner(function: &AstFunction, image: Option<&Image>) -> Str
 
 struct CPrintContext<'a> {
     local_names: BTreeMap<String, String>,
+    stack_locals: BTreeMap<(String, i64), String>,
+    local_stack_locations: BTreeMap<String, (String, i64)>,
+    register_locals: BTreeMap<String, String>,
+    synthetic_stack_locals: Vec<SyntheticStackLocal>,
     rip_locals: BTreeSet<String>,
     entry_address: Option<u64>,
     image: Option<&'a Image>,
     string_cache: RefCell<BTreeMap<u64, Option<String>>>,
+    suppressed_stack_local_load: RefCell<Option<(String, i64)>>,
+}
+
+struct SyntheticStackLocal {
+    name: String,
+    ty: AstType,
+    base: String,
+    offset: i64,
 }
 
 impl<'a> CPrintContext<'a> {
@@ -117,6 +170,7 @@ impl<'a> CPrintContext<'a> {
         let mut implicit_locals = BTreeMap::new();
         for block in &function.blocks {
             collect_assigned_named_places(block, &mut implicit_locals);
+            collect_referenced_named_values(block, &mut implicit_locals);
         }
         for name in implicit_locals.keys() {
             if function
@@ -131,6 +185,35 @@ impl<'a> CPrintContext<'a> {
                 index += 1;
             }
         }
+        let mut stack_locals = BTreeMap::new();
+        let mut local_stack_locations = BTreeMap::new();
+        for local in &function.locals {
+            if let Some(IrStorage::Stack { base, offset, .. }) = &local.storage {
+                local_stack_locations.insert(local.name.clone(), (base.clone(), *offset));
+                stack_locals
+                    .entry((base.clone(), *offset))
+                    .or_insert_with(|| local_names[&local.name].clone());
+            }
+        }
+        let mut synthetic_stack_slots = BTreeMap::new();
+        for block in &function.blocks {
+            collect_stack_memory_slots(block, &mut synthetic_stack_slots);
+        }
+        let mut synthetic_stack_locals = Vec::new();
+        for ((base, offset), ty) in synthetic_stack_slots {
+            if stack_locals.contains_key(&(base.clone(), offset)) {
+                continue;
+            }
+            let name = format!("v{index}");
+            index += 1;
+            stack_locals.insert((base.clone(), offset), name.clone());
+            synthetic_stack_locals.push(SyntheticStackLocal {
+                name,
+                ty,
+                base,
+                offset,
+            });
+        }
         let rip_locals = function
             .locals
             .iter()
@@ -143,13 +226,28 @@ impl<'a> CPrintContext<'a> {
                 _ => None,
             })
             .collect();
+        let register_locals = function
+            .locals
+            .iter()
+            .filter_map(|local| match &local.storage {
+                Some(IrStorage::Register { name, .. }) => {
+                    Some((name.clone(), local_names[&local.name].clone()))
+                }
+                _ => None,
+            })
+            .collect();
         let entry_address = function.name.as_deref().and_then(parse_function_address);
         Self {
             local_names,
+            stack_locals,
+            local_stack_locations,
+            register_locals,
+            synthetic_stack_locals,
             rip_locals,
             entry_address,
             image,
             string_cache: RefCell::new(BTreeMap::new()),
+            suppressed_stack_local_load: RefCell::new(None),
         }
     }
 
@@ -158,6 +256,18 @@ impl<'a> CPrintContext<'a> {
             .get(name)
             .cloned()
             .unwrap_or_else(|| sanitize_identifier(name))
+    }
+
+    fn stack_local_name(&self, base: &str, offset: i64) -> Option<String> {
+        self.stack_locals.get(&(base.to_string(), offset)).cloned()
+    }
+
+    fn local_stack_location(&self, name: &str) -> Option<(String, i64)> {
+        self.local_stack_locations.get(name).cloned()
+    }
+
+    fn register_local_name(&self, name: &str) -> Option<&str> {
+        self.register_locals.get(name).map(String::as_str)
     }
 
     fn string_literal(&self, address: u64) -> Option<String> {
@@ -198,15 +308,26 @@ impl<'a> CPrintContext<'a> {
     }
 
     fn expression_string_literal(&self, expression: &AstExpression) -> Option<String> {
+        self.expression_string_literal_with_preference(expression, StringPreference::Any)
+    }
+
+    fn expression_string_literal_with_preference(
+        &self,
+        expression: &AstExpression,
+        preference: StringPreference,
+    ) -> Option<String> {
         if let AstExpression::Value(AstValue::Integer { value, bits }) = expression
             && *bits >= 32
             && let Ok(address) = u64::try_from(*value)
         {
-            return self.normalized_string_literal(address);
+            return self
+                .normalized_string_literal(address)
+                .filter(|literal| string_literal_matches_preference(literal, preference));
         }
         let address = self.resolve_expression_address(expression)?;
         self.normalized_string_literal(address)
-            .or_else(|| self.scan_forward_string_literal(address, 0x80))
+            .filter(|literal| string_literal_matches_preference(literal, preference))
+            .or_else(|| self.scan_forward_string_literal_with_preference(address, 0x80, preference))
     }
 
     fn backward_wide_component_string_literal(
@@ -282,10 +403,18 @@ impl<'a> CPrintContext<'a> {
         }))
     }
 
-    fn scan_forward_string_literal(&self, address: u64, max_scan: u64) -> Option<String> {
+    fn scan_forward_string_literal_with_preference(
+        &self,
+        address: u64,
+        max_scan: u64,
+        preference: StringPreference,
+    ) -> Option<String> {
         (1..=max_scan)
             .filter_map(|offset| address.checked_add(offset))
-            .find_map(|candidate| self.string_literal(candidate))
+            .find_map(|candidate| {
+                self.string_literal(candidate)
+                    .filter(|literal| string_literal_matches_preference(literal, preference))
+            })
     }
 
     fn resolve_expression_address(&self, expression: &AstExpression) -> Option<u64> {
@@ -358,38 +487,68 @@ fn format_statement_into(
     let pad = "    ".repeat(indent);
     match statement {
         AstStatement::Assign { target, value } => {
-            output.push_str(&pad);
-            output.push_str(&format_place(target, context));
-            output.push_str(" = ");
-            output.push_str(&format_expression(value, context));
-            output.push(';');
-            if let Some(comment) = expression_symbol_comment(value) {
-                output.push_str(" /* ");
-                output.push_str(comment);
-                output.push_str(" */");
+            if let Some(segment_store) = format_segment_store(target, value, context) {
+                output.push_str(&pad);
+                output.push_str(&segment_store);
+                output.push(';');
+                output.push('\n');
+                return;
             }
-            output.push('\n');
+            if matches!(target, AstPlace::Named { .. })
+                && !expression_has_c_side_effects(value)
+                && format_place(target, context) == format_expression(value, context)
+            {
+                return;
+            }
+            let target_text = format_place(target, context);
+            let suppressed_stack_local = place_stack_location(target, context);
+            let previous_suppression = context
+                .suppressed_stack_local_load
+                .replace(suppressed_stack_local);
+            let value_text = format_expression(value, context);
+            context
+                .suppressed_stack_local_load
+                .replace(previous_suppression);
+            let line = format!("{pad}{target_text} = {value_text};");
+            if line.chars().count() > MAX_C_LINE_LEN
+                && let Some(wrapped) =
+                    format_call_statement_lines(Some(&target_text), value, indent, context)
+            {
+                output.push_str(&wrapped);
+            } else if line.chars().count() > MAX_C_LINE_LEN
+                && let Some(wrapped) =
+                    format_binary_assignment_lines(&target_text, value, indent, context)
+            {
+                output.push_str(&wrapped);
+            } else {
+                output.push_str(&line);
+                output.push('\n');
+            }
         }
         AstStatement::Expr(value) => {
-            output.push_str(&pad);
-            output.push_str(&format_expression(value, context));
-            output.push(';');
-            if let Some(comment) = expression_symbol_comment(value) {
-                output.push_str(" /* ");
-                output.push_str(comment);
-                output.push_str(" */");
+            let line = format!("{pad}{};", format_expression(value, context));
+            if line.chars().count() > MAX_C_LINE_LEN
+                && let Some(wrapped) = format_call_statement_lines(None, value, indent, context)
+            {
+                output.push_str(&wrapped);
+            } else {
+                output.push_str(&line);
+                output.push('\n');
             }
-            output.push('\n');
         }
         AstStatement::If {
             condition,
             then_body,
             else_body,
         } => {
-            output.push_str(&pad);
-            output.push_str("if (");
-            output.push_str(&format_expression(condition, context));
-            output.push_str(") {\n");
+            let condition_text = format_condition(condition, context);
+            output.push_str(&format_control_header(
+                "if",
+                condition,
+                &condition_text,
+                indent,
+                context,
+            ));
             format_block_into(then_body, indent + 1, context, output);
             output.push_str(&pad);
             output.push('}');
@@ -402,10 +561,14 @@ fn format_statement_into(
             output.push('\n');
         }
         AstStatement::While { condition, body } => {
-            output.push_str(&pad);
-            output.push_str("while (");
-            output.push_str(&format_expression(condition, context));
-            output.push_str(") {\n");
+            let condition_text = format_condition(condition, context);
+            output.push_str(&format_control_header(
+                "while",
+                condition,
+                &condition_text,
+                indent,
+                context,
+            ));
             format_block_into(body, indent + 1, context, output);
             output.push_str(&pad);
             output.push_str("}\n");
@@ -486,6 +649,206 @@ fn format_statement_into(
     }
 }
 
+fn format_call_statement_lines(
+    assignment_target: Option<&str>,
+    expression: &AstExpression,
+    indent: usize,
+    context: &CPrintContext<'_>,
+) -> Option<String> {
+    let (callee, arguments) = match expression {
+        AstExpression::Call {
+            target,
+            abi,
+            arguments,
+            return_types,
+        } => (
+            format_call_target(target, abi.as_ref(), return_types, arguments, context),
+            arguments
+                .iter()
+                .enumerate()
+                .map(|(index, argument)| format_call_argument(target, index, argument, context))
+                .collect::<Vec<_>>(),
+        ),
+        AstExpression::Intrinsic {
+            name, arguments, ..
+        } => (
+            sanitize_identifier(name),
+            arguments
+                .iter()
+                .map(|argument| format_expression(argument, context))
+                .collect::<Vec<_>>(),
+        ),
+        _ => return None,
+    };
+
+    let pad = "    ".repeat(indent);
+    let arg_pad = "    ".repeat(indent + 1);
+    let mut output = String::new();
+    output.push_str(&pad);
+    if let Some(target) = assignment_target {
+        output.push_str(target);
+        output.push_str(" = ");
+    }
+    output.push_str(&callee);
+    output.push_str("(\n");
+    for (index, argument) in arguments.iter().enumerate() {
+        output.push_str(&arg_pad);
+        output.push_str(argument);
+        if index + 1 != arguments.len() {
+            output.push(',');
+        }
+        output.push('\n');
+    }
+    output.push_str(&pad);
+    output.push_str(");");
+    output.push('\n');
+    Some(output)
+}
+
+fn format_binary_assignment_lines(
+    target: &str,
+    expression: &AstExpression,
+    indent: usize,
+    context: &CPrintContext<'_>,
+) -> Option<String> {
+    let mut terms = Vec::new();
+    collect_additive_terms(expression, context, &mut terms);
+    if terms.len() < 2 {
+        return None;
+    }
+
+    let pad = "    ".repeat(indent);
+    let continuation_pad = "    ".repeat(indent + 1);
+    let mut output = String::new();
+    output.push_str(&pad);
+    output.push_str(target);
+    output.push_str(" = ");
+    output.push_str(&terms[0].1);
+    output.push('\n');
+    for (index, (op, value)) in terms.iter().enumerate().skip(1) {
+        output.push_str(&continuation_pad);
+        output.push_str(op);
+        output.push(' ');
+        output.push_str(value);
+        if index + 1 == terms.len() {
+            output.push(';');
+        }
+        output.push('\n');
+    }
+    Some(output)
+}
+
+fn collect_additive_terms(
+    expression: &AstExpression,
+    context: &CPrintContext<'_>,
+    terms: &mut Vec<(&'static str, String)>,
+) {
+    match expression {
+        AstExpression::Binary {
+            op: AstBinaryOperation::Add,
+            lhs,
+            rhs,
+            ..
+        } => {
+            collect_additive_terms(lhs, context, terms);
+            terms.push(("+", format_subexpression_inner(rhs, context, false)));
+        }
+        AstExpression::Binary {
+            op: AstBinaryOperation::Sub,
+            lhs,
+            rhs,
+            ..
+        } => {
+            collect_additive_terms(lhs, context, terms);
+            terms.push(("-", format_subexpression_inner(rhs, context, false)));
+        }
+        expression => terms.push(("", format_expression(expression, context))),
+    }
+}
+
+fn format_control_header(
+    keyword: &str,
+    condition: &AstExpression,
+    condition_text: &str,
+    indent: usize,
+    context: &CPrintContext<'_>,
+) -> String {
+    let pad = "    ".repeat(indent);
+    let line = format!("{pad}{keyword} ({condition_text}) {{\n");
+    if line.chars().count() <= MAX_C_LINE_LEN {
+        return line;
+    }
+
+    let Some(condition_lines) = format_wrapped_condition_lines(condition, indent + 1, context)
+    else {
+        return line;
+    };
+    let mut output = String::new();
+    output.push_str(&pad);
+    output.push_str(keyword);
+    output.push_str(" (\n");
+    for line in condition_lines {
+        output.push_str(&line);
+        output.push('\n');
+    }
+    output.push_str(&pad);
+    output.push_str(") {\n");
+    output
+}
+
+fn format_wrapped_condition_lines(
+    condition: &AstExpression,
+    indent: usize,
+    context: &CPrintContext<'_>,
+) -> Option<Vec<String>> {
+    let AstExpression::Binary { op, ty, .. } = condition else {
+        return None;
+    };
+    if !matches!(ty, AstType::Integer(1))
+        || !matches!(op, AstBinaryOperation::And | AstBinaryOperation::Or)
+    {
+        return None;
+    }
+
+    let mut terms = Vec::new();
+    collect_logical_terms(condition, *op, context, &mut terms);
+    if terms.len() < 2 {
+        return None;
+    }
+    let pad = "    ".repeat(indent);
+    let operator = match op {
+        AstBinaryOperation::And => "&&",
+        AstBinaryOperation::Or => "||",
+        _ => unreachable!(),
+    };
+    let mut lines = Vec::new();
+    for (index, term) in terms.into_iter().enumerate() {
+        if index == 0 {
+            lines.push(format!("{pad}{term}"));
+        } else {
+            lines.push(format!("{pad}{operator} {term}"));
+        }
+    }
+    Some(lines)
+}
+
+fn collect_logical_terms(
+    expression: &AstExpression,
+    target_op: AstBinaryOperation,
+    context: &CPrintContext<'_>,
+    terms: &mut Vec<String>,
+) {
+    match expression {
+        AstExpression::Binary { op, lhs, rhs, ty }
+            if *op == target_op && matches!(ty, AstType::Integer(1)) =>
+        {
+            collect_logical_terms(lhs, target_op, context, terms);
+            collect_logical_terms(rhs, target_op, context, terms);
+        }
+        expression => terms.push(format_logical_condition_operand(expression, context)),
+    }
+}
+
 fn format_expression(expression: &AstExpression, context: &CPrintContext<'_>) -> String {
     format_expression_inner(expression, context, true)
 }
@@ -546,6 +909,9 @@ fn format_expression_inner(
             } else {
                 (1u128 << bits) - 1
             };
+            if *lsb == 0 {
+                return format!("({} & {:#x})", format_subexpression(value, context), mask);
+            }
             format!(
                 "(({} >> {}) & {:#x})",
                 format_subexpression(value, context),
@@ -553,11 +919,21 @@ fn format_expression_inner(
                 mask
             )
         }
-        AstExpression::Load { address, ty, .. } => {
+        AstExpression::Load {
+            address_space,
+            address,
+            ty,
+        } => {
+            if let Some(intrinsic) = format_segment_load(address_space, address, ty, context) {
+                return intrinsic;
+            }
+            if let Some(local) = format_stack_local_load(address_space, address, context) {
+                return local;
+            }
             format!(
-                "*({}*){}",
+                "*({}*)({})",
                 format_type(ty),
-                format_subexpression_inner(address, context, false)
+                format_memory_address(address_space, address, context)
             )
         }
         AstExpression::Compare { op, lhs, rhs, .. } => format!(
@@ -580,13 +956,17 @@ fn format_expression_inner(
             )
         }
         AstExpression::Call {
-            target, arguments, ..
+            target,
+            abi,
+            arguments,
+            return_types,
         } => format!(
             "{}({})",
-            format_call_target(target, context),
+            format_call_target(target, abi.as_ref(), return_types, arguments, context),
             arguments
                 .iter()
-                .map(|argument| format_expression(argument, context))
+                .enumerate()
+                .map(|(index, argument)| format_call_argument(target, index, argument, context))
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
@@ -616,6 +996,304 @@ fn format_expression_inner(
                 format_expression_without_strings(index, context)
             )
         }
+    }
+}
+
+fn format_call_argument(
+    target: &AstTarget,
+    index: usize,
+    argument: &AstExpression,
+    context: &CPrintContext<'_>,
+) -> String {
+    let preference = call_argument_string_preference(target, index);
+    if preference != StringPreference::Any
+        && let Some(literal) =
+            context.expression_string_literal_with_preference(argument, preference)
+    {
+        return literal;
+    }
+    if preference != StringPreference::Any {
+        return format_expression_without_strings(argument, context);
+    }
+    format_expression(argument, context)
+}
+
+fn format_condition(expression: &AstExpression, context: &CPrintContext<'_>) -> String {
+    if let Some((value, bits, negated)) = sign_bit_condition(expression) {
+        let op = if negated { ">=" } else { "<" };
+        return format!(
+            "(int{}_t){} {} 0",
+            bits,
+            format_subexpression(value, context),
+            op
+        );
+    }
+    if let Some(condition) = bit_test_condition(expression, context) {
+        return condition;
+    }
+    if let Some(condition) = logical_condition(expression, context) {
+        return condition;
+    }
+    format_expression(expression, context)
+}
+
+fn logical_condition(expression: &AstExpression, context: &CPrintContext<'_>) -> Option<String> {
+    let AstExpression::Binary { op, lhs, rhs, ty } = expression else {
+        return None;
+    };
+    if !matches!(ty, AstType::Integer(1)) {
+        return None;
+    }
+    let op = match op {
+        AstBinaryOperation::And => "&&",
+        AstBinaryOperation::Or => "||",
+        _ => return None,
+    };
+    Some(format!(
+        "{} {} {}",
+        format_logical_condition_operand(lhs, context),
+        op,
+        format_logical_condition_operand(rhs, context)
+    ))
+}
+
+fn format_logical_condition_operand(
+    expression: &AstExpression,
+    context: &CPrintContext<'_>,
+) -> String {
+    if let Some(condition) = logical_condition(expression, context) {
+        return format!("({condition})");
+    }
+    format_subexpression(expression, context)
+}
+
+fn sign_bit_condition(expression: &AstExpression) -> Option<(&AstExpression, u16, bool)> {
+    match expression {
+        AstExpression::Unary {
+            op: AstUnaryOperation::LogicalNot,
+            value,
+            ..
+        } => {
+            let (value, bits, negated) = sign_bit_condition(value)?;
+            Some((value, bits, !negated))
+        }
+        AstExpression::Cast { value, .. } => sign_bit_condition(value),
+        AstExpression::Extract { value, lsb, ty } if integer_bits(ty) == Some(1) => {
+            let bits = expression_integer_bits(value)?;
+            (*lsb + 1 == bits && matches!(bits, 8 | 16 | 32 | 64 | 128)).then_some((
+                value.as_ref(),
+                bits,
+                false,
+            ))
+        }
+        AstExpression::Binary {
+            op: AstBinaryOperation::And,
+            lhs,
+            rhs,
+            ..
+        } => {
+            if is_one_ast_expression(rhs) {
+                sign_bit_shift_condition(lhs)
+            } else if is_one_ast_expression(lhs) {
+                sign_bit_shift_condition(rhs)
+            } else {
+                None
+            }
+        }
+        AstExpression::Compare { op, lhs, rhs, .. }
+            if matches!(op, AstCompareOperation::Eq | AstCompareOperation::Ne) =>
+        {
+            let candidate = if is_zero_ast_expression(rhs) {
+                lhs.as_ref()
+            } else if is_zero_ast_expression(lhs) {
+                rhs.as_ref()
+            } else {
+                return None;
+            };
+            let (value, bits, negated) = sign_bit_condition(candidate)?;
+            let equals_zero = matches!(op, AstCompareOperation::Eq);
+            Some((value, bits, negated ^ equals_zero))
+        }
+        _ => None,
+    }
+}
+
+fn sign_bit_shift_condition(expression: &AstExpression) -> Option<(&AstExpression, u16, bool)> {
+    let expression = peel_casts(expression);
+    let AstExpression::Binary {
+        op: AstBinaryOperation::LShr | AstBinaryOperation::AShr,
+        lhs,
+        rhs,
+        ..
+    } = expression
+    else {
+        return None;
+    };
+    let shift = expression_integer_value(rhs)?;
+    let bits = u16::try_from(shift + 1).ok()?;
+    matches!(bits, 8 | 16 | 32 | 64 | 128).then_some((lhs.as_ref(), bits, false))
+}
+
+fn bit_test_condition(expression: &AstExpression, context: &CPrintContext<'_>) -> Option<String> {
+    let (value, bit, negated) = raw_bit_test_condition(expression)?;
+    if let Some(bits) = sign_width_for_bit(bit) {
+        let op = if negated { ">=" } else { "<" };
+        return Some(format!(
+            "(int{}_t){} {} 0",
+            bits,
+            format_subexpression(value, context),
+            op
+        ));
+    }
+    let mask = 1u128.checked_shl(u32::from(bit))?;
+    let op = if negated { "==" } else { "!=" };
+    Some(format!(
+        "({} & {}) {} 0",
+        format_subexpression(value, context),
+        format_hex_mask(mask),
+        op
+    ))
+}
+
+fn raw_bit_test_condition(expression: &AstExpression) -> Option<(&AstExpression, u16, bool)> {
+    match expression {
+        AstExpression::Unary {
+            op: AstUnaryOperation::LogicalNot,
+            value,
+            ..
+        } => {
+            let (value, bit, negated) = raw_bit_test_condition(value)?;
+            Some((value, bit, !negated))
+        }
+        AstExpression::Cast { value, .. } => raw_bit_test_condition(value),
+        AstExpression::Extract { value, lsb, ty } if integer_bits(ty) == Some(1) => {
+            Some((value.as_ref(), *lsb, false))
+        }
+        AstExpression::Binary {
+            op: AstBinaryOperation::And,
+            lhs,
+            rhs,
+            ..
+        } => {
+            if is_one_ast_expression(rhs) {
+                shifted_bit_condition(lhs)
+            } else if is_one_ast_expression(lhs) {
+                shifted_bit_condition(rhs)
+            } else {
+                None
+            }
+        }
+        AstExpression::Compare { op, lhs, rhs, .. }
+            if matches!(op, AstCompareOperation::Eq | AstCompareOperation::Ne) =>
+        {
+            let candidate = if is_zero_ast_expression(rhs) {
+                lhs.as_ref()
+            } else if is_zero_ast_expression(lhs) {
+                rhs.as_ref()
+            } else {
+                return None;
+            };
+            let (value, bit, negated) = raw_bit_test_condition(candidate)?;
+            let equals_zero = matches!(op, AstCompareOperation::Eq);
+            Some((value, bit, negated ^ equals_zero))
+        }
+        _ => None,
+    }
+}
+
+fn shifted_bit_condition(expression: &AstExpression) -> Option<(&AstExpression, u16, bool)> {
+    let expression = peel_casts(expression);
+    let AstExpression::Binary {
+        op: AstBinaryOperation::LShr | AstBinaryOperation::AShr,
+        lhs,
+        rhs,
+        ..
+    } = expression
+    else {
+        return None;
+    };
+    let shift = expression_integer_value(rhs)?;
+    Some((lhs.as_ref(), u16::try_from(shift).ok()?, false))
+}
+
+fn sign_width_for_bit(bit: u16) -> Option<u16> {
+    match bit + 1 {
+        bits @ (8 | 16 | 32 | 64 | 128) => Some(bits),
+        _ => None,
+    }
+}
+
+fn peel_casts(mut expression: &AstExpression) -> &AstExpression {
+    while let AstExpression::Cast { value, .. } = expression {
+        expression = value;
+    }
+    expression
+}
+
+fn expression_has_c_side_effects(expression: &AstExpression) -> bool {
+    match expression {
+        AstExpression::Call { .. } | AstExpression::Intrinsic { .. } => true,
+        AstExpression::Unary { value, .. }
+        | AstExpression::Extract { value, .. }
+        | AstExpression::Cast { value, .. }
+        | AstExpression::Deref { pointer: value, .. } => expression_has_c_side_effects(value),
+        AstExpression::Binary { lhs, rhs, .. }
+        | AstExpression::Compare { lhs, rhs, .. }
+        | AstExpression::FloatCompare { lhs, rhs, .. }
+        | AstExpression::Index {
+            base: lhs,
+            index: rhs,
+            ..
+        } => expression_has_c_side_effects(lhs) || expression_has_c_side_effects(rhs),
+        AstExpression::Select {
+            condition,
+            when_true,
+            when_false,
+            ..
+        } => {
+            expression_has_c_side_effects(condition)
+                || expression_has_c_side_effects(when_true)
+                || expression_has_c_side_effects(when_false)
+        }
+        AstExpression::Concat { parts, .. } => parts.iter().any(expression_has_c_side_effects),
+        AstExpression::Load { address, .. } => expression_has_c_side_effects(address),
+        AstExpression::AddressOf { .. } | AstExpression::Value(_) => false,
+    }
+}
+
+fn format_hex_mask(mask: u128) -> String {
+    if mask == u128::from(u64::MAX) {
+        format!("{mask:#x}ULL")
+    } else {
+        format!("{mask:#x}")
+    }
+}
+
+fn is_one_ast_expression(expression: &AstExpression) -> bool {
+    matches!(
+        expression,
+        AstExpression::Value(AstValue::Integer { value: 1, .. })
+            | AstExpression::Value(AstValue::Boolean(true))
+    )
+}
+
+fn is_zero_ast_expression(expression: &AstExpression) -> bool {
+    matches!(
+        expression,
+        AstExpression::Value(AstValue::Integer { value: 0, .. })
+            | AstExpression::Value(AstValue::Boolean(false))
+    )
+}
+
+fn call_argument_string_preference(target: &AstTarget, index: usize) -> StringPreference {
+    let AstTarget::Direct(name) = target else {
+        return StringPreference::Any;
+    };
+    match (display_symbol_name(name), index) {
+        ("LoadLibraryExW" | "LoadLibraryW", 0) => StringPreference::WideModule,
+        ("LoadLibraryExA" | "LoadLibraryA", 0) => StringPreference::Ascii,
+        ("GetProcAddress", 1) => StringPreference::Ascii,
+        _ => StringPreference::Any,
     }
 }
 
@@ -654,11 +1332,18 @@ fn format_place(place: &AstPlace, context: &CPrintContext<'_>) -> String {
                 format_subexpression_inner(pointer, context, false)
             )
         }
-        AstPlace::Memory { address, ty, .. } => {
+        AstPlace::Memory {
+            address_space,
+            address,
+            ty,
+        } => {
+            if let Some(local) = format_stack_local_load(address_space, address, context) {
+                return local;
+            }
             format!(
                 "*({}*){}",
                 format_type(ty),
-                format_subexpression_inner(address, context, false)
+                format_memory_address(address_space, address, context)
             )
         }
         AstPlace::Index { base, index, .. } => {
@@ -671,6 +1356,255 @@ fn format_place(place: &AstPlace, context: &CPrintContext<'_>) -> String {
     }
 }
 
+fn format_stack_local_load(
+    address_space: &AstAddressSpace,
+    address: &AstExpression,
+    context: &CPrintContext<'_>,
+) -> Option<String> {
+    let (base, offset) = stack_memory_location(address_space, address)?;
+    if context.suppressed_stack_local_load.borrow().as_ref() == Some(&(base.clone(), offset)) {
+        return None;
+    }
+    context.stack_local_name(&base, offset)
+}
+
+fn place_stack_location(place: &AstPlace, context: &CPrintContext<'_>) -> Option<(String, i64)> {
+    match place {
+        AstPlace::Named { name, .. } => context.local_stack_location(name),
+        AstPlace::Memory {
+            address_space,
+            address,
+            ..
+        } => stack_memory_location(address_space, address),
+        AstPlace::Deref { .. } | AstPlace::Index { .. } => None,
+    }
+}
+
+fn format_memory_address(
+    address_space: &AstAddressSpace,
+    address: &AstExpression,
+    context: &CPrintContext<'_>,
+) -> String {
+    if matches!(address_space, AstAddressSpace::Default) {
+        return format_subexpression_inner(address, context, false);
+    }
+    if let Some(address) = format_stack_memory_address(address_space, address, context) {
+        return address;
+    }
+    format_address_expression(address_space, address, context)
+}
+
+fn format_stack_memory_address(
+    address_space: &AstAddressSpace,
+    address: &AstExpression,
+    context: &CPrintContext<'_>,
+) -> Option<String> {
+    let Some((base, offset)) = stack_memory_location(address_space, address) else {
+        return matches!(address_space, AstAddressSpace::Stack)
+            .then(|| format_address_expression(address_space, address, context));
+    };
+    let c_address = if expression_integer_value(address).is_some() {
+        format_stack_base_address(&base, offset, context)
+    } else {
+        format_expression_without_strings(address, context)
+    };
+    Some(c_address)
+}
+
+fn format_stack_base_address(base: &str, offset: i64, context: &CPrintContext<'_>) -> String {
+    let Some(base_name) = context.register_local_name(base) else {
+        return format_integer_literal(i128::from(offset), 64);
+    };
+    if offset == 0 {
+        base_name.to_string()
+    } else if offset > 0 {
+        format!(
+            "{base_name} + {}",
+            format_integer_literal(i128::from(offset), 64)
+        )
+    } else {
+        format!(
+            "{base_name} - {}",
+            format_integer_literal(i128::from(-offset), 64)
+        )
+    }
+}
+
+fn stack_memory_location(
+    address_space: &AstAddressSpace,
+    address: &AstExpression,
+) -> Option<(String, i64)> {
+    let offset = i64::try_from(expression_integer_value(address)?).ok()?;
+    match address_space {
+        AstAddressSpace::Stack => Some(("rsp".to_string(), offset)),
+        AstAddressSpace::Local { name } | AstAddressSpace::Spill { name } => Some((
+            "rbp".to_string(),
+            i64::try_from(-parse_address_space_offset(name)?).ok()? + offset,
+        )),
+        AstAddressSpace::Argument { name } | AstAddressSpace::Incoming { name } => Some((
+            "rsp".to_string(),
+            i64::try_from(parse_address_space_offset(name)?).ok()? + offset,
+        )),
+        AstAddressSpace::SavedFrame { .. } | AstAddressSpace::ReturnAddress { .. } => {
+            Some(("rsp".to_string(), offset))
+        }
+        _ => None,
+    }
+}
+
+fn format_address_expression(
+    address_space: &AstAddressSpace,
+    address: &AstExpression,
+    context: &CPrintContext<'_>,
+) -> String {
+    let base = address_space_base_offset(address_space);
+    let offset = expression_integer_value(address);
+    match (base, offset) {
+        (Some(base), Some(offset)) => format_integer_literal(base + offset, 64),
+        (Some(0), None) | (None, None) => format_subexpression_inner(address, context, false),
+        (Some(base), None) => format!(
+            "({} + {})",
+            format_integer_literal(base, 64),
+            format_expression_without_strings(address, context)
+        ),
+        (None, Some(offset)) => format_integer_literal(offset, 64),
+    }
+}
+
+fn format_stack_address_comment(base: &str, offset: i128) -> String {
+    if offset == 0 {
+        return format!("[{base}]");
+    }
+    if offset < 0 {
+        format!("[{base}-0x{:x}]", offset.unsigned_abs())
+    } else {
+        format!("[{base}+0x{offset:x}]")
+    }
+}
+
+fn format_segment_load(
+    address_space: &AstAddressSpace,
+    address: &AstExpression,
+    ty: &AstType,
+    context: &CPrintContext<'_>,
+) -> Option<String> {
+    let AstAddressSpace::Named { name } = address_space else {
+        return None;
+    };
+    let intrinsic = match (name.as_str(), integer_bits(ty).unwrap_or(type_bits(ty))) {
+        ("gs", 8) => "__readgsbyte",
+        ("gs", 16) => "__readgsword",
+        ("gs", 32) => "__readgsdword",
+        ("gs", 64) => "__readgsqword",
+        ("fs", 8) => "__readfsbyte",
+        ("fs", 16) => "__readfsword",
+        ("fs", 32) => "__readfsdword",
+        ("fs", 64) => "__readfsqword",
+        _ => return None,
+    };
+    Some(format!(
+        "{}({})",
+        intrinsic,
+        format_address_space_offset(address_space, address, context)
+    ))
+}
+
+fn format_segment_store(
+    target: &AstPlace,
+    value: &AstExpression,
+    context: &CPrintContext<'_>,
+) -> Option<String> {
+    let AstPlace::Memory {
+        address_space,
+        address,
+        ty,
+    } = target
+    else {
+        return None;
+    };
+    let AstAddressSpace::Named { name } = address_space else {
+        return None;
+    };
+    let intrinsic = match (name.as_str(), integer_bits(ty).unwrap_or(type_bits(ty))) {
+        ("gs", 8) => "__writegsbyte",
+        ("gs", 16) => "__writegsword",
+        ("gs", 32) => "__writegsdword",
+        ("gs", 64) => "__writegsqword",
+        ("fs", 8) => "__writefsbyte",
+        ("fs", 16) => "__writefsword",
+        ("fs", 32) => "__writefsdword",
+        ("fs", 64) => "__writefsqword",
+        _ => return None,
+    };
+    Some(format!(
+        "{}({}, {})",
+        intrinsic,
+        format_address_space_offset(address_space, address, context),
+        format_expression(value, context)
+    ))
+}
+
+fn format_address_space_offset(
+    address_space: &AstAddressSpace,
+    address: &AstExpression,
+    context: &CPrintContext<'_>,
+) -> String {
+    let base = address_space_base_offset(address_space);
+    let offset = expression_integer_value(address);
+    match (base, offset) {
+        (Some(base), Some(offset)) => format_c_offset(base + offset),
+        (Some(base), None) if base == 0 => format_expression_without_strings(address, context),
+        (Some(base), None) => {
+            format!(
+                "{} + {}",
+                format_c_offset(base),
+                format_expression_without_strings(address, context)
+            )
+        }
+        (None, Some(offset)) => format_c_offset(offset),
+        (None, None) => format_expression_without_strings(address, context),
+    }
+}
+
+fn address_space_base_offset(address_space: &AstAddressSpace) -> Option<i128> {
+    match address_space {
+        AstAddressSpace::Local { name }
+        | AstAddressSpace::Argument { name }
+        | AstAddressSpace::Spill { name }
+        | AstAddressSpace::Incoming { name }
+        | AstAddressSpace::SavedFrame { name }
+        | AstAddressSpace::ReturnAddress { name } => parse_address_space_offset(name),
+        AstAddressSpace::Default
+        | AstAddressSpace::Stack
+        | AstAddressSpace::Heap
+        | AstAddressSpace::Global
+        | AstAddressSpace::HeapObject { .. }
+        | AstAddressSpace::GlobalObject { .. }
+        | AstAddressSpace::Io
+        | AstAddressSpace::Named { .. } => None,
+    }
+}
+
+fn parse_address_space_offset(name: &str) -> Option<i128> {
+    let suffix = name.strip_prefix('m').unwrap_or(name);
+    suffix.parse::<i128>().ok()
+}
+
+fn expression_integer_value(expression: &AstExpression) -> Option<i128> {
+    match expression {
+        AstExpression::Value(AstValue::Integer { value, .. }) => Some(*value),
+        _ => None,
+    }
+}
+
+fn format_c_offset(value: i128) -> String {
+    if value < 0 {
+        format!("-0x{:x}", value.unsigned_abs())
+    } else {
+        format!("0x{value:x}")
+    }
+}
+
 fn format_target(target: &AstTarget, context: &CPrintContext<'_>) -> String {
     match target {
         AstTarget::Direct(name) => sanitize_identifier(name),
@@ -680,10 +1614,31 @@ fn format_target(target: &AstTarget, context: &CPrintContext<'_>) -> String {
     }
 }
 
-fn format_call_target(target: &AstTarget, context: &CPrintContext<'_>) -> String {
+fn format_call_target(
+    target: &AstTarget,
+    abi: Option<&LirAbi>,
+    return_types: &[AstType],
+    arguments: &[AstExpression],
+    context: &CPrintContext<'_>,
+) -> String {
     match target {
         AstTarget::Direct(name) => sanitize_identifier(display_symbol_name(name)),
-        AstTarget::Indirect(expression) => format!("(*{})", format_expression(expression, context)),
+        AstTarget::Indirect(expression) => {
+            if let Some(convention) = abi.and_then(format_abi_function_pointer_convention) {
+                format!(
+                    "(({} ({convention}*)({})){})",
+                    format_return_type(return_types),
+                    arguments
+                        .iter()
+                        .map(|argument| format_type(&expression_type(argument)))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    format_expression(expression, context)
+                )
+            } else {
+                format!("(*{})", format_expression(expression, context))
+            }
+        }
     }
 }
 
@@ -702,6 +1657,9 @@ fn format_compare_operand(
     ) {
         return operand;
     }
+    if let AstExpression::Value(AstValue::Integer { value, .. }) = expression {
+        return format_signed_integer_literal(*value);
+    }
     let Some(bits) = expression_integer_bits(expression) else {
         return operand;
     };
@@ -709,6 +1667,19 @@ fn format_compare_operand(
         8 | 16 | 32 | 64 | 128 => format!("(int{bits}_t){operand}"),
         _ => operand,
     }
+}
+
+fn format_signed_integer_literal(value: i128) -> String {
+    if value == 0 {
+        return "0".to_string();
+    }
+    if (1..=9).contains(&value) {
+        return value.to_string();
+    }
+    if value < 0 {
+        return format!("-0x{:x}", value.unsigned_abs());
+    }
+    format!("0x{value:x}")
 }
 
 fn expression_integer_bits(expression: &AstExpression) -> Option<u16> {
@@ -733,13 +1704,25 @@ fn expression_integer_bits(expression: &AstExpression) -> Option<u16> {
     }
 }
 
-fn expression_symbol_comment(expression: &AstExpression) -> Option<&str> {
+fn expression_type(expression: &AstExpression) -> AstType {
     match expression {
-        AstExpression::Call {
-            target: AstTarget::Direct(name),
-            ..
-        } => symbol_comment(name),
-        _ => None,
+        AstExpression::Value(value) => value.ty(),
+        AstExpression::Unary { ty, .. }
+        | AstExpression::Binary { ty, .. }
+        | AstExpression::Select { ty, .. }
+        | AstExpression::Concat { ty, .. }
+        | AstExpression::Extract { ty, .. }
+        | AstExpression::Load { ty, .. }
+        | AstExpression::Compare { ty, .. }
+        | AstExpression::FloatCompare { ty, .. }
+        | AstExpression::Cast { ty, .. }
+        | AstExpression::AddressOf { ty, .. }
+        | AstExpression::Deref { ty, .. }
+        | AstExpression::Index { ty, .. } => ty.clone(),
+        AstExpression::Call { return_types, .. }
+        | AstExpression::Intrinsic { return_types, .. } => {
+            return_types.first().cloned().unwrap_or_else(AstType::void)
+        }
     }
 }
 
@@ -749,8 +1732,27 @@ fn display_symbol_name(name: &str) -> &str {
         .unwrap_or(name)
 }
 
-fn symbol_comment(name: &str) -> Option<&str> {
-    name.contains('!').then_some(name)
+fn string_literal_matches_preference(literal: &str, preference: StringPreference) -> bool {
+    match preference {
+        StringPreference::Any => true,
+        StringPreference::Ascii => !literal.starts_with("L\""),
+        StringPreference::WideModule => {
+            literal.starts_with("L\"") && string_literal_body(literal).is_some_and(is_module_name)
+        }
+    }
+}
+
+fn string_literal_body(literal: &str) -> Option<&str> {
+    literal
+        .strip_prefix("L\"")
+        .or_else(|| literal.strip_prefix('"'))
+        .and_then(|body| body.strip_suffix('"'))
+}
+
+fn is_module_name(body: &str) -> bool {
+    body.rsplit(['\\', '/'])
+        .next()
+        .is_some_and(|name| name.to_ascii_lowercase().ends_with(".dll"))
 }
 
 fn parse_function_address(name: &str) -> Option<u64> {
@@ -768,12 +1770,7 @@ fn parse_function_address(name: &str) -> Option<u64> {
 fn format_value(value: &AstValue, context: &CPrintContext<'_>) -> String {
     match value {
         AstValue::Named { name, .. } => context.local_name(name),
-        AstValue::Integer { value, bits } => {
-            if *value == 0 {
-                return "0".to_string();
-            }
-            format!("{value}{suffix}", suffix = integer_suffix(*bits))
-        }
+        AstValue::Integer { value, bits } => format_integer_literal(*value, *bits),
         AstValue::Boolean(value) => {
             if *value {
                 "1".to_string()
@@ -884,6 +1881,334 @@ fn collect_assigned_named_places(block: &AstBlock, locals: &mut BTreeMap<String,
     }
 }
 
+fn collect_referenced_named_values(block: &AstBlock, locals: &mut BTreeMap<String, AstType>) {
+    for statement in &block.statements {
+        collect_referenced_named_values_in_statement(statement, locals);
+    }
+}
+
+fn collect_stack_memory_slots(block: &AstBlock, slots: &mut BTreeMap<(String, i64), AstType>) {
+    for statement in &block.statements {
+        collect_stack_memory_slots_in_statement(statement, slots);
+    }
+}
+
+fn collect_stack_memory_slots_in_statement(
+    statement: &AstStatement,
+    slots: &mut BTreeMap<(String, i64), AstType>,
+) {
+    match statement {
+        AstStatement::Assign { target, value } => {
+            collect_stack_memory_slots_in_place(target, slots);
+            collect_stack_memory_slots_in_expression(value, slots);
+        }
+        AstStatement::Expr(value) => collect_stack_memory_slots_in_expression(value, slots),
+        AstStatement::If {
+            condition,
+            then_body,
+            else_body,
+        } => {
+            collect_stack_memory_slots_in_expression(condition, slots);
+            collect_stack_memory_slots(then_body, slots);
+            if let Some(else_body) = else_body {
+                collect_stack_memory_slots(else_body, slots);
+            }
+        }
+        AstStatement::While { condition, body } => {
+            collect_stack_memory_slots_in_expression(condition, slots);
+            collect_stack_memory_slots(body, slots);
+        }
+        AstStatement::Loop { body } => collect_stack_memory_slots(body, slots),
+        AstStatement::Switch {
+            value,
+            cases,
+            default,
+        } => {
+            collect_stack_memory_slots_in_expression(value, slots);
+            for case in cases {
+                collect_stack_memory_slots(&case.body, slots);
+            }
+            if let Some(default) = default {
+                collect_stack_memory_slots(default, slots);
+            }
+        }
+        AstStatement::Return { values } => {
+            for value in values {
+                collect_stack_memory_slots_in_expression(value, slots);
+            }
+        }
+        AstStatement::Goto(AstTarget::Indirect(value)) => {
+            collect_stack_memory_slots_in_expression(value, slots);
+        }
+        AstStatement::Break
+        | AstStatement::Continue
+        | AstStatement::Label(_)
+        | AstStatement::Goto(AstTarget::Direct(_))
+        | AstStatement::Trap
+        | AstStatement::Unreachable => {}
+    }
+}
+
+fn collect_stack_memory_slots_in_expression(
+    expression: &AstExpression,
+    slots: &mut BTreeMap<(String, i64), AstType>,
+) {
+    match expression {
+        AstExpression::Load {
+            address_space,
+            address,
+            ty,
+        } => {
+            record_stack_memory_slot(address_space, address, ty, slots);
+            collect_stack_memory_slots_in_expression(address, slots);
+        }
+        AstExpression::Unary { value, .. }
+        | AstExpression::Extract { value, .. }
+        | AstExpression::Cast { value, .. }
+        | AstExpression::Deref { pointer: value, .. } => {
+            collect_stack_memory_slots_in_expression(value, slots);
+        }
+        AstExpression::Binary { lhs, rhs, .. }
+        | AstExpression::Compare { lhs, rhs, .. }
+        | AstExpression::FloatCompare { lhs, rhs, .. } => {
+            collect_stack_memory_slots_in_expression(lhs, slots);
+            collect_stack_memory_slots_in_expression(rhs, slots);
+        }
+        AstExpression::Select {
+            condition,
+            when_true,
+            when_false,
+            ..
+        } => {
+            collect_stack_memory_slots_in_expression(condition, slots);
+            collect_stack_memory_slots_in_expression(when_true, slots);
+            collect_stack_memory_slots_in_expression(when_false, slots);
+        }
+        AstExpression::Concat { parts, .. } => {
+            for part in parts {
+                collect_stack_memory_slots_in_expression(part, slots);
+            }
+        }
+        AstExpression::Call {
+            target, arguments, ..
+        } => {
+            collect_stack_memory_slots_in_target(target, slots);
+            for argument in arguments {
+                collect_stack_memory_slots_in_expression(argument, slots);
+            }
+        }
+        AstExpression::Intrinsic { arguments, .. } => {
+            for argument in arguments {
+                collect_stack_memory_slots_in_expression(argument, slots);
+            }
+        }
+        AstExpression::AddressOf { place, .. } => collect_stack_memory_slots_in_place(place, slots),
+        AstExpression::Index { base, index, .. } => {
+            collect_stack_memory_slots_in_expression(base, slots);
+            collect_stack_memory_slots_in_expression(index, slots);
+        }
+        AstExpression::Value(_) => {}
+    }
+}
+
+fn collect_stack_memory_slots_in_place(
+    place: &AstPlace,
+    slots: &mut BTreeMap<(String, i64), AstType>,
+) {
+    match place {
+        AstPlace::Memory {
+            address_space,
+            address,
+            ty,
+        } => {
+            record_stack_memory_slot(address_space, address, ty, slots);
+            collect_stack_memory_slots_in_expression(address, slots);
+        }
+        AstPlace::Deref { pointer, .. } => collect_stack_memory_slots_in_expression(pointer, slots),
+        AstPlace::Index { base, index, .. } => {
+            collect_stack_memory_slots_in_expression(base, slots);
+            collect_stack_memory_slots_in_expression(index, slots);
+        }
+        AstPlace::Named { .. } => {}
+    }
+}
+
+fn collect_stack_memory_slots_in_target(
+    target: &AstTarget,
+    slots: &mut BTreeMap<(String, i64), AstType>,
+) {
+    if let AstTarget::Indirect(expression) = target {
+        collect_stack_memory_slots_in_expression(expression, slots);
+    }
+}
+
+fn record_stack_memory_slot(
+    address_space: &AstAddressSpace,
+    address: &AstExpression,
+    ty: &AstType,
+    slots: &mut BTreeMap<(String, i64), AstType>,
+) {
+    let Some(location) = stack_memory_location(address_space, address) else {
+        return;
+    };
+    slots
+        .entry(location)
+        .and_modify(|existing| {
+            if type_bits(ty) > type_bits(existing) {
+                *existing = ty.clone();
+            }
+        })
+        .or_insert_with(|| ty.clone());
+}
+
+fn collect_referenced_named_values_in_statement(
+    statement: &AstStatement,
+    locals: &mut BTreeMap<String, AstType>,
+) {
+    match statement {
+        AstStatement::Assign { target, value } => {
+            collect_referenced_named_values_in_place(target, locals);
+            collect_referenced_named_values_in_expression(value, locals);
+        }
+        AstStatement::Expr(value) => collect_referenced_named_values_in_expression(value, locals),
+        AstStatement::If {
+            condition,
+            then_body,
+            else_body,
+        } => {
+            collect_referenced_named_values_in_expression(condition, locals);
+            collect_referenced_named_values(then_body, locals);
+            if let Some(else_body) = else_body {
+                collect_referenced_named_values(else_body, locals);
+            }
+        }
+        AstStatement::While { condition, body } => {
+            collect_referenced_named_values_in_expression(condition, locals);
+            collect_referenced_named_values(body, locals);
+        }
+        AstStatement::Loop { body } => collect_referenced_named_values(body, locals),
+        AstStatement::Switch {
+            value,
+            cases,
+            default,
+        } => {
+            collect_referenced_named_values_in_expression(value, locals);
+            for case in cases {
+                collect_referenced_named_values(&case.body, locals);
+            }
+            if let Some(default) = default {
+                collect_referenced_named_values(default, locals);
+            }
+        }
+        AstStatement::Return { values } => {
+            for value in values {
+                collect_referenced_named_values_in_expression(value, locals);
+            }
+        }
+        AstStatement::Goto(AstTarget::Indirect(value)) => {
+            collect_referenced_named_values_in_expression(value, locals);
+        }
+        AstStatement::Break
+        | AstStatement::Continue
+        | AstStatement::Label(_)
+        | AstStatement::Goto(AstTarget::Direct(_))
+        | AstStatement::Trap
+        | AstStatement::Unreachable => {}
+    }
+}
+
+fn collect_referenced_named_values_in_expression(
+    expression: &AstExpression,
+    locals: &mut BTreeMap<String, AstType>,
+) {
+    match expression {
+        AstExpression::Value(AstValue::Named { name, ty }) => {
+            locals.entry(name.clone()).or_insert_with(|| ty.clone());
+        }
+        AstExpression::Unary { value, .. }
+        | AstExpression::Extract { value, .. }
+        | AstExpression::Cast { value, .. } => {
+            collect_referenced_named_values_in_expression(value, locals);
+        }
+        AstExpression::Binary { lhs, rhs, .. }
+        | AstExpression::Compare { lhs, rhs, .. }
+        | AstExpression::FloatCompare { lhs, rhs, .. } => {
+            collect_referenced_named_values_in_expression(lhs, locals);
+            collect_referenced_named_values_in_expression(rhs, locals);
+        }
+        AstExpression::Select {
+            condition,
+            when_true,
+            when_false,
+            ..
+        } => {
+            collect_referenced_named_values_in_expression(condition, locals);
+            collect_referenced_named_values_in_expression(when_true, locals);
+            collect_referenced_named_values_in_expression(when_false, locals);
+        }
+        AstExpression::Concat { parts, .. } => {
+            for part in parts {
+                collect_referenced_named_values_in_expression(part, locals);
+            }
+        }
+        AstExpression::Load { address, .. } => {
+            collect_referenced_named_values_in_expression(address, locals);
+        }
+        AstExpression::Call {
+            target, arguments, ..
+        } => {
+            collect_referenced_named_values_in_target(target, locals);
+            for argument in arguments {
+                collect_referenced_named_values_in_expression(argument, locals);
+            }
+        }
+        AstExpression::Intrinsic { arguments, .. } => {
+            for argument in arguments {
+                collect_referenced_named_values_in_expression(argument, locals);
+            }
+        }
+        AstExpression::AddressOf { place, .. } => {
+            collect_referenced_named_values_in_place(place, locals);
+        }
+        AstExpression::Deref { pointer, .. } => {
+            collect_referenced_named_values_in_expression(pointer, locals);
+        }
+        AstExpression::Index { base, index, .. } => {
+            collect_referenced_named_values_in_expression(base, locals);
+            collect_referenced_named_values_in_expression(index, locals);
+        }
+        AstExpression::Value(_) => {}
+    }
+}
+
+fn collect_referenced_named_values_in_place(
+    place: &AstPlace,
+    locals: &mut BTreeMap<String, AstType>,
+) {
+    match place {
+        AstPlace::Named { .. } => {}
+        AstPlace::Deref { pointer, .. }
+        | AstPlace::Memory {
+            address: pointer, ..
+        } => {
+            collect_referenced_named_values_in_expression(pointer, locals);
+        }
+        AstPlace::Index { base, index, .. } => {
+            collect_referenced_named_values_in_expression(base, locals);
+            collect_referenced_named_values_in_expression(index, locals);
+        }
+    }
+}
+
+fn collect_referenced_named_values_in_target(
+    target: &AstTarget,
+    locals: &mut BTreeMap<String, AstType>,
+) {
+    if let AstTarget::Indirect(expression) = target {
+        collect_referenced_named_values_in_expression(expression, locals);
+    }
+}
+
 fn collect_assigned_named_places_in_statement(
     statement: &AstStatement,
     locals: &mut BTreeMap<String, AstType>,
@@ -946,10 +2271,36 @@ fn format_return_type(returns: &[AstType]) -> String {
     }
 }
 
+fn format_abi_calling_convention(abi: Option<&LirAbi>) -> String {
+    abi.and_then(format_abi_declaration_convention)
+        .map(|convention| format!(" {convention}"))
+        .unwrap_or_default()
+}
+
+fn format_abi_declaration_convention(abi: &LirAbi) -> Option<&'static str> {
+    match abi.name.as_str() {
+        "windows64" => Some("__fastcall"),
+        "cdecl" => Some("__cdecl"),
+        "stdcall" => Some("__stdcall"),
+        "fastcall" => Some("__fastcall"),
+        _ => None,
+    }
+}
+
+fn format_abi_function_pointer_convention(abi: &LirAbi) -> Option<&'static str> {
+    match abi.name.as_str() {
+        "windows64" => Some("__fastcall "),
+        "cdecl" => Some("__cdecl "),
+        "stdcall" => Some("__stdcall "),
+        "fastcall" => Some("__fastcall "),
+        _ => None,
+    }
+}
+
 fn format_type(ty: &AstType) -> String {
     match ty {
         AstType::Void => "void".to_string(),
-        AstType::Integer(bits) => format!("uint{bits}_t"),
+        AstType::Integer(bits) => format_integer_type(*bits),
         AstType::Float(32) => "float".to_string(),
         AstType::Float(64) => "double".to_string(),
         AstType::Float(bits) => format!("float{bits}_t"),
@@ -957,6 +2308,17 @@ fn format_type(ty: &AstType) -> String {
         AstType::Function { .. } => "void*".to_string(),
         AstType::Memory => "uint8_t*".to_string(),
         AstType::Custom { name } => sanitize_identifier(name),
+    }
+}
+
+fn format_integer_type(bits: u16) -> String {
+    match bits {
+        0..=8 => "uint8_t".to_string(),
+        9..=16 => "uint16_t".to_string(),
+        17..=32 => "uint32_t".to_string(),
+        33..=64 => "uint64_t".to_string(),
+        65..=128 => "uint128_t".to_string(),
+        _ => format!("uint{bits}_t"),
     }
 }
 
@@ -1033,6 +2395,23 @@ fn integer_suffix(bits: u16) -> &'static str {
         64 => "ULL",
         _ => "",
     }
+}
+
+fn format_integer_literal(value: i128, bits: u16) -> String {
+    if value == 0 {
+        return "0".to_string();
+    }
+    if value == -1 || (bits < 128 && value == ((1i128 << bits) - 1)) {
+        return format!("-1{}", integer_suffix(bits));
+    }
+    if (1..=9).contains(&value) {
+        return value.to_string();
+    }
+    let suffix = integer_suffix(bits);
+    if value < 0 {
+        return format!("-0x{:x}{suffix}", value.unsigned_abs());
+    }
+    format!("0x{value:x}{suffix}")
 }
 
 fn format_unary_op(op: AstUnaryOperation) -> &'static str {

@@ -1,4 +1,5 @@
 use super::*;
+use crate::ir::lir::LirAddressSpace;
 
 pub(super) const X87_BITS: u16 = 80;
 

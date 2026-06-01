@@ -300,6 +300,18 @@ fn format_operation(operation: &MirOperation) -> String {
             format_value(address),
             format_type(ty)
         ),
+        MirOperationKind::AddressOf {
+            address_space,
+            address,
+            pointee_ty,
+            ty,
+        } => format!(
+            "mir.address_of {}, {} : {} -> {}",
+            format_address_space(address_space),
+            format_value(address),
+            format_type(pointee_ty),
+            format_type(ty)
+        ),
         MirOperationKind::Store {
             address_space,
             address,
@@ -352,12 +364,16 @@ fn format_operation(operation: &MirOperation) -> String {
         ),
         MirOperationKind::Call {
             target,
+            abi,
             arguments,
             result_types,
             clobbers,
             memory_effects,
         } => format!(
-            "mir.call {}({}) -> ({}){}{}",
+            "mir.call{} {}({}) -> ({}){}{}",
+            abi.as_ref()
+                .map(|abi| format!(".{}", abi.name))
+                .unwrap_or_default(),
             format_control_target(target),
             arguments
                 .iter()

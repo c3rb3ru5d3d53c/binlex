@@ -22,7 +22,7 @@
 
 use crate::Architecture;
 use crate::ir::lir::{
-    Lir, LirDiagnostic, LirEffect, LirExpression, LirLocation, LirOperationBinary,
+    Lir, LirAddressSpace, LirDiagnostic, LirEffect, LirExpression, LirLocation, LirOperationBinary,
     LirOperationCompare, LirOperationUnary, LirStatus, LirTerminator,
 };
 
@@ -256,6 +256,14 @@ pub fn memory_addr(
         result = add(result, disp_expr, bits);
     }
     result
+}
+
+pub fn memory_space(segment_register_name: Option<&str>) -> LirAddressSpace {
+    segment_register_name
+        .map(|name| LirAddressSpace::Segment {
+            name: name.to_string(),
+        })
+        .unwrap_or(LirAddressSpace::Default)
 }
 
 fn condition_suffix(mnemonic: &str) -> Option<&str> {

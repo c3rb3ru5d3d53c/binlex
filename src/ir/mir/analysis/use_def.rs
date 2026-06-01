@@ -77,7 +77,9 @@ fn operation_uses(kind: &MirOperationKind) -> Vec<String> {
         | MirOperationKind::Popcount { value, .. }
         | MirOperationKind::CountLeadingZeros { value, .. }
         | MirOperationKind::CountTrailingZeros { value, .. } => vec_from_values([value]),
-        MirOperationKind::Load { address, .. } => vec_from_values([address]),
+        MirOperationKind::Load { address, .. } | MirOperationKind::AddressOf { address, .. } => {
+            vec_from_values([address])
+        }
         MirOperationKind::Store { address, value, .. } => vec_from_values([address, value]),
         MirOperationKind::MemoryCopy {
             src_address,
@@ -188,6 +190,7 @@ fn record_operation_use_counts(counts: &mut HashMap<String, usize>, kind: &MirOp
         | MirOperationKind::CountLeadingZeros { value, .. }
         | MirOperationKind::CountTrailingZeros { value, .. }
         | MirOperationKind::Load { address: value, .. }
+        | MirOperationKind::AddressOf { address: value, .. }
         | MirOperationKind::Cast { value, .. } => record_named(counts, value),
         MirOperationKind::Store { address, value, .. } => {
             record_named(counts, address);

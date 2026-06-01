@@ -3,6 +3,7 @@ use crate::ir::mir::Mir;
 pub fn optimize(mir: &mut Mir) {
     mir.optimize_blocks();
     mir.optimize_abi();
+    mir.optimize_stack_slots();
     mir.optimize_returns();
     mir.optimize_calls();
     mir.optimize_stack();

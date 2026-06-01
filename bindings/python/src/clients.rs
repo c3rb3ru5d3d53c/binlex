@@ -280,6 +280,7 @@ impl Server {
             py,
             Graph {
                 inner: std::sync::Arc::new(std::sync::Mutex::new(graph)),
+                image: std::sync::Arc::new(std::sync::Mutex::new(None)),
             },
         )
     }
@@ -302,6 +303,7 @@ impl Server {
             py,
             Graph {
                 inner: std::sync::Arc::new(std::sync::Mutex::new(graph)),
+                image: std::sync::Arc::new(std::sync::Mutex::new(None)),
             },
         )
     }

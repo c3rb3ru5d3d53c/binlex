@@ -572,6 +572,22 @@ fn lower_operation(operation: &MirOperation) -> Result<HirStatement, HirLowerErr
                 ty: ty.clone(),
             },
         ),
+        MirOperationKind::AddressOf {
+            address_space,
+            address,
+            pointee_ty,
+            ty,
+        } => lower_assign(
+            operation,
+            HirExpression::AddressOf {
+                place: Box::new(HirPlace::Memory {
+                    address_space: address_space.clone(),
+                    address: Box::new(lower_value_expression(address)),
+                    ty: pointee_ty.clone(),
+                }),
+                ty: ty.clone(),
+            },
+        ),
         MirOperationKind::Store {
             address_space,
             address,
@@ -637,6 +653,7 @@ fn lower_operation(operation: &MirOperation) -> Result<HirStatement, HirLowerErr
         ),
         MirOperationKind::Call {
             target,
+            abi,
             arguments,
             result_types,
             ..
@@ -644,6 +661,7 @@ fn lower_operation(operation: &MirOperation) -> Result<HirStatement, HirLowerErr
             operation,
             HirExpression::Call {
                 target: lower_target(target),
+                abi: abi.clone(),
                 arguments: arguments.iter().map(lower_value_expression).collect(),
                 return_types: result_types.clone(),
             },
@@ -816,7 +834,7 @@ fn collect_named_values_from_operation(
                 collect_named_value(part, locals, parameter_names);
             }
         }
-        MirOperationKind::Load { address, .. } => {
+        MirOperationKind::Load { address, .. } | MirOperationKind::AddressOf { address, .. } => {
             collect_named_value(address, locals, parameter_names)
         }
         MirOperationKind::Store { address, value, .. } => {
@@ -881,6 +899,7 @@ fn result_type(operation: &MirOperation) -> Option<HirType> {
         | MirOperationKind::Select { ty, .. }
         | MirOperationKind::Extract { ty, .. }
         | MirOperationKind::Load { ty, .. }
+        | MirOperationKind::AddressOf { ty, .. }
         | MirOperationKind::Icmp { ty, .. }
         | MirOperationKind::Fcmp { ty, .. }
         | MirOperationKind::Cast { ty, .. }

@@ -67,7 +67,10 @@ impl Decompiler {
         configuration: Py<Configuration>,
         backend: Option<String>,
     ) -> PyResult<Self> {
-        let graph_inner = graph.borrow(py).inner.clone();
+        let graph_ref = graph.borrow(py);
+        graph_ref.set_image(image.clone_ref(py));
+        let graph_inner = graph_ref.inner.clone();
+        drop(graph_ref);
         let inner_configuration = configuration.borrow(py).inner.lock().unwrap().clone();
         let backend = match backend.as_deref().unwrap_or("default") {
             "default" => DecompilerBackend::Default,

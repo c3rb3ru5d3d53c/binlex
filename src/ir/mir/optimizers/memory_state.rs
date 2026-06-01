@@ -1,5 +1,6 @@
 use crate::ir::mir::{
-    Mir, MirAddressSpace, MirOperation, MirOperationKind, MirTerminator, MirType, MirValue,
+    Mir, MirAddressSpace, MirCastOperation, MirOperation, MirOperationKind, MirTerminator, MirType,
+    MirValue,
 };
 use std::collections::HashMap;
 
@@ -17,6 +18,11 @@ struct MemoryEntry {
 
 type AliasMap = HashMap<String, MirValue>;
 type MemoryMap = HashMap<MemoryCell, MemoryEntry>;
+
+enum WidenedValue {
+    Alias(MirValue),
+    Operation(MirOperation),
+}
 
 pub fn optimize_memory_state(mir: &mut Mir) {
     for block in mir.blocks_mut() {
@@ -47,6 +53,19 @@ pub fn optimize_memory_state(mir: &mut Mir) {
                     if let Some(entry) = memory.get(&cell) {
                         if &entry.ty == ty {
                             aliases.insert(result, entry.value.clone());
+                            continue;
+                        }
+                        if let Some(alias) =
+                            widened_stack_slot_value(&result, &cell.address_space, entry, ty)
+                        {
+                            match alias {
+                                WidenedValue::Alias(value) => {
+                                    aliases.insert(result, value);
+                                }
+                                WidenedValue::Operation(operation) => {
+                                    normalized.push(operation);
+                                }
+                            }
                             continue;
                         }
                     }
@@ -176,6 +195,69 @@ fn address_space_matches_effect(space: &MirAddressSpace, effect: &MirAddressSpac
     )
 }
 
+fn widened_stack_slot_value(
+    result: &str,
+    address_space: &MirAddressSpace,
+    entry: &MemoryEntry,
+    load_ty: &MirType,
+) -> Option<WidenedValue> {
+    if !is_stack_slot_space(address_space) {
+        return None;
+    }
+
+    let store_bits = integer_bits(&entry.ty)?;
+    let load_bits = integer_bits(load_ty)?;
+    if store_bits > load_bits {
+        return None;
+    }
+
+    match &entry.value {
+        MirValue::Integer { value, .. } => Some(WidenedValue::Alias(MirValue::integer(
+            mask_integer(*value, store_bits),
+            load_bits,
+        ))),
+        MirValue::Boolean(value) if load_bits >= 1 => Some(WidenedValue::Alias(MirValue::integer(
+            i128::from(*value),
+            load_bits,
+        ))),
+        value if store_bits == load_bits => Some(WidenedValue::Alias(value.clone())),
+        value => Some(WidenedValue::Operation(MirOperation::new(
+            Some(result.to_string()),
+            MirOperationKind::Cast {
+                op: MirCastOperation::ZeroExtend,
+                value: value.clone(),
+                ty: load_ty.clone(),
+            },
+        ))),
+    }
+}
+
+fn is_stack_slot_space(space: &MirAddressSpace) -> bool {
+    matches!(
+        space,
+        MirAddressSpace::Local { .. }
+            | MirAddressSpace::Argument { .. }
+            | MirAddressSpace::Spill { .. }
+            | MirAddressSpace::Incoming { .. }
+            | MirAddressSpace::SavedFrame { .. }
+    )
+}
+
+fn integer_bits(ty: &MirType) -> Option<u16> {
+    match ty {
+        MirType::Integer(bits) => Some(*bits),
+        _ => None,
+    }
+}
+
+fn mask_integer(value: i128, bits: u16) -> i128 {
+    if bits >= 128 {
+        value
+    } else {
+        value & ((1i128 << bits) - 1)
+    }
+}
+
 fn rewrite_operation(operation: &mut MirOperation, aliases: &AliasMap) {
     match &mut operation.kind {
         MirOperationKind::Add { lhs, rhs, .. }
@@ -224,7 +306,7 @@ fn rewrite_operation(operation: &mut MirOperation, aliases: &AliasMap) {
         | MirOperationKind::Popcount { value, .. }
         | MirOperationKind::CountLeadingZeros { value, .. }
         | MirOperationKind::CountTrailingZeros { value, .. } => rewrite_value(value, aliases),
-        MirOperationKind::Load { address, .. } => {
+        MirOperationKind::Load { address, .. } | MirOperationKind::AddressOf { address, .. } => {
             rewrite_value(address, aliases);
         }
         MirOperationKind::Store { address, value, .. } => {

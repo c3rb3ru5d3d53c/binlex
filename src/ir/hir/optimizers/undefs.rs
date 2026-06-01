@@ -205,6 +205,7 @@ mod tests {
             blocks: vec![HirBlock {
                 statements: vec![HirStatement::Expr(HirExpression::Call {
                     target: crate::ir::hir::HirTarget::Direct("side_effect".to_string()),
+                    abi: None,
                     arguments: vec![HirExpression::Value(HirValue::Undef {
                         ty: HirType::integer(64),
                     })],
@@ -219,6 +220,7 @@ mod tests {
             function.blocks[0].statements,
             vec![HirStatement::Expr(HirExpression::Call {
                 target: crate::ir::hir::HirTarget::Direct("side_effect".to_string()),
+                abi: None,
                 arguments: vec![HirExpression::Value(HirValue::Undef {
                     ty: HirType::integer(64),
                 })],

@@ -126,7 +126,7 @@ fn rewrite_operation(operation: &mut crate::ir::mir::MirOperation, constants: &C
         | MirOperationKind::Popcount { value, .. }
         | MirOperationKind::CountLeadingZeros { value, .. }
         | MirOperationKind::CountTrailingZeros { value, .. } => rewrite_value(value, constants),
-        MirOperationKind::Load { address, .. } => {
+        MirOperationKind::Load { address, .. } | MirOperationKind::AddressOf { address, .. } => {
             rewrite_value(address, constants);
         }
         MirOperationKind::Store { address, value, .. } => {
@@ -240,6 +240,7 @@ fn fold_operation(kind: &MirOperationKind) -> Option<MirValue> {
         | MirOperationKind::FDiv { .. }
         | MirOperationKind::Fcmp { .. }
         | MirOperationKind::Load { .. }
+        | MirOperationKind::AddressOf { .. }
         | MirOperationKind::Store { .. }
         | MirOperationKind::MemoryCopy { .. }
         | MirOperationKind::Call { .. }

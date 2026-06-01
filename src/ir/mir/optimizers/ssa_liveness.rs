@@ -266,7 +266,10 @@ fn replace_operation_uses(
         | MirOperationKind::CountLeadingZeros { value, .. }
         | MirOperationKind::CountTrailingZeros { value, .. }
         | MirOperationKind::Cast { value, .. }
-        | MirOperationKind::Load { address: value, .. } => replace_value(value, name, replacement),
+        | MirOperationKind::Load { address: value, .. }
+        | MirOperationKind::AddressOf { address: value, .. } => {
+            replace_value(value, name, replacement)
+        }
         MirOperationKind::Store { address, value, .. } => {
             replace_value(address, name, replacement);
             replace_value(value, name, replacement);

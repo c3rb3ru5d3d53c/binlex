@@ -124,7 +124,9 @@ fn rewrite_operation(operation: &mut MirOperation, undefs: &UndefMap) {
         | MirOperationKind::Popcount { value, .. }
         | MirOperationKind::CountLeadingZeros { value, .. }
         | MirOperationKind::CountTrailingZeros { value, .. } => rewrite_value(value, undefs),
-        MirOperationKind::Load { address, .. } => rewrite_value(address, undefs),
+        MirOperationKind::Load { address, .. } | MirOperationKind::AddressOf { address, .. } => {
+            rewrite_value(address, undefs)
+        }
         MirOperationKind::Store { address, value, .. } => {
             rewrite_value(address, undefs);
             rewrite_value(value, undefs);
@@ -256,6 +258,9 @@ fn fold_undef(kind: &MirOperationKind) -> Option<MirValue> {
         | MirOperationKind::Popcount { value, ty }
         | MirOperationKind::CountLeadingZeros { value, ty }
         | MirOperationKind::CountTrailingZeros { value, ty }
+        | MirOperationKind::AddressOf {
+            address: value, ty, ..
+        }
         | MirOperationKind::Cast { value, ty, .. } => {
             if is_undef(value) {
                 Some(MirValue::undef(ty.clone()))

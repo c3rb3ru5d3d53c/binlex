@@ -241,6 +241,7 @@ fn rewrite_operation(operation: &mut MirOperation, aliases: &AliasMap) {
         | MirOperationKind::CountLeadingZeros { value, .. }
         | MirOperationKind::CountTrailingZeros { value, .. }
         | MirOperationKind::Load { address: value, .. }
+        | MirOperationKind::AddressOf { address: value, .. }
         | MirOperationKind::Cast { value, .. } => {
             rewrite_value(value, aliases);
         }

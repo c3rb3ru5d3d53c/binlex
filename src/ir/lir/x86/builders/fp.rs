@@ -25,8 +25,8 @@ use crate::ir::lir::x86::helpers as common;
 use crate::ir::lir::x86::instruction::InstructionDetailX86;
 use crate::ir::lir::x86::operand::{X86OperandKind, X86OperandView};
 use crate::ir::lir::{
-    Lir, LirAddressSpace, LirEffect, LirExpression, LirLocation, LirOperationBinary,
-    LirOperationCast, LirOperationCompare, LirTerminator,
+    Lir, LirEffect, LirExpression, LirLocation, LirOperationBinary, LirOperationCast,
+    LirOperationCompare, LirTerminator,
 };
 
 #[path = "fp/x87.rs"]
@@ -657,7 +657,7 @@ fn operand_expr(machine: Architecture, operand: &X86OperandView) -> Option<LirEx
             });
             let addr = common::memory_addr(machine, base, index, mem.displacement);
             Some(LirExpression::Load {
-                space: LirAddressSpace::Default,
+                space: common::memory_space(mem.segment_register_name),
                 addr: Box::new(addr),
                 bits: operand.size_bits,
             })
@@ -682,7 +682,7 @@ fn operand_location(machine: Architecture, operand: &X86OperandView) -> Option<L
             });
             let addr = common::memory_addr(machine, base, index, mem.displacement);
             Some(LirLocation::Memory {
-                space: LirAddressSpace::Default,
+                space: common::memory_space(mem.segment_register_name),
                 addr: Box::new(addr),
                 bits: operand.size_bits,
             })

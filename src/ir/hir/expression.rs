@@ -27,6 +27,7 @@ use super::kind::{
 use super::place::HirPlace;
 use super::target::HirTarget;
 use super::value::HirValue;
+use crate::ir::lir::LirAbi;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -82,6 +83,8 @@ pub enum HirExpression {
     },
     Call {
         target: HirTarget,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        abi: Option<LirAbi>,
         arguments: Vec<HirExpression>,
         return_types: Vec<HirType>,
     },

@@ -137,7 +137,7 @@ fn rewrite_operation(operation: &mut MirOperation, aliases: &MirRegisterAliases)
         | MirOperationKind::Popcount { value, .. }
         | MirOperationKind::CountLeadingZeros { value, .. }
         | MirOperationKind::CountTrailingZeros { value, .. } => rewrite_value(value, aliases),
-        MirOperationKind::Load { address, .. } => {
+        MirOperationKind::Load { address, .. } | MirOperationKind::AddressOf { address, .. } => {
             rewrite_value(address, aliases);
         }
         MirOperationKind::Store { address, value, .. } => {

@@ -179,6 +179,7 @@ fn rewrite_operation(
         | MirOperationKind::CountLeadingZeros { value, .. }
         | MirOperationKind::CountTrailingZeros { value, .. }
         | MirOperationKind::Load { address: value, .. }
+        | MirOperationKind::AddressOf { address: value, .. }
         | MirOperationKind::Cast { value, .. } => rewrite_value(value, replacements),
         MirOperationKind::Store { address, value, .. } => {
             rewrite_value(address, replacements);

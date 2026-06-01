@@ -1,5 +1,5 @@
 use crate::ir::mir::analysis::build_use_counts;
-use crate::ir::mir::{Mir, MirAddressSpace, MirOperation, MirOperationKind, MirType, MirValue};
+use crate::ir::mir::{Mir, MirAddressSpace, MirOperation, MirOperationKind, MirValue};
 use std::collections::HashSet;
 
 pub fn optimize_dead_effects(mir: &mut Mir) {
@@ -29,7 +29,6 @@ pub fn optimize_dead_effects(mir: &mut Mir) {
 struct LocalSlotCell {
     address_space: MirAddressSpace,
     address: MirValue,
-    ty: MirType,
 }
 
 fn remove_dead_local_slot_stores(operations: Vec<MirOperation>) -> Vec<MirOperation> {
@@ -42,25 +41,22 @@ fn remove_dead_local_slot_stores(operations: Vec<MirOperation>) -> Vec<MirOperat
             MirOperationKind::Load {
                 address_space,
                 address,
-                ty,
+                ..
             } if is_local_slot_space(address_space) => {
                 live.insert(LocalSlotCell {
                     address_space: address_space.clone(),
                     address: address.clone(),
-                    ty: ty.clone(),
                 });
                 kept.push(operation);
             }
             MirOperationKind::Store {
                 address_space,
                 address,
-                ty,
                 ..
             } if is_local_slot_space(address_space) => {
                 let cell = LocalSlotCell {
                     address_space: address_space.clone(),
                     address: address.clone(),
-                    ty: ty.clone(),
                 };
                 if barrier || live.remove(&cell) {
                     kept.push(operation);
@@ -90,6 +86,7 @@ fn is_local_slot_space(space: &MirAddressSpace) -> bool {
             | MirAddressSpace::Spill { .. }
             | MirAddressSpace::Incoming { .. }
             | MirAddressSpace::SavedFrame { .. }
+            | MirAddressSpace::ReturnAddress { .. }
     )
 }
 
