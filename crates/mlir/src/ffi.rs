@@ -47,6 +47,12 @@ pub struct MlirOpPrintingFlags {
 
 #[repr(C)]
 #[derive(Copy, Clone)]
+pub struct MlirBytecodeWriterConfig {
+    pub ptr: *mut c_void,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
 pub struct MlirOpOperand {
     pub ptr: *mut c_void,
 }
@@ -284,6 +290,7 @@ unsafe extern "C" {
     pub fn mlirOperationGetParentOperation(op: MlirOperation) -> MlirOperation;
     pub fn mlirOperationGetNumRegions(op: MlirOperation) -> isize;
     pub fn mlirOperationGetRegion(op: MlirOperation, pos: isize) -> MlirRegion;
+    pub fn mlirOperationGetNextInBlock(op: MlirOperation) -> MlirOperation;
     pub fn mlirOperationGetNumOperands(op: MlirOperation) -> isize;
     pub fn mlirOperationGetOperand(op: MlirOperation, pos: isize) -> MlirValue;
     pub fn mlirOperationSetOperand(op: MlirOperation, pos: isize, new_value: MlirValue);
@@ -297,6 +304,21 @@ unsafe extern "C" {
     pub fn mlirOperationGetNumSuccessors(op: MlirOperation) -> isize;
     pub fn mlirOperationGetSuccessor(op: MlirOperation, pos: isize) -> MlirBlock;
     pub fn mlirOperationSetSuccessor(op: MlirOperation, pos: isize, block: MlirBlock);
+    pub fn mlirOperationHasInherentAttributeByName(op: MlirOperation, name: MlirStringRef) -> bool;
+    pub fn mlirOperationGetInherentAttributeByName(
+        op: MlirOperation,
+        name: MlirStringRef,
+    ) -> MlirAttribute;
+    pub fn mlirOperationSetInherentAttributeByName(
+        op: MlirOperation,
+        name: MlirStringRef,
+        attr: MlirAttribute,
+    );
+    pub fn mlirOperationGetNumDiscardableAttributes(op: MlirOperation) -> isize;
+    pub fn mlirOperationGetDiscardableAttribute(
+        op: MlirOperation,
+        pos: isize,
+    ) -> MlirNamedAttribute;
     pub fn mlirOperationGetDiscardableAttributeByName(
         op: MlirOperation,
         name: MlirStringRef,
@@ -310,7 +332,22 @@ unsafe extern "C" {
         op: MlirOperation,
         name: MlirStringRef,
     ) -> bool;
+    pub fn mlirOperationGetNumAttributes(op: MlirOperation) -> isize;
+    pub fn mlirOperationGetAttribute(op: MlirOperation, pos: isize) -> MlirNamedAttribute;
+    pub fn mlirOperationGetAttributeByName(op: MlirOperation, name: MlirStringRef)
+    -> MlirAttribute;
+    pub fn mlirOperationSetAttributeByName(
+        op: MlirOperation,
+        name: MlirStringRef,
+        attr: MlirAttribute,
+    );
+    pub fn mlirOperationRemoveAttributeByName(op: MlirOperation, name: MlirStringRef) -> bool;
     pub fn mlirOperationPrint(
+        op: MlirOperation,
+        callback: MlirStringCallback,
+        user_data: *mut c_void,
+    );
+    pub fn mlirOperationWriteBytecode(
         op: MlirOperation,
         callback: MlirStringCallback,
         user_data: *mut c_void,
@@ -406,8 +443,16 @@ unsafe extern "C" {
         user_data: *mut c_void,
     );
     pub fn mlirBoolAttrGet(context: MlirContext, value: i32) -> MlirAttribute;
+    pub fn mlirAttributeIsABool(attr: MlirAttribute) -> bool;
+    pub fn mlirBoolAttrGetValue(attr: MlirAttribute) -> bool;
     pub fn mlirIntegerAttrGet(ty: MlirType, value: i64) -> MlirAttribute;
+    pub fn mlirAttributeIsAInteger(attr: MlirAttribute) -> bool;
+    pub fn mlirIntegerAttrGetValueInt(attr: MlirAttribute) -> i64;
+    pub fn mlirIntegerAttrGetValueSInt(attr: MlirAttribute) -> i64;
+    pub fn mlirIntegerAttrGetValueUInt(attr: MlirAttribute) -> u64;
     pub fn mlirStringAttrGet(context: MlirContext, value: MlirStringRef) -> MlirAttribute;
+    pub fn mlirAttributeIsAString(attr: MlirAttribute) -> bool;
+    pub fn mlirStringAttrGetValue(attr: MlirAttribute) -> MlirStringRef;
 
     pub fn mlirPassManagerCreate(context: MlirContext) -> MlirPassManager;
     pub fn mlirPassManagerCreateOnOperation(

@@ -1,9 +1,9 @@
 use super::{
     LirCpu, LirCpuAlias, LirCpuEndian, LirCpuKind, LirCpuProgramCounter, LirCpuRegister, LirMemory,
 };
-use crate::symbolic::Error;
+use crate::ir::lir::executor::LirExecutorError;
 
-pub fn build() -> Result<LirCpu, Error> {
+pub fn build() -> Result<LirCpu, LirExecutorError> {
     let mut registers = (0..=30)
         .map(|index| LirCpuRegister::new(format!("x{index}"), 64))
         .collect::<Vec<_>>();

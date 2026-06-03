@@ -30,7 +30,7 @@ pub enum HirPlace {
         name: String,
         ty: HirType,
     },
-    Deref {
+    Dereference {
         pointer: Box<HirExpression>,
         ty: HirType,
     },

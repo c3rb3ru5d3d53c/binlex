@@ -1,19 +1,19 @@
+use crate::ir::lir::executor::{LirExecutor, LirExecutorError, LirExecutorState};
 use crate::ir::lir::{LirEffect, LirExpression, LirLocation};
-use crate::symbolic::{Error, SymbolicCpuState, SymbolicExecutor};
 use z3::ast::{Ast, BV, Bool};
 
-impl SymbolicExecutor {
+impl LirExecutor {
     pub(crate) fn concretize_if_dependency_free(
         &self,
-        state: &SymbolicCpuState,
-        value: crate::symbolic::expressions::EvaluatedValue,
-    ) -> Result<crate::symbolic::expressions::EvaluatedValue, Error> {
+        state: &LirExecutorState,
+        value: crate::ir::lir::executor::expressions::EvaluatedValue,
+    ) -> Result<crate::ir::lir::executor::expressions::EvaluatedValue, LirExecutorError> {
         if value.deps.is_empty() && value.value.get_size() <= 64 {
             if let Some(concrete) = state
                 .backend()
                 .eval_bv_u64(state.solver_constraints(), &value.value)?
             {
-                return Ok(crate::symbolic::expressions::EvaluatedValue {
+                return Ok(crate::ir::lir::executor::expressions::EvaluatedValue {
                     value: state
                         .backend()
                         .const_bv(concrete as u128, value.value.get_size() as u16)?,
@@ -56,10 +56,10 @@ impl SymbolicExecutor {
 
     pub(crate) fn apply_effect(
         &self,
-        state: &mut SymbolicCpuState,
+        state: &mut LirExecutorState,
         instruction: Option<&crate::ir::lir::LirEncoding>,
         effect: &LirEffect,
-    ) -> Result<(), Error> {
+    ) -> Result<(), LirExecutorError> {
         match effect {
             LirEffect::Set { dst, expression } => {
                 let value =
@@ -222,15 +222,15 @@ impl SymbolicExecutor {
                     state,
                     instruction,
                     dst,
-                    crate::symbolic::expressions::EvaluatedValue {
+                    crate::ir::lir::executor::expressions::EvaluatedValue {
                         value: cell.value,
                         deps: cell.def_id.into_iter().collect(),
                     },
                 )
             }
             LirEffect::Nop => Ok(()),
-            LirEffect::Fence { .. } => Err(Error::UnsupportedEffect("fence")),
-            LirEffect::Trap { .. } => Err(Error::UnsupportedEffect("trap")),
+            LirEffect::Fence { .. } => Err(LirExecutorError::UnsupportedEffect("fence")),
+            LirEffect::Trap { .. } => Err(LirExecutorError::UnsupportedEffect("trap")),
             LirEffect::Intrinsic {
                 name,
                 args,
@@ -241,14 +241,14 @@ impl SymbolicExecutor {
 
     fn apply_memory_set(
         &self,
-        state: &mut SymbolicCpuState,
+        state: &mut LirExecutorState,
         instruction: Option<&crate::ir::lir::LirEncoding>,
         addr: &LirExpression,
         value: &LirExpression,
         count: &LirExpression,
         element_bits: u16,
         decrement: &LirExpression,
-    ) -> Result<(), Error> {
+    ) -> Result<(), LirExecutorError> {
         let base_address = self.eval_expression(state, addr, false)?;
         let base_address_value = self.coerce_address(state, &base_address.value)?;
         let value_eval = self.eval_expression(state, value, false)?;
@@ -257,15 +257,15 @@ impl SymbolicExecutor {
             .backend()
             .coerce_bv_width(&value_eval.value, element_bits)?;
         let count_eval = self.eval_expression(state, count, false)?;
-        let count = self
-            .concrete_bv_u64(&count_eval.value)
-            .ok_or(Error::UnsupportedEffect("memory_set with symbolic count"))?;
-        let decrement_eval = self.eval_condition(state, decrement)?;
-        let decrement =
-            self.concrete_bool(&decrement_eval.value)
-                .ok_or(Error::UnsupportedEffect(
-                    "memory_set with symbolic decrement",
+        let count =
+            self.concrete_bv_u64(&count_eval.value)
+                .ok_or(LirExecutorError::UnsupportedEffect(
+                    "memory_set with symbolic count",
                 ))?;
+        let decrement_eval = self.eval_condition(state, decrement)?;
+        let decrement = self.concrete_bool(&decrement_eval.value).ok_or(
+            LirExecutorError::UnsupportedEffect("memory_set with symbolic decrement"),
+        )?;
         let backend = state.backend().clone();
         let stride = (element_bits / 8) as u64;
         for index in 0..count {
@@ -303,28 +303,28 @@ impl SymbolicExecutor {
 
     fn apply_memory_copy(
         &self,
-        state: &mut SymbolicCpuState,
+        state: &mut LirExecutorState,
         instruction: Option<&crate::ir::lir::LirEncoding>,
         src_addr: &LirExpression,
         dst_addr: &LirExpression,
         count: &LirExpression,
         element_bits: u16,
         decrement: &LirExpression,
-    ) -> Result<(), Error> {
+    ) -> Result<(), LirExecutorError> {
         let src_base = self.eval_expression(state, src_addr, false)?;
         let src_base_value = self.coerce_address(state, &src_base.value)?;
         let dst_base = self.eval_expression(state, dst_addr, false)?;
         let dst_base_value = self.coerce_address(state, &dst_base.value)?;
         let count_eval = self.eval_expression(state, count, false)?;
-        let count = self
-            .concrete_bv_u64(&count_eval.value)
-            .ok_or(Error::UnsupportedEffect("memory_copy with symbolic count"))?;
-        let decrement_eval = self.eval_condition(state, decrement)?;
-        let decrement =
-            self.concrete_bool(&decrement_eval.value)
-                .ok_or(Error::UnsupportedEffect(
-                    "memory_copy with symbolic decrement",
+        let count =
+            self.concrete_bv_u64(&count_eval.value)
+                .ok_or(LirExecutorError::UnsupportedEffect(
+                    "memory_copy with symbolic count",
                 ))?;
+        let decrement_eval = self.eval_condition(state, decrement)?;
+        let decrement = self.concrete_bool(&decrement_eval.value).ok_or(
+            LirExecutorError::UnsupportedEffect("memory_copy with symbolic decrement"),
+        )?;
         let backend = state.backend().clone();
         let stride = (element_bits / 8) as u64;
         for index in 0..count {
@@ -370,14 +370,14 @@ impl SymbolicExecutor {
 
     fn apply_atomic_cmpxchg(
         &self,
-        state: &mut SymbolicCpuState,
+        state: &mut LirExecutorState,
         instruction: Option<&crate::ir::lir::LirEncoding>,
         addr: &LirExpression,
         expected: &LirExpression,
         desired: &LirExpression,
         bits: u16,
         observed: &LirLocation,
-    ) -> Result<(), Error> {
+    ) -> Result<(), LirExecutorError> {
         let address = self.eval_expression(state, addr, false)?;
         let address_value = self.coerce_address(state, &address.value)?;
         let backend = state.backend().clone();
@@ -389,7 +389,7 @@ impl SymbolicExecutor {
             state,
             instruction,
             observed,
-            crate::symbolic::expressions::EvaluatedValue {
+            crate::ir::lir::executor::expressions::EvaluatedValue {
                 value: observed_value.clone(),
                 deps: observed_parents.clone(),
             },
@@ -428,34 +428,34 @@ impl SymbolicExecutor {
 
     pub(crate) fn read_location(
         &self,
-        state: &mut SymbolicCpuState,
+        state: &mut LirExecutorState,
         location: &LirLocation,
-    ) -> Result<crate::symbolic::expressions::EvaluatedValue, Error> {
+    ) -> Result<crate::ir::lir::executor::expressions::EvaluatedValue, LirExecutorError> {
         match location {
             LirLocation::Register { name, bits } => {
                 let cell = state.get_or_create_register(name, *bits)?;
-                Ok(crate::symbolic::expressions::EvaluatedValue {
+                Ok(crate::ir::lir::executor::expressions::EvaluatedValue {
                     value: cell.value,
                     deps: cell.def_id.into_iter().collect(),
                 })
             }
             LirLocation::Flag { name, bits } => {
                 let cell = state.get_or_create_flag(name, *bits)?;
-                Ok(crate::symbolic::expressions::EvaluatedValue {
+                Ok(crate::ir::lir::executor::expressions::EvaluatedValue {
                     value: cell.value,
                     deps: cell.def_id.into_iter().collect(),
                 })
             }
             LirLocation::ProgramCounter { bits } => {
                 let cell = state.get_or_create_program_counter(*bits)?;
-                Ok(crate::symbolic::expressions::EvaluatedValue {
+                Ok(crate::ir::lir::executor::expressions::EvaluatedValue {
                     value: cell.value,
                     deps: cell.def_id.into_iter().collect(),
                 })
             }
             LirLocation::Temporary { id, bits } => {
                 let cell = state.get_or_create_temporary(*id, *bits)?;
-                Ok(crate::symbolic::expressions::EvaluatedValue {
+                Ok(crate::ir::lir::executor::expressions::EvaluatedValue {
                     value: cell.value,
                     deps: cell.def_id.into_iter().collect(),
                 })
@@ -475,13 +475,13 @@ impl SymbolicExecutor {
                         .backend()
                         .eval_bv_u64(state.solver_constraints(), &value)?
                     {
-                        return Ok(crate::symbolic::expressions::EvaluatedValue {
+                        return Ok(crate::ir::lir::executor::expressions::EvaluatedValue {
                             value: state.backend().const_bv(concrete as u128, *bits)?,
                             deps,
                         });
                     }
                 }
-                Ok(crate::symbolic::expressions::EvaluatedValue { value, deps })
+                Ok(crate::ir::lir::executor::expressions::EvaluatedValue { value, deps })
             }
             LirLocation::IndexedMemory { name, index, bits } => {
                 let index = self.eval_expression(state, index, false)?;
@@ -494,14 +494,14 @@ impl SymbolicExecutor {
                 if index.value.as_u64().is_none() {
                     deps.extend(index.deps);
                 }
-                Ok(crate::symbolic::expressions::EvaluatedValue {
+                Ok(crate::ir::lir::executor::expressions::EvaluatedValue {
                     value: cell.value,
                     deps,
                 })
             }
             LirLocation::StackMemory { name, offset, bits } => {
                 let cell = state.get_or_create_stack_memory(name, *offset, *bits)?;
-                Ok(crate::symbolic::expressions::EvaluatedValue {
+                Ok(crate::ir::lir::executor::expressions::EvaluatedValue {
                     value: cell.value,
                     deps: cell.def_id.into_iter().collect(),
                 })
@@ -511,11 +511,11 @@ impl SymbolicExecutor {
 
     pub(crate) fn write_location(
         &self,
-        state: &mut SymbolicCpuState,
+        state: &mut LirExecutorState,
         instruction: Option<&crate::ir::lir::LirEncoding>,
         location: &LirLocation,
-        value: crate::symbolic::expressions::EvaluatedValue,
-    ) -> Result<(), Error> {
+        value: crate::ir::lir::executor::expressions::EvaluatedValue,
+    ) -> Result<(), LirExecutorError> {
         match location {
             LirLocation::Register { name, bits } => {
                 let coerced = state.backend().coerce_bv_width(&value.value, *bits)?;

@@ -76,13 +76,18 @@ pub enum AstExpression {
         place: Box<AstPlace>,
         ty: AstType,
     },
-    Deref {
+    Dereference {
         pointer: Box<AstExpression>,
         ty: AstType,
     },
     Index {
         base: Box<AstExpression>,
         index: Box<AstExpression>,
+        ty: AstType,
+    },
+    Member {
+        base: Box<AstExpression>,
+        name: String,
         ty: AstType,
     },
 }
@@ -172,7 +177,7 @@ impl AstExpression {
                 place: Box::new(AstPlace::from_hir(place)),
                 ty: ty.clone(),
             },
-            HirExpression::Deref { pointer, ty } => Self::Deref {
+            HirExpression::Dereference { pointer, ty } => Self::Dereference {
                 pointer: Box::new(Self::from_hir(pointer)),
                 ty: ty.clone(),
             },

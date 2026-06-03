@@ -38,7 +38,7 @@ from binlex_bindings.binlex.controlflow.instruction import OperandKind as Operan
 from binlex.core.architecture import _coerce_architecture
 from binlex.hashing import MinHash32, SHA256, SSDeep, TLSH
 from binlex.ir.hir import HirFunction
-from binlex.ir.lir import LirBlock, LirCpu, LirFunction, LirInstruction, _cpu_kind_from_architecture
+from binlex.ir.lir import Lir, LirBlock, LirCpu, LirFunction, _cpu_kind_from_architecture
 from binlex.ir.mir import MirBlock, MirFunction
 
 EntityKind = _EntityKindBinding
@@ -355,7 +355,7 @@ class Instruction:
         lir = self._inner.lir()
         if lir is None:
             return None
-        return LirInstruction._from_inner(lir)
+        return Lir._from_inner(lir)
 
     def set_lir(self, lir):
         """Replace the canonical LIR for this instruction inside the graph."""
@@ -477,7 +477,7 @@ class InstructionJsonDeserializer:
         lir = self._inner.lir()
         if lir is None:
             return None
-        return LirInstruction._from_inner(lir)
+        return Lir._from_inner(lir)
 
     def to_dict(self):
         """Convert the instruction to a Python dictionary."""

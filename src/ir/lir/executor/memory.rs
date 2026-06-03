@@ -1,5 +1,5 @@
-use crate::symbolic::Error;
-use crate::symbolic::backend::z3::Z3Backend;
+use crate::ir::lir::executor::LirExecutorError;
+use crate::ir::lir::executor::backend::z3::Z3Backend;
 use memmap2::Mmap;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs::File;
@@ -25,11 +25,13 @@ impl ImageBackingInner {
         }
     }
 
-    fn read_byte(&mut self, address: u64) -> Result<Option<u8>, Error> {
+    fn read_byte(&mut self, address: u64) -> Result<Option<u8>, LirExecutorError> {
         if self.mmap.is_none() {
-            let file = File::open(&self.path).map_err(|error| Error::solver(error.to_string()))?;
-            let mmap =
-                unsafe { Mmap::map(&file).map_err(|error| Error::solver(error.to_string()))? };
+            let file = File::open(&self.path)
+                .map_err(|error| LirExecutorError::solver(error.to_string()))?;
+            let mmap = unsafe {
+                Mmap::map(&file).map_err(|error| LirExecutorError::solver(error.to_string()))?
+            };
             self.file = Some(file);
             self.mmap = Some(mmap);
         }
@@ -56,10 +58,10 @@ impl ImageBacking {
         }
     }
 
-    fn read_byte(&self, address: u64) -> Result<Option<u8>, Error> {
+    fn read_byte(&self, address: u64) -> Result<Option<u8>, LirExecutorError> {
         self.inner
             .lock()
-            .map_err(|_| Error::solver("image backing lock poisoned"))?
+            .map_err(|_| LirExecutorError::solver("image backing lock poisoned"))?
             .read_byte(address)
     }
 }
@@ -99,7 +101,7 @@ impl FlatMemory {
         backend: &Z3Backend,
         address: u64,
         bytes: &[u8],
-    ) -> Result<(), Error> {
+    ) -> Result<(), LirExecutorError> {
         for (offset, byte) in bytes.iter().enumerate() {
             let index =
                 backend.const_bv((address + offset as u64) as u128, self.address_bits as u16)?;
@@ -117,7 +119,7 @@ impl FlatMemory {
         address: u64,
         size: usize,
         mut symbol_name: impl FnMut(usize) -> String,
-    ) -> Result<Vec<BV>, Error> {
+    ) -> Result<Vec<BV>, LirExecutorError> {
         let mut values = Vec::with_capacity(size);
         for offset in 0..size {
             let index =
@@ -130,7 +132,12 @@ impl FlatMemory {
         Ok(values)
     }
 
-    pub(crate) fn load(&self, backend: &Z3Backend, address: &BV, bits: u16) -> Result<BV, Error> {
+    pub(crate) fn load(
+        &self,
+        backend: &Z3Backend,
+        address: &BV,
+        bits: u16,
+    ) -> Result<BV, LirExecutorError> {
         Ok(self.load_with_provenance(backend, address, bits)?.0)
     }
 
@@ -139,9 +146,9 @@ impl FlatMemory {
         backend: &Z3Backend,
         address: &BV,
         bits: u16,
-    ) -> Result<(BV, BTreeSet<u64>), Error> {
+    ) -> Result<(BV, BTreeSet<u64>), LirExecutorError> {
         if bits == 0 || !bits.is_multiple_of(8) {
-            return Err(Error::UnsupportedExpression(
+            return Err(LirExecutorError::UnsupportedExpression(
                 "memory loads currently require a byte-aligned width",
             ));
         }
@@ -183,7 +190,7 @@ impl FlatMemory {
         }
         let mut value = bytes
             .pop()
-            .ok_or_else(|| Error::solver("memory load assembled no bytes"))?;
+            .ok_or_else(|| LirExecutorError::solver("memory load assembled no bytes"))?;
         while let Some(next) = bytes.pop() {
             value = value.concat(&next);
         }
@@ -197,9 +204,9 @@ impl FlatMemory {
         value: &BV,
         bits: u16,
         def_id: Option<u64>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), LirExecutorError> {
         if bits == 0 || !bits.is_multiple_of(8) {
-            return Err(Error::UnsupportedEffect(
+            return Err(LirExecutorError::UnsupportedEffect(
                 "memory stores currently require a byte-aligned width",
             ));
         }

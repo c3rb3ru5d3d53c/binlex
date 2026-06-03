@@ -20,6 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#![allow(dead_code)]
+
 use super::block::HirBlock;
 use super::expression::HirExpression;
 use super::hir::{HirFunction, HirModule};
@@ -34,57 +36,293 @@ use super::value::HirValue;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub fn format_hir_function(hir: &HirFunction) -> String {
-    let mut lines = Vec::new();
-    let mut formatter = HirFormatter::new(hir);
-    let name = hir.name.clone().unwrap_or_else(|| "anonymous".to_string());
-    let params = hir
-        .parameters
-        .iter()
-        .map(format_parameter)
-        .collect::<Vec<_>>()
-        .join(", ");
-    lines.push(format!(
-        "hir.function {}({}) -> {} {{",
-        format_code_location(&name),
-        params,
-        format_return_types(&hir.returns)
-    ));
-
-    if !formatter.explicit_locals.is_empty() {
-        for local in &formatter.explicit_locals {
-            lines.push(format!("  {}", format_local(local)));
-        }
-        if !hir.blocks.is_empty() {
-            lines.push(String::new());
-        }
-    }
-
-    for block in &hir.blocks {
-        formatter.format_block(block, 1, &mut lines);
-    }
-
-    lines.push("}".to_string());
-    lines.join("\n")
+    let context = crate::ir::mlir::context();
+    hir_function_operation(&context, hir)
+        .and_then(|op| op.to_string())
+        .unwrap_or_else(|error| format!("// mlir print failed: {error}"))
 }
 
 pub fn format_hir_module(module: &HirModule) -> String {
+    let context = crate::ir::mlir::context();
+    hir_module_operation(&context, module)
+        .and_then(|op| crate::ir::mlir::MlirDocument::from_context_and_ops(context, vec![op]))
+        .and_then(|document| document.text())
+        .unwrap_or_else(|error| format!("// mlir print failed: {error}"))
+}
+
+fn hir_local_operation(context: &mlir::Context, local: &HirLocal) -> mlir::Result<mlir::Operation> {
+    crate::ir::mlir::operation(
+        context,
+        "binlex.hir.local",
+        hir_local_attrs(context, local),
+        Vec::new(),
+    )
+}
+
+fn hir_local_attrs(context: &mlir::Context, local: &HirLocal) -> Vec<mlir::NamedAttribute> {
+    let mut attrs = vec![
+        crate::ir::mlir::string_attr(context, "name", &local.name),
+        crate::ir::mlir::string_attr(context, "ty", &format_type(&local.ty)),
+    ];
+    if let Some(init) = &local.init {
+        attrs.push(crate::ir::mlir::string_attr(
+            context,
+            "init",
+            &format_expression(init),
+        ));
+    }
+    if let Some(storage) = &local.storage {
+        attrs.push(crate::ir::mlir::string_attr(
+            context,
+            "storage",
+            &format!("{storage:?}"),
+        ));
+    }
+    attrs
+}
+
+fn hir_statement_operation(
+    context: &mlir::Context,
+    statement: &HirStatement,
+) -> mlir::Result<mlir::Operation> {
+    let (name, attrs, regions) = hir_statement_parts(context, statement)?;
+    crate::ir::mlir::operation(context, name, attrs, regions)
+}
+
+fn hir_statement_parts(
+    context: &mlir::Context,
+    statement: &HirStatement,
+) -> mlir::Result<(&'static str, Vec<mlir::NamedAttribute>, Vec<mlir::Region>)> {
+    Ok(match statement {
+        HirStatement::Assign { target, value } => (
+            "binlex.hir.assign",
+            vec![
+                crate::ir::mlir::string_attr(context, "target", &format_place(target)),
+                crate::ir::mlir::string_attr(context, "value", &format_expression(value)),
+            ],
+            Vec::new(),
+        ),
+        HirStatement::Expr(expression) => (
+            "binlex.hir.expr",
+            vec![crate::ir::mlir::string_attr(
+                context,
+                "value",
+                &format_expression(expression),
+            )],
+            Vec::new(),
+        ),
+        HirStatement::If {
+            condition,
+            then_body,
+            else_body,
+        } => {
+            let mut regions = vec![hir_block_region(context, then_body)?];
+            if let Some(else_body) = else_body {
+                regions.push(hir_block_region(context, else_body)?);
+            }
+            (
+                "binlex.hir.if",
+                vec![crate::ir::mlir::string_attr(
+                    context,
+                    "condition",
+                    &format_expression(condition),
+                )],
+                regions,
+            )
+        }
+        HirStatement::While { condition, body } => (
+            "binlex.hir.while",
+            vec![crate::ir::mlir::string_attr(
+                context,
+                "condition",
+                &format_expression(condition),
+            )],
+            vec![hir_block_region(context, body)?],
+        ),
+        HirStatement::Loop { body } => (
+            "binlex.hir.loop",
+            Vec::new(),
+            vec![hir_block_region(context, body)?],
+        ),
+        HirStatement::Switch {
+            value,
+            cases,
+            default,
+        } => {
+            let mut regions = cases
+                .iter()
+                .map(|case| hir_switch_case_region(context, case))
+                .collect::<mlir::Result<Vec<_>>>()?;
+            if let Some(default) = default {
+                regions.push(hir_block_region(context, default)?);
+            }
+            (
+                "binlex.hir.switch",
+                vec![crate::ir::mlir::string_attr(
+                    context,
+                    "value",
+                    &format_expression(value),
+                )],
+                regions,
+            )
+        }
+        HirStatement::Break => ("binlex.hir.break", Vec::new(), Vec::new()),
+        HirStatement::Continue => ("binlex.hir.continue", Vec::new(), Vec::new()),
+        HirStatement::Return { values } => (
+            "binlex.hir.return",
+            vec![crate::ir::mlir::string_attr(
+                context,
+                "values",
+                &values
+                    .iter()
+                    .map(format_expression)
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            )],
+            Vec::new(),
+        ),
+        HirStatement::Label(label) => (
+            "binlex.hir.label",
+            vec![crate::ir::mlir::string_attr(context, "target", label)],
+            Vec::new(),
+        ),
+        HirStatement::Goto(target) => (
+            "binlex.hir.goto",
+            vec![crate::ir::mlir::string_attr(
+                context,
+                "target",
+                &format_target(target),
+            )],
+            Vec::new(),
+        ),
+        HirStatement::Trap => ("binlex.hir.trap", Vec::new(), Vec::new()),
+        HirStatement::Unreachable => ("binlex.hir.unreachable", Vec::new(), Vec::new()),
+    })
+}
+
+fn hir_switch_case_region(
+    context: &mlir::Context,
+    case: &HirSwitchCase,
+) -> mlir::Result<mlir::Region> {
+    let mut ops = vec![crate::ir::mlir::operation(
+        context,
+        "binlex.hir.case",
+        vec![crate::ir::mlir::string_attr(
+            context,
+            "value",
+            &format_value(&case.value),
+        )],
+        Vec::new(),
+    )?];
+    ops.extend(hir_block_operations(context, &case.body)?);
+    Ok(crate::ir::mlir::region_with_ops(ops))
+}
+
+fn hir_block_operation(
+    context: &mlir::Context,
+    index: usize,
+    block: &HirBlock,
+) -> mlir::Result<mlir::Operation> {
+    crate::ir::mlir::operation(
+        context,
+        "binlex.hir.block",
+        vec![crate::ir::mlir::string_attr(
+            context,
+            "sym_name",
+            &format!("block{index}"),
+        )],
+        vec![hir_block_region(context, block)?],
+    )
+}
+
+fn hir_block_region(context: &mlir::Context, block: &HirBlock) -> mlir::Result<mlir::Region> {
+    Ok(crate::ir::mlir::region_with_ops(hir_block_operations(
+        context, block,
+    )?))
+}
+
+fn hir_block_operations(
+    context: &mlir::Context,
+    block: &HirBlock,
+) -> mlir::Result<Vec<mlir::Operation>> {
+    block
+        .statements
+        .iter()
+        .map(|statement| hir_statement_operation(context, statement))
+        .collect()
+}
+
+fn hir_function_operation(
+    context: &mlir::Context,
+    hir: &HirFunction,
+) -> mlir::Result<mlir::Operation> {
+    let name = hir.name.clone().unwrap_or_else(|| "anonymous".to_string());
+    let mut attrs = vec![
+        crate::ir::mlir::string_attr(context, "sym_name", &name),
+        crate::ir::mlir::string_attr(
+            context,
+            "parameters",
+            &hir.parameters
+                .iter()
+                .map(format_parameter)
+                .collect::<Vec<_>>()
+                .join("\n"),
+        ),
+        crate::ir::mlir::string_attr(context, "returns", &format_return_types(&hir.returns)),
+    ];
+    if !hir.locals.is_empty() {
+        attrs.push(crate::ir::mlir::string_attr(
+            context,
+            "locals",
+            &hir.locals
+                .iter()
+                .map(format_local)
+                .collect::<Vec<_>>()
+                .join("\n"),
+        ));
+    }
+
+    let explicit_locals = hir
+        .locals
+        .iter()
+        .filter(|local| local.init.is_some() || !is_generated_temp_name(&local.name))
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut ops = explicit_locals
+        .iter()
+        .map(|local| hir_local_operation(context, local))
+        .collect::<mlir::Result<Vec<_>>>()?;
+    for (index, block) in hir.blocks.iter().enumerate() {
+        ops.push(hir_block_operation(context, index, block)?);
+    }
+
+    crate::ir::mlir::operation(
+        context,
+        "binlex.hir.function",
+        attrs,
+        vec![crate::ir::mlir::region_with_ops(ops)],
+    )
+}
+
+pub(crate) fn hir_module_operation(
+    context: &mlir::Context,
+    module: &HirModule,
+) -> mlir::Result<mlir::Operation> {
     let name = module
         .name
         .clone()
         .unwrap_or_else(|| "anonymous".to_string());
-    let mut lines = vec![format!("hir.module {} {{", format_code_location(&name))];
-
-    for (index, function) in module.functions.iter().enumerate() {
-        if index > 0 {
-            lines.push(String::new());
-        }
-        for line in format_hir_function(function).lines() {
-            lines.push(format!("  {line}"));
-        }
-    }
-
-    lines.push("}".to_string());
-    lines.join("\n")
+    let ops = module
+        .functions
+        .iter()
+        .map(|function| hir_function_operation(context, function))
+        .collect::<mlir::Result<Vec<_>>>()?;
+    crate::ir::mlir::operation(
+        context,
+        "binlex.hir.module",
+        vec![crate::ir::mlir::string_attr(context, "sym_name", &name)],
+        vec![crate::ir::mlir::region_with_ops(ops)],
+    )
 }
 
 fn format_parameter(parameter: &HirParameter) -> String {
@@ -1252,18 +1490,6 @@ fn collect_printed_label_references_in_block_with_regions(
     }
 }
 
-fn collect_printed_label_references_in_statement(
-    statement: &HirStatement,
-    labels: &mut BTreeSet<String>,
-) {
-    let inherited_cloneable_regions = BTreeMap::new();
-    collect_printed_label_references_in_statement_with_regions(
-        statement,
-        labels,
-        &inherited_cloneable_regions,
-    );
-}
-
 fn collect_printed_label_references_in_statement_with_regions(
     statement: &HirStatement,
     labels: &mut BTreeSet<String>,
@@ -1673,7 +1899,7 @@ fn format_expression(expression: &HirExpression) -> String {
                 .join(", ")
         ),
         HirExpression::AddressOf { place, .. } => format!("&{}", format_place(place)),
-        HirExpression::Deref { pointer, .. } => format!("*{}", format_subexpression(pointer)),
+        HirExpression::Dereference { pointer, .. } => format!("*{}", format_subexpression(pointer)),
         HirExpression::Index { base, index, .. } => {
             format!(
                 "{}[{}]",
@@ -1697,7 +1923,7 @@ fn format_value(value: &HirValue) -> String {
 fn format_place(place: &HirPlace) -> String {
     match place {
         HirPlace::Named { name, .. } => format!("%{}", name),
-        HirPlace::Deref { pointer, .. } => format!("*{}", format_subexpression(pointer)),
+        HirPlace::Dereference { pointer, .. } => format!("*{}", format_subexpression(pointer)),
         HirPlace::Memory {
             address_space,
             address,
@@ -1749,7 +1975,9 @@ fn format_type(ty: &HirType) -> String {
             format_return_types(returns)
         ),
         HirType::Memory => "memory".to_string(),
-        HirType::Custom { name } => name.clone(),
+        HirType::TypeDefinition { name }
+        | HirType::Structure { name, .. }
+        | HirType::Union { name, .. } => name.clone(),
     }
 }
 
@@ -1765,7 +1993,7 @@ fn expression_type(expression: &HirExpression) -> HirType {
         | HirExpression::Compare { ty, .. }
         | HirExpression::FloatCompare { ty, .. }
         | HirExpression::Cast { ty, .. }
-        | HirExpression::Deref { ty, .. }
+        | HirExpression::Dereference { ty, .. }
         | HirExpression::Index { ty, .. }
         | HirExpression::AddressOf { ty, .. } => ty.clone(),
         HirExpression::Call { return_types, .. }
@@ -1991,7 +2219,7 @@ fn format_subexpression(expression: &HirExpression) -> String {
         | HirExpression::Call { .. }
         | HirExpression::Intrinsic { .. }
         | HirExpression::AddressOf { .. }
-        | HirExpression::Deref { .. }
+        | HirExpression::Dereference { .. }
         | HirExpression::Index { .. }
         | HirExpression::Load { .. } => format_expression(expression),
         _ => format!("({})", format_expression(expression)),

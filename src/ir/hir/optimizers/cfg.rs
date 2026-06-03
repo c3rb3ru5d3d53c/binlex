@@ -2725,7 +2725,9 @@ fn expression_references_names(expression: &HirExpression, names: &BTreeSet<Stri
         HirExpression::Unary { value, .. }
         | HirExpression::Extract { value, .. }
         | HirExpression::Cast { value, .. }
-        | HirExpression::Deref { pointer: value, .. } => expression_references_names(value, names),
+        | HirExpression::Dereference { pointer: value, .. } => {
+            expression_references_names(value, names)
+        }
         HirExpression::Binary { lhs, rhs, .. }
         | HirExpression::Compare { lhs, rhs, .. }
         | HirExpression::FloatCompare { lhs, rhs, .. }
@@ -2772,7 +2774,7 @@ fn expression_references_names(expression: &HirExpression, names: &BTreeSet<Stri
 fn place_references_names(place: &crate::ir::hir::HirPlace, names: &BTreeSet<String>) -> bool {
     match place {
         crate::ir::hir::HirPlace::Named { name, .. } => names.contains(name),
-        crate::ir::hir::HirPlace::Deref { pointer, .. }
+        crate::ir::hir::HirPlace::Dereference { pointer, .. }
         | crate::ir::hir::HirPlace::Memory {
             address: pointer, ..
         } => expression_references_names(pointer, names),

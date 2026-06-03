@@ -4,6 +4,7 @@ pub fn normalize_instruction_lir(semantics: &Lir) -> Lir {
     Lir {
         version: semantics.version,
         status: semantics.status,
+        metadata: Default::default(),
         abi: semantics.abi.clone(),
         encoding: semantics.encoding.clone(),
         temporaries: semantics.temporaries.clone(),

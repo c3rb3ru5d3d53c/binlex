@@ -704,7 +704,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 mod tests {
     use crate::ir::lir::{
         Lir, LirAbi, LirAbiKind, LirCpu, LirCpuKind, LirEffect, LirExpression, LirLocation,
-        LirModule, LirStatus, LirTerminator, LirTrapKind,
+        LirMetadata, LirModule, LirStatus, LirTerminator, LirTrapKind,
     };
     use crate::ir::llvm::Lifter;
     use crate::{Architecture, Configuration};
@@ -741,6 +741,7 @@ mod tests {
         let mut semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: Some(builtin_abi(Architecture::ARM64, LirAbiKind::LinuxSyscall)),
             encoding: None,
             temporaries: Vec::new(),
@@ -800,6 +801,7 @@ mod tests {
         let mut semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: Some(builtin_abi(Architecture::AMD64, LirAbiKind::LinuxSyscall)),
             encoding: None,
             temporaries: Vec::new(),
@@ -838,6 +840,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: Some(builtin_abi(Architecture::AMD64, LirAbiKind::LinuxSyscall)),
             encoding: None,
             temporaries: Vec::new(),
@@ -882,6 +885,7 @@ mod tests {
         let mut semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: Some(builtin_abi(Architecture::AMD64, LirAbiKind::WindowsSyscall)),
             encoding: None,
             temporaries: Vec::new(),
@@ -923,6 +927,7 @@ mod tests {
         let mut semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: Some(builtin_abi(Architecture::AMD64, LirAbiKind::WindowsSyscall)),
             encoding: None,
             temporaries: Vec::new(),
@@ -983,6 +988,7 @@ mod tests {
         let mut semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: Some(builtin_abi(Architecture::AMD64, LirAbiKind::WindowsSyscall)),
             encoding: None,
             temporaries: Vec::new(),
@@ -1031,6 +1037,7 @@ mod tests {
         let mut semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: Some(builtin_abi(Architecture::I386, LirAbiKind::LinuxSyscall)),
             encoding: None,
             temporaries: Vec::new(),
@@ -1069,6 +1076,7 @@ mod tests {
         let mut semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: Some(builtin_abi(Architecture::I386, LirAbiKind::WindowsSyscall)),
             encoding: None,
             temporaries: Vec::new(),
@@ -1110,6 +1118,7 @@ mod tests {
         let mut semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: Some(builtin_abi(Architecture::I386, LirAbiKind::LinuxSyscall)),
             encoding: None,
             temporaries: Vec::new(),
@@ -1150,6 +1159,7 @@ mod tests {
         let mut semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: Some(builtin_abi(Architecture::I386, LirAbiKind::WindowsSyscall)),
             encoding: None,
             temporaries: Vec::new(),
@@ -1193,6 +1203,7 @@ mod tests {
         let mut semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: Some(builtin_abi(Architecture::ARM64, LirAbiKind::WindowsSyscall)),
             encoding: None,
             temporaries: Vec::new(),

@@ -1,8 +1,8 @@
 use super::reg;
+use crate::ir::lir::executor::LirExecutorError;
 use crate::ir::lir::{LirAbi, LirCpu};
-use crate::symbolic::Error;
 
-pub fn arm64(cpu: &LirCpu) -> Result<LirAbi, Error> {
+pub fn arm64(cpu: &LirCpu) -> Result<LirAbi, LirExecutorError> {
     Ok(LirAbi::new(
         "sysv".to_string(),
         cpu.clone(),
@@ -22,7 +22,7 @@ pub fn arm64(cpu: &LirCpu) -> Result<LirAbi, Error> {
     ))
 }
 
-pub fn amd64(cpu: &LirCpu) -> Result<LirAbi, Error> {
+pub fn amd64(cpu: &LirCpu) -> Result<LirAbi, LirExecutorError> {
     Ok(LirAbi::new(
         "sysv".to_string(),
         cpu.clone(),

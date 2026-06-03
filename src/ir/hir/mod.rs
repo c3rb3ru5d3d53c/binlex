@@ -25,6 +25,7 @@ pub mod expression;
 pub mod hir;
 pub mod kind;
 pub mod lower;
+pub mod mlir;
 pub mod optimizers;
 pub mod place;
 pub mod print;
@@ -40,6 +41,7 @@ pub use kind::{
     HirAddressSpace, HirBinaryOperation, HirCastOperation, HirCompareOperation,
     HirFloatCompareOperation, HirType, HirTypeKind, HirUnaryOperation,
 };
+pub use mlir::HirMlirModule;
 pub use place::HirPlace;
 pub use print::{format_hir_function, format_hir_module};
 pub use statement::{HirLocal, HirParameter, HirStatement, HirSwitchCase};

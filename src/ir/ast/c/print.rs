@@ -40,6 +40,11 @@ pub fn format_c_function_with_image(function: &AstFunction, image: &Image) -> St
 fn format_c_function_inner(function: &AstFunction, image: Option<&Image>) -> String {
     let mut output = String::new();
     let context = CPrintContext::new(function, image);
+    if let Some(comment) = &function.comment {
+        output.push_str("// ");
+        output.push_str(&format_comment_text(comment));
+        output.push('\n');
+    }
     let returns = format_return_type(&function.returns);
     let convention = format_abi_calling_convention(function.abi.as_ref());
     let name = sanitize_identifier(function.name.as_deref().unwrap_or("function"));
@@ -89,11 +94,18 @@ fn format_c_function_inner(function: &AstFunction, image: Option<&Image>) -> Str
             output.push_str(&format_expression(init, &context));
         }
         output.push(';');
+        let mut comments = Vec::new();
         if let Some(storage) = &local.storage
             && let Some(comment) = format_storage(storage, &local.ty)
         {
+            comments.push(comment);
+        }
+        if let Some(comment) = &local.comment {
+            comments.push(format_comment_text(comment));
+        }
+        if !comments.is_empty() {
             output.push_str(" // ");
-            output.push_str(&comment);
+            output.push_str(&comments.join("; "));
         }
         output.push('\n');
     }
@@ -163,7 +175,12 @@ impl<'a> CPrintContext<'a> {
         let mut index = 0usize;
         for local in &function.locals {
             if !local_names.contains_key(&local.name) {
-                local_names.insert(local.name.clone(), format!("v{index}"));
+                let name = local
+                    .display_name
+                    .as_deref()
+                    .map(sanitize_identifier)
+                    .unwrap_or_else(|| format!("v{index}"));
+                local_names.insert(local.name.clone(), name);
                 index += 1;
             }
         }
@@ -486,6 +503,12 @@ fn format_statement_into(
 ) {
     let pad = "    ".repeat(indent);
     match statement {
+        AstStatement::Comment(comment) => {
+            output.push_str(&pad);
+            output.push_str("// ");
+            output.push_str(&format_comment_text(comment));
+            output.push('\n');
+        }
         AstStatement::Assign { target, value } => {
             if let Some(segment_store) = format_segment_store(target, value, context) {
                 output.push_str(&pad);
@@ -982,7 +1005,7 @@ fn format_expression_inner(
                 .join(", ")
         ),
         AstExpression::AddressOf { place, .. } => format!("&{}", format_place(place, context)),
-        AstExpression::Deref { pointer, ty } => {
+        AstExpression::Dereference { pointer, ty } => {
             format!(
                 "*({}*){}",
                 format_type(ty),
@@ -994,6 +1017,13 @@ fn format_expression_inner(
                 "{}[{}]",
                 format_subexpression_inner(base, context, false),
                 format_expression_without_strings(index, context)
+            )
+        }
+        AstExpression::Member { base, name, .. } => {
+            format!(
+                "{}->{}",
+                format_subexpression_inner(base, context, false),
+                sanitize_identifier(name)
             )
         }
     }
@@ -1236,7 +1266,7 @@ fn expression_has_c_side_effects(expression: &AstExpression) -> bool {
         AstExpression::Unary { value, .. }
         | AstExpression::Extract { value, .. }
         | AstExpression::Cast { value, .. }
-        | AstExpression::Deref { pointer: value, .. } => expression_has_c_side_effects(value),
+        | AstExpression::Dereference { pointer: value, .. } => expression_has_c_side_effects(value),
         AstExpression::Binary { lhs, rhs, .. }
         | AstExpression::Compare { lhs, rhs, .. }
         | AstExpression::FloatCompare { lhs, rhs, .. }
@@ -1245,6 +1275,7 @@ fn expression_has_c_side_effects(expression: &AstExpression) -> bool {
             index: rhs,
             ..
         } => expression_has_c_side_effects(lhs) || expression_has_c_side_effects(rhs),
+        AstExpression::Member { base, .. } => expression_has_c_side_effects(base),
         AstExpression::Select {
             condition,
             when_true,
@@ -1311,8 +1342,9 @@ fn format_subexpression_inner(
         | AstExpression::Call { .. }
         | AstExpression::Intrinsic { .. }
         | AstExpression::Load { .. }
-        | AstExpression::Deref { .. }
-        | AstExpression::Index { .. } => {
+        | AstExpression::Dereference { .. }
+        | AstExpression::Index { .. }
+        | AstExpression::Member { .. } => {
             format_expression_inner(expression, context, allow_strings)
         }
         _ => format!(
@@ -1325,7 +1357,7 @@ fn format_subexpression_inner(
 fn format_place(place: &AstPlace, context: &CPrintContext<'_>) -> String {
     match place {
         AstPlace::Named { name, .. } => context.local_name(name),
-        AstPlace::Deref { pointer, ty } => {
+        AstPlace::Dereference { pointer, ty } => {
             format!(
                 "*({}*){}",
                 format_type(ty),
@@ -1376,7 +1408,7 @@ fn place_stack_location(place: &AstPlace, context: &CPrintContext<'_>) -> Option
             address,
             ..
         } => stack_memory_location(address_space, address),
-        AstPlace::Deref { .. } | AstPlace::Index { .. } => None,
+        AstPlace::Dereference { .. } | AstPlace::Index { .. } => None,
     }
 }
 
@@ -1695,8 +1727,9 @@ fn expression_integer_bits(expression: &AstExpression) -> Option<u16> {
         | AstExpression::FloatCompare { ty, .. }
         | AstExpression::Cast { ty, .. }
         | AstExpression::AddressOf { ty, .. }
-        | AstExpression::Deref { ty, .. }
-        | AstExpression::Index { ty, .. } => integer_bits(ty),
+        | AstExpression::Dereference { ty, .. }
+        | AstExpression::Index { ty, .. }
+        | AstExpression::Member { ty, .. } => integer_bits(ty),
         AstExpression::Call { return_types, .. }
         | AstExpression::Intrinsic { return_types, .. } => {
             return_types.first().and_then(integer_bits)
@@ -1717,8 +1750,9 @@ fn expression_type(expression: &AstExpression) -> AstType {
         | AstExpression::FloatCompare { ty, .. }
         | AstExpression::Cast { ty, .. }
         | AstExpression::AddressOf { ty, .. }
-        | AstExpression::Deref { ty, .. }
-        | AstExpression::Index { ty, .. } => ty.clone(),
+        | AstExpression::Dereference { ty, .. }
+        | AstExpression::Index { ty, .. }
+        | AstExpression::Member { ty, .. } => ty.clone(),
         AstExpression::Call { return_types, .. }
         | AstExpression::Intrinsic { return_types, .. } => {
             return_types.first().cloned().unwrap_or_else(AstType::void)
@@ -1942,6 +1976,7 @@ fn collect_stack_memory_slots_in_statement(
         }
         AstStatement::Break
         | AstStatement::Continue
+        | AstStatement::Comment(_)
         | AstStatement::Label(_)
         | AstStatement::Goto(AstTarget::Direct(_))
         | AstStatement::Trap
@@ -1965,7 +2000,7 @@ fn collect_stack_memory_slots_in_expression(
         AstExpression::Unary { value, .. }
         | AstExpression::Extract { value, .. }
         | AstExpression::Cast { value, .. }
-        | AstExpression::Deref { pointer: value, .. } => {
+        | AstExpression::Dereference { pointer: value, .. } => {
             collect_stack_memory_slots_in_expression(value, slots);
         }
         AstExpression::Binary { lhs, rhs, .. }
@@ -2003,6 +2038,7 @@ fn collect_stack_memory_slots_in_expression(
             }
         }
         AstExpression::AddressOf { place, .. } => collect_stack_memory_slots_in_place(place, slots),
+        AstExpression::Member { base, .. } => collect_stack_memory_slots_in_expression(base, slots),
         AstExpression::Index { base, index, .. } => {
             collect_stack_memory_slots_in_expression(base, slots);
             collect_stack_memory_slots_in_expression(index, slots);
@@ -2024,7 +2060,9 @@ fn collect_stack_memory_slots_in_place(
             record_stack_memory_slot(address_space, address, ty, slots);
             collect_stack_memory_slots_in_expression(address, slots);
         }
-        AstPlace::Deref { pointer, .. } => collect_stack_memory_slots_in_expression(pointer, slots),
+        AstPlace::Dereference { pointer, .. } => {
+            collect_stack_memory_slots_in_expression(pointer, slots)
+        }
         AstPlace::Index { base, index, .. } => {
             collect_stack_memory_slots_in_expression(base, slots);
             collect_stack_memory_slots_in_expression(index, slots);
@@ -2110,6 +2148,7 @@ fn collect_referenced_named_values_in_statement(
         }
         AstStatement::Break
         | AstStatement::Continue
+        | AstStatement::Comment(_)
         | AstStatement::Label(_)
         | AstStatement::Goto(AstTarget::Direct(_))
         | AstStatement::Trap
@@ -2170,8 +2209,11 @@ fn collect_referenced_named_values_in_expression(
         AstExpression::AddressOf { place, .. } => {
             collect_referenced_named_values_in_place(place, locals);
         }
-        AstExpression::Deref { pointer, .. } => {
+        AstExpression::Dereference { pointer, .. } => {
             collect_referenced_named_values_in_expression(pointer, locals);
+        }
+        AstExpression::Member { base, .. } => {
+            collect_referenced_named_values_in_expression(base, locals);
         }
         AstExpression::Index { base, index, .. } => {
             collect_referenced_named_values_in_expression(base, locals);
@@ -2187,7 +2229,7 @@ fn collect_referenced_named_values_in_place(
 ) {
     match place {
         AstPlace::Named { .. } => {}
-        AstPlace::Deref { pointer, .. }
+        AstPlace::Dereference { pointer, .. }
         | AstPlace::Memory {
             address: pointer, ..
         } => {
@@ -2242,6 +2284,7 @@ fn collect_assigned_named_places_in_statement(
             }
         }
         AstStatement::Assign { .. }
+        | AstStatement::Comment(_)
         | AstStatement::Expr(_)
         | AstStatement::Break
         | AstStatement::Continue
@@ -2259,7 +2302,10 @@ fn format_undef_value(ty: &AstType) -> String {
         AstType::Integer(_) => "0".to_string(),
         AstType::Float(_) => "0.0".to_string(),
         AstType::Pointer { .. } | AstType::Memory | AstType::Function { .. } => "NULL".to_string(),
-        AstType::Void | AstType::Custom { .. } => "0".to_string(),
+        AstType::Void
+        | AstType::TypeDefinition { .. }
+        | AstType::Structure { .. }
+        | AstType::Union { .. } => "0".to_string(),
     }
 }
 
@@ -2307,7 +2353,9 @@ fn format_type(ty: &AstType) -> String {
         AstType::Pointer { pointee } => format!("{}*", format_type(pointee)),
         AstType::Function { .. } => "void*".to_string(),
         AstType::Memory => "uint8_t*".to_string(),
-        AstType::Custom { name } => sanitize_identifier(name),
+        AstType::TypeDefinition { name }
+        | AstType::Structure { name, .. }
+        | AstType::Union { name, .. } => sanitize_identifier(name),
     }
 }
 
@@ -2326,7 +2374,10 @@ fn type_bits(ty: &AstType) -> u16 {
     match ty {
         AstType::Integer(bits) | AstType::Float(bits) => *bits,
         AstType::Pointer { .. } | AstType::Function { .. } | AstType::Memory => 64,
-        AstType::Void | AstType::Custom { .. } => 0,
+        AstType::Void
+        | AstType::TypeDefinition { .. }
+        | AstType::Structure { .. }
+        | AstType::Union { .. } => 0,
     }
 }
 
@@ -2464,6 +2515,15 @@ fn format_float_compare_op(op: AstFloatCompareOperation) -> &'static str {
         AstFloatCompareOperation::Ordered => "/* ordered */ ==",
         AstFloatCompareOperation::Unordered => "/* unordered */ !=",
     }
+}
+
+fn format_comment_text(comment: &str) -> String {
+    comment
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn sanitize_identifier(name: &str) -> String {

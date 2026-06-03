@@ -195,7 +195,7 @@ fn count_name_uses_in_expression(expression: &HirExpression, name: &str, uses: &
         HirExpression::Unary { value, .. }
         | HirExpression::Extract { value, .. }
         | HirExpression::Cast { value, .. }
-        | HirExpression::Deref { pointer: value, .. } => {
+        | HirExpression::Dereference { pointer: value, .. } => {
             count_name_uses_in_expression(value, name, uses)
         }
         HirExpression::Binary { lhs, rhs, .. }
@@ -250,7 +250,7 @@ fn count_name_uses_in_place(place: &HirPlace, name: &str, uses: &mut usize) {
         HirPlace::Named {
             name: place_name, ..
         } if place_name == name => *uses += 1,
-        HirPlace::Deref { pointer, .. }
+        HirPlace::Dereference { pointer, .. }
         | HirPlace::Memory {
             address: pointer, ..
         } => count_name_uses_in_expression(pointer, name, uses),
@@ -346,7 +346,7 @@ fn replace_name_in_expression(
         HirExpression::Unary { value, .. }
         | HirExpression::Extract { value, .. }
         | HirExpression::Cast { value, .. }
-        | HirExpression::Deref { pointer: value, .. } => {
+        | HirExpression::Dereference { pointer: value, .. } => {
             replace_name_in_expression(value, name, replacement)
         }
         HirExpression::Binary { lhs, rhs, .. }
@@ -398,7 +398,7 @@ fn replace_name_in_expression(
 
 fn replace_name_in_place(place: &mut HirPlace, name: &str, replacement: &HirExpression) -> bool {
     match place {
-        HirPlace::Deref { pointer, .. }
+        HirPlace::Dereference { pointer, .. }
         | HirPlace::Memory {
             address: pointer, ..
         } => replace_name_in_expression(pointer, name, replacement),
@@ -416,7 +416,7 @@ fn expression_safe_to_duplicate(expression: &HirExpression) -> bool {
         HirExpression::Unary { value, .. }
         | HirExpression::Extract { value, .. }
         | HirExpression::Cast { value, .. }
-        | HirExpression::Deref { pointer: value, .. } => expression_safe_to_duplicate(value),
+        | HirExpression::Dereference { pointer: value, .. } => expression_safe_to_duplicate(value),
         HirExpression::Binary { lhs, rhs, .. }
         | HirExpression::Compare { lhs, rhs, .. }
         | HirExpression::FloatCompare { lhs, rhs, .. }
@@ -445,7 +445,7 @@ fn expression_safe_to_duplicate(expression: &HirExpression) -> bool {
 fn place_safe_to_duplicate(place: &HirPlace) -> bool {
     match place {
         HirPlace::Named { .. } => true,
-        HirPlace::Deref { pointer, .. }
+        HirPlace::Dereference { pointer, .. }
         | HirPlace::Memory {
             address: pointer, ..
         } => expression_safe_to_duplicate(pointer),

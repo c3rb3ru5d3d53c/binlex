@@ -1,8 +1,8 @@
+use crate::ir::lir::executor::{LirExecutor, LirExecutorError, LirExecutorState};
 use crate::ir::lir::{
     LirExpression, LirLocation, LirOperationBinary, LirOperationCast, LirOperationCompare,
     LirOperationUnary,
 };
-use crate::symbolic::{Error, SymbolicCpuState, SymbolicExecutor};
 use std::collections::BTreeSet;
 use z3::ast::{BV, Bool, RoundingMode};
 
@@ -18,13 +18,13 @@ pub(crate) struct EvaluatedCondition {
     pub(crate) deps: BTreeSet<u64>,
 }
 
-impl SymbolicExecutor {
+impl LirExecutor {
     pub(crate) fn eval_expression(
         &self,
-        state: &mut SymbolicCpuState,
+        state: &mut LirExecutorState,
         expression: &LirExpression,
         expected_float: bool,
-    ) -> Result<EvaluatedValue, Error> {
+    ) -> Result<EvaluatedValue, LirExecutorError> {
         match expression {
             LirExpression::Const { value, bits } => Ok(EvaluatedValue {
                 value: state.backend().const_bv(*value, *bits)?,
@@ -35,12 +35,9 @@ impl SymbolicExecutor {
                 deps: BTreeSet::new(),
             }),
             LirExpression::DataAddress { name, bits } => {
-                let address =
-                    state
-                        .semantic_data_address(name)
-                        .ok_or(Error::UnsupportedExpression(
-                            "unknown semantic data_address symbol",
-                        ))?;
+                let address = state.semantic_data_address(name).ok_or(
+                    LirExecutorError::UnsupportedExpression("unknown semantic data_address symbol"),
+                )?;
                 Ok(EvaluatedValue {
                     value: state.backend().const_bv(address as u128, *bits)?,
                     deps: BTreeSet::new(),
@@ -243,9 +240,9 @@ impl SymbolicExecutor {
             }
             LirExpression::Concat { parts, bits } => {
                 let mut parts = parts.iter();
-                let first = parts
-                    .next()
-                    .ok_or(Error::UnsupportedExpression("concat with zero parts"))?;
+                let first = parts.next().ok_or(LirExecutorError::UnsupportedExpression(
+                    "concat with zero parts",
+                ))?;
                 let mut value = self.eval_expression(state, first, expected_float)?;
                 for part in parts {
                     let next = self.eval_expression(state, part, expected_float)?;
@@ -286,9 +283,9 @@ impl SymbolicExecutor {
 
     pub(crate) fn eval_condition(
         &self,
-        state: &mut SymbolicCpuState,
+        state: &mut LirExecutorState,
         expression: &LirExpression,
-    ) -> Result<EvaluatedCondition, Error> {
+    ) -> Result<EvaluatedCondition, LirExecutorError> {
         let value = self.eval_expression(state, expression, false)?;
         Ok(EvaluatedCondition {
             value: state.backend().bv_to_bool(&value.value),
@@ -298,13 +295,13 @@ impl SymbolicExecutor {
 
     fn eval_unary(
         &self,
-        state: &mut SymbolicCpuState,
+        state: &mut LirExecutorState,
         op: LirOperationUnary,
         arg: BV,
         arg_expression: &LirExpression,
         bits: u16,
         expected_float: bool,
-    ) -> Result<BV, Error> {
+    ) -> Result<BV, LirExecutorError> {
         match op {
             LirOperationUnary::Not => Ok(arg.bvnot()),
             LirOperationUnary::Neg => {
@@ -334,11 +331,11 @@ impl SymbolicExecutor {
 
     fn eval_binary(
         &self,
-        state: &SymbolicCpuState,
+        state: &LirExecutorState,
         op: LirOperationBinary,
         left: BV,
         right: BV,
-    ) -> Result<BV, Error> {
+    ) -> Result<BV, LirExecutorError> {
         match op {
             LirOperationBinary::Add => Ok(left.bvadd(&right)),
             LirOperationBinary::AddWithCarry => Ok(left.bvadd(&right)),
@@ -372,11 +369,11 @@ impl SymbolicExecutor {
 
     fn eval_cast(
         &self,
-        state: &mut SymbolicCpuState,
+        state: &mut LirExecutorState,
         op: LirOperationCast,
         arg: BV,
         bits: u16,
-    ) -> Result<BV, Error> {
+    ) -> Result<BV, LirExecutorError> {
         let current = arg.get_size() as u16;
         match op {
             LirOperationCast::ZeroExtend => {
@@ -422,11 +419,11 @@ impl SymbolicExecutor {
 
     fn eval_compare(
         &self,
-        state: &SymbolicCpuState,
+        state: &LirExecutorState,
         op: LirOperationCompare,
         left: BV,
         right: BV,
-    ) -> Result<Bool, Error> {
+    ) -> Result<Bool, LirExecutorError> {
         match op {
             LirOperationCompare::Eq => Ok(left.eq(&right)),
             LirOperationCompare::Ne => Ok(left.eq(&right).not()),
@@ -457,13 +454,13 @@ impl SymbolicExecutor {
 
     pub(crate) fn coerce_address(
         &self,
-        state: &mut SymbolicCpuState,
+        state: &mut LirExecutorState,
         value: &BV,
-    ) -> Result<BV, Error> {
+    ) -> Result<BV, LirExecutorError> {
         state.backend().coerce_bv_width(value, state.address_bits())
     }
 
-    fn unsigned_mul_high(&self, left: &BV, right: &BV) -> Result<BV, Error> {
+    fn unsigned_mul_high(&self, left: &BV, right: &BV) -> Result<BV, LirExecutorError> {
         let bits = left.get_size() as u16;
         let extended_bits = bits * 2;
         let lhs = left.zero_ext(bits as u32);
@@ -472,7 +469,7 @@ impl SymbolicExecutor {
         Ok(product.extract((extended_bits - 1) as u32, bits as u32))
     }
 
-    fn signed_mul_high(&self, left: &BV, right: &BV) -> Result<BV, Error> {
+    fn signed_mul_high(&self, left: &BV, right: &BV) -> Result<BV, LirExecutorError> {
         let bits = left.get_size() as u16;
         let extended_bits = bits * 2;
         let lhs = left.sign_ext(bits as u32);
@@ -481,9 +478,14 @@ impl SymbolicExecutor {
         Ok(product.extract((extended_bits - 1) as u32, bits as u32))
     }
 
-    fn byte_swap(&self, state: &mut SymbolicCpuState, arg: &BV, bits: u16) -> Result<BV, Error> {
+    fn byte_swap(
+        &self,
+        state: &mut LirExecutorState,
+        arg: &BV,
+        bits: u16,
+    ) -> Result<BV, LirExecutorError> {
         if !bits.is_multiple_of(8) {
-            return Err(Error::UnsupportedExpression(
+            return Err(LirExecutorError::UnsupportedExpression(
                 "byte swap requires a byte-aligned width",
             ));
         }
@@ -497,14 +499,24 @@ impl SymbolicExecutor {
         self.concat_parts(state, &bytes)
     }
 
-    fn bit_reverse(&self, state: &mut SymbolicCpuState, arg: &BV, bits: u16) -> Result<BV, Error> {
+    fn bit_reverse(
+        &self,
+        state: &mut LirExecutorState,
+        arg: &BV,
+        bits: u16,
+    ) -> Result<BV, LirExecutorError> {
         let parts = (0..bits)
             .map(|index| arg.extract(index as u32, index as u32))
             .collect::<Vec<_>>();
         self.concat_parts(state, &parts)
     }
 
-    fn popcount(&self, state: &mut SymbolicCpuState, arg: &BV, bits: u16) -> Result<BV, Error> {
+    fn popcount(
+        &self,
+        state: &mut LirExecutorState,
+        arg: &BV,
+        bits: u16,
+    ) -> Result<BV, LirExecutorError> {
         let mut total = state.backend().zero_bv(bits)?;
         for index in 0..bits {
             let bit = arg.extract(index as u32, index as u32);
@@ -516,10 +528,10 @@ impl SymbolicExecutor {
 
     fn count_leading_zeros(
         &self,
-        state: &mut SymbolicCpuState,
+        state: &mut LirExecutorState,
         arg: &BV,
         bits: u16,
-    ) -> Result<BV, Error> {
+    ) -> Result<BV, LirExecutorError> {
         let mut total = state.backend().zero_bv(bits)?;
         let one = state.backend().one_bv(bits)?;
         let mut still_zero = Bool::from_bool(true);
@@ -534,10 +546,10 @@ impl SymbolicExecutor {
 
     fn count_trailing_zeros(
         &self,
-        state: &mut SymbolicCpuState,
+        state: &mut LirExecutorState,
         arg: &BV,
         bits: u16,
-    ) -> Result<BV, Error> {
+    ) -> Result<BV, LirExecutorError> {
         let mut total = state.backend().zero_bv(bits)?;
         let one = state.backend().one_bv(bits)?;
         let mut still_zero = Bool::from_bool(true);
@@ -550,12 +562,18 @@ impl SymbolicExecutor {
         Ok(total)
     }
 
-    fn concat_parts(&self, state: &mut SymbolicCpuState, parts: &[BV]) -> Result<BV, Error> {
+    fn concat_parts(
+        &self,
+        state: &mut LirExecutorState,
+        parts: &[BV],
+    ) -> Result<BV, LirExecutorError> {
         let mut parts = parts.iter();
         let first = parts
             .next()
             .cloned()
-            .ok_or(Error::UnsupportedExpression("concat with zero parts"))?;
+            .ok_or(LirExecutorError::UnsupportedExpression(
+                "concat with zero parts",
+            ))?;
         let mut value = first;
         for part in parts {
             value = value.concat(part);
@@ -565,17 +583,29 @@ impl SymbolicExecutor {
             .coerce_bv_width(&value, value.get_size() as u16)
     }
 
-    pub(crate) fn eval_fp_abs(&self, state: &SymbolicCpuState, value: BV) -> Result<BV, Error> {
+    pub(crate) fn eval_fp_abs(
+        &self,
+        state: &LirExecutorState,
+        value: BV,
+    ) -> Result<BV, LirExecutorError> {
         let value = state.backend().float_from_ieee_bv(&value)?;
         Ok(state.backend().float_to_ieee_bv(&value.unary_abs()))
     }
 
-    pub(crate) fn eval_fp_neg(&self, state: &SymbolicCpuState, value: BV) -> Result<BV, Error> {
+    pub(crate) fn eval_fp_neg(
+        &self,
+        state: &LirExecutorState,
+        value: BV,
+    ) -> Result<BV, LirExecutorError> {
         let value = state.backend().float_from_ieee_bv(&value)?;
         Ok(state.backend().float_to_ieee_bv(&value.unary_neg()))
     }
 
-    pub(crate) fn eval_fp_sqrt(&self, state: &SymbolicCpuState, value: BV) -> Result<BV, Error> {
+    pub(crate) fn eval_fp_sqrt(
+        &self,
+        state: &LirExecutorState,
+        value: BV,
+    ) -> Result<BV, LirExecutorError> {
         let value = state.backend().float_from_ieee_bv(&value)?;
         Ok(state.backend().float_to_ieee_bv(&value.sqrt()))
     }
@@ -685,11 +715,11 @@ impl SymbolicExecutor {
 
     fn eval_fp_binary(
         &self,
-        state: &SymbolicCpuState,
+        state: &LirExecutorState,
         op: LirOperationBinary,
         left: BV,
         right: BV,
-    ) -> Result<BV, Error> {
+    ) -> Result<BV, LirExecutorError> {
         let left = state.backend().float_from_ieee_bv(&left)?;
         let right = state.backend().float_from_ieee_bv(&right)?;
         let rounding = RoundingMode::round_nearest_ties_to_even();
@@ -698,18 +728,18 @@ impl SymbolicExecutor {
             LirOperationBinary::FSub => left.sub_with_rounding_mode(&right, &rounding),
             LirOperationBinary::FMul => left.mul_with_rounding_mode(&right, &rounding),
             LirOperationBinary::FDiv => left.div_with_rounding_mode(&right, &rounding),
-            _ => return Err(Error::UnsupportedExpression("binary op")),
+            _ => return Err(LirExecutorError::UnsupportedExpression("binary op")),
         };
         Ok(state.backend().float_to_ieee_bv(&value))
     }
 
     fn eval_fp_compare(
         &self,
-        state: &SymbolicCpuState,
+        state: &LirExecutorState,
         op: LirOperationCompare,
         left: BV,
         right: BV,
-    ) -> Result<Bool, Error> {
+    ) -> Result<Bool, LirExecutorError> {
         let left = state.backend().float_from_ieee_bv(&left)?;
         let right = state.backend().float_from_ieee_bv(&right)?;
         let unordered = Bool::or(&[left.is_nan(), right.is_nan()]);
@@ -734,20 +764,20 @@ impl SymbolicExecutor {
             LirOperationCompare::UleFp => Ok(Bool::or(&[unordered, le])),
             LirOperationCompare::UgtFp => Ok(Bool::or(&[unordered, gt])),
             LirOperationCompare::UgeFp => Ok(Bool::or(&[unordered, ge])),
-            _ => Err(Error::UnsupportedExpression("compare op")),
+            _ => Err(LirExecutorError::UnsupportedExpression("compare op")),
         }
     }
 
     pub(crate) fn eval_intrinsic_expression(
         &self,
-        state: &mut SymbolicCpuState,
+        state: &mut LirExecutorState,
         name: &str,
         args: &[LirExpression],
         bits: u16,
-    ) -> Result<BV, Error> {
+    ) -> Result<BV, LirExecutorError> {
         if let Some(value) = self.eval_x87_intrinsic_expression(state, name, args, bits)? {
             return Ok(value);
         }
-        Err(Error::UnsupportedExpression("intrinsic"))
+        Err(LirExecutorError::UnsupportedExpression("intrinsic"))
     }
 }

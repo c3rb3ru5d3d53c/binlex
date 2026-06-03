@@ -1,8 +1,8 @@
 use super::reg;
+use crate::ir::lir::executor::LirExecutorError;
 use crate::ir::lir::{LirAbi, LirCpu};
-use crate::symbolic::Error;
 
-pub fn i386(cpu: &LirCpu) -> Result<LirAbi, Error> {
+pub fn i386(cpu: &LirCpu) -> Result<LirAbi, LirExecutorError> {
     Ok(LirAbi::new(
         "cdecl".to_string(),
         cpu.clone(),

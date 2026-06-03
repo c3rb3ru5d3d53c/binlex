@@ -1,15 +1,15 @@
+use crate::ir::lir::executor::LirExecutorError;
+use crate::ir::lir::executor::LirExecutorState;
 use crate::ir::lir::{Lir, LirModule, LirStatus, LirTerminator};
-use crate::symbolic::Error;
-use crate::symbolic::SymbolicCpuState;
 use std::collections::{BTreeSet, HashMap};
 
 #[derive(Clone)]
-pub struct SymbolicExecutor {
+pub struct LirExecutor {
     breakpoints: BTreeSet<u64>,
     hooks: BTreeSet<u64>,
 }
 
-impl SymbolicExecutor {
+impl LirExecutor {
     pub fn new() -> Self {
         Self {
             breakpoints: BTreeSet::new(),
@@ -52,8 +52,8 @@ impl SymbolicExecutor {
     pub fn step(
         &self,
         semantics: &LirModule,
-        state: &SymbolicCpuState,
-    ) -> Result<Vec<SymbolicCpuState>, Error> {
+        state: &LirExecutorState,
+    ) -> Result<Vec<LirExecutorState>, LirExecutorError> {
         if semantics.instructions().is_empty() {
             return Ok(vec![state.clone()]);
         }
@@ -66,9 +66,9 @@ impl SymbolicExecutor {
     pub fn run(
         &self,
         semantics: &LirModule,
-        state: &SymbolicCpuState,
+        state: &LirExecutorState,
         steps: Option<usize>,
-    ) -> Result<Vec<SymbolicCpuState>, Error> {
+    ) -> Result<Vec<LirExecutorState>, LirExecutorError> {
         let (semantics, initial_state, address_to_index, start_index) =
             self.prepare_state_and_semantics(semantics.clone(), state)?;
         let semantics = semantics.instructions();
@@ -142,8 +142,8 @@ impl SymbolicExecutor {
         address_to_index: &HashMap<u64, usize>,
         current_index: usize,
         previous_pc: Option<u64>,
-        successor: &SymbolicCpuState,
-    ) -> Result<Option<usize>, Error> {
+        successor: &LirExecutorState,
+    ) -> Result<Option<usize>, LirExecutorError> {
         let current = semantics[current_index];
         let current_pc = successor.eval_program_counter_u64()?;
         let sequential_next = (current_index + 1 < semantics.len()).then_some(current_index + 1);
@@ -175,8 +175,8 @@ impl SymbolicExecutor {
     fn prepare_state_and_semantics(
         &self,
         semantics: LirModule,
-        state: &SymbolicCpuState,
-    ) -> Result<(LirModule, SymbolicCpuState, HashMap<u64, usize>, usize), Error> {
+        state: &LirExecutorState,
+    ) -> Result<(LirModule, LirExecutorState, HashMap<u64, usize>, usize), LirExecutorError> {
         let mut working_state = state.clone();
         working_state.load_semantic_data(&semantics.data)?;
         let mut address_to_index = HashMap::new();
@@ -195,10 +195,10 @@ impl SymbolicExecutor {
     fn step_instruction(
         &self,
         semantics: &Lir,
-        state: &SymbolicCpuState,
-    ) -> Result<Vec<SymbolicCpuState>, Error> {
+        state: &LirExecutorState,
+    ) -> Result<Vec<LirExecutorState>, LirExecutorError> {
         if !matches!(semantics.status, LirStatus::Complete) {
-            return Err(Error::UnsupportedExpression(
+            return Err(LirExecutorError::UnsupportedExpression(
                 "partial LIR bindings are not executable",
             ));
         }
@@ -212,8 +212,8 @@ impl SymbolicExecutor {
 
 #[cfg(test)]
 mod tests {
-    use super::SymbolicCpuState;
-    use super::SymbolicExecutor;
+    use super::LirExecutor;
+    use super::LirExecutorState;
     use crate::Architecture;
     use crate::Configuration;
     use crate::assemblers::{Assembler, AssemblerBackend};
@@ -222,8 +222,8 @@ mod tests {
     use crate::formats::Image;
     use crate::ir::lir::{
         Lir, LirAddressSpace, LirCpu, LirData, LirEffect, LirEncoding, LirExpression, LirLocation,
-        LirModule, LirOperationBinary, LirOperationCast, LirOperationCompare, LirOperationUnary,
-        LirStatus, LirTerminator,
+        LirMetadata, LirModule, LirOperationBinary, LirOperationCast, LirOperationCompare,
+        LirOperationUnary, LirStatus, LirTerminator,
     };
     use std::collections::{BTreeMap, BTreeSet};
     use std::io::Cursor;
@@ -261,9 +261,9 @@ mod tests {
 
     #[test]
     fn symbolic_branch_forks() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         state
             .symbolize_register("x0", 64, Some("input_x0"))
             .expect("symbolize register");
@@ -271,6 +271,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -321,14 +322,15 @@ mod tests {
 
     #[test]
     fn symbolic_semantics_data_supports_step_and_run() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
         state.set_register("rdi", 64, 2).expect("set register");
 
         let body = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -390,9 +392,9 @@ mod tests {
 
     #[test]
     fn symbolic_map_image_reads_global_bytes_without_preload_copy() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let state_cpu = LirCpu::from_architecture(Architecture::AMD64).expect("cpu");
-        let mut state = SymbolicCpuState::new(state_cpu);
+        let mut state = LirExecutorState::new(state_cpu);
 
         let temp_path = std::env::temp_dir().join(format!(
             "binlex-symbolic-map-image-{}-{}.img",
@@ -415,6 +417,7 @@ mod tests {
         let semantics = LirModule::from_instructions(vec![Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -446,13 +449,14 @@ mod tests {
 
     #[test]
     fn symbolic_memory_store_then_load() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
 
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -500,9 +504,9 @@ mod tests {
 
     #[test]
     fn symbolic_indexed_memory_store_then_read() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
 
         let location = LirLocation::IndexedMemory {
             name: "locals".to_string(),
@@ -512,6 +516,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -547,9 +552,9 @@ mod tests {
 
     #[test]
     fn symbolic_stack_memory_store_then_read() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
 
         let location = LirLocation::StackMemory {
             name: "value_stack".to_string(),
@@ -559,6 +564,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -594,13 +600,14 @@ mod tests {
 
     #[test]
     fn symbolic_stack_push_and_pop_execute() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
 
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -653,9 +660,9 @@ mod tests {
 
     #[test]
     fn symbolic_reference_property_write_then_read() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::CIL).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::CIL).expect("cpu"));
 
         let object = LirExpression::Allocate {
             kind: "object".to_string(),
@@ -664,6 +671,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -713,13 +721,14 @@ mod tests {
 
     #[test]
     fn symbolic_reference_element_write_then_read() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::CIL).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::CIL).expect("cpu"));
 
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -776,7 +785,7 @@ mod tests {
     #[test]
     fn symbolic_state_read_memory_returns_concrete_bytes() {
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
         state.map_memory(0x5000, 4);
         state
             .write_memory(0x5000, &[0x44, 0x33, 0x22, 0x11])
@@ -791,12 +800,13 @@ mod tests {
 
     #[test]
     fn symbolic_unary_popcount_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -831,12 +841,13 @@ mod tests {
 
     #[test]
     fn symbolic_mul_high_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -872,12 +883,13 @@ mod tests {
 
     #[test]
     fn partial_semantics_are_rejected() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
         let semantics = Lir {
             version: 1,
             status: LirStatus::Partial,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -890,12 +902,13 @@ mod tests {
 
     #[test]
     fn symbolic_trace_run_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
         let first = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -912,6 +925,7 @@ mod tests {
         let second = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -960,12 +974,13 @@ mod tests {
 
     #[test]
     fn symbolic_run_follows_concrete_control_flow() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         let setup = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "i386".to_string(),
@@ -988,6 +1003,7 @@ mod tests {
         let loop_body = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "i386".to_string(),
@@ -1036,6 +1052,7 @@ mod tests {
         let exit = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "i386".to_string(),
@@ -1081,9 +1098,9 @@ mod tests {
 
     #[test]
     fn symbolic_run_stops_at_non_concrete_control_flow() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state
             .symbolize_register("eax", 32, Some("input_eax"))
             .expect("symbolize register");
@@ -1091,6 +1108,7 @@ mod tests {
         let branch = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "i386".to_string(),
@@ -1125,6 +1143,7 @@ mod tests {
         let taken = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "i386".to_string(),
@@ -1147,6 +1166,7 @@ mod tests {
         let not_taken = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "i386".to_string(),
@@ -1196,12 +1216,13 @@ mod tests {
 
     #[test]
     fn symbolic_run_honors_step_budget() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
         let first = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
@@ -1224,6 +1245,7 @@ mod tests {
         let second = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
@@ -1265,13 +1287,14 @@ mod tests {
 
     #[test]
     fn symbolic_run_stops_at_breakpoint_before_execution() {
-        let mut executor = SymbolicExecutor::new();
+        let mut executor = LirExecutor::new();
         executor.set_breakpoint(0x401001);
         let state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
         let first = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
@@ -1294,6 +1317,7 @@ mod tests {
         let second = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
@@ -1342,13 +1366,14 @@ mod tests {
 
     #[test]
     fn symbolic_run_stops_at_hook_before_execution() {
-        let mut executor = SymbolicExecutor::new();
+        let mut executor = LirExecutor::new();
         executor.add_hook(0x401001);
         let state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
         let first = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
@@ -1371,6 +1396,7 @@ mod tests {
         let second = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
@@ -1430,9 +1456,9 @@ mod tests {
             ret
             ",
         );
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("esp", 32, 0x3000).expect("set register");
         state.map_memory(0x2000, 0x2000);
         state
@@ -1471,9 +1497,9 @@ mod tests {
             ret
             ",
         );
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
         state.set_register("rsp", 64, 0x3000).expect("set register");
         state.map_memory(0x2000, 0x2000);
         state
@@ -1512,10 +1538,10 @@ mod tests {
             ret
             ",
         );
-        let mut executor = SymbolicExecutor::new();
+        let mut executor = LirExecutor::new();
         executor.set_breakpoint(0x4);
         let state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         let states = executor
             .run(&LirModule::from_instructions(semantics), &state, None)
             .expect("run");
@@ -1538,7 +1564,7 @@ mod tests {
     #[test]
     fn symbolic_memory_u64_eval_executes() {
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
         state
             .write_memory(0x5000, &[0x44, 0x33, 0x22, 0x11])
             .expect("write memory");
@@ -1553,12 +1579,13 @@ mod tests {
 
     #[test]
     fn symbolic_call_sets_program_counter() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -1587,9 +1614,9 @@ mod tests {
 
     #[test]
     fn slice_from_register_returns_dependency_chain() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
         state
             .symbolize_memory(0x1000, 1, Some("input"))
             .expect("symbolize memory");
@@ -1598,6 +1625,7 @@ mod tests {
         let first = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
@@ -1627,6 +1655,7 @@ mod tests {
         let second = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
@@ -1657,6 +1686,7 @@ mod tests {
         let third = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
@@ -1696,9 +1726,9 @@ mod tests {
 
     #[test]
     fn slice_from_memory_returns_store_dependency() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
         state
             .symbolize_register("al", 8, Some("input_al"))
             .expect("symbolize register");
@@ -1706,6 +1736,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
@@ -1745,9 +1776,9 @@ mod tests {
 
     #[test]
     fn slice_from_register_preserves_x86_subregister_dependencies() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
         state
             .symbolize_memory(0x1000, 1, Some("input"))
             .expect("symbolize memory");
@@ -1756,6 +1787,7 @@ mod tests {
         let first = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
@@ -1785,6 +1817,7 @@ mod tests {
         let second = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
@@ -1814,6 +1847,7 @@ mod tests {
         let third = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
@@ -1857,9 +1891,9 @@ mod tests {
 
     #[test]
     fn symbolic_fp_add32_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         state
             .set_register("s0", 32, 1.5f32.to_bits() as u64)
             .expect("set register");
@@ -1870,6 +1904,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -1909,14 +1944,15 @@ mod tests {
 
     #[test]
     fn symbolic_fp_casts_execute() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         state.set_register("x0", 64, 42).expect("set register");
 
         let to_float = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -1940,6 +1976,7 @@ mod tests {
         let from_float = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -1982,9 +2019,9 @@ mod tests {
 
     #[test]
     fn symbolic_fp_unordered_compare_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         state
             .set_register("d0", 64, f64::NAN.to_bits())
             .expect("set register");
@@ -1995,6 +2032,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2034,9 +2072,9 @@ mod tests {
 
     #[test]
     fn symbolic_fp_neg_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         state
             .set_register("d0", 64, 3.5f64.to_bits())
             .expect("set register");
@@ -2044,6 +2082,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2079,13 +2118,14 @@ mod tests {
 
     #[test]
     fn symbolic_fp_neg_of_const_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
 
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2121,9 +2161,9 @@ mod tests {
 
     #[test]
     fn symbolic_fp_neg_of_memory_load_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         state
             .write_memory(0x8000, &3.5f64.to_bits().to_le_bytes())
             .expect("write memory");
@@ -2131,6 +2171,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2170,14 +2211,15 @@ mod tests {
 
     #[test]
     fn symbolic_integer_neg_still_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         state.set_register("x0", 64, 7).expect("set register");
 
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2213,15 +2255,16 @@ mod tests {
 
     #[test]
     fn symbolic_float80_compare_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 1).expect("set register");
         state.set_register("ebx", 32, 2).expect("set register");
 
         let to_fp80_left = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2246,6 +2289,7 @@ mod tests {
         let to_fp80_right = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2270,6 +2314,7 @@ mod tests {
         let compare = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2313,14 +2358,15 @@ mod tests {
 
     #[test]
     fn symbolic_float80_truncate_to_f64_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 42).expect("set register");
 
         let to_fp80 = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2345,6 +2391,7 @@ mod tests {
         let truncate = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2380,15 +2427,16 @@ mod tests {
 
     #[test]
     fn symbolic_x87_const_add_store_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 7).expect("set register");
         state.set_register("ebx", 32, 2).expect("set register");
 
         let lhs = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2413,6 +2461,7 @@ mod tests {
         let rhs = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2437,6 +2486,7 @@ mod tests {
         let add = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2467,6 +2517,7 @@ mod tests {
         let store = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2502,9 +2553,9 @@ mod tests {
 
     #[test]
     fn symbolic_x87_load_f32_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state
             .write_memory(0x9000, &3.25f32.to_bits().to_le_bytes())
             .expect("write memory");
@@ -2512,6 +2563,7 @@ mod tests {
         let load = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2540,6 +2592,7 @@ mod tests {
         let store = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2575,13 +2628,14 @@ mod tests {
 
     #[test]
     fn symbolic_x87_store_i32_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
 
         let load = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2603,6 +2657,7 @@ mod tests {
         let store = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2644,15 +2699,16 @@ mod tests {
 
     #[test]
     fn symbolic_x87_store_i32_trunc_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 7).expect("set register");
         state.set_register("ebx", 32, 2).expect("set register");
 
         let to_fp80 = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2677,6 +2733,7 @@ mod tests {
         let divide = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2723,6 +2780,7 @@ mod tests {
         let store = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2764,9 +2822,9 @@ mod tests {
 
     #[test]
     fn symbolic_x87_xam_negative_zero_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state
             .set_register("xmm0", 64, (-0.0f64).to_bits())
             .expect("set register");
@@ -2774,6 +2832,7 @@ mod tests {
         let load = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2798,6 +2857,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2865,9 +2925,9 @@ mod tests {
 
     #[test]
     fn symbolic_x87_xam_infinity_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state
             .set_register("xmm0", 64, f64::INFINITY.to_bits())
             .expect("set register");
@@ -2875,6 +2935,7 @@ mod tests {
         let load = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2899,6 +2960,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -2966,9 +3028,9 @@ mod tests {
 
     #[test]
     fn symbolic_x87_sin_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state
             .set_register("xmm0", 64, 0.0f64.to_bits())
             .expect("set register");
@@ -2976,6 +3038,7 @@ mod tests {
         let load = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -3000,6 +3063,7 @@ mod tests {
         let sin = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -3024,6 +3088,7 @@ mod tests {
         let store = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -3057,9 +3122,9 @@ mod tests {
 
     #[test]
     fn symbolic_x87_cos_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state
             .set_register("xmm0", 64, 0.0f64.to_bits())
             .expect("set register");
@@ -3067,6 +3132,7 @@ mod tests {
         let load = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -3091,6 +3157,7 @@ mod tests {
         let cos = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -3115,6 +3182,7 @@ mod tests {
         let store = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -3150,14 +3218,15 @@ mod tests {
 
     #[test]
     fn symbolic_x87_atan2_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 1).expect("set register");
 
         let lhs = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -3198,6 +3267,7 @@ mod tests {
         let atan2 = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -3228,6 +3298,7 @@ mod tests {
         let store = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -3263,15 +3334,16 @@ mod tests {
 
     #[test]
     fn symbolic_x87_scale_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 3).expect("set register");
         state.set_register("ebx", 32, 2).expect("set register");
 
         let load = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -3312,6 +3384,7 @@ mod tests {
         let scale = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -3342,6 +3415,7 @@ mod tests {
         let store = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -3377,14 +3451,15 @@ mod tests {
 
     #[test]
     fn symbolic_x87_f2xm1_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 1).expect("set register");
 
         let load = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -3409,6 +3484,7 @@ mod tests {
         let op = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -3433,6 +3509,7 @@ mod tests {
         let store = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -3468,13 +3545,14 @@ mod tests {
 
     #[test]
     fn symbolic_x87_load_bcd_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
 
         let load = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -3499,6 +3577,7 @@ mod tests {
         let store = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -3534,14 +3613,15 @@ mod tests {
 
     #[test]
     fn symbolic_x87_store_bcd_executes() {
-        let executor = SymbolicExecutor::new();
+        let executor = LirExecutor::new();
         let mut state =
-            SymbolicCpuState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 42).expect("set register");
 
         let load = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -3566,6 +3646,7 @@ mod tests {
         let store = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),

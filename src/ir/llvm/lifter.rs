@@ -1189,8 +1189,8 @@ mod jit_tests {
     use super::Lifter;
     use crate::Configuration;
     use crate::ir::lir::{
-        Lir, LirAbi, LirCpu, LirEffect, LirExpression, LirLocation, LirModule, LirOperationBinary,
-        LirStatus, LirTerminator,
+        Lir, LirAbi, LirCpu, LirEffect, LirExpression, LirLocation, LirMetadata, LirModule,
+        LirOperationBinary, LirStatus, LirTerminator,
     };
     use std::collections::BTreeMap;
 
@@ -1204,6 +1204,7 @@ mod jit_tests {
         let semantics = LirModule::from_instructions(vec![Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),

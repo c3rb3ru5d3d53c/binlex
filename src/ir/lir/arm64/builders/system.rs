@@ -65,6 +65,7 @@ pub(crate) fn build(view: &InstructionDetailArm64) -> Option<Lir> {
         "svc" => Some(Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: Default::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),

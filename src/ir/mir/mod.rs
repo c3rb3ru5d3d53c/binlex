@@ -26,6 +26,7 @@ pub mod kind;
 pub mod lower;
 pub mod memory;
 pub mod mir;
+pub mod mlir;
 pub mod operation;
 pub mod optimizers;
 pub mod print;
@@ -36,11 +37,12 @@ pub mod verify;
 
 pub use block::{MirBlock, MirBlockParameter};
 pub use kind::{
-    MirCastOperation, MirCompareOperation, MirFloatCompareOperation, MirTerminatorKind, MirType,
-    MirTypeKind,
+    MirCastOperation, MirCompareOperation, MirFloatCompareOperation, MirStructureMember,
+    MirTerminatorKind, MirType, MirTypeKind, MirUnionMember,
 };
 pub use memory::MirAddressSpace;
 pub use mir::{MirFunction, MirModule};
+pub use mlir::MirMlirModule;
 pub use operation::{MirCallClobber, MirOperation, MirOperationKind};
 pub use print::{format_mir_function, format_mir_module};
 pub use target::MirControlTarget;

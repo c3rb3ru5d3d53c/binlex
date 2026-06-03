@@ -3,7 +3,7 @@
 use binlex::controlflow::graph::Graph;
 use binlex::controlflow::{Block, Function, InstructionRecord};
 use binlex::ir::lir::{
-    LirEffect, LirExpression, LirInstruction, LirLocation, LirStatus, LirTerminator,
+    LirEffect, LirExpression, LirInstruction, LirLocation, LirMetadata, LirStatus, LirTerminator,
 };
 use binlex::ir::vex::Lifter;
 use binlex::{Architecture, Configuration};
@@ -64,6 +64,7 @@ fn instruction(address: u64, bytes: &[u8]) -> InstructionRecord {
     instruction.semantics = Some(LirInstruction {
         version: 1,
         status: LirStatus::Complete,
+        metadata: LirMetadata::default(),
         abi: None,
         encoding: None,
         temporaries: Vec::new(),

@@ -1,5 +1,5 @@
 use crate::Architecture;
-use crate::symbolic::Error;
+use crate::ir::lir::executor::LirExecutorError;
 use ::capstone::{RegId, arch::arm64::Arm64Reg};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -204,7 +204,7 @@ impl LirCpu {
         aliases: Vec<LirCpuAlias>,
         program_counter: Option<LirCpuProgramCounter>,
         memory: Vec<LirMemory>,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, LirExecutorError> {
         Self::build(
             None,
             name.into(),
@@ -226,7 +226,7 @@ impl LirCpu {
         aliases: Vec<LirCpuAlias>,
         program_counter: Option<LirCpuProgramCounter>,
         memory: Vec<LirMemory>,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, LirExecutorError> {
         Self::build(
             Some(kind),
             name.into(),
@@ -248,7 +248,7 @@ impl LirCpu {
         aliases: Vec<LirCpuAlias>,
         program_counter: Option<LirCpuProgramCounter>,
         memory: Vec<LirMemory>,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, LirExecutorError> {
         let cpu = Self {
             kind,
             name: name.into(),
@@ -272,7 +272,7 @@ impl LirCpu {
         Ok(cpu)
     }
 
-    pub fn from_kind(kind: LirCpuKind) -> Result<Self, Error> {
+    pub fn from_kind(kind: LirCpuKind) -> Result<Self, LirExecutorError> {
         match kind {
             LirCpuKind::I386 => i386::build(),
             LirCpuKind::Amd64 => amd64::build(),
@@ -281,29 +281,29 @@ impl LirCpu {
         }
     }
 
-    pub fn i386() -> Result<Self, Error> {
+    pub fn i386() -> Result<Self, LirExecutorError> {
         Self::from_kind(LirCpuKind::I386)
     }
 
-    pub fn amd64() -> Result<Self, Error> {
+    pub fn amd64() -> Result<Self, LirExecutorError> {
         Self::from_kind(LirCpuKind::Amd64)
     }
 
-    pub fn arm64() -> Result<Self, Error> {
+    pub fn arm64() -> Result<Self, LirExecutorError> {
         Self::from_kind(LirCpuKind::Arm64)
     }
 
-    pub fn cil() -> Result<Self, Error> {
+    pub fn cil() -> Result<Self, LirExecutorError> {
         Self::from_kind(LirCpuKind::Cil)
     }
 
-    pub fn from_architecture(architecture: Architecture) -> Result<Self, Error> {
+    pub fn from_architecture(architecture: Architecture) -> Result<Self, LirExecutorError> {
         match architecture {
             Architecture::I386 => Self::from_kind(LirCpuKind::I386),
             Architecture::AMD64 => Self::from_kind(LirCpuKind::Amd64),
             Architecture::ARM64 => Self::from_kind(LirCpuKind::Arm64),
             Architecture::CIL => Self::from_kind(LirCpuKind::Cil),
-            Architecture::UNKNOWN => Err(Error::UnsupportedCpu("unknown".to_string())),
+            Architecture::UNKNOWN => Err(LirExecutorError::UnsupportedCpu("unknown".to_string())),
         }
     }
 
@@ -376,10 +376,12 @@ impl LirCpu {
             .map(|program_counter| program_counter.name.as_str())
     }
 
-    fn validate(&self) -> Result<(), Error> {
+    fn validate(&self) -> Result<(), LirExecutorError> {
         validate_bits(self.address_bits, "address width")?;
         if self.name.trim().is_empty() {
-            return Err(Error::InvalidCpu("CPU name must not be empty".to_string()));
+            return Err(LirExecutorError::InvalidCpu(
+                "CPU name must not be empty".to_string(),
+            ));
         }
         for register in self.registers.values() {
             validate_name(&register.name, "register")?;
@@ -389,26 +391,26 @@ impl LirCpu {
             validate_name(&alias.name, "alias")?;
             validate_bits(alias.bits, &format!("alias {}", alias.name))?;
             if self.registers.contains_key(&alias.name) {
-                return Err(Error::InvalidCpu(format!(
+                return Err(LirExecutorError::InvalidCpu(format!(
                     "alias {} conflicts with a register",
                     alias.name
                 )));
             }
             let Some(parent) = self.registers.get(&alias.parent) else {
-                return Err(Error::InvalidCpu(format!(
+                return Err(LirExecutorError::InvalidCpu(format!(
                     "alias {} references missing parent register {}",
                     alias.name, alias.parent
                 )));
             };
             if alias.offset.saturating_add(alias.bits) > parent.bits {
-                return Err(Error::InvalidCpu(format!(
+                return Err(LirExecutorError::InvalidCpu(format!(
                     "alias {} exceeds parent register {}",
                     alias.name, parent.name
                 )));
             }
             if matches!(alias.write_policy, LirCpuAliasWritePolicy::ZeroExtend) && alias.offset != 0
             {
-                return Err(Error::InvalidCpu(format!(
+                return Err(LirExecutorError::InvalidCpu(format!(
                     "zero-extend alias {} must start at bit 0",
                     alias.name
                 )));
@@ -424,13 +426,13 @@ impl LirCpu {
             validate_name(&program_counter.name, "program counter")?;
             validate_bits(program_counter.bits, "program counter")?;
             let Some(resolution) = self.resolve_register(&program_counter.name) else {
-                return Err(Error::InvalidCpu(format!(
+                return Err(LirExecutorError::InvalidCpu(format!(
                     "program counter {} is not a register or alias",
                     program_counter.name
                 )));
             };
             if resolution.bits != program_counter.bits {
-                return Err(Error::InvalidCpu(format!(
+                return Err(LirExecutorError::InvalidCpu(format!(
                     "program counter {} declares {} bits but resolves to {} bits",
                     program_counter.name, program_counter.bits, resolution.bits
                 )));
@@ -500,16 +502,18 @@ fn arm64_canonical_semantic_register_id(reg_id: u16) -> u16 {
     }
 }
 
-fn validate_name(name: &str, kind: &str) -> Result<(), Error> {
+fn validate_name(name: &str, kind: &str) -> Result<(), LirExecutorError> {
     if name.trim().is_empty() {
-        return Err(Error::InvalidCpu(format!("{kind} name must not be empty")));
+        return Err(LirExecutorError::InvalidCpu(format!(
+            "{kind} name must not be empty"
+        )));
     }
     Ok(())
 }
 
-fn validate_bits(bits: u16, label: &str) -> Result<(), Error> {
+fn validate_bits(bits: u16, label: &str) -> Result<(), LirExecutorError> {
     if bits == 0 {
-        return Err(Error::InvalidCpu(format!(
+        return Err(LirExecutorError::InvalidCpu(format!(
             "{label} must have non-zero bits"
         )));
     }

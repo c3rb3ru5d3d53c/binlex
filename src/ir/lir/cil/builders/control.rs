@@ -35,6 +35,7 @@ pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Lir> {
         return Some(Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: Default::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -52,6 +53,7 @@ pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Lir> {
         return Some(Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: Default::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -274,6 +276,7 @@ pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Lir> {
         return Some(Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: Default::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -311,6 +314,7 @@ pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Lir> {
         return Some(Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: Default::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),

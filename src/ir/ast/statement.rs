@@ -12,6 +12,8 @@ use serde::{Deserialize, Serialize};
 pub struct AstParameter {
     pub name: String,
     pub ty: AstType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
 }
 
 impl AstParameter {
@@ -19,6 +21,7 @@ impl AstParameter {
         Self {
             name: parameter.name.clone(),
             ty: parameter.ty.clone(),
+            comment: None,
         }
     }
 }
@@ -26,20 +29,26 @@ impl AstParameter {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AstLocal {
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
     pub ty: AstType,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub init: Option<AstExpression>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub storage: Option<IrStorage>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
 }
 
 impl AstLocal {
     pub fn from_hir(local: &HirLocal) -> Self {
         Self {
             name: local.name.clone(),
+            display_name: None,
             ty: local.ty.clone(),
             init: local.init.as_ref().map(AstExpression::from_hir),
             storage: local.storage.clone(),
+            comment: None,
         }
     }
 }
@@ -61,6 +70,7 @@ impl AstSwitchCase {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AstStatement {
+    Comment(String),
     Assign {
         target: AstPlace,
         value: AstExpression,

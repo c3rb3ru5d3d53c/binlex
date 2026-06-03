@@ -7,6 +7,10 @@ pub struct NamedAttribute {
 }
 
 impl NamedAttribute {
+    pub(crate) fn from_raw(raw: ffi::MlirNamedAttribute) -> Self {
+        Self { raw }
+    }
+
     pub fn new(name: Identifier, attribute: Attribute) -> Self {
         let raw = unsafe { ffi::mlirNamedAttributeGet(name.raw(), attribute.raw()) };
         Self { raw }

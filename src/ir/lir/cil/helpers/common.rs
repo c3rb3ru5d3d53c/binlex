@@ -34,6 +34,7 @@ pub(crate) fn partial_intrinsic_fallthrough(
     Lir {
         version: 1,
         status: LirStatus::Partial,
+        metadata: Default::default(),
         abi: None,
         encoding: None,
         temporaries: Vec::new(),
@@ -148,6 +149,7 @@ pub(crate) fn complete_with_effects(terminator: LirTerminator, effects: Vec<LirE
     Lir {
         version: 1,
         status: LirStatus::Complete,
+        metadata: Default::default(),
         abi: None,
         encoding: None,
         temporaries: Vec::new(),

@@ -15,7 +15,7 @@ pub use block::AstBlock;
 pub use expression::AstExpression;
 pub use kind::{
     AstAddressSpace, AstBinaryOperation, AstCastOperation, AstCompareOperation,
-    AstFloatCompareOperation, AstType, AstUnaryOperation,
+    AstFloatCompareOperation, AstStructureMember, AstType, AstUnaryOperation, AstUnionMember,
 };
 pub use place::AstPlace;
 pub use statement::{AstLocal, AstParameter, AstStatement, AstSwitchCase};

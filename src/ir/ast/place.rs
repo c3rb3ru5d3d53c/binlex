@@ -9,7 +9,7 @@ pub enum AstPlace {
         name: String,
         ty: AstType,
     },
-    Deref {
+    Dereference {
         pointer: Box<AstExpression>,
         ty: AstType,
     },
@@ -32,7 +32,7 @@ impl AstPlace {
                 name: name.clone(),
                 ty: ty.clone(),
             },
-            HirPlace::Deref { pointer, ty } => Self::Deref {
+            HirPlace::Dereference { pointer, ty } => Self::Dereference {
                 pointer: Box::new(AstExpression::from_hir(pointer)),
                 ty: ty.clone(),
             },

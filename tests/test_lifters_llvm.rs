@@ -4,8 +4,8 @@ use binlex::assemblers::{Assembler, AssemblerBackend};
 use binlex::controlflow::{Block, Function, Graph, Instruction};
 use binlex::ir::lir::{
     LirAbi, LirAbiKind, LirBlock, LirCpu, LirCpuKind, LirDiagnosticKind, LirEffect, LirExpression,
-    LirFunction, LirInstruction, LirLocation, LirModule, LirOperationBinary, LirStatus,
-    LirTerminator,
+    LirFunction, LirInstruction, LirLocation, LirMetadata, LirModule, LirOperationBinary,
+    LirStatus, LirTerminator,
 };
 use binlex::ir::llvm::Lifter;
 use binlex::{Architecture, Configuration};
@@ -68,6 +68,7 @@ fn build_fastcall_semantic_function_graph() -> Graph {
     instruction.semantics = Some(LirInstruction {
         version: 1,
         status: LirStatus::Complete,
+        metadata: LirMetadata::default(),
         abi: None,
         encoding: None,
         temporaries: Vec::new(),
@@ -352,6 +353,7 @@ fn llvm_lift_function_semantics_uses_explicit_abi_without_native_sync_epilogue()
                 instructions: vec![LirInstruction {
                     version: 1,
                     status: LirStatus::Complete,
+                    metadata: LirMetadata::default(),
                     abi: None,
                     encoding: None,
                     temporaries: Vec::new(),

@@ -1,15 +1,15 @@
+use crate::ir::lir::executor::{LirExecutor, LirExecutorError, LirExecutorState};
 use crate::ir::lir::{LirExpression, LirLocation};
-use crate::symbolic::{Error, SymbolicCpuState, SymbolicExecutor};
 use z3::ast::{Ast, BV, Bool, RoundingMode};
 
-impl SymbolicExecutor {
+impl LirExecutor {
     pub(crate) fn eval_x87_intrinsic_expression(
         &self,
-        state: &mut SymbolicCpuState,
+        state: &mut LirExecutorState,
         name: &str,
         args: &[LirExpression],
         bits: u16,
-    ) -> Result<Option<BV>, Error> {
+    ) -> Result<Option<BV>, LirExecutorError> {
         if let Some(constant) = name.strip_prefix("x86.x87.const_") {
             return Ok(Some(self.eval_x87_constant(state, constant, bits)?));
         }
@@ -26,7 +26,9 @@ impl SymbolicExecutor {
         let value = match op {
             "add" | "sub" | "mul" | "div" => {
                 let [left, right] = evaluated.as_slice() else {
-                    return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
+                    return Err(LirExecutorError::UnsupportedExpression(
+                        "x87 intrinsic arity",
+                    ));
                 };
                 let left = state.backend().float_from_ieee_bv(&left.value)?;
                 let right = state.backend().float_from_ieee_bv(&right.value)?;
@@ -42,25 +44,33 @@ impl SymbolicExecutor {
             }
             "abs" => {
                 let [value] = evaluated.as_slice() else {
-                    return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
+                    return Err(LirExecutorError::UnsupportedExpression(
+                        "x87 intrinsic arity",
+                    ));
                 };
                 self.eval_fp_abs(state, value.value.clone())?
             }
             "neg" => {
                 let [value] = evaluated.as_slice() else {
-                    return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
+                    return Err(LirExecutorError::UnsupportedExpression(
+                        "x87 intrinsic arity",
+                    ));
                 };
                 self.eval_fp_neg(state, value.value.clone())?
             }
             "sqrt" => {
                 let [value] = evaluated.as_slice() else {
-                    return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
+                    return Err(LirExecutorError::UnsupportedExpression(
+                        "x87 intrinsic arity",
+                    ));
                 };
                 self.eval_fp_sqrt(state, value.value.clone())?
             }
             "rint" => {
                 let [value] = evaluated.as_slice() else {
-                    return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
+                    return Err(LirExecutorError::UnsupportedExpression(
+                        "x87 intrinsic arity",
+                    ));
                 };
                 let value = state.backend().float_from_ieee_bv(&value.value)?;
                 let rounded = value.round_to_integral_with_rounding_mode(
@@ -70,7 +80,9 @@ impl SymbolicExecutor {
             }
             "load_f32" | "load_f64" => {
                 let [raw] = evaluated.as_slice() else {
-                    return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
+                    return Err(LirExecutorError::UnsupportedExpression(
+                        "x87 intrinsic arity",
+                    ));
                 };
                 let value = state.backend().float_from_ieee_bv(&raw.value)?;
                 let value = state.backend().float_cast(&value, bits)?;
@@ -78,20 +90,24 @@ impl SymbolicExecutor {
             }
             "load_i16" | "load_i32" | "load_i64" => {
                 let [raw] = evaluated.as_slice() else {
-                    return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
+                    return Err(LirExecutorError::UnsupportedExpression(
+                        "x87 intrinsic arity",
+                    ));
                 };
                 let value = state.backend().signed_bv_to_float(&raw.value, bits)?;
                 state.backend().float_to_ieee_bv(&value)
             }
             "load_bcd" => {
                 let [raw] = evaluated.as_slice() else {
-                    return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
+                    return Err(LirExecutorError::UnsupportedExpression(
+                        "x87 intrinsic arity",
+                    ));
                 };
-                let raw = self
-                    .concrete_bv_u128(&raw.value)
-                    .ok_or(Error::UnsupportedExpression(
+                let raw = self.concrete_bv_u128(&raw.value).ok_or(
+                    LirExecutorError::UnsupportedExpression(
                         "x87 intrinsic requires concrete value",
-                    ))?;
+                    ),
+                )?;
                 let integer = self.decode_x87_bcd(raw)?;
                 let integer = state.backend().const_bv(integer as u128, 64)?;
                 let value = state.backend().signed_bv_to_float(&integer, bits)?;
@@ -99,7 +115,9 @@ impl SymbolicExecutor {
             }
             "store_f32" => {
                 let [value] = evaluated.as_slice() else {
-                    return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
+                    return Err(LirExecutorError::UnsupportedExpression(
+                        "x87 intrinsic arity",
+                    ));
                 };
                 let value = state.backend().float_from_ieee_bv(&value.value)?;
                 let value = state.backend().float_cast(&value, 32)?;
@@ -107,7 +125,9 @@ impl SymbolicExecutor {
             }
             "store_f64" => {
                 let [value] = evaluated.as_slice() else {
-                    return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
+                    return Err(LirExecutorError::UnsupportedExpression(
+                        "x87 intrinsic arity",
+                    ));
                 };
                 let value = state.backend().float_from_ieee_bv(&value.value)?;
                 let value = state.backend().float_cast(&value, 64)?;
@@ -115,15 +135,19 @@ impl SymbolicExecutor {
             }
             "store_bcd" => {
                 let [value] = evaluated.as_slice() else {
-                    return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
+                    return Err(LirExecutorError::UnsupportedExpression(
+                        "x87 intrinsic arity",
+                    ));
                 };
                 let value = self
                     .try_concrete_f64_from_fp_bv(state, &value.value)
-                    .ok_or(Error::UnsupportedExpression(
+                    .ok_or(LirExecutorError::UnsupportedExpression(
                         "x87 intrinsic requires concrete value",
                     ))?;
                 if !value.is_finite() || value < i64::MIN as f64 || value > i64::MAX as f64 {
-                    return Err(Error::UnsupportedExpression("x87 bcd value out of range"));
+                    return Err(LirExecutorError::UnsupportedExpression(
+                        "x87 bcd value out of range",
+                    ));
                 }
                 let rounded = value.round_ties_even() as i64;
                 state
@@ -132,11 +156,13 @@ impl SymbolicExecutor {
             }
             "sin" | "cos" | "tan" | "f2xm1" => {
                 let [value] = evaluated.as_slice() else {
-                    return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
+                    return Err(LirExecutorError::UnsupportedExpression(
+                        "x87 intrinsic arity",
+                    ));
                 };
                 let concrete = self
                     .try_concrete_f64_from_fp_bv(state, &value.value)
-                    .ok_or(Error::UnsupportedExpression(
+                    .ok_or(LirExecutorError::UnsupportedExpression(
                         "x87 intrinsic requires concrete value",
                     ))?;
                 let result = match op {
@@ -151,14 +177,18 @@ impl SymbolicExecutor {
             }
             "atan2" | "yl2x" | "yl2xp1" | "scale" => {
                 let [left, right] = evaluated.as_slice() else {
-                    return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
+                    return Err(LirExecutorError::UnsupportedExpression(
+                        "x87 intrinsic arity",
+                    ));
                 };
                 let left = self.try_concrete_f64_from_fp_bv(state, &left.value).ok_or(
-                    Error::UnsupportedExpression("x87 intrinsic requires concrete value"),
+                    LirExecutorError::UnsupportedExpression(
+                        "x87 intrinsic requires concrete value",
+                    ),
                 )?;
                 let right = self
                     .try_concrete_f64_from_fp_bv(state, &right.value)
-                    .ok_or(Error::UnsupportedExpression(
+                    .ok_or(LirExecutorError::UnsupportedExpression(
                         "x87 intrinsic requires concrete value",
                     ))?;
                 let result = match op {
@@ -173,7 +203,9 @@ impl SymbolicExecutor {
             }
             op if op.starts_with("store_i") => {
                 let [value] = evaluated.as_slice() else {
-                    return Err(Error::UnsupportedExpression("x87 intrinsic arity"));
+                    return Err(LirExecutorError::UnsupportedExpression(
+                        "x87 intrinsic arity",
+                    ));
                 };
                 let (target_bits, trunc) = self.parse_x87_store_int_op(op)?;
                 let value = state.backend().float_from_ieee_bv(&value.value)?;
@@ -198,10 +230,10 @@ impl SymbolicExecutor {
 
     fn eval_x87_constant(
         &self,
-        state: &SymbolicCpuState,
+        state: &LirExecutorState,
         name: &str,
         bits: u16,
-    ) -> Result<BV, Error> {
+    ) -> Result<BV, LirExecutorError> {
         let value = match name {
             "one" => 1.0,
             "zero" => 0.0,
@@ -210,13 +242,13 @@ impl SymbolicExecutor {
             "l2e" => std::f64::consts::LOG2_E,
             "lg2" => std::f64::consts::LOG10_2,
             "ln2" => std::f64::consts::LN_2,
-            _ => return Err(Error::UnsupportedExpression("x87 constant")),
+            _ => return Err(LirExecutorError::UnsupportedExpression("x87 constant")),
         };
         let value = state.backend().float_from_f64(bits, value)?;
         Ok(state.backend().float_to_ieee_bv(&value))
     }
 
-    fn try_concrete_f64_from_fp_bv(&self, state: &SymbolicCpuState, value: &BV) -> Option<f64> {
+    fn try_concrete_f64_from_fp_bv(&self, state: &LirExecutorState, value: &BV) -> Option<f64> {
         let value = state.backend().float_from_ieee_bv(value).ok()?;
         let value = state.backend().float_cast(&value, 64).ok()?;
         let bits = state.backend().float_to_ieee_bv(&value).simplify();
@@ -242,7 +274,7 @@ impl SymbolicExecutor {
         ])
     }
 
-    fn decode_x87_bcd(&self, raw: u128) -> Result<i64, Error> {
+    fn decode_x87_bcd(&self, raw: u128) -> Result<i64, LirExecutorError> {
         let bytes = raw.to_le_bytes();
         let mut digits = 0u64;
         let mut factor = 1u64;
@@ -250,28 +282,32 @@ impl SymbolicExecutor {
             let low = byte & 0x0f;
             let high = (byte >> 4) & 0x0f;
             if low > 9 || high > 9 {
-                return Err(Error::UnsupportedExpression("invalid x87 bcd digit"));
+                return Err(LirExecutorError::UnsupportedExpression(
+                    "invalid x87 bcd digit",
+                ));
             }
             digits = digits
                 .checked_add((low as u64).saturating_mul(factor))
-                .ok_or(Error::UnsupportedExpression("x87 bcd overflow"))?;
+                .ok_or(LirExecutorError::UnsupportedExpression("x87 bcd overflow"))?;
             factor = factor
                 .checked_mul(10)
-                .ok_or(Error::UnsupportedExpression("x87 bcd overflow"))?;
+                .ok_or(LirExecutorError::UnsupportedExpression("x87 bcd overflow"))?;
             digits = digits
                 .checked_add((high as u64).saturating_mul(factor))
-                .ok_or(Error::UnsupportedExpression("x87 bcd overflow"))?;
+                .ok_or(LirExecutorError::UnsupportedExpression("x87 bcd overflow"))?;
             factor = factor
                 .checked_mul(10)
-                .ok_or(Error::UnsupportedExpression("x87 bcd overflow"))?;
+                .ok_or(LirExecutorError::UnsupportedExpression("x87 bcd overflow"))?;
         }
         let top = bytes[9] & 0x0f;
         if top > 9 {
-            return Err(Error::UnsupportedExpression("invalid x87 bcd digit"));
+            return Err(LirExecutorError::UnsupportedExpression(
+                "invalid x87 bcd digit",
+            ));
         }
         digits = digits
             .checked_add((top as u64).saturating_mul(factor))
-            .ok_or(Error::UnsupportedExpression("x87 bcd overflow"))?;
+            .ok_or(LirExecutorError::UnsupportedExpression("x87 bcd overflow"))?;
         let negative = (bytes[9] & 0x80) != 0;
         if negative {
             Ok(-(digits as i64))
@@ -282,30 +318,30 @@ impl SymbolicExecutor {
 
     pub(crate) fn apply_intrinsic_effect(
         &self,
-        state: &mut SymbolicCpuState,
+        state: &mut LirExecutorState,
         instruction: Option<&crate::ir::lir::LirEncoding>,
         name: &str,
         args: &[LirExpression],
         outputs: &[LirLocation],
-    ) -> Result<(), Error> {
+    ) -> Result<(), LirExecutorError> {
         if name == "x86.x87.xam" {
             return self.apply_x87_xam_effect(state, instruction, args, outputs);
         }
-        Err(Error::UnsupportedEffect("intrinsic"))
+        Err(LirExecutorError::UnsupportedEffect("intrinsic"))
     }
 
     fn apply_x87_xam_effect(
         &self,
-        state: &mut SymbolicCpuState,
+        state: &mut LirExecutorState,
         instruction: Option<&crate::ir::lir::LirEncoding>,
         args: &[LirExpression],
         outputs: &[LirLocation],
-    ) -> Result<(), Error> {
+    ) -> Result<(), LirExecutorError> {
         let [arg] = args else {
-            return Err(Error::UnsupportedEffect("x87 xam arity"));
+            return Err(LirExecutorError::UnsupportedEffect("x87 xam arity"));
         };
         if outputs.len() != 4 {
-            return Err(Error::UnsupportedEffect("x87 xam outputs"));
+            return Err(LirExecutorError::UnsupportedEffect("x87 xam outputs"));
         }
 
         let evaluated = self.eval_expression(state, arg, true)?;
@@ -319,7 +355,7 @@ impl SymbolicExecutor {
         let flags = [c0, c1, c2, c3];
         for (output, flag) in outputs.iter().zip(flags.into_iter()) {
             let bits = output.bits();
-            let value = crate::symbolic::expressions::EvaluatedValue {
+            let value = crate::ir::lir::executor::expressions::EvaluatedValue {
                 value: state.backend().bool_to_bv(&flag, bits)?,
                 deps: evaluated.deps.clone(),
             };
@@ -328,9 +364,11 @@ impl SymbolicExecutor {
         Ok(())
     }
 
-    fn parse_x87_store_int_op(&self, op: &str) -> Result<(u16, bool), Error> {
+    fn parse_x87_store_int_op(&self, op: &str) -> Result<(u16, bool), LirExecutorError> {
         let Some(suffix) = op.strip_prefix("store_i") else {
-            return Err(Error::UnsupportedExpression("x87 store intrinsic"));
+            return Err(LirExecutorError::UnsupportedExpression(
+                "x87 store intrinsic",
+            ));
         };
         let trunc = suffix.ends_with("_trunc");
         let width = if trunc {
@@ -340,10 +378,12 @@ impl SymbolicExecutor {
         };
         let bits = width
             .parse::<u16>()
-            .map_err(|_| Error::UnsupportedExpression("x87 store intrinsic"))?;
+            .map_err(|_| LirExecutorError::UnsupportedExpression("x87 store intrinsic"))?;
         match bits {
             16 | 32 | 64 => Ok((bits, trunc)),
-            _ => Err(Error::UnsupportedExpression("x87 store intrinsic")),
+            _ => Err(LirExecutorError::UnsupportedExpression(
+                "x87 store intrinsic",
+            )),
         }
     }
 }

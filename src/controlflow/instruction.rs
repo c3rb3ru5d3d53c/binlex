@@ -474,6 +474,7 @@ impl InstructionRecord {
         LirInstruction {
             version: 1,
             status: LirStatus::Partial,
+            metadata: Default::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: self.architecture.to_string(),
@@ -948,6 +949,7 @@ fn unsupported_fallthrough(
     LirInstruction {
         version: 1,
         status: LirStatus::Partial,
+        metadata: Default::default(),
         abi: None,
         encoding: Some(LirEncoding {
             architecture,

@@ -39,6 +39,7 @@ pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Lir> {
         "break" => Some(Lir {
             version: 1,
             status: crate::ir::lir::LirStatus::Complete,
+            metadata: Default::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),

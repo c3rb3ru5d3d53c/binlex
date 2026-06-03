@@ -24,7 +24,9 @@ pub mod abis;
 pub mod arm64;
 pub mod cil;
 pub mod cpus;
+pub mod executor;
 pub mod ir;
+pub mod mlir;
 pub mod optimizers;
 pub mod print;
 pub mod x86;
@@ -34,14 +36,18 @@ pub use cpus::{
     LirCpu, LirCpuAlias, LirCpuAliasWritePolicy, LirCpuEndian, LirCpuKind, LirCpuProgramCounter,
     LirCpuRegister, LirMemory, LirMemoryAddressed, LirMemoryIndexed, LirMemoryStack,
 };
+pub use executor::{
+    LirExecutor, LirExecutorError, LirExecutorState, Slice, SliceInstruction, SliceNode,
+};
 pub use ir::{
     LirAddressSpace, LirBlock, LirData, LirDiagnostic, LirDiagnosticKind, LirEffect, LirEffectKind,
     LirEncoding, LirExpression, LirExpressionKind, LirFenceKind, LirFunction, LirInstruction,
-    LirJson, LirLocation, LirLocationKind, LirModule, LirOperation, LirOperationBinary,
-    LirOperationCast, LirOperationCompare, LirOperationUnary, LirStatus, LirTemporary,
-    LirTerminator, LirTerminatorKind, LirTrapKind, normalize_instruction_lir,
+    LirJson, LirLocation, LirLocationKind, LirMetadata, LirModule, LirOperation,
+    LirOperationBinary, LirOperationCast, LirOperationCompare, LirOperationUnary, LirStatus,
+    LirTemporary, LirTerminator, LirTerminatorKind, LirTrapKind, normalize_instruction_lir,
     validate_instruction_lir,
 };
+pub use mlir::LirMlirModule;
 pub use optimizers::{
     optimize, optimize_branches, optimize_casts, optimize_constants, optimize_identities,
     optimize_intrinsics, optimize_noops,

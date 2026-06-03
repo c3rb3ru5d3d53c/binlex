@@ -22,6 +22,9 @@
 
 use crate::ir::lir::LirAbi;
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
+use std::collections::BTreeMap;
+use std::hash::{Hash, Hasher};
 
 mod semantic_const_value_serde {
     use serde::{Deserialize, Deserializer, Serializer};
@@ -53,10 +56,52 @@ mod semantic_const_value_serde {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct LirMetadata {
+    pub values: BTreeMap<String, JsonValue>,
+}
+
+impl Default for LirMetadata {
+    fn default() -> Self {
+        Self {
+            values: BTreeMap::new(),
+        }
+    }
+}
+
+impl PartialEq for LirMetadata {
+    fn eq(&self, other: &Self) -> bool {
+        self.values == other.values
+    }
+}
+
+impl Eq for LirMetadata {}
+
+impl Hash for LirMetadata {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        serde_json::to_string(&self.values)
+            .expect("metadata serialization should not fail")
+            .hash(state);
+    }
+}
+
+impl LirMetadata {
+    pub fn new(values: BTreeMap<String, JsonValue>) -> Self {
+        Self { values }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.values.is_empty()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct LirInstruction {
     pub version: u32,
     pub status: LirStatus,
+    #[serde(default, skip_serializing_if = "LirMetadata::is_empty")]
+    pub metadata: LirMetadata,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub abi: Option<LirAbi>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -338,6 +383,22 @@ impl LirModule {
         println!("{}", self.text());
     }
 
+    pub fn mlir(&self) -> mlir::Result<crate::ir::lir::LirMlirModule> {
+        crate::ir::lir::LirMlirModule::from_lir(self)
+    }
+
+    pub fn from_text(text: &str) -> mlir::Result<crate::ir::lir::LirMlirModule> {
+        crate::ir::lir::LirMlirModule::from_text(text)
+    }
+
+    pub fn from_bytecode(bytecode: &[u8]) -> mlir::Result<crate::ir::lir::LirMlirModule> {
+        crate::ir::lir::LirMlirModule::from_bytecode(bytecode)
+    }
+
+    pub fn bytecode(&self) -> mlir::Result<Vec<u8>> {
+        Ok(self.mlir()?.bytecode())
+    }
+
     pub fn optimize_constants(&mut self) {
         for function in &mut self.functions {
             function.optimize_constants();
@@ -385,6 +446,8 @@ impl LirModule {
 pub struct LirJson {
     pub version: u32,
     pub status: LirStatus,
+    #[serde(default, skip_serializing_if = "LirMetadata::is_empty")]
+    pub metadata: LirMetadata,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub abi: Option<LirAbi>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -463,6 +526,169 @@ pub enum LirLocation {
         offset: u32,
         bits: u16,
     },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirLocationRegister {
+    pub name: String,
+    pub bits: u16,
+}
+
+impl LirLocationRegister {
+    pub fn new(name: impl Into<String>, bits: u16) -> Self {
+        Self {
+            name: name.into(),
+            bits,
+        }
+    }
+}
+
+impl From<LirLocationRegister> for LirLocation {
+    fn from(value: LirLocationRegister) -> Self {
+        Self::Register {
+            name: value.name,
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirLocationFlag {
+    pub name: String,
+    pub bits: u16,
+}
+
+impl LirLocationFlag {
+    pub fn new(name: impl Into<String>, bits: u16) -> Self {
+        Self {
+            name: name.into(),
+            bits,
+        }
+    }
+}
+
+impl From<LirLocationFlag> for LirLocation {
+    fn from(value: LirLocationFlag) -> Self {
+        Self::Flag {
+            name: value.name,
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirLocationProgramCounter {
+    pub bits: u16,
+}
+
+impl LirLocationProgramCounter {
+    pub fn new(bits: u16) -> Self {
+        Self { bits }
+    }
+}
+
+impl From<LirLocationProgramCounter> for LirLocation {
+    fn from(value: LirLocationProgramCounter) -> Self {
+        Self::ProgramCounter { bits: value.bits }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirLocationTemporary {
+    pub id: u32,
+    pub bits: u16,
+}
+
+impl LirLocationTemporary {
+    pub fn new(id: u32, bits: u16) -> Self {
+        Self { id, bits }
+    }
+}
+
+impl From<LirLocationTemporary> for LirLocation {
+    fn from(value: LirLocationTemporary) -> Self {
+        Self::Temporary {
+            id: value.id,
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirLocationMemory {
+    pub space: LirAddressSpace,
+    pub addr: LirExpression,
+    pub bits: u16,
+}
+
+impl LirLocationMemory {
+    pub fn new(space: LirAddressSpace, addr: LirExpression, bits: u16) -> Self {
+        Self { space, addr, bits }
+    }
+}
+
+impl From<LirLocationMemory> for LirLocation {
+    fn from(value: LirLocationMemory) -> Self {
+        Self::Memory {
+            space: value.space,
+            addr: Box::new(value.addr),
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirLocationIndexedMemory {
+    pub name: String,
+    pub index: LirExpression,
+    pub bits: u16,
+}
+
+impl LirLocationIndexedMemory {
+    pub fn new(name: impl Into<String>, index: LirExpression, bits: u16) -> Self {
+        Self {
+            name: name.into(),
+            index,
+            bits,
+        }
+    }
+}
+
+impl From<LirLocationIndexedMemory> for LirLocation {
+    fn from(value: LirLocationIndexedMemory) -> Self {
+        Self::IndexedMemory {
+            name: value.name,
+            index: Box::new(value.index),
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirLocationStackMemory {
+    pub name: String,
+    pub offset: u32,
+    pub bits: u16,
+}
+
+impl LirLocationStackMemory {
+    pub fn new(name: impl Into<String>, offset: u32, bits: u16) -> Self {
+        Self {
+            name: name.into(),
+            offset,
+            bits,
+        }
+    }
+}
+
+impl From<LirLocationStackMemory> for LirLocation {
+    fn from(value: LirLocationStackMemory) -> Self {
+        Self::StackMemory {
+            name: value.name,
+            offset: value.offset,
+            bits: value.bits,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -549,6 +775,393 @@ pub enum LirEffect {
     Nop,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirEffectSet {
+    pub dst: LirLocation,
+    pub expression: LirExpression,
+}
+
+impl LirEffectSet {
+    pub fn new(dst: LirLocation, expression: LirExpression) -> Self {
+        Self { dst, expression }
+    }
+}
+
+impl From<LirEffectSet> for LirEffect {
+    fn from(value: LirEffectSet) -> Self {
+        Self::Set {
+            dst: value.dst,
+            expression: value.expression,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirEffectStore {
+    pub space: LirAddressSpace,
+    pub addr: LirExpression,
+    pub expression: LirExpression,
+    pub bits: u16,
+}
+
+impl LirEffectStore {
+    pub fn new(
+        space: LirAddressSpace,
+        addr: LirExpression,
+        expression: LirExpression,
+        bits: u16,
+    ) -> Self {
+        Self {
+            space,
+            addr,
+            expression,
+            bits,
+        }
+    }
+}
+
+impl From<LirEffectStore> for LirEffect {
+    fn from(value: LirEffectStore) -> Self {
+        Self::Store {
+            space: value.space,
+            addr: value.addr,
+            expression: value.expression,
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirEffectMemorySet {
+    pub space: LirAddressSpace,
+    pub addr: LirExpression,
+    pub value: LirExpression,
+    pub count: LirExpression,
+    pub element_bits: u16,
+    pub decrement: LirExpression,
+}
+
+impl LirEffectMemorySet {
+    pub fn new(
+        space: LirAddressSpace,
+        addr: LirExpression,
+        value: LirExpression,
+        count: LirExpression,
+        element_bits: u16,
+        decrement: LirExpression,
+    ) -> Self {
+        Self {
+            space,
+            addr,
+            value,
+            count,
+            element_bits,
+            decrement,
+        }
+    }
+}
+
+impl From<LirEffectMemorySet> for LirEffect {
+    fn from(value: LirEffectMemorySet) -> Self {
+        Self::MemorySet {
+            space: value.space,
+            addr: value.addr,
+            value: value.value,
+            count: value.count,
+            element_bits: value.element_bits,
+            decrement: value.decrement,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirEffectMemoryCopy {
+    pub src_space: LirAddressSpace,
+    pub src_addr: LirExpression,
+    pub dst_space: LirAddressSpace,
+    pub dst_addr: LirExpression,
+    pub count: LirExpression,
+    pub element_bits: u16,
+    pub decrement: LirExpression,
+}
+
+impl LirEffectMemoryCopy {
+    pub fn new(
+        src_space: LirAddressSpace,
+        src_addr: LirExpression,
+        dst_space: LirAddressSpace,
+        dst_addr: LirExpression,
+        count: LirExpression,
+        element_bits: u16,
+        decrement: LirExpression,
+    ) -> Self {
+        Self {
+            src_space,
+            src_addr,
+            dst_space,
+            dst_addr,
+            count,
+            element_bits,
+            decrement,
+        }
+    }
+}
+
+impl From<LirEffectMemoryCopy> for LirEffect {
+    fn from(value: LirEffectMemoryCopy) -> Self {
+        Self::MemoryCopy {
+            src_space: value.src_space,
+            src_addr: value.src_addr,
+            dst_space: value.dst_space,
+            dst_addr: value.dst_addr,
+            count: value.count,
+            element_bits: value.element_bits,
+            decrement: value.decrement,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirEffectAtomicCmpXchg {
+    pub space: LirAddressSpace,
+    pub addr: LirExpression,
+    pub expected: LirExpression,
+    pub desired: LirExpression,
+    pub bits: u16,
+    pub observed: LirLocation,
+}
+
+impl LirEffectAtomicCmpXchg {
+    pub fn new(
+        space: LirAddressSpace,
+        addr: LirExpression,
+        expected: LirExpression,
+        desired: LirExpression,
+        bits: u16,
+        observed: LirLocation,
+    ) -> Self {
+        Self {
+            space,
+            addr,
+            expected,
+            desired,
+            bits,
+            observed,
+        }
+    }
+}
+
+impl From<LirEffectAtomicCmpXchg> for LirEffect {
+    fn from(value: LirEffectAtomicCmpXchg) -> Self {
+        Self::AtomicCmpXchg {
+            space: value.space,
+            addr: value.addr,
+            expected: value.expected,
+            desired: value.desired,
+            bits: value.bits,
+            observed: value.observed,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirEffectWriteProperty {
+    pub reference: LirExpression,
+    pub name: String,
+    pub expression: LirExpression,
+    pub bits: u16,
+}
+
+impl LirEffectWriteProperty {
+    pub fn new(
+        reference: LirExpression,
+        name: impl Into<String>,
+        expression: LirExpression,
+        bits: u16,
+    ) -> Self {
+        Self {
+            reference,
+            name: name.into(),
+            expression,
+            bits,
+        }
+    }
+}
+
+impl From<LirEffectWriteProperty> for LirEffect {
+    fn from(value: LirEffectWriteProperty) -> Self {
+        Self::WriteProperty {
+            reference: value.reference,
+            name: value.name,
+            expression: value.expression,
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirEffectWriteElement {
+    pub reference: LirExpression,
+    pub index: LirExpression,
+    pub expression: LirExpression,
+    pub bits: u16,
+}
+
+impl LirEffectWriteElement {
+    pub fn new(
+        reference: LirExpression,
+        index: LirExpression,
+        expression: LirExpression,
+        bits: u16,
+    ) -> Self {
+        Self {
+            reference,
+            index,
+            expression,
+            bits,
+        }
+    }
+}
+
+impl From<LirEffectWriteElement> for LirEffect {
+    fn from(value: LirEffectWriteElement) -> Self {
+        Self::WriteElement {
+            reference: value.reference,
+            index: value.index,
+            expression: value.expression,
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirEffectPush {
+    pub stack: String,
+    pub expression: LirExpression,
+}
+
+impl LirEffectPush {
+    pub fn new(stack: impl Into<String>, expression: LirExpression) -> Self {
+        Self {
+            stack: stack.into(),
+            expression,
+        }
+    }
+}
+
+impl From<LirEffectPush> for LirEffect {
+    fn from(value: LirEffectPush) -> Self {
+        Self::Push {
+            stack: value.stack,
+            expression: value.expression,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirEffectPop {
+    pub stack: String,
+    pub dst: LirLocation,
+}
+
+impl LirEffectPop {
+    pub fn new(stack: impl Into<String>, dst: LirLocation) -> Self {
+        Self {
+            stack: stack.into(),
+            dst,
+        }
+    }
+}
+
+impl From<LirEffectPop> for LirEffect {
+    fn from(value: LirEffectPop) -> Self {
+        Self::Pop {
+            stack: value.stack,
+            dst: value.dst,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirEffectFence {
+    pub kind: LirFenceKind,
+}
+
+impl LirEffectFence {
+    pub fn new(kind: LirFenceKind) -> Self {
+        Self { kind }
+    }
+}
+
+impl From<LirEffectFence> for LirEffect {
+    fn from(value: LirEffectFence) -> Self {
+        Self::Fence { kind: value.kind }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirEffectTrap {
+    pub kind: LirTrapKind,
+}
+
+impl LirEffectTrap {
+    pub fn new(kind: LirTrapKind) -> Self {
+        Self { kind }
+    }
+}
+
+impl From<LirEffectTrap> for LirEffect {
+    fn from(value: LirEffectTrap) -> Self {
+        Self::Trap { kind: value.kind }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirEffectIntrinsic {
+    pub name: String,
+    pub args: Vec<LirExpression>,
+    pub outputs: Vec<LirLocation>,
+}
+
+impl LirEffectIntrinsic {
+    pub fn new(
+        name: impl Into<String>,
+        args: Vec<LirExpression>,
+        outputs: Vec<LirLocation>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            args,
+            outputs,
+        }
+    }
+}
+
+impl From<LirEffectIntrinsic> for LirEffect {
+    fn from(value: LirEffectIntrinsic) -> Self {
+        Self::Intrinsic {
+            name: value.name,
+            args: value.args,
+            outputs: value.outputs,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirEffectNop;
+
+impl LirEffectNop {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl From<LirEffectNop> for LirEffect {
+    fn from(_: LirEffectNop) -> Self {
+        Self::Nop
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum LirEffectKind {
     Set,
@@ -613,6 +1226,154 @@ pub enum LirTerminator {
     },
     Unreachable,
     Trap,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirTerminatorFallThrough;
+
+impl LirTerminatorFallThrough {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl From<LirTerminatorFallThrough> for LirTerminator {
+    fn from(_: LirTerminatorFallThrough) -> Self {
+        Self::FallThrough
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirTerminatorJump {
+    pub target: LirExpression,
+}
+
+impl LirTerminatorJump {
+    pub fn new(target: LirExpression) -> Self {
+        Self { target }
+    }
+}
+
+impl From<LirTerminatorJump> for LirTerminator {
+    fn from(value: LirTerminatorJump) -> Self {
+        Self::Jump {
+            target: value.target,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirTerminatorBranch {
+    pub condition: LirExpression,
+    pub true_target: LirExpression,
+    pub false_target: LirExpression,
+}
+
+impl LirTerminatorBranch {
+    pub fn new(
+        condition: LirExpression,
+        true_target: LirExpression,
+        false_target: LirExpression,
+    ) -> Self {
+        Self {
+            condition,
+            true_target,
+            false_target,
+        }
+    }
+}
+
+impl From<LirTerminatorBranch> for LirTerminator {
+    fn from(value: LirTerminatorBranch) -> Self {
+        Self::Branch {
+            condition: value.condition,
+            true_target: value.true_target,
+            false_target: value.false_target,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirTerminatorCall {
+    pub target: LirExpression,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub return_target: Option<LirExpression>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub does_return: Option<bool>,
+}
+
+impl LirTerminatorCall {
+    pub fn new(
+        target: LirExpression,
+        return_target: Option<LirExpression>,
+        does_return: Option<bool>,
+    ) -> Self {
+        Self {
+            target,
+            return_target,
+            does_return,
+        }
+    }
+}
+
+impl From<LirTerminatorCall> for LirTerminator {
+    fn from(value: LirTerminatorCall) -> Self {
+        Self::Call {
+            target: value.target,
+            return_target: value.return_target,
+            does_return: value.does_return,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirTerminatorReturn {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expression: Option<LirExpression>,
+}
+
+impl LirTerminatorReturn {
+    pub fn new(expression: Option<LirExpression>) -> Self {
+        Self { expression }
+    }
+}
+
+impl From<LirTerminatorReturn> for LirTerminator {
+    fn from(value: LirTerminatorReturn) -> Self {
+        Self::Return {
+            expression: value.expression,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirTerminatorUnreachable;
+
+impl LirTerminatorUnreachable {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl From<LirTerminatorUnreachable> for LirTerminator {
+    fn from(_: LirTerminatorUnreachable) -> Self {
+        Self::Unreachable
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirTerminatorTrap;
+
+impl LirTerminatorTrap {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl From<LirTerminatorTrap> for LirTerminator {
+    fn from(_: LirTerminatorTrap) -> Self {
+        Self::Trap
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -716,6 +1477,488 @@ pub enum LirExpression {
         index: Box<LirExpression>,
         bits: u16,
     },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirExpressionConst {
+    #[serde(with = "semantic_const_value_serde")]
+    pub value: u128,
+    pub bits: u16,
+}
+
+impl LirExpressionConst {
+    pub fn new(value: u128, bits: u16) -> Self {
+        Self { value, bits }
+    }
+}
+
+impl From<LirExpressionConst> for LirExpression {
+    fn from(value: LirExpressionConst) -> Self {
+        Self::Const {
+            value: value.value,
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirExpressionFunction {
+    pub name: String,
+    pub bits: u16,
+}
+
+impl LirExpressionFunction {
+    pub fn new(name: impl Into<String>, bits: u16) -> Self {
+        Self {
+            name: name.into(),
+            bits,
+        }
+    }
+}
+
+impl From<LirExpressionFunction> for LirExpression {
+    fn from(value: LirExpressionFunction) -> Self {
+        Self::Function {
+            name: value.name,
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirExpressionDataAddress {
+    pub name: String,
+    pub bits: u16,
+}
+
+impl LirExpressionDataAddress {
+    pub fn new(name: impl Into<String>, bits: u16) -> Self {
+        Self {
+            name: name.into(),
+            bits,
+        }
+    }
+}
+
+impl From<LirExpressionDataAddress> for LirExpression {
+    fn from(value: LirExpressionDataAddress) -> Self {
+        Self::DataAddress {
+            name: value.name,
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirExpressionAddressOf {
+    pub location: LirLocation,
+    pub bits: u16,
+}
+
+impl LirExpressionAddressOf {
+    pub fn new(location: LirLocation, bits: u16) -> Self {
+        Self { location, bits }
+    }
+}
+
+impl From<LirExpressionAddressOf> for LirExpression {
+    fn from(value: LirExpressionAddressOf) -> Self {
+        Self::AddressOf {
+            location: Box::new(value.location),
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirExpressionRead {
+    pub location: LirLocation,
+}
+
+impl LirExpressionRead {
+    pub fn new(location: LirLocation) -> Self {
+        Self { location }
+    }
+}
+
+impl From<LirExpressionRead> for LirExpression {
+    fn from(value: LirExpressionRead) -> Self {
+        Self::Read(Box::new(value.location))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirExpressionLoad {
+    pub space: LirAddressSpace,
+    pub addr: LirExpression,
+    pub bits: u16,
+}
+
+impl LirExpressionLoad {
+    pub fn new(space: LirAddressSpace, addr: LirExpression, bits: u16) -> Self {
+        Self { space, addr, bits }
+    }
+}
+
+impl From<LirExpressionLoad> for LirExpression {
+    fn from(value: LirExpressionLoad) -> Self {
+        Self::Load {
+            space: value.space,
+            addr: Box::new(value.addr),
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirExpressionUnary {
+    pub op: LirOperationUnary,
+    pub arg: LirExpression,
+    pub bits: u16,
+}
+
+impl LirExpressionUnary {
+    pub fn new(op: LirOperationUnary, arg: LirExpression, bits: u16) -> Self {
+        Self { op, arg, bits }
+    }
+}
+
+impl From<LirExpressionUnary> for LirExpression {
+    fn from(value: LirExpressionUnary) -> Self {
+        Self::Unary {
+            op: value.op,
+            arg: Box::new(value.arg),
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirExpressionBinary {
+    pub op: LirOperationBinary,
+    pub left: LirExpression,
+    pub right: LirExpression,
+    pub bits: u16,
+}
+
+impl LirExpressionBinary {
+    pub fn new(
+        op: LirOperationBinary,
+        left: LirExpression,
+        right: LirExpression,
+        bits: u16,
+    ) -> Self {
+        Self {
+            op,
+            left,
+            right,
+            bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirExpressionCast {
+    pub op: LirOperationCast,
+    pub arg: LirExpression,
+    pub bits: u16,
+}
+
+impl LirExpressionCast {
+    pub fn new(op: LirOperationCast, arg: LirExpression, bits: u16) -> Self {
+        Self { op, arg, bits }
+    }
+}
+
+impl From<LirExpressionCast> for LirExpression {
+    fn from(value: LirExpressionCast) -> Self {
+        Self::Cast {
+            op: value.op,
+            arg: Box::new(value.arg),
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirExpressionCompare {
+    pub op: LirOperationCompare,
+    pub left: LirExpression,
+    pub right: LirExpression,
+    pub bits: u16,
+}
+
+impl LirExpressionCompare {
+    pub fn new(
+        op: LirOperationCompare,
+        left: LirExpression,
+        right: LirExpression,
+        bits: u16,
+    ) -> Self {
+        Self {
+            op,
+            left,
+            right,
+            bits,
+        }
+    }
+}
+
+impl From<LirExpressionCompare> for LirExpression {
+    fn from(value: LirExpressionCompare) -> Self {
+        Self::Compare {
+            op: value.op,
+            left: Box::new(value.left),
+            right: Box::new(value.right),
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirExpressionSelect {
+    pub condition: LirExpression,
+    pub when_true: LirExpression,
+    pub when_false: LirExpression,
+    pub bits: u16,
+}
+
+impl LirExpressionSelect {
+    pub fn new(
+        condition: LirExpression,
+        when_true: LirExpression,
+        when_false: LirExpression,
+        bits: u16,
+    ) -> Self {
+        Self {
+            condition,
+            when_true,
+            when_false,
+            bits,
+        }
+    }
+}
+
+impl From<LirExpressionSelect> for LirExpression {
+    fn from(value: LirExpressionSelect) -> Self {
+        Self::Select {
+            condition: Box::new(value.condition),
+            when_true: Box::new(value.when_true),
+            when_false: Box::new(value.when_false),
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirExpressionExtract {
+    pub arg: LirExpression,
+    pub lsb: u16,
+    pub bits: u16,
+}
+
+impl LirExpressionExtract {
+    pub fn new(arg: LirExpression, lsb: u16, bits: u16) -> Self {
+        Self { arg, lsb, bits }
+    }
+}
+
+impl From<LirExpressionExtract> for LirExpression {
+    fn from(value: LirExpressionExtract) -> Self {
+        Self::Extract {
+            arg: Box::new(value.arg),
+            lsb: value.lsb,
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirExpressionConcat {
+    pub parts: Vec<LirExpression>,
+    pub bits: u16,
+}
+
+impl LirExpressionConcat {
+    pub fn new(parts: Vec<LirExpression>, bits: u16) -> Self {
+        Self { parts, bits }
+    }
+}
+
+impl From<LirExpressionConcat> for LirExpression {
+    fn from(value: LirExpressionConcat) -> Self {
+        Self::Concat {
+            parts: value.parts,
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirExpressionUndefined {
+    pub bits: u16,
+}
+
+impl LirExpressionUndefined {
+    pub fn new(bits: u16) -> Self {
+        Self { bits }
+    }
+}
+
+impl From<LirExpressionUndefined> for LirExpression {
+    fn from(value: LirExpressionUndefined) -> Self {
+        Self::Undefined { bits: value.bits }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirExpressionPoison {
+    pub bits: u16,
+}
+
+impl LirExpressionPoison {
+    pub fn new(bits: u16) -> Self {
+        Self { bits }
+    }
+}
+
+impl From<LirExpressionPoison> for LirExpression {
+    fn from(value: LirExpressionPoison) -> Self {
+        Self::Poison { bits: value.bits }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirExpressionIntrinsic {
+    pub name: String,
+    pub args: Vec<LirExpression>,
+    pub bits: u16,
+}
+
+impl LirExpressionIntrinsic {
+    pub fn new(name: impl Into<String>, args: Vec<LirExpression>, bits: u16) -> Self {
+        Self {
+            name: name.into(),
+            args,
+            bits,
+        }
+    }
+}
+
+impl From<LirExpressionIntrinsic> for LirExpression {
+    fn from(value: LirExpressionIntrinsic) -> Self {
+        Self::Intrinsic {
+            name: value.name,
+            args: value.args,
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirExpressionNull {
+    pub bits: u16,
+}
+
+impl LirExpressionNull {
+    pub fn new(bits: u16) -> Self {
+        Self { bits }
+    }
+}
+
+impl From<LirExpressionNull> for LirExpression {
+    fn from(value: LirExpressionNull) -> Self {
+        Self::Null { bits: value.bits }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirExpressionAllocate {
+    pub kind: String,
+    pub bits: u16,
+}
+
+impl LirExpressionAllocate {
+    pub fn new(kind: impl Into<String>, bits: u16) -> Self {
+        Self {
+            kind: kind.into(),
+            bits,
+        }
+    }
+}
+
+impl From<LirExpressionAllocate> for LirExpression {
+    fn from(value: LirExpressionAllocate) -> Self {
+        Self::Allocate {
+            kind: value.kind,
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirExpressionReadProperty {
+    pub reference: LirExpression,
+    pub name: String,
+    pub bits: u16,
+}
+
+impl LirExpressionReadProperty {
+    pub fn new(reference: LirExpression, name: impl Into<String>, bits: u16) -> Self {
+        Self {
+            reference,
+            name: name.into(),
+            bits,
+        }
+    }
+}
+
+impl From<LirExpressionReadProperty> for LirExpression {
+    fn from(value: LirExpressionReadProperty) -> Self {
+        Self::ReadProperty {
+            reference: Box::new(value.reference),
+            name: value.name,
+            bits: value.bits,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirExpressionReadElement {
+    pub reference: LirExpression,
+    pub index: LirExpression,
+    pub bits: u16,
+}
+
+impl LirExpressionReadElement {
+    pub fn new(reference: LirExpression, index: LirExpression, bits: u16) -> Self {
+        Self {
+            reference,
+            index,
+            bits,
+        }
+    }
+}
+
+impl From<LirExpressionReadElement> for LirExpression {
+    fn from(value: LirExpressionReadElement) -> Self {
+        Self::ReadElement {
+            reference: Box::new(value.reference),
+            index: Box::new(value.index),
+            bits: value.bits,
+        }
+    }
+}
+
+impl From<LirExpressionBinary> for LirExpression {
+    fn from(value: LirExpressionBinary) -> Self {
+        Self::Binary {
+            op: value.op,
+            left: Box::new(value.left),
+            right: Box::new(value.right),
+            bits: value.bits,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -861,6 +2104,7 @@ impl LirInstruction {
         LirJson {
             version: self.version,
             status: self.status,
+            metadata: self.metadata.clone(),
             abi: self.abi.clone(),
             encoding: self.encoding.clone(),
             temporaries: self.temporaries.clone(),
@@ -876,6 +2120,18 @@ impl LirInstruction {
 
     pub fn set_status(&mut self, status: LirStatus) {
         self.status = status;
+    }
+
+    pub fn metadata(&self) -> &LirMetadata {
+        &self.metadata
+    }
+
+    pub fn metadata_mut(&mut self) -> &mut LirMetadata {
+        &mut self.metadata
+    }
+
+    pub fn set_metadata(&mut self, metadata: LirMetadata) {
+        self.metadata = metadata;
     }
 
     pub fn set_encoding(&mut self, encoding: Option<LirEncoding>) {
@@ -1862,6 +3118,7 @@ impl LirJson {
         LirInstruction {
             version: self.version,
             status: self.status,
+            metadata: self.metadata,
             abi: self.abi,
             encoding: self.encoding,
             temporaries: self.temporaries,
@@ -1878,7 +3135,9 @@ impl LirJson {
 
 #[cfg(test)]
 mod tests {
-    use super::{LirEncoding, LirExpression, LirInstruction, LirStatus, LirTerminator};
+    use super::{
+        LirEncoding, LirExpression, LirInstruction, LirMetadata, LirStatus, LirTerminator,
+    };
     use crate::ir::lir::{LirAbi, LirAbiKind, LirCpu, LirCpuKind};
 
     #[test]
@@ -1886,6 +3145,7 @@ mod tests {
         let semantics = LirInstruction {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: Some(
                 LirAbi::from_kind(
                     LirAbiKind::SysV,

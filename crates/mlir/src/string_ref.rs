@@ -7,6 +7,13 @@ pub fn from_str(value: &str) -> MlirStringRef {
     }
 }
 
+pub fn from_bytes(value: &[u8]) -> MlirStringRef {
+    MlirStringRef {
+        data: value.as_ptr().cast(),
+        length: value.len(),
+    }
+}
+
 pub fn to_string(value: MlirStringRef) -> String {
     if value.data.is_null() || value.length == 0 {
         return String::new();

@@ -378,6 +378,7 @@ fn simplify_stack_cookie_check_calls_in_block(
             AstStatement::Goto(AstTarget::Direct(_))
             | AstStatement::Break
             | AstStatement::Continue
+            | AstStatement::Comment(_)
             | AstStatement::Label(_)
             | AstStatement::Trap
             | AstStatement::Unreachable => {}
@@ -391,7 +392,7 @@ fn simplify_stack_cookie_check_call_in_place(
     definitions: &BTreeMap<String, AstExpression>,
 ) {
     match place {
-        AstPlace::Deref { pointer, .. }
+        AstPlace::Dereference { pointer, .. }
         | AstPlace::Memory {
             address: pointer, ..
         } => simplify_stack_cookie_check_call_in_expression(
@@ -442,7 +443,7 @@ fn simplify_stack_cookie_check_call_in_expression(
         AstExpression::Unary { value, .. }
         | AstExpression::Extract { value, .. }
         | AstExpression::Cast { value, .. }
-        | AstExpression::Deref { pointer: value, .. } => {
+        | AstExpression::Dereference { pointer: value, .. } => {
             simplify_stack_cookie_check_call_in_expression(
                 value,
                 stack_pointer_locals,
@@ -509,6 +510,9 @@ fn simplify_stack_cookie_check_call_in_expression(
         }
         AstExpression::AddressOf { place, .. } => {
             simplify_stack_cookie_check_call_in_place(place, stack_pointer_locals, definitions);
+        }
+        AstExpression::Member { base, .. } => {
+            simplify_stack_cookie_check_call_in_expression(base, stack_pointer_locals, definitions);
         }
         AstExpression::Value(_) => {}
     }
@@ -1231,6 +1235,7 @@ fn simplify_guarded_shift_conditions_in_block(
             }
             AstStatement::Break
             | AstStatement::Continue
+            | AstStatement::Comment(_)
             | AstStatement::Label(_)
             | AstStatement::Trap
             | AstStatement::Unreachable => {}
@@ -1251,7 +1256,7 @@ fn simplify_guarded_shift_conditions_in_place(
     definitions: &BTreeMap<String, AstExpression>,
 ) {
     match place {
-        AstPlace::Deref { pointer, .. }
+        AstPlace::Dereference { pointer, .. }
         | AstPlace::Memory {
             address: pointer, ..
         } => {
@@ -1360,6 +1365,7 @@ fn count_assignments_and_uses_in_block(
             AstStatement::Goto(target) => count_target_uses(target, uses),
             AstStatement::Break
             | AstStatement::Continue
+            | AstStatement::Comment(_)
             | AstStatement::Label(_)
             | AstStatement::Trap
             | AstStatement::Unreachable => {}
@@ -1411,7 +1417,8 @@ fn count_expression_uses(expression: &AstExpression, uses: &mut BTreeMap<String,
             }
         }
         AstExpression::AddressOf { place, .. } => count_place_uses(place, uses),
-        AstExpression::Deref { pointer, .. } => count_expression_uses(pointer, uses),
+        AstExpression::Dereference { pointer, .. } => count_expression_uses(pointer, uses),
+        AstExpression::Member { base, .. } => count_expression_uses(base, uses),
         AstExpression::Index { base, index, .. } => {
             count_expression_uses(base, uses);
             count_expression_uses(index, uses);
@@ -1425,7 +1432,7 @@ fn count_place_uses(place: &AstPlace, uses: &mut BTreeMap<String, usize>) {
         AstPlace::Named { name, .. } => {
             *uses.entry(name.clone()).or_default() += 1;
         }
-        AstPlace::Deref { pointer, .. }
+        AstPlace::Dereference { pointer, .. }
         | AstPlace::Memory {
             address: pointer, ..
         } => {
@@ -1631,6 +1638,7 @@ fn replace_statement_values(
         AstStatement::Goto(target) => replace_target_values(target, replacements),
         AstStatement::Break
         | AstStatement::Continue
+        | AstStatement::Comment(_)
         | AstStatement::Label(_)
         | AstStatement::Trap
         | AstStatement::Unreachable => {}
@@ -1686,7 +1694,10 @@ fn replace_expression_values(
             }
         }
         AstExpression::AddressOf { place, .. } => replace_place_values(place, replacements),
-        AstExpression::Deref { pointer, .. } => replace_expression_values(pointer, replacements),
+        AstExpression::Dereference { pointer, .. } => {
+            replace_expression_values(pointer, replacements)
+        }
+        AstExpression::Member { base, .. } => replace_expression_values(base, replacements),
         AstExpression::Index { base, index, .. } => {
             replace_expression_values(base, replacements);
             replace_expression_values(index, replacements);
@@ -1699,7 +1710,7 @@ fn replace_expression_values(
 fn replace_place_values(place: &mut AstPlace, replacements: &BTreeMap<String, AstExpression>) {
     match place {
         AstPlace::Named { .. } => {}
-        AstPlace::Deref { pointer, .. }
+        AstPlace::Dereference { pointer, .. }
         | AstPlace::Memory {
             address: pointer, ..
         } => {
@@ -1838,9 +1849,10 @@ fn expression_has_side_effects(expression: &AstExpression) -> bool {
         }
         AstExpression::Concat { parts, .. } => parts.iter().any(expression_has_side_effects),
         AstExpression::Load { address, .. }
-        | AstExpression::Deref {
+        | AstExpression::Dereference {
             pointer: address, ..
         } => expression_has_side_effects(address),
+        AstExpression::Member { base, .. } => expression_has_side_effects(base),
         AstExpression::AddressOf { place, .. } => place_has_side_effects(place),
         AstExpression::Value(_) => false,
     }
@@ -1849,7 +1861,7 @@ fn expression_has_side_effects(expression: &AstExpression) -> bool {
 fn place_has_side_effects(place: &AstPlace) -> bool {
     match place {
         AstPlace::Named { .. } => false,
-        AstPlace::Deref { pointer, .. }
+        AstPlace::Dereference { pointer, .. }
         | AstPlace::Memory {
             address: pointer, ..
         } => expression_has_side_effects(pointer),
@@ -1909,6 +1921,7 @@ fn simplify_statement_expressions(statement: &mut AstStatement) {
         AstStatement::Goto(target) => simplify_target_expressions(target),
         AstStatement::Break
         | AstStatement::Continue
+        | AstStatement::Comment(_)
         | AstStatement::Label(_)
         | AstStatement::Trap
         | AstStatement::Unreachable => {}
@@ -1918,7 +1931,7 @@ fn simplify_statement_expressions(statement: &mut AstStatement) {
 fn simplify_place_expressions(place: &mut AstPlace) {
     match place {
         AstPlace::Named { .. } => {}
-        AstPlace::Deref { pointer, .. }
+        AstPlace::Dereference { pointer, .. }
         | AstPlace::Memory {
             address: pointer, ..
         } => {
@@ -2032,13 +2045,18 @@ fn simplified_expression(expression: AstExpression) -> AstExpression {
             return_types,
         },
         AstExpression::AddressOf { place, ty } => AstExpression::AddressOf { place, ty },
-        AstExpression::Deref { pointer, ty } => AstExpression::Deref {
+        AstExpression::Dereference { pointer, ty } => AstExpression::Dereference {
             pointer: Box::new(simplified_expression(*pointer)),
             ty,
         },
         AstExpression::Index { base, index, ty } => AstExpression::Index {
             base: Box::new(simplified_expression(*base)),
             index: Box::new(simplified_expression(*index)),
+            ty,
+        },
+        AstExpression::Member { base, name, ty } => AstExpression::Member {
+            base: Box::new(simplified_expression(*base)),
+            name,
             ty,
         },
         AstExpression::Value(value) => AstExpression::Value(value),
@@ -2936,8 +2954,9 @@ fn expression_type(expression: &AstExpression) -> AstType {
         | AstExpression::FloatCompare { ty, .. }
         | AstExpression::Cast { ty, .. }
         | AstExpression::AddressOf { ty, .. }
-        | AstExpression::Deref { ty, .. }
-        | AstExpression::Index { ty, .. } => ty.clone(),
+        | AstExpression::Dereference { ty, .. }
+        | AstExpression::Index { ty, .. }
+        | AstExpression::Member { ty, .. } => ty.clone(),
         AstExpression::Call { return_types, .. }
         | AstExpression::Intrinsic { return_types, .. } => {
             return_types.first().cloned().unwrap_or_else(AstType::void)
@@ -3158,9 +3177,11 @@ mod tests {
         let mut function = AstFunction {
             locals: vec![crate::ir::ast::AstLocal {
                 name: "x".to_string(),
+                display_name: None,
                 ty: AstType::integer(64),
                 init: None,
                 storage: None,
+                comment: None,
             }],
             blocks: vec![AstBlock {
                 statements: vec![

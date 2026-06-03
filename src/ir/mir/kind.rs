@@ -30,7 +30,33 @@ pub enum MirTypeKind {
     Pointer,
     Function,
     Memory,
-    Custom,
+    TypeDefinition,
+    Structure,
+    Union,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct MirStructureMember {
+    pub name: String,
+    pub ty: MirType,
+}
+
+impl MirStructureMember {
+    pub fn new(name: String, ty: MirType) -> Self {
+        Self { name, ty }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct MirUnionMember {
+    pub name: String,
+    pub ty: MirType,
+}
+
+impl MirUnionMember {
+    pub fn new(name: String, ty: MirType) -> Self {
+        Self { name, ty }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -46,8 +72,18 @@ pub enum MirType {
         returns: Vec<MirType>,
     },
     Memory,
-    Custom {
+    TypeDefinition {
         name: String,
+    },
+    Structure {
+        name: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        members: Vec<MirStructureMember>,
+    },
+    Union {
+        name: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        members: Vec<MirUnionMember>,
     },
 }
 
@@ -60,7 +96,9 @@ impl MirType {
             Self::Pointer { .. } => MirTypeKind::Pointer,
             Self::Function { .. } => MirTypeKind::Function,
             Self::Memory => MirTypeKind::Memory,
-            Self::Custom { .. } => MirTypeKind::Custom,
+            Self::TypeDefinition { .. } => MirTypeKind::TypeDefinition,
+            Self::Structure { .. } => MirTypeKind::Structure,
+            Self::Union { .. } => MirTypeKind::Union,
         }
     }
 
@@ -93,8 +131,16 @@ impl MirType {
         Self::Memory
     }
 
-    pub fn custom(name: String) -> Self {
-        Self::Custom { name }
+    pub fn type_definition(name: String) -> Self {
+        Self::TypeDefinition { name }
+    }
+
+    pub fn structure(name: String, members: Vec<MirStructureMember>) -> Self {
+        Self::Structure { name, members }
+    }
+
+    pub fn union(name: String, members: Vec<MirUnionMember>) -> Self {
+        Self::Union { name, members }
     }
 }
 

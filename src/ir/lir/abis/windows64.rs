@@ -1,8 +1,8 @@
 use super::reg;
+use crate::ir::lir::executor::LirExecutorError;
 use crate::ir::lir::{LirAbi, LirCpu};
-use crate::symbolic::Error;
 
-pub fn amd64(cpu: &LirCpu) -> Result<LirAbi, Error> {
+pub fn amd64(cpu: &LirCpu) -> Result<LirAbi, LirExecutorError> {
     let mut arguments = vec![reg("rcx", 64), reg("rdx", 64), reg("r8", 64), reg("r9", 64)];
     arguments.extend(
         (0..8).map(|index| crate::ir::lir::LirLocation::StackMemory {

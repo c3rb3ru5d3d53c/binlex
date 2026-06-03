@@ -4,123 +4,184 @@ use crate::ir::lir::{
 };
 
 pub fn format_lir_instruction(lir: &LirInstruction) -> String {
-    let mut lines = Vec::new();
-    let header = lir
-        .encoding
-        .as_ref()
-        .map(|encoding| format!("lir.instruction @{:x} {{", encoding.address))
-        .unwrap_or_else(|| "lir.instruction {".to_string());
-    lines.push(header);
-
-    if let Some(encoding) = lir.encoding.as_ref() {
-        push_encoding(&mut lines, encoding);
-    }
-
-    if !lir.temporaries.is_empty() {
-        lines.push(String::new());
-        lines.push("  temporaries:".to_string());
-        for temporary in &lir.temporaries {
-            let name = temporary
-                .name
-                .as_ref()
-                .map(|name| format!(" {}", name))
-                .unwrap_or_default();
-            lines.push(format!(
-                "    tmp{}{} : i{}",
-                temporary.id, name, temporary.bits
-            ));
-        }
-    }
-
-    if !lir.effects.is_empty() {
-        lines.push(String::new());
-        lines.push("  effects:".to_string());
-        for effect in &lir.effects {
-            lines.push(format!("    {}", format_effect(effect)));
-        }
-    }
-
-    lines.push(String::new());
-    lines.push("  terminator:".to_string());
-    lines.push(format!("    {}", format_terminator(&lir.terminator)));
-
-    if !lir.diagnostics.is_empty() {
-        lines.push(String::new());
-        lines.push("  diagnostics:".to_string());
-        for diagnostic in &lir.diagnostics {
-            lines.push(format!("    {}", format_diagnostic(diagnostic)));
-        }
-    }
-
-    lines.push("}".to_string());
-    lines.join("\n")
+    let context = crate::ir::mlir::context();
+    lir_instruction_operation(&context, lir)
+        .and_then(|op| op.to_string())
+        .unwrap_or_else(|error| format!("// mlir print failed: {error}"))
 }
 
 pub fn format_lir_block(block: &LirBlock) -> String {
-    let name = block.name.as_deref().unwrap_or("block");
-    let mut lines = vec![format!("lir.block @{name} {{")];
-    for (index, instruction) in block.instructions.iter().enumerate() {
-        if index > 0 {
-            lines.push(String::new());
-        }
-        for line in format_lir_instruction(instruction).lines() {
-            lines.push(format!("  {line}"));
-        }
-    }
-    lines.push("}".to_string());
-    lines.join("\n")
+    let context = crate::ir::mlir::context();
+    lir_block_operation(&context, block)
+        .and_then(|op| op.to_string())
+        .unwrap_or_else(|error| format!("// mlir print failed: {error}"))
 }
 
 pub fn format_lir_function(function: &LirFunction) -> String {
-    let name = function.name.as_deref().unwrap_or("function");
-    let mut lines = vec![format!("lir.function @{name} {{")];
-    if let Some(abi) = function.abi.as_ref() {
-        lines.push(format!("  abi {}", abi.name));
-    }
-    for (index, block) in function.blocks.iter().enumerate() {
-        if index > 0 || function.abi.is_some() {
-            lines.push(String::new());
-        }
-        for line in format_lir_block(block).lines() {
-            lines.push(format!("  {line}"));
-        }
-    }
-    lines.push("}".to_string());
-    lines.join("\n")
+    let context = crate::ir::mlir::context();
+    lir_function_operation(&context, function)
+        .and_then(|op| op.to_string())
+        .unwrap_or_else(|error| format!("// mlir print failed: {error}"))
 }
 
 pub fn format_lir_module(module: &LirModule) -> String {
-    let name = module.name.as_deref().unwrap_or("module");
-    let mut lines = vec![format!("lir.module @{name} {{")];
-
-    for (index, function) in module.functions.iter().enumerate() {
-        if index > 0 {
-            lines.push(String::new());
-        }
-        for line in format_lir_function(function).lines() {
-            lines.push(format!("  {line}"));
-        }
-    }
-
-    if !module.data.is_empty() {
-        if !module.functions.is_empty() {
-            lines.push(String::new());
-        }
-        lines.push("  lir.data {".to_string());
-        for data in &module.data {
-            lines.push(format!("    {}", format_data(data)));
-        }
-        lines.push("  }".to_string());
-    }
-
-    lines.push("}".to_string());
-    lines.join("\n")
+    let context = crate::ir::mlir::context();
+    lir_module_operation(&context, module)
+        .and_then(|op| crate::ir::mlir::MlirDocument::from_context_and_ops(context, vec![op]))
+        .and_then(|document| document.text())
+        .unwrap_or_else(|error| format!("// mlir print failed: {error}"))
 }
 
-fn push_encoding(lines: &mut Vec<String>, encoding: &LirEncoding) {
-    lines.push(format!("  architecture {}", encoding.architecture));
-    lines.push(format!("  mnemonic {:?}", encoding.mnemonic));
-    lines.push(format!("  disassembly {:?}", encoding.disassembly));
+fn lir_instruction_operation(
+    context: &mlir::Context,
+    lir: &LirInstruction,
+) -> mlir::Result<mlir::Operation> {
+    let mut attrs = Vec::new();
+    attrs.push(crate::ir::mlir::integer_attr(
+        context,
+        "version",
+        i64::from(lir.version),
+    ));
+    attrs.push(crate::ir::mlir::string_attr(
+        context,
+        "status",
+        &format!("{:?}", lir.status),
+    ));
+    if let Some(abi) = lir.abi.as_ref() {
+        attrs.push(crate::ir::mlir::string_attr(context, "abi", &abi.name));
+    }
+    if let Some(encoding) = lir.encoding.as_ref() {
+        push_encoding_attrs(context, &mut attrs, encoding);
+    }
+    if !lir.temporaries.is_empty() {
+        let temporaries = lir
+            .temporaries
+            .iter()
+            .map(|temporary| {
+                let name = temporary.name.as_deref().unwrap_or("");
+                format!("tmp{} {} : i{}", temporary.id, name, temporary.bits)
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        attrs.push(crate::ir::mlir::string_attr(
+            context,
+            "temporaries",
+            &temporaries,
+        ));
+    }
+    if !lir.effects.is_empty() {
+        let effects = lir
+            .effects
+            .iter()
+            .map(format_effect)
+            .collect::<Vec<_>>()
+            .join("\n");
+        attrs.push(crate::ir::mlir::string_attr(context, "effects", &effects));
+    }
+    attrs.push(crate::ir::mlir::string_attr(
+        context,
+        "terminator",
+        &format_terminator(&lir.terminator),
+    ));
+    if !lir.diagnostics.is_empty() {
+        let diagnostics = lir
+            .diagnostics
+            .iter()
+            .map(format_diagnostic)
+            .collect::<Vec<_>>()
+            .join("\n");
+        attrs.push(crate::ir::mlir::string_attr(
+            context,
+            "diagnostics",
+            &diagnostics,
+        ));
+    }
+    crate::ir::mlir::operation(context, "binlex.lir.instruction", attrs, Vec::new())
+}
+
+fn lir_block_operation(context: &mlir::Context, block: &LirBlock) -> mlir::Result<mlir::Operation> {
+    let name = block.name.as_deref().unwrap_or("block");
+    let ops = block
+        .instructions
+        .iter()
+        .map(|instruction| lir_instruction_operation(context, instruction))
+        .collect::<mlir::Result<Vec<_>>>()?;
+    crate::ir::mlir::operation(
+        context,
+        "binlex.lir.block",
+        vec![crate::ir::mlir::string_attr(context, "sym_name", name)],
+        vec![crate::ir::mlir::region_with_ops(ops)],
+    )
+}
+
+fn lir_function_operation(
+    context: &mlir::Context,
+    function: &LirFunction,
+) -> mlir::Result<mlir::Operation> {
+    let name = function.name.as_deref().unwrap_or("function");
+    let mut attrs = vec![crate::ir::mlir::string_attr(context, "sym_name", name)];
+    if let Some(abi) = function.abi.as_ref() {
+        attrs.push(crate::ir::mlir::string_attr(context, "abi", &abi.name));
+    }
+    let ops = function
+        .blocks
+        .iter()
+        .map(|block| lir_block_operation(context, block))
+        .collect::<mlir::Result<Vec<_>>>()?;
+    crate::ir::mlir::operation(
+        context,
+        "binlex.lir.function",
+        attrs,
+        vec![crate::ir::mlir::region_with_ops(ops)],
+    )
+}
+
+pub(crate) fn lir_module_operation(
+    context: &mlir::Context,
+    module: &LirModule,
+) -> mlir::Result<mlir::Operation> {
+    let name = module.name.as_deref().unwrap_or("module");
+    let mut ops = module
+        .functions
+        .iter()
+        .map(|function| lir_function_operation(context, function))
+        .collect::<mlir::Result<Vec<_>>>()?;
+    for data in &module.data {
+        ops.push(lir_data_operation(context, data)?);
+    }
+    crate::ir::mlir::operation(
+        context,
+        "binlex.lir.module",
+        vec![crate::ir::mlir::string_attr(context, "sym_name", name)],
+        vec![crate::ir::mlir::region_with_ops(ops)],
+    )
+}
+
+fn push_encoding_attrs(
+    context: &mlir::Context,
+    attrs: &mut Vec<mlir::NamedAttribute>,
+    encoding: &LirEncoding,
+) {
+    attrs.push(crate::ir::mlir::string_attr(
+        context,
+        "architecture",
+        &encoding.architecture,
+    ));
+    attrs.push(crate::ir::mlir::string_attr(
+        context,
+        "mnemonic",
+        &encoding.mnemonic,
+    ));
+    attrs.push(crate::ir::mlir::string_attr(
+        context,
+        "disassembly",
+        &encoding.disassembly,
+    ));
+    attrs.push(crate::ir::mlir::string_attr(
+        context,
+        "address",
+        &format!("0x{:x}", encoding.address),
+    ));
     if !encoding.bytes.is_empty() {
         let bytes = encoding
             .bytes
@@ -128,7 +189,7 @@ fn push_encoding(lines: &mut Vec<String>, encoding: &LirEncoding) {
             .map(|byte| format!("{byte:02x}"))
             .collect::<Vec<_>>()
             .join(" ");
-        lines.push(format!("  bytes {}", bytes));
+        attrs.push(crate::ir::mlir::string_attr(context, "bytes", &bytes));
     }
 }
 
@@ -298,14 +359,22 @@ fn format_diagnostic(diagnostic: &LirDiagnostic) -> String {
     format!("{:?}: {}", diagnostic.kind, diagnostic.message)
 }
 
-fn format_data(data: &LirData) -> String {
+fn lir_data_operation(context: &mlir::Context, data: &LirData) -> mlir::Result<mlir::Operation> {
     let bytes = data
         .bytes
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect::<Vec<_>>()
         .join(" ");
-    format!("{} [{}]", data.name, bytes)
+    crate::ir::mlir::operation(
+        context,
+        "binlex.lir.data",
+        vec![
+            crate::ir::mlir::string_attr(context, "sym_name", &data.name),
+            crate::ir::mlir::string_attr(context, "bytes", &bytes),
+        ],
+        Vec::new(),
+    )
 }
 
 fn format_location(location: &crate::ir::lir::LirLocation) -> String {

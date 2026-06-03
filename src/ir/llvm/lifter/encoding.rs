@@ -180,7 +180,7 @@ mod tests {
         Lir, LirDiagnostic, LirDiagnosticKind, LirEffect, LirEncoding, LirExpression, LirLocation,
         LirStatus, LirTerminator,
     };
-    use crate::ir::lir::{LirAbi, LirAbiKind, LirCpu, LirCpuKind, LirModule};
+    use crate::ir::lir::{LirAbi, LirAbiKind, LirCpu, LirCpuKind, LirMetadata, LirModule};
     use crate::ir::llvm::Lifter;
     use std::collections::BTreeMap;
 
@@ -190,6 +190,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Partial,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "arm64".to_string(),
@@ -226,6 +227,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
@@ -257,6 +259,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -329,6 +332,7 @@ mod tests {
         let mut semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -364,6 +368,7 @@ mod tests {
         let mut semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -399,6 +404,7 @@ mod tests {
         let mut semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -434,6 +440,7 @@ mod tests {
         let mut semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -475,6 +482,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: LirMetadata::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),

@@ -148,7 +148,7 @@ fn collect_loads_in_expression(
         HirExpression::Unary { value, .. }
         | HirExpression::Extract { value, .. }
         | HirExpression::Cast { value, .. }
-        | HirExpression::Deref { pointer: value, .. } => {
+        | HirExpression::Dereference { pointer: value, .. } => {
             collect_loads_in_expression(value, counts);
         }
         HirExpression::Binary { lhs, rhs, .. }
@@ -199,7 +199,7 @@ fn collect_loads_in_expression(
 
 fn collect_loads_in_place(place: &HirPlace, counts: &mut HashMap<HirExpression, usize>) {
     match place {
-        HirPlace::Deref { pointer, .. }
+        HirPlace::Dereference { pointer, .. }
         | HirPlace::Memory {
             address: pointer, ..
         } => collect_loads_in_expression(pointer, counts),

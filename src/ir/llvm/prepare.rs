@@ -106,6 +106,7 @@ pub fn prepare_instruction_semantics(semantics: &Lir) -> Result<Lir, Error> {
     Ok(Lir {
         version: normalized.version,
         status: normalized.status,
+        metadata: Default::default(),
         abi: normalized.abi,
         encoding: normalized.encoding.clone(),
         temporaries,
@@ -953,6 +954,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: Default::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -984,6 +986,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: Default::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -1021,6 +1024,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: Default::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -1058,6 +1062,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: Default::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),

@@ -1,9 +1,9 @@
 use super::{
     LirCpu, LirCpuAlias, LirCpuEndian, LirCpuKind, LirCpuProgramCounter, LirCpuRegister, LirMemory,
 };
-use crate::symbolic::Error;
+use crate::ir::lir::executor::LirExecutorError;
 
-pub fn build() -> Result<LirCpu, Error> {
+pub fn build() -> Result<LirCpu, LirExecutorError> {
     let mut registers = [
         "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "rip",
     ]

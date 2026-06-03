@@ -1,6 +1,8 @@
 pub mod abis;
+mod executor;
 
 use crate::ir::lir::abis::{extract_abi, register_abi_classes, LirAbi as PyLirAbi};
+use crate::ir::lir::executor::register_executor_classes;
 use binlex::ir::lir::{
     LirAddressSpace as InnerAddressSpace, LirBlock as InnerLirBlock, LirCpu as InnerLirCpu,
     LirCpuAlias as InnerLirCpuAlias, LirCpuAliasWritePolicy as InnerLirCpuAliasWritePolicy,
@@ -14,6 +16,7 @@ use binlex::ir::lir::{
     LirLocation as InnerLirLocation, LirLocationKind as InnerLirLocationKind,
     LirMemory as InnerLirMemory, LirMemoryAddressed as InnerLirMemoryAddressed,
     LirMemoryIndexed as InnerLirMemoryIndexed, LirMemoryStack as InnerLirMemoryStack,
+    LirMetadata as InnerLirMetadata, LirMlirModule as InnerLirMlirModule,
     LirModule as InnerLirModule, LirOperation as InnerLirOperation,
     LirOperationBinary as InnerLirBinaryOp, LirOperationCast as InnerLirCastOp,
     LirOperationCompare as InnerLirCompareOp, LirOperationUnary as InnerLirUnaryOp,
@@ -42,6 +45,11 @@ fn py_to_json_value(py: Python<'_>, value: Py<PyAny>) -> PyResult<serde_json::Va
         .call_method1("dumps", (value,))?
         .extract::<String>()?;
     serde_json::from_str(&json_str).map_err(|error| PyValueError::new_err(error.to_string()))
+}
+
+fn py_to_lir_metadata(py: Python<'_>, value: Py<PyAny>) -> PyResult<InnerLirMetadata> {
+    let value = py_to_json_value(py, value)?;
+    serde_json::from_value(value).map_err(|error| PyValueError::new_err(error.to_string()))
 }
 
 fn hash_value<T: Hash>(value: &T) -> isize {
@@ -981,6 +989,73 @@ value_wrapper!(Lir, InnerLir);
 value_wrapper!(LirBlock, InnerLirBlock);
 value_wrapper!(LirFunction, InnerLirFunction);
 value_wrapper!(LirModule, InnerLirModule);
+
+#[pyclass(name = "LirMlirModule", unsendable, skip_from_py_object)]
+pub struct LirMlirModule {
+    inner: InnerLirMlirModule,
+}
+
+impl LirMlirModule {
+    pub fn from_inner(inner: InnerLirMlirModule) -> Self {
+        Self { inner }
+    }
+}
+
+#[pymethods]
+impl LirMlirModule {
+    #[classmethod]
+    pub fn from_text(_cls: &Bound<'_, PyType>, text: &str) -> PyResult<Self> {
+        let inner = InnerLirMlirModule::from_text(text)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(Self::from_inner(inner))
+    }
+
+    #[classmethod]
+    pub fn from_bytecode(
+        _cls: &Bound<'_, PyType>,
+        bytecode: &Bound<'_, PyBytes>,
+    ) -> PyResult<Self> {
+        let inner = InnerLirMlirModule::from_bytecode(bytecode.as_bytes())
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(Self::from_inner(inner))
+    }
+
+    pub fn normalize_status(&self) {
+        self.inner.normalize_status();
+    }
+
+    pub fn optimize(&self) {
+        self.inner.optimize();
+    }
+
+    pub fn text(&self) -> String {
+        self.inner.text()
+    }
+
+    pub fn bytecode(&self, py: Python<'_>) -> Py<PyBytes> {
+        PyBytes::new(py, &self.inner.bytecode()).unbind()
+    }
+
+    pub fn operation_names(&self) -> Vec<String> {
+        self.inner.operation_names()
+    }
+
+    pub fn operation_count(&self) -> usize {
+        self.inner.operation_count()
+    }
+
+    pub fn operation_records(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(
+            py,
+            &serde_json::to_value(self.inner.operation_records())
+                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?,
+        )
+    }
+
+    pub fn print(&self) {
+        println!("{}", self.text());
+    }
+}
 
 #[pymethods]
 impl LirTemporary {
@@ -2266,7 +2341,7 @@ impl LirTerminator {
 #[pymethods]
 impl Lir {
     #[new]
-    #[pyo3(signature = (version, status, abi=None, encoding=None, temporaries=None, effects=None, terminator=None, diagnostics=None))]
+    #[pyo3(signature = (version, status, abi=None, encoding=None, temporaries=None, effects=None, terminator=None, diagnostics=None, metadata=None))]
     pub fn new(
         py: Python<'_>,
         version: u32,
@@ -2277,6 +2352,7 @@ impl Lir {
         effects: Option<Vec<Py<LirEffect>>>,
         terminator: Option<Py<LirTerminator>>,
         diagnostics: Option<Vec<Py<LirDiagnostic>>>,
+        metadata: Option<Py<PyAny>>,
     ) -> PyResult<Self> {
         let abi = abi
             .map(|item| extract_abi(item.bind(py).as_any()))
@@ -2300,9 +2376,14 @@ impl Lir {
             .into_iter()
             .map(|item| item.borrow(py).inner.lock().unwrap().clone())
             .collect();
+        let metadata = metadata
+            .map(|metadata| py_to_lir_metadata(py, metadata))
+            .transpose()?
+            .unwrap_or_default();
         Ok(Self::from_inner(InnerLir {
             version,
             status: status.borrow(py).inner,
+            metadata,
             abi,
             encoding,
             temporaries,
@@ -2323,6 +2404,13 @@ impl Lir {
     }
     pub fn status(&self) -> LirStatus {
         LirStatus::from_inner(self.inner.lock().unwrap().status)
+    }
+    pub fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(
+            py,
+            &serde_json::to_value(&self.inner.lock().unwrap().metadata)
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
+        )
     }
     pub fn abi(&self) -> Option<PyLirAbi> {
         self.inner
@@ -2385,6 +2473,39 @@ impl Lir {
             .lock()
             .unwrap()
             .set_status(status.borrow(py).inner);
+    }
+    pub fn set_metadata(&mut self, py: Python<'_>, metadata: Py<PyAny>) -> PyResult<()> {
+        let metadata = py_to_lir_metadata(py, metadata)?;
+        self.inner.lock().unwrap().set_metadata(metadata);
+        Ok(())
+    }
+    pub fn get_metadata_value(&self, py: Python<'_>, key: String) -> PyResult<Option<Py<PyAny>>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .metadata
+            .values
+            .get(&key)
+            .map(|value| json_value_to_py(py, value))
+            .transpose()
+    }
+    pub fn set_metadata_value(
+        &mut self,
+        py: Python<'_>,
+        key: String,
+        value: Py<PyAny>,
+    ) -> PyResult<()> {
+        let value = py_to_json_value(py, value)?;
+        self.inner
+            .lock()
+            .unwrap()
+            .metadata
+            .values
+            .insert(key, value);
+        Ok(())
+    }
+    pub fn remove_metadata_value(&mut self, key: String) {
+        self.inner.lock().unwrap().metadata.values.remove(&key);
     }
     pub fn set_abi(&mut self, py: Python<'_>, abi: Option<Py<PyAny>>) -> PyResult<()> {
         let abi = abi
@@ -2822,6 +2943,23 @@ impl LirModule {
         Ok(Self::from_inner(inner))
     }
 
+    #[classmethod]
+    pub fn from_text(_cls: &Bound<'_, PyType>, text: &str) -> PyResult<LirMlirModule> {
+        let inner = InnerLirModule::from_text(text)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(LirMlirModule::from_inner(inner))
+    }
+
+    #[classmethod]
+    pub fn from_bytecode(
+        _cls: &Bound<'_, PyType>,
+        bytecode: &Bound<'_, PyBytes>,
+    ) -> PyResult<LirMlirModule> {
+        let inner = InnerLirModule::from_bytecode(bytecode.as_bytes())
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(LirMlirModule::from_inner(inner))
+    }
+
     pub fn name(&self) -> Option<String> {
         self.inner.lock().unwrap().name.clone()
     }
@@ -2916,6 +3054,26 @@ impl LirModule {
         self.inner.lock().unwrap().text()
     }
 
+    pub fn bytecode(&self, py: Python<'_>) -> PyResult<Py<PyBytes>> {
+        let bytecode = self
+            .inner
+            .lock()
+            .unwrap()
+            .bytecode()
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(PyBytes::new(py, &bytecode).unbind())
+    }
+
+    pub fn mlir(&self) -> PyResult<LirMlirModule> {
+        let module = self
+            .inner
+            .lock()
+            .unwrap()
+            .mlir()
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(LirMlirModule::from_inner(module))
+    }
+
     pub fn print(&self) -> PyResult<()> {
         self.inner.lock().unwrap().print();
         Ok(())
@@ -2972,6 +3130,8 @@ pub fn lir_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<LirFunction>()?;
     m.add_class::<LirData>()?;
     m.add_class::<LirModule>()?;
+    m.add_class::<LirMlirModule>()?;
+    register_executor_classes(m)?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.ir.lir", m)?;

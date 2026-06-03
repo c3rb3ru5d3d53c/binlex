@@ -2066,6 +2066,7 @@ mod tests {
         LirInstruction {
             version: 1,
             status: LirStatus::Complete,
+            metadata: Default::default(),
             abi: None,
             encoding: Some(LirEncoding {
                 architecture: "amd64".to_string(),
@@ -2129,6 +2130,7 @@ mod tests {
             blocks: vec![LirBlock {
                 name: Some("entry".to_string()),
                 instructions: vec![LirInstruction {
+                    metadata: Default::default(),
                     effects: vec![LirEffect::Set {
                         dst: LirLocation::Register {
                             name: "esi".to_string(),

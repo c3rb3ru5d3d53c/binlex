@@ -30,6 +30,7 @@ use super::optimizers::{
 };
 use super::print::{format_hir_function, format_hir_module};
 use super::statement::{HirLocal, HirParameter};
+use crate::ir::hir::mlir::HirMlirModule;
 use crate::ir::lir::{LirAbi, LirFunction, LirModule};
 use crate::ir::mir::{MirFunction, MirModule};
 use serde::{Deserialize, Serialize};
@@ -269,6 +270,22 @@ impl HirModule {
 
     pub fn text(&self) -> String {
         format_hir_module(self)
+    }
+
+    pub fn mlir(&self) -> mlir::Result<HirMlirModule> {
+        HirMlirModule::from_hir(self)
+    }
+
+    pub fn from_text(text: &str) -> mlir::Result<HirMlirModule> {
+        HirMlirModule::from_text(text)
+    }
+
+    pub fn from_bytecode(bytecode: &[u8]) -> mlir::Result<HirMlirModule> {
+        HirMlirModule::from_bytecode(bytecode)
+    }
+
+    pub fn bytecode(&self) -> mlir::Result<Vec<u8>> {
+        Ok(self.mlir()?.bytecode())
     }
 
     pub fn print(&self) {

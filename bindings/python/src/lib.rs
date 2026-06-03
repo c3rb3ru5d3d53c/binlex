@@ -41,7 +41,6 @@ pub mod math;
 pub mod metadata;
 pub mod rules;
 pub mod storage;
-pub mod symbolic;
 pub mod util;
 
 pub use config::Configuration;
@@ -69,7 +68,6 @@ use crate::math::{entropy_init, math_init};
 use crate::metadata::metadata_init;
 use crate::rules::rules_init;
 use crate::storage::storage_init;
-use crate::symbolic::symbolic_init;
 use crate::util::util_init;
 use ::binlex::runtime::{register_host_runtime, HostRuntime};
 
@@ -103,7 +101,6 @@ fn binlex(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(databases_init))?;
     m.add_wrapped(wrap_pymodule!(decompilers_init))?;
     m.add_wrapped(wrap_pymodule!(ir_init))?;
-    m.add_wrapped(wrap_pymodule!(symbolic_init))?;
     m.add_class::<Architecture>()?;
     m.add_class::<Configuration>()?;
     m.add_class::<Magic>()?;

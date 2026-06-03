@@ -1,8 +1,8 @@
 use super::reg;
+use crate::ir::lir::executor::LirExecutorError;
 use crate::ir::lir::{LirAbi, LirAbiTrap, LirCpu, LirTrapKind};
-use crate::symbolic::Error;
 
-pub fn arm64(cpu: &LirCpu) -> Result<LirAbi, Error> {
+pub fn arm64(cpu: &LirCpu) -> Result<LirAbi, LirExecutorError> {
     Ok(LirAbi::new(
         "windows_syscall".to_string(),
         cpu.clone(),
@@ -28,7 +28,7 @@ pub fn arm64(cpu: &LirCpu) -> Result<LirAbi, Error> {
     ))
 }
 
-pub fn amd64(cpu: &LirCpu) -> Result<LirAbi, Error> {
+pub fn amd64(cpu: &LirCpu) -> Result<LirAbi, LirExecutorError> {
     Ok(LirAbi::new(
         "windows_syscall".to_string(),
         cpu.clone(),
@@ -45,7 +45,7 @@ pub fn amd64(cpu: &LirCpu) -> Result<LirAbi, Error> {
     ))
 }
 
-pub fn i386(cpu: &LirCpu) -> Result<LirAbi, Error> {
+pub fn i386(cpu: &LirCpu) -> Result<LirAbi, LirExecutorError> {
     Ok(LirAbi::new(
         "windows_syscall".to_string(),
         cpu.clone(),

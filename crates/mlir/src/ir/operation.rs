@@ -5,7 +5,9 @@ use crate::printer;
 use crate::string_ref;
 use crate::verifier;
 
-use super::{Attribute, Identifier, Location, OperationState, Region, Value, block::Block};
+use super::{
+    Attribute, Identifier, Location, NamedAttribute, OperationState, Region, Value, block::Block,
+};
 
 pub struct Operation {
     raw: ffi::MlirOperation,
@@ -72,6 +74,10 @@ impl Operation {
         Self::from_borrowed_raw(unsafe { ffi::mlirOperationGetParentOperation(self.raw) })
     }
 
+    pub fn next_in_block(&self) -> Option<Self> {
+        Self::from_borrowed_raw(unsafe { ffi::mlirOperationGetNextInBlock(self.raw) })
+    }
+
     pub fn num_regions(&self) -> usize {
         unsafe { ffi::mlirOperationGetNumRegions(self.raw) as usize }
     }
@@ -125,6 +131,43 @@ impl Operation {
         }
     }
 
+    pub fn has_inherent_attribute(&self, name: &str) -> bool {
+        unsafe {
+            ffi::mlirOperationHasInherentAttributeByName(self.raw, string_ref::from_str(name))
+        }
+    }
+
+    pub fn inherent_attribute(&self, name: &str) -> Option<Attribute> {
+        let raw = unsafe {
+            ffi::mlirOperationGetInherentAttributeByName(self.raw, string_ref::from_str(name))
+        };
+        if raw.ptr.is_null() {
+            None
+        } else {
+            Some(Attribute::from_raw(raw))
+        }
+    }
+
+    pub fn set_inherent_attribute(&self, name: &str, attribute: Attribute) {
+        unsafe {
+            ffi::mlirOperationSetInherentAttributeByName(
+                self.raw,
+                string_ref::from_str(name),
+                attribute.raw(),
+            )
+        };
+    }
+
+    pub fn num_discardable_attributes(&self) -> usize {
+        unsafe { ffi::mlirOperationGetNumDiscardableAttributes(self.raw) as usize }
+    }
+
+    pub fn discardable_attribute_at(&self, index: usize) -> NamedAttribute {
+        NamedAttribute::from_raw(unsafe {
+            ffi::mlirOperationGetDiscardableAttribute(self.raw, index as isize)
+        })
+    }
+
     pub fn set_discardable_attribute(&self, name: &str, attribute: Attribute) {
         unsafe {
             ffi::mlirOperationSetDiscardableAttributeByName(
@@ -139,6 +182,40 @@ impl Operation {
         unsafe {
             ffi::mlirOperationRemoveDiscardableAttributeByName(self.raw, string_ref::from_str(name))
         }
+    }
+
+    pub fn num_attributes(&self) -> usize {
+        unsafe { ffi::mlirOperationGetNumAttributes(self.raw) as usize }
+    }
+
+    pub fn attribute_at(&self, index: usize) -> NamedAttribute {
+        NamedAttribute::from_raw(unsafe {
+            ffi::mlirOperationGetAttribute(self.raw, index as isize)
+        })
+    }
+
+    pub fn attribute(&self, name: &str) -> Option<Attribute> {
+        let raw =
+            unsafe { ffi::mlirOperationGetAttributeByName(self.raw, string_ref::from_str(name)) };
+        if raw.ptr.is_null() {
+            None
+        } else {
+            Some(Attribute::from_raw(raw))
+        }
+    }
+
+    pub fn set_attribute(&self, name: &str, attribute: Attribute) {
+        unsafe {
+            ffi::mlirOperationSetAttributeByName(
+                self.raw,
+                string_ref::from_str(name),
+                attribute.raw(),
+            )
+        };
+    }
+
+    pub fn remove_attribute(&self, name: &str) -> bool {
+        unsafe { ffi::mlirOperationRemoveAttributeByName(self.raw, string_ref::from_str(name)) }
     }
 
     pub fn to_string(&self) -> Result<String> {

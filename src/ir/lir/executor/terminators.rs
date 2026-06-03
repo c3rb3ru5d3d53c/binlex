@@ -1,13 +1,13 @@
 use crate::ir::lir::LirTerminator;
-use crate::symbolic::{Error, SymbolicCpuState, SymbolicExecutor};
+use crate::ir::lir::executor::{LirExecutor, LirExecutorError, LirExecutorState};
 
-impl SymbolicExecutor {
+impl LirExecutor {
     pub(crate) fn apply_terminator(
         &self,
-        mut state: SymbolicCpuState,
+        mut state: LirExecutorState,
         instruction: Option<&crate::ir::lir::LirEncoding>,
         terminator: &LirTerminator,
-    ) -> Result<Vec<SymbolicCpuState>, Error> {
+    ) -> Result<Vec<LirExecutorState>, LirExecutorError> {
         match terminator {
             LirTerminator::FallThrough => Ok(vec![state]),
             LirTerminator::Jump { target } => {

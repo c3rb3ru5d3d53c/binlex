@@ -23,13 +23,14 @@
 use binlex::ir::mir::{
     format_mir_function, format_mir_module, verify_mir_function, verify_mir_module,
     MirAddressSpace, MirBlock, MirBlockParameter, MirCastOperation, MirCompareOperation,
-    MirControlTarget, MirFunction, MirModule, MirOperation, MirOperationKind, MirTerminator,
-    MirTerminatorKind, MirType, MirTypeKind, MirValue,
+    MirControlTarget, MirFunction, MirMlirModule, MirModule, MirOperation, MirOperationKind,
+    MirStructureMember, MirTerminator, MirTerminatorKind, MirType, MirTypeKind, MirUnionMember,
+    MirValue,
 };
 use pyo3::class::basic::CompareOp;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyAny, PyModule, PyType};
+use pyo3::types::{PyAny, PyBytes, PyModule, PyType};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
@@ -146,13 +147,19 @@ simple_enum_binding!(MirCastOp, "MirCastOp", MirCastOperation, {
     FloatExtend, FloatTruncate
 });
 simple_enum_binding!(MirTypeKindPy, "MirTypeKind", MirTypeKind, {
-    Void, Integer, Float, Pointer, Memory, Custom
+    Void, Integer, Float, Pointer, Memory, TypeDefinition, Structure, Union
 });
 simple_enum_binding!(MirTerminatorKindPy, "MirTerminatorKind", MirTerminatorKind, {
     Jump, CondBr, Return, Trap, Unreachable
 });
 
 value_wrapper!(PyMirType, "MirType", MirType);
+value_wrapper!(
+    PyMirStructureMember,
+    "MirStructureMember",
+    MirStructureMember
+);
+value_wrapper!(PyMirUnionMember, "MirUnionMember", MirUnionMember);
 value_wrapper!(PyMirValue, "MirValue", MirValue);
 value_wrapper!(PyMirAddressSpace, "MirAddressSpace", MirAddressSpace);
 value_wrapper!(PyMirBlockParameter, "MirBlockParameter", MirBlockParameter);
@@ -162,6 +169,17 @@ value_wrapper!(PyMirBlock, "MirBlock", MirBlock);
 value_wrapper!(PyMirFunction, "MirFunction", MirFunction);
 value_wrapper!(PyMirModule, "MirModule", MirModule);
 
+#[pyclass(name = "MirMlirModule", unsendable, skip_from_py_object)]
+pub struct PyMirMlirModule {
+    inner: MirMlirModule,
+}
+
+impl PyMirMlirModule {
+    pub fn from_inner(inner: MirMlirModule) -> Self {
+        Self { inner }
+    }
+}
+
 impl PyMirBlock {
     fn value_eq(&self, other: &Self) -> bool {
         *self.inner.lock().unwrap() == *other.inner.lock().unwrap()
@@ -169,6 +187,66 @@ impl PyMirBlock {
 
     fn value_hash(&self) -> isize {
         hash_value(&*self.inner.lock().unwrap())
+    }
+}
+
+#[pymethods]
+impl PyMirMlirModule {
+    #[classmethod]
+    pub fn from_text(_cls: &Bound<'_, PyType>, text: &str) -> PyResult<Self> {
+        let inner = MirMlirModule::from_text(text)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(Self::from_inner(inner))
+    }
+
+    #[classmethod]
+    pub fn from_bytecode(
+        _cls: &Bound<'_, PyType>,
+        bytecode: &Bound<'_, PyBytes>,
+    ) -> PyResult<Self> {
+        let inner = MirMlirModule::from_bytecode(bytecode.as_bytes())
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(Self::from_inner(inner))
+    }
+
+    pub fn optimize_copy_propagation(&self) {
+        self.inner.optimize_copy_propagation();
+    }
+
+    pub fn optimize_constants(&self) {
+        self.inner.optimize_constants();
+    }
+
+    pub fn optimize(&self) {
+        self.inner.optimize();
+    }
+
+    pub fn text(&self) -> String {
+        self.inner.text()
+    }
+
+    pub fn bytecode(&self, py: Python<'_>) -> Py<PyBytes> {
+        PyBytes::new(py, &self.inner.bytecode()).unbind()
+    }
+
+    pub fn operation_names(&self) -> Vec<String> {
+        self.inner.operation_names()
+    }
+
+    pub fn operation_count(&self) -> usize {
+        self.inner.operation_count()
+    }
+
+    pub fn operation_records(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(
+            py,
+            &serde_json::to_value(self.inner.operation_records())
+                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?,
+        )
+    }
+
+    pub fn print(&self) {
+        println!("{}", self.text());
     }
 }
 
@@ -200,8 +278,40 @@ impl PyMirType {
     }
 
     #[classmethod]
-    pub fn custom(_cls: &Bound<'_, PyType>, name: String) -> Self {
-        Self::from_inner(MirType::custom(name))
+    pub fn type_definition(_cls: &Bound<'_, PyType>, name: String) -> Self {
+        Self::from_inner(MirType::type_definition(name))
+    }
+
+    #[classmethod]
+    #[pyo3(signature = (name, members=None))]
+    pub fn structure(
+        _cls: &Bound<'_, PyType>,
+        py: Python<'_>,
+        name: String,
+        members: Option<Vec<Py<PyMirStructureMember>>>,
+    ) -> Self {
+        let members = members
+            .unwrap_or_default()
+            .into_iter()
+            .map(|member| member.borrow(py).inner.lock().unwrap().clone())
+            .collect();
+        Self::from_inner(MirType::structure(name, members))
+    }
+
+    #[classmethod]
+    #[pyo3(signature = (name, members=None))]
+    pub fn union(
+        _cls: &Bound<'_, PyType>,
+        py: Python<'_>,
+        name: String,
+        members: Option<Vec<Py<PyMirUnionMember>>>,
+    ) -> Self {
+        let members = members
+            .unwrap_or_default()
+            .into_iter()
+            .map(|member| member.borrow(py).inner.lock().unwrap().clone())
+            .collect();
+        Self::from_inner(MirType::union(name, members))
     }
 
     #[classmethod]
@@ -227,6 +337,75 @@ impl PyMirType {
 
     pub fn kind(&self) -> MirTypeKindPy {
         MirTypeKindPy::from_inner(self.inner.lock().unwrap().kind())
+    }
+}
+
+#[pymethods]
+impl PyMirStructureMember {
+    #[classmethod]
+    pub fn from_dict(_cls: &Bound<'_, PyType>, py: Python<'_>, data: Py<PyAny>) -> PyResult<Self> {
+        let value = py_to_json_value(py, data)?;
+        let inner = serde_json::from_value(value)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        Ok(Self::from_inner(inner))
+    }
+
+    #[new]
+    pub fn new(name: String, ty: PyRef<'_, PyMirType>) -> Self {
+        Self::from_inner(MirStructureMember::new(
+            name,
+            ty.inner.lock().unwrap().clone(),
+        ))
+    }
+
+    pub fn name(&self) -> String {
+        self.inner.lock().unwrap().name.clone()
+    }
+
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(
+            py,
+            &serde_json::to_value(&*self.inner.lock().unwrap())
+                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?,
+        )
+    }
+
+    pub fn json(&self) -> PyResult<String> {
+        serde_json::to_string(&*self.inner.lock().unwrap())
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+}
+
+#[pymethods]
+impl PyMirUnionMember {
+    #[classmethod]
+    pub fn from_dict(_cls: &Bound<'_, PyType>, py: Python<'_>, data: Py<PyAny>) -> PyResult<Self> {
+        let value = py_to_json_value(py, data)?;
+        let inner = serde_json::from_value(value)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        Ok(Self::from_inner(inner))
+    }
+
+    #[new]
+    pub fn new(name: String, ty: PyRef<'_, PyMirType>) -> Self {
+        Self::from_inner(MirUnionMember::new(name, ty.inner.lock().unwrap().clone()))
+    }
+
+    pub fn name(&self) -> String {
+        self.inner.lock().unwrap().name.clone()
+    }
+
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(
+            py,
+            &serde_json::to_value(&*self.inner.lock().unwrap())
+                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?,
+        )
+    }
+
+    pub fn json(&self) -> PyResult<String> {
+        serde_json::to_string(&*self.inner.lock().unwrap())
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 }
 
@@ -367,6 +546,23 @@ impl PyMirBlockParameter {
 
 #[pymethods]
 impl PyMirOperation {
+    #[classmethod]
+    #[pyo3(signature = (value, ty, result=None))]
+    pub fn copy(
+        _cls: &Bound<'_, PyType>,
+        value: PyRef<'_, PyMirValue>,
+        ty: PyRef<'_, PyMirType>,
+        result: Option<String>,
+    ) -> Self {
+        Self::from_inner(MirOperation::new(
+            result,
+            MirOperationKind::Copy {
+                value: value.inner.lock().unwrap().clone(),
+                ty: ty.inner.lock().unwrap().clone(),
+            },
+        ))
+    }
+
     #[classmethod]
     #[pyo3(signature = (lhs, rhs, ty, result=None))]
     pub fn add(
@@ -919,6 +1115,23 @@ impl PyMirModule {
         Ok(Self::from_inner(mir))
     }
 
+    #[classmethod]
+    pub fn from_text(_cls: &Bound<'_, PyType>, text: &str) -> PyResult<PyMirMlirModule> {
+        let inner = MirModule::from_text(text)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(PyMirMlirModule::from_inner(inner))
+    }
+
+    #[classmethod]
+    pub fn from_bytecode(
+        _cls: &Bound<'_, PyType>,
+        bytecode: &Bound<'_, PyBytes>,
+    ) -> PyResult<PyMirMlirModule> {
+        let inner = MirModule::from_bytecode(bytecode.as_bytes())
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(PyMirMlirModule::from_inner(inner))
+    }
+
     pub fn append_function(&mut self, function: PyRef<'_, PyMirFunction>) {
         self.inner
             .lock()
@@ -1046,6 +1259,26 @@ impl PyMirModule {
         format_mir_module(&self.inner.lock().unwrap())
     }
 
+    pub fn bytecode(&self, py: Python<'_>) -> PyResult<Py<PyBytes>> {
+        let bytecode = self
+            .inner
+            .lock()
+            .unwrap()
+            .bytecode()
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(PyBytes::new(py, &bytecode).unbind())
+    }
+
+    pub fn mlir(&self) -> PyResult<PyMirMlirModule> {
+        let module = self
+            .inner
+            .lock()
+            .unwrap()
+            .mlir()
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(PyMirMlirModule::from_inner(module))
+    }
+
     pub fn print(&self) -> PyResult<()> {
         self.inner.lock().unwrap().print();
         Ok(())
@@ -1072,6 +1305,8 @@ pub fn mir_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<MirTypeKindPy>()?;
     m.add_class::<MirTerminatorKindPy>()?;
     m.add_class::<PyMirType>()?;
+    m.add_class::<PyMirStructureMember>()?;
+    m.add_class::<PyMirUnionMember>()?;
     m.add_class::<PyMirValue>()?;
     m.add_class::<PyMirAddressSpace>()?;
     m.add_class::<PyMirBlockParameter>()?;
@@ -1080,6 +1315,7 @@ pub fn mir_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyMirBlock>()?;
     m.add_class::<PyMirFunction>()?;
     m.add_class::<PyMirModule>()?;
+    m.add_class::<PyMirMlirModule>()?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.ir.mir", m)?;

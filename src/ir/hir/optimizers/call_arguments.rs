@@ -124,7 +124,7 @@ fn extract_complex_call_arguments_from_expression(
         HirExpression::Unary { value, .. }
         | HirExpression::Extract { value, .. }
         | HirExpression::Cast { value, .. }
-        | HirExpression::Deref { pointer: value, .. } => {
+        | HirExpression::Dereference { pointer: value, .. } => {
             extract_complex_call_arguments_from_expression(value, locals, next_index, prepend);
         }
         HirExpression::Binary { lhs, rhs, .. }
@@ -170,7 +170,7 @@ fn extract_complex_call_arguments_from_place(
     prepend: &mut Vec<HirStatement>,
 ) {
     match place {
-        HirPlace::Deref { pointer, .. }
+        HirPlace::Dereference { pointer, .. }
         | HirPlace::Memory {
             address: pointer, ..
         } => {
@@ -187,7 +187,7 @@ fn extract_complex_call_arguments_from_place(
 fn should_extract_complex_load_argument(expression: &HirExpression) -> bool {
     match expression {
         HirExpression::Load { .. } => true,
-        HirExpression::Deref { .. } => true,
+        HirExpression::Dereference { .. } => true,
         HirExpression::Binary { lhs, rhs, .. } => {
             expression_contains_memory_read(lhs) || expression_contains_memory_read(rhs)
         }
@@ -197,7 +197,7 @@ fn should_extract_complex_load_argument(expression: &HirExpression) -> bool {
 
 fn expression_contains_memory_read(expression: &HirExpression) -> bool {
     match expression {
-        HirExpression::Load { .. } | HirExpression::Deref { .. } => true,
+        HirExpression::Load { .. } | HirExpression::Dereference { .. } => true,
         HirExpression::Unary { value, .. }
         | HirExpression::Extract { value, .. }
         | HirExpression::Cast { value, .. } => expression_contains_memory_read(value),

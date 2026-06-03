@@ -388,6 +388,7 @@ pub(crate) fn complete(terminator: LirTerminator, effects: Vec<LirEffect>) -> Li
     Lir {
         version: 1,
         status: LirStatus::Complete,
+        metadata: Default::default(),
         abi: None,
         encoding: None,
         temporaries: Vec::new(),

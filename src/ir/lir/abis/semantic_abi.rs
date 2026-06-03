@@ -1,6 +1,6 @@
 use crate::Architecture;
+use crate::ir::lir::executor::LirExecutorError;
 use crate::ir::lir::{LirCpu, LirLocation, LirTrapKind};
-use crate::symbolic::Error;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -75,35 +75,35 @@ impl LirAbi {
         }
     }
 
-    pub fn from_kind(kind: LirAbiKind, cpu: &LirCpu) -> Result<Self, Error> {
+    pub fn from_kind(kind: LirAbiKind, cpu: &LirCpu) -> Result<Self, LirExecutorError> {
         super::build_builtin(kind, cpu)
     }
 
-    pub fn sysv(cpu: &LirCpu) -> Result<Self, Error> {
+    pub fn sysv(cpu: &LirCpu) -> Result<Self, LirExecutorError> {
         Self::from_kind(LirAbiKind::SysV, cpu)
     }
 
-    pub fn windows64(cpu: &LirCpu) -> Result<Self, Error> {
+    pub fn windows64(cpu: &LirCpu) -> Result<Self, LirExecutorError> {
         Self::from_kind(LirAbiKind::Windows64, cpu)
     }
 
-    pub fn cdecl(cpu: &LirCpu) -> Result<Self, Error> {
+    pub fn cdecl(cpu: &LirCpu) -> Result<Self, LirExecutorError> {
         Self::from_kind(LirAbiKind::Cdecl, cpu)
     }
 
-    pub fn stdcall(cpu: &LirCpu) -> Result<Self, Error> {
+    pub fn stdcall(cpu: &LirCpu) -> Result<Self, LirExecutorError> {
         Self::from_kind(LirAbiKind::Stdcall, cpu)
     }
 
-    pub fn fastcall(cpu: &LirCpu) -> Result<Self, Error> {
+    pub fn fastcall(cpu: &LirCpu) -> Result<Self, LirExecutorError> {
         Self::from_kind(LirAbiKind::Fastcall, cpu)
     }
 
-    pub fn linux_syscall(cpu: &LirCpu) -> Result<Self, Error> {
+    pub fn linux_syscall(cpu: &LirCpu) -> Result<Self, LirExecutorError> {
         Self::from_kind(LirAbiKind::LinuxSyscall, cpu)
     }
 
-    pub fn windows_syscall(cpu: &LirCpu) -> Result<Self, Error> {
+    pub fn windows_syscall(cpu: &LirCpu) -> Result<Self, LirExecutorError> {
         Self::from_kind(LirAbiKind::WindowsSyscall, cpu)
     }
 

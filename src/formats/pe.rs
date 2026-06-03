@@ -1466,25 +1466,29 @@ impl PE {
             None => return symbols,
         };
 
-        let mut typedefs = Vec::<TypeDefEntry>::new();
+        let mut type_definitions = Vec::<TypeDefEntry>::new();
         let mut methoddefs = Vec::<MethodDefEntry>::new();
         for entry in entries {
             match entry {
-                Entry::TypeDef(entry) => typedefs.push(entry),
+                Entry::TypeDef(entry) => type_definitions.push(entry),
                 Entry::MethodDef(entry) => methoddefs.push(entry),
                 _ => {}
             }
         }
 
         let mut method_owner_names = vec![None::<String>; methoddefs.len()];
-        for (type_index, typedef) in typedefs.iter().enumerate() {
-            let start = typedef.method_list.offset.saturating_sub(1) as usize;
-            let end = typedefs
+        for (type_index, type_definition) in type_definitions.iter().enumerate() {
+            let start = type_definition.method_list.offset.saturating_sub(1) as usize;
+            let end = type_definitions
                 .get(type_index + 1)
                 .map(|next| next.method_list.offset.saturating_sub(1) as usize)
                 .unwrap_or(methoddefs.len());
-            let type_name = self.dotnet_string(&typedef.name).unwrap_or_default();
-            let type_namespace = self.dotnet_string(&typedef.namespace).unwrap_or_default();
+            let type_name = self
+                .dotnet_string(&type_definition.name)
+                .unwrap_or_default();
+            let type_namespace = self
+                .dotnet_string(&type_definition.namespace)
+                .unwrap_or_default();
             let qualified_name = if type_namespace.is_empty() {
                 type_name
             } else if type_name.is_empty() {

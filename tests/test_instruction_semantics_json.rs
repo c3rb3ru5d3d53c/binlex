@@ -2,7 +2,7 @@ use binlex::controlflow::InstructionRecord;
 use binlex::controlflow::{Function, Graph};
 use binlex::disassemblers::x86::Disassembler;
 use binlex::ir::lir::{
-    LirEffect, LirExpression, LirInstruction, LirLocation, LirStatus, LirTerminator,
+    LirEffect, LirExpression, LirInstruction, LirLocation, LirMetadata, LirStatus, LirTerminator,
 };
 use binlex::{Architecture, Configuration};
 use serde_json::to_value;
@@ -16,6 +16,7 @@ fn instruction_with_semantics(config: Configuration) -> InstructionRecord {
     instruction.semantics = Some(LirInstruction {
         version: 1,
         status: LirStatus::Complete,
+        metadata: LirMetadata::default(),
         abi: None,
         encoding: None,
         temporaries: Vec::new(),

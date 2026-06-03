@@ -22,6 +22,7 @@ lief = "0.15.1"
 capstone = "0.12.0"
 object = "0.37.3"
 llvm-asm = { path = "crates/llvm-asm" }
+mlir = { path = "crates/mlir" }
 fast-tlsh = "0.1.6"
 ring = "0.17.8"
 serde = { version = "1.0.217", features = ["derive"] }

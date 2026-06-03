@@ -1,7 +1,7 @@
 use std::fmt;
 
 #[derive(Debug, Clone)]
-pub enum Error {
+pub enum LirExecutorError {
     InvalidBits(u16),
     UnsupportedArchitecture(String),
     UnsupportedCpu(String),
@@ -16,7 +16,7 @@ pub enum Error {
     Unsatisfiable,
 }
 
-impl Error {
+impl LirExecutorError {
     pub(crate) fn invalid_bits(bits: u16) -> Self {
         Self::InvalidBits(bits)
     }
@@ -26,7 +26,7 @@ impl Error {
     }
 }
 
-impl fmt::Display for Error {
+impl fmt::Display for LirExecutorError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidBits(bits) => write!(f, "invalid symbolic bit width: {bits}"),
@@ -51,4 +51,4 @@ impl fmt::Display for Error {
     }
 }
 
-impl std::error::Error for Error {}
+impl std::error::Error for LirExecutorError {}

@@ -1,15 +1,15 @@
 use crate::formats::Image;
+use crate::ir::lir::executor::LirExecutorError;
+use crate::ir::lir::executor::backend::z3::{TrackedAst, Z3Backend};
+use crate::ir::lir::executor::memory::FlatMemory;
+use crate::ir::lir::executor::slice::{Slice, SliceInstruction, SliceNode};
 use crate::ir::lir::{LirCpu, LirData, LirEncoding};
-use crate::symbolic::Error;
-use crate::symbolic::backend::z3::{TrackedAst, Z3Backend};
-use crate::symbolic::memory::FlatMemory;
-use crate::symbolic::slice::{Slice, SliceInstruction, SliceNode};
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::sync::Arc;
 use z3::ast::{BV, Bool};
 
 #[derive(Clone)]
-pub(crate) struct SymbolicCell {
+pub(crate) struct LirExecutorCell {
     pub(crate) value: BV,
     pub(crate) def_id: Option<u64>,
 }
@@ -24,19 +24,19 @@ struct DefinitionNode {
 }
 
 #[derive(Clone)]
-pub struct SymbolicCpuState {
+pub struct LirExecutorState {
     cpu: Arc<LirCpu>,
     address_bits: u16,
     backend: Z3Backend,
-    registers: HashMap<String, SymbolicCell>,
-    flags: HashMap<String, SymbolicCell>,
-    temporaries: HashMap<u32, SymbolicCell>,
-    program_counter: Option<SymbolicCell>,
+    registers: HashMap<String, LirExecutorCell>,
+    flags: HashMap<String, LirExecutorCell>,
+    temporaries: HashMap<u32, LirExecutorCell>,
+    program_counter: Option<LirExecutorCell>,
     memory: FlatMemory,
-    indexed_memory: HashMap<String, HashMap<String, SymbolicCell>>,
-    stack_memory: HashMap<String, HashMap<u32, SymbolicCell>>,
-    reference_properties: HashMap<String, HashMap<String, SymbolicCell>>,
-    reference_elements: HashMap<String, HashMap<String, SymbolicCell>>,
+    indexed_memory: HashMap<String, HashMap<String, LirExecutorCell>>,
+    stack_memory: HashMap<String, HashMap<u32, LirExecutorCell>>,
+    reference_properties: HashMap<String, HashMap<String, LirExecutorCell>>,
+    reference_elements: HashMap<String, HashMap<String, LirExecutorCell>>,
     semantic_data_addresses: HashMap<String, u64>,
     next_semantic_data_address: u64,
     constraints: Vec<Bool>,
@@ -47,8 +47,13 @@ pub struct SymbolicCpuState {
     next_reference_id: u64,
 }
 
-impl SymbolicCpuState {
-    fn extract_register_alias(&self, value: &BV, alias_bits: u16, lsb: u16) -> Result<BV, Error> {
+impl LirExecutorState {
+    fn extract_register_alias(
+        &self,
+        value: &BV,
+        alias_bits: u16,
+        lsb: u16,
+    ) -> Result<BV, LirExecutorError> {
         let full_bits = value.get_size() as u16;
         if alias_bits == full_bits && lsb == 0 {
             return Ok(value.clone());
@@ -58,13 +63,13 @@ impl SymbolicCpuState {
 
     fn merge_register_alias(
         &self,
-        current: Option<&SymbolicCell>,
+        current: Option<&LirExecutorCell>,
         alias_value: &BV,
         full_bits: u16,
         alias_bits: u16,
         lsb: u16,
         zero_extend_on_write: bool,
-    ) -> Result<BV, Error> {
+    ) -> Result<BV, LirExecutorError> {
         if alias_bits == full_bits && lsb == 0 {
             return self.backend.coerce_bv_width(alias_value, full_bits);
         }
@@ -144,7 +149,7 @@ impl SymbolicCpuState {
         name: &str,
         bits: u16,
         symbol: Option<&str>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), LirExecutorError> {
         let symbol = symbol
             .map(ToOwned::to_owned)
             .unwrap_or_else(|| format!("register:{name}"));
@@ -156,20 +161,33 @@ impl SymbolicCpuState {
         Ok(())
     }
 
-    pub fn set_register(&mut self, name: &str, bits: u16, value: u64) -> Result<(), Error> {
+    pub fn set_register(
+        &mut self,
+        name: &str,
+        bits: u16,
+        value: u64,
+    ) -> Result<(), LirExecutorError> {
         let value = self.backend.const_bv(value as u128, bits)?;
         self.set_register_value(name, value, None);
         Ok(())
     }
 
-    pub fn symbolic_register(&self, name: &str, bits: u16) -> Result<Option<String>, Error> {
+    pub fn symbolic_register(
+        &self,
+        name: &str,
+        bits: u16,
+    ) -> Result<Option<String>, LirExecutorError> {
         let Some(value) = self.get_register_cell(name, bits)? else {
             return Ok(None);
         };
         Ok(Some(value.value.to_string()))
     }
 
-    pub fn evaluate_register(&self, name: &str, bits: u16) -> Result<Option<u64>, Error> {
+    pub fn evaluate_register(
+        &self,
+        name: &str,
+        bits: u16,
+    ) -> Result<Option<u64>, LirExecutorError> {
         let Some(value) = self.get_register_cell(name, bits)? else {
             return Ok(None);
         };
@@ -180,7 +198,7 @@ impl SymbolicCpuState {
         self.memory.map(address, size);
     }
 
-    pub fn write_memory(&mut self, address: u64, data: &[u8]) -> Result<(), Error> {
+    pub fn write_memory(&mut self, address: u64, data: &[u8]) -> Result<(), LirExecutorError> {
         self.memory.store_bytes(&self.backend, address, data)
     }
 
@@ -193,7 +211,7 @@ impl SymbolicCpuState {
         address: u64,
         size: usize,
         name: Option<&str>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), LirExecutorError> {
         let prefix = name.unwrap_or("memory");
         let bytes = self
             .memory
@@ -215,7 +233,7 @@ impl SymbolicCpuState {
         Ok(())
     }
 
-    pub fn symbolic_memory(&self, address: u64, size: usize) -> Result<String, Error> {
+    pub fn symbolic_memory(&self, address: u64, size: usize) -> Result<String, LirExecutorError> {
         let address = self.backend.const_bv(address as u128, self.address_bits)?;
         let value = self
             .memory
@@ -227,18 +245,22 @@ impl SymbolicCpuState {
         self.constraints.iter().map(ToString::to_string).collect()
     }
 
-    pub fn program_counter(&self) -> Result<Option<u64>, Error> {
+    pub fn program_counter(&self) -> Result<Option<u64>, LirExecutorError> {
         match self.program_counter.as_ref() {
             Some(value) => self.backend.eval_bv_u64(&self.constraints, &value.value),
             None => Ok(None),
         }
     }
 
-    pub(crate) fn eval_program_counter_u64(&self) -> Result<Option<u64>, Error> {
+    pub(crate) fn eval_program_counter_u64(&self) -> Result<Option<u64>, LirExecutorError> {
         self.program_counter()
     }
 
-    pub fn evaluate_memory(&self, address: u64, size: usize) -> Result<Option<u64>, Error> {
+    pub fn evaluate_memory(
+        &self,
+        address: u64,
+        size: usize,
+    ) -> Result<Option<u64>, LirExecutorError> {
         let address = self.backend.const_bv(address as u128, self.address_bits)?;
         let value = self
             .memory
@@ -246,7 +268,11 @@ impl SymbolicCpuState {
         self.backend.eval_bv_u64(&self.constraints, &value)
     }
 
-    pub fn read_memory(&self, address: u64, size: usize) -> Result<Option<Vec<u8>>, Error> {
+    pub fn read_memory(
+        &self,
+        address: u64,
+        size: usize,
+    ) -> Result<Option<Vec<u8>>, LirExecutorError> {
         let mut bytes = Vec::with_capacity(size);
         for offset in 0..size {
             let byte_address = self
@@ -261,14 +287,14 @@ impl SymbolicCpuState {
         Ok(Some(bytes))
     }
 
-    pub fn satisfiable(&self) -> Result<bool, Error> {
+    pub fn satisfiable(&self) -> Result<bool, LirExecutorError> {
         self.backend.is_sat(&self.constraints)
     }
 
-    pub fn load_semantic_data(&mut self, data: &[LirData]) -> Result<(), Error> {
+    pub fn load_semantic_data(&mut self, data: &[LirData]) -> Result<(), LirExecutorError> {
         for item in data {
             if item.name.trim().is_empty() {
-                return Err(Error::UnsupportedExpression(
+                return Err(LirExecutorError::UnsupportedExpression(
                     "semantic data item has empty name",
                 ));
             }
@@ -285,23 +311,23 @@ impl SymbolicCpuState {
             self.next_semantic_data_address = self
                 .next_semantic_data_address
                 .checked_add(aligned_size)
-                .ok_or_else(|| Error::solver("semantic data address space overflow"))?;
+                .ok_or_else(|| LirExecutorError::solver("semantic data address space overflow"))?;
         }
         Ok(())
     }
 
-    pub fn model(&self) -> Result<HashMap<String, String>, Error> {
+    pub fn model(&self) -> Result<HashMap<String, String>, LirExecutorError> {
         self.backend.model(&self.constraints, &self.tracked)
     }
 
-    pub fn slice_from_register(&self, name: &str, bits: u16) -> Result<Slice, Error> {
+    pub fn slice_from_register(&self, name: &str, bits: u16) -> Result<Slice, LirExecutorError> {
         let Some(cell) = self.get_register_cell(name, bits)? else {
             return Ok(Slice::default());
         };
         Ok(self.slice_from_def_ids(cell.def_id.into_iter().collect()))
     }
 
-    pub fn slice_from_memory(&self, address: u64, size: usize) -> Result<Slice, Error> {
+    pub fn slice_from_memory(&self, address: u64, size: usize) -> Result<Slice, LirExecutorError> {
         Ok(self.slice_from_def_ids(self.memory.provenance_for_range(address, size)))
     }
 
@@ -336,14 +362,14 @@ impl SymbolicCpuState {
         {
             self.set_register_value(&name, value.clone(), def_id);
         }
-        self.program_counter = Some(SymbolicCell { value, def_id });
+        self.program_counter = Some(LirExecutorCell { value, def_id });
     }
 
     pub(crate) fn get_or_create_register(
         &mut self,
         name: &str,
         bits: u16,
-    ) -> Result<SymbolicCell, Error> {
+    ) -> Result<LirExecutorCell, LirExecutorError> {
         if let Some(resolution) = self.cpu.resolve_register(name) {
             let canonical = resolution.storage_name;
             let base = if let Some(value) = self.registers.get(&canonical) {
@@ -358,14 +384,14 @@ impl SymbolicCpuState {
                     &value,
                     Some(symbol),
                 );
-                let cell = SymbolicCell {
+                let cell = LirExecutorCell {
                     value: value.clone(),
                     def_id: Some(def_id),
                 };
                 self.registers.insert(canonical.to_string(), cell.clone());
                 cell
             };
-            return Ok(SymbolicCell {
+            return Ok(LirExecutorCell {
                 value: self.extract_register_alias(
                     &base.value,
                     resolution.bits.min(bits),
@@ -375,7 +401,7 @@ impl SymbolicCpuState {
             });
         }
         if let Some(value) = self.registers.get(name) {
-            return Ok(SymbolicCell {
+            return Ok(LirExecutorCell {
                 value: self.backend.coerce_bv_width(&value.value, bits)?,
                 def_id: value.def_id,
             });
@@ -385,7 +411,7 @@ impl SymbolicCpuState {
         self.tracked
             .insert(symbol.clone(), TrackedAst::BitVector(value.clone()));
         let def_id = self.create_root_definition(format!("register:{name}"), &value, Some(symbol));
-        let cell = SymbolicCell {
+        let cell = LirExecutorCell {
             value: value.clone(),
             def_id: Some(def_id),
         };
@@ -411,14 +437,14 @@ impl SymbolicCpuState {
                 .instruction_pointer_register_name(merged.get_size() as u16)
                 .is_some_and(|ip_name| ip_name == canonical.as_str())
             {
-                self.program_counter = Some(SymbolicCell {
+                self.program_counter = Some(LirExecutorCell {
                     value: merged.clone(),
                     def_id,
                 });
             }
             self.registers.insert(
                 canonical,
-                SymbolicCell {
+                LirExecutorCell {
                     value: merged,
                     def_id,
                 },
@@ -429,21 +455,25 @@ impl SymbolicCpuState {
             .instruction_pointer_register_name(value.get_size() as u16)
             .is_some_and(|ip_name| ip_name == name)
         {
-            self.program_counter = Some(SymbolicCell {
+            self.program_counter = Some(LirExecutorCell {
                 value: value.clone(),
                 def_id,
             });
         }
         self.registers
-            .insert(name.to_string(), SymbolicCell { value, def_id });
+            .insert(name.to_string(), LirExecutorCell { value, def_id });
     }
 
-    fn get_register_cell(&self, name: &str, bits: u16) -> Result<Option<SymbolicCell>, Error> {
+    fn get_register_cell(
+        &self,
+        name: &str,
+        bits: u16,
+    ) -> Result<Option<LirExecutorCell>, LirExecutorError> {
         if let Some(resolution) = self.cpu.resolve_register(name) {
             let Some(base) = self.registers.get(&resolution.storage_name) else {
                 return Ok(None);
             };
-            return Ok(Some(SymbolicCell {
+            return Ok(Some(LirExecutorCell {
                 value: self.extract_register_alias(
                     &base.value,
                     resolution.bits.min(bits),
@@ -455,7 +485,7 @@ impl SymbolicCpuState {
         let Some(value) = self.registers.get(name) else {
             return Ok(None);
         };
-        Ok(Some(SymbolicCell {
+        Ok(Some(LirExecutorCell {
             value: self.backend.coerce_bv_width(&value.value, bits)?,
             def_id: value.def_id,
         }))
@@ -465,9 +495,9 @@ impl SymbolicCpuState {
         &mut self,
         name: &str,
         bits: u16,
-    ) -> Result<SymbolicCell, Error> {
+    ) -> Result<LirExecutorCell, LirExecutorError> {
         if let Some(value) = self.flags.get(name) {
-            return Ok(SymbolicCell {
+            return Ok(LirExecutorCell {
                 value: self.backend.coerce_bv_width(&value.value, bits)?,
                 def_id: value.def_id,
             });
@@ -477,7 +507,7 @@ impl SymbolicCpuState {
         self.tracked
             .insert(symbol.clone(), TrackedAst::BitVector(value.clone()));
         let def_id = self.create_root_definition(format!("flag:{name}"), &value, Some(symbol));
-        let cell = SymbolicCell {
+        let cell = LirExecutorCell {
             value: value.clone(),
             def_id: Some(def_id),
         };
@@ -487,16 +517,16 @@ impl SymbolicCpuState {
 
     pub(crate) fn set_flag_value(&mut self, name: &str, value: BV, def_id: Option<u64>) {
         self.flags
-            .insert(name.to_string(), SymbolicCell { value, def_id });
+            .insert(name.to_string(), LirExecutorCell { value, def_id });
     }
 
     pub(crate) fn get_or_create_temporary(
         &mut self,
         id: u32,
         bits: u16,
-    ) -> Result<SymbolicCell, Error> {
+    ) -> Result<LirExecutorCell, LirExecutorError> {
         if let Some(value) = self.temporaries.get(&id) {
-            return Ok(SymbolicCell {
+            return Ok(LirExecutorCell {
                 value: self.backend.coerce_bv_width(&value.value, bits)?,
                 def_id: value.def_id,
             });
@@ -506,7 +536,7 @@ impl SymbolicCpuState {
         self.tracked
             .insert(symbol.clone(), TrackedAst::BitVector(value.clone()));
         let def_id = self.create_root_definition(format!("temporary:{id}"), &value, Some(symbol));
-        let cell = SymbolicCell {
+        let cell = LirExecutorCell {
             value: value.clone(),
             def_id: Some(def_id),
         };
@@ -515,7 +545,8 @@ impl SymbolicCpuState {
     }
 
     pub(crate) fn set_temporary_value(&mut self, id: u32, value: BV, def_id: Option<u64>) {
-        self.temporaries.insert(id, SymbolicCell { value, def_id });
+        self.temporaries
+            .insert(id, LirExecutorCell { value, def_id });
     }
 
     pub(crate) fn get_or_create_indexed_memory(
@@ -523,13 +554,13 @@ impl SymbolicCpuState {
         name: &str,
         index: &str,
         bits: u16,
-    ) -> Result<SymbolicCell, Error> {
+    ) -> Result<LirExecutorCell, LirExecutorError> {
         if let Some(value) = self
             .indexed_memory
             .get(name)
             .and_then(|slots| slots.get(index))
         {
-            return Ok(SymbolicCell {
+            return Ok(LirExecutorCell {
                 value: self.backend.coerce_bv_width(&value.value, bits)?,
                 def_id: value.def_id,
             });
@@ -543,7 +574,7 @@ impl SymbolicCpuState {
             &value,
             Some(symbol),
         );
-        let cell = SymbolicCell {
+        let cell = LirExecutorCell {
             value: value.clone(),
             def_id: Some(def_id),
         };
@@ -564,7 +595,7 @@ impl SymbolicCpuState {
         self.indexed_memory
             .entry(name.to_string())
             .or_default()
-            .insert(index, SymbolicCell { value, def_id });
+            .insert(index, LirExecutorCell { value, def_id });
     }
 
     pub(crate) fn get_or_create_stack_memory(
@@ -572,13 +603,13 @@ impl SymbolicCpuState {
         name: &str,
         offset: u32,
         bits: u16,
-    ) -> Result<SymbolicCell, Error> {
+    ) -> Result<LirExecutorCell, LirExecutorError> {
         if let Some(value) = self
             .stack_memory
             .get(name)
             .and_then(|slots| slots.get(&offset))
         {
-            return Ok(SymbolicCell {
+            return Ok(LirExecutorCell {
                 value: self.backend.coerce_bv_width(&value.value, bits)?,
                 def_id: value.def_id,
             });
@@ -592,7 +623,7 @@ impl SymbolicCpuState {
             &value,
             Some(symbol),
         );
-        let cell = SymbolicCell {
+        let cell = LirExecutorCell {
             value: value.clone(),
             def_id: Some(def_id),
         };
@@ -613,7 +644,7 @@ impl SymbolicCpuState {
         self.stack_memory
             .entry(name.to_string())
             .or_default()
-            .insert(offset, SymbolicCell { value, def_id });
+            .insert(offset, LirExecutorCell { value, def_id });
     }
 
     pub(crate) fn push_stack_memory_value(&mut self, name: &str, value: BV, def_id: Option<u64>) {
@@ -622,7 +653,7 @@ impl SymbolicCpuState {
             .iter()
             .map(|(offset, cell)| (offset.saturating_add(1), cell.clone()))
             .collect::<HashMap<_, _>>();
-        shifted.insert(0, SymbolicCell { value, def_id });
+        shifted.insert(0, LirExecutorCell { value, def_id });
         *stack = shifted;
     }
 
@@ -630,7 +661,7 @@ impl SymbolicCpuState {
         &mut self,
         name: &str,
         bits: u16,
-    ) -> Result<SymbolicCell, Error> {
+    ) -> Result<LirExecutorCell, LirExecutorError> {
         let cell = self.get_or_create_stack_memory(name, 0, bits)?;
         let stack = self.stack_memory.entry(name.to_string()).or_default();
         let shifted = stack
@@ -650,16 +681,16 @@ impl SymbolicCpuState {
     pub(crate) fn get_or_create_program_counter(
         &mut self,
         bits: u16,
-    ) -> Result<SymbolicCell, Error> {
+    ) -> Result<LirExecutorCell, LirExecutorError> {
         if let Some(value) = self.program_counter.as_ref() {
-            return Ok(SymbolicCell {
+            return Ok(LirExecutorCell {
                 value: self.backend.coerce_bv_width(&value.value, bits)?,
                 def_id: value.def_id,
             });
         }
         if let Some(name) = self.instruction_pointer_register_name(bits) {
             if let Some(value) = self.registers.get(name) {
-                let value = SymbolicCell {
+                let value = LirExecutorCell {
                     value: self.backend.coerce_bv_width(&value.value, bits)?,
                     def_id: value.def_id,
                 };
@@ -673,7 +704,7 @@ impl SymbolicCpuState {
             .insert(symbol.clone(), TrackedAst::BitVector(value.clone()));
         let def_id =
             self.create_root_definition("program_counter".to_string(), &value, Some(symbol));
-        let cell = SymbolicCell {
+        let cell = LirExecutorCell {
             value: value.clone(),
             def_id: Some(def_id),
         };
@@ -684,14 +715,18 @@ impl SymbolicCpuState {
         Ok(cell)
     }
 
-    pub(crate) fn fresh_value(&mut self, prefix: &str, bits: u16) -> Result<SymbolicCell, Error> {
+    pub(crate) fn fresh_value(
+        &mut self,
+        prefix: &str,
+        bits: u16,
+    ) -> Result<LirExecutorCell, LirExecutorError> {
         let name = format!("{prefix}#{}", self.next_fresh_id);
         self.next_fresh_id += 1;
         let value = self.backend.fresh_bv(&name, bits)?;
         self.tracked
             .insert(name.clone(), TrackedAst::BitVector(value.clone()));
         let def_id = self.create_root_definition(name.clone(), &value, Some(name));
-        Ok(SymbolicCell {
+        Ok(LirExecutorCell {
             value,
             def_id: Some(def_id),
         })
@@ -701,7 +736,7 @@ impl SymbolicCpuState {
         &mut self,
         kind: &str,
         bits: u16,
-    ) -> Result<SymbolicCell, Error> {
+    ) -> Result<LirExecutorCell, LirExecutorError> {
         let id = self.next_reference_id;
         self.next_reference_id = self.next_reference_id.saturating_add(1);
         let value = self.backend.const_bv(id as u128, bits)?;
@@ -710,7 +745,7 @@ impl SymbolicCpuState {
             &value,
             Some(format!("reference:{kind}#{id}")),
         );
-        Ok(SymbolicCell {
+        Ok(LirExecutorCell {
             value,
             def_id: Some(def_id),
         })
@@ -721,13 +756,13 @@ impl SymbolicCpuState {
         reference: &str,
         name: &str,
         bits: u16,
-    ) -> Result<SymbolicCell, Error> {
+    ) -> Result<LirExecutorCell, LirExecutorError> {
         if let Some(value) = self
             .reference_properties
             .get(reference)
             .and_then(|properties| properties.get(name))
         {
-            return Ok(SymbolicCell {
+            return Ok(LirExecutorCell {
                 value: self.backend.coerce_bv_width(&value.value, bits)?,
                 def_id: value.def_id,
             });
@@ -741,7 +776,7 @@ impl SymbolicCpuState {
             &value,
             Some(symbol),
         );
-        let cell = SymbolicCell {
+        let cell = LirExecutorCell {
             value: value.clone(),
             def_id: Some(def_id),
         };
@@ -762,7 +797,7 @@ impl SymbolicCpuState {
         self.reference_properties
             .entry(reference)
             .or_default()
-            .insert(name, SymbolicCell { value, def_id });
+            .insert(name, LirExecutorCell { value, def_id });
     }
 
     pub(crate) fn get_or_create_reference_element(
@@ -770,13 +805,13 @@ impl SymbolicCpuState {
         reference: &str,
         index: &str,
         bits: u16,
-    ) -> Result<SymbolicCell, Error> {
+    ) -> Result<LirExecutorCell, LirExecutorError> {
         if let Some(value) = self
             .reference_elements
             .get(reference)
             .and_then(|elements| elements.get(index))
         {
-            return Ok(SymbolicCell {
+            return Ok(LirExecutorCell {
                 value: self.backend.coerce_bv_width(&value.value, bits)?,
                 def_id: value.def_id,
             });
@@ -790,7 +825,7 @@ impl SymbolicCpuState {
             &value,
             Some(symbol),
         );
-        let cell = SymbolicCell {
+        let cell = LirExecutorCell {
             value: value.clone(),
             def_id: Some(def_id),
         };
@@ -811,7 +846,7 @@ impl SymbolicCpuState {
         self.reference_elements
             .entry(reference)
             .or_default()
-            .insert(index, SymbolicCell { value, def_id });
+            .insert(index, LirExecutorCell { value, def_id });
     }
 
     pub(crate) fn define_location(

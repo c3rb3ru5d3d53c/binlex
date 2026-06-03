@@ -1,6 +1,7 @@
 use crate::Context;
 use crate::error::{Error, Result};
 use crate::ffi;
+use crate::printer;
 use crate::string_ref;
 
 use super::{Block, Location, Operation};
@@ -21,6 +22,15 @@ impl Module {
     pub fn parse(context: &Context, source: &str) -> Result<Self> {
         let raw =
             unsafe { ffi::mlirModuleCreateParse(context.raw(), string_ref::from_str(source)) };
+        if raw.ptr.is_null() {
+            return Err(Error::ParseFailed);
+        }
+        Ok(Self { raw })
+    }
+
+    pub fn parse_bytes(context: &Context, source: &[u8]) -> Result<Self> {
+        let raw =
+            unsafe { ffi::mlirModuleCreateParse(context.raw(), string_ref::from_bytes(source)) };
         if raw.ptr.is_null() {
             return Err(Error::ParseFailed);
         }
@@ -61,6 +71,12 @@ impl Module {
 
     pub fn to_string(&self) -> Result<String> {
         self.operation().to_string()
+    }
+
+    pub fn bytecode(&self) -> Vec<u8> {
+        printer::collect_bytes(|callback, user_data| unsafe {
+            ffi::mlirOperationWriteBytecode(self.operation().raw(), callback, user_data);
+        })
     }
 }
 

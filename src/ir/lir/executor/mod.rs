@@ -9,7 +9,7 @@ mod slice;
 mod state;
 mod terminators;
 
-pub use error::Error;
-pub use executor::SymbolicExecutor;
+pub use error::LirExecutorError;
+pub use executor::LirExecutor;
 pub use slice::{Slice, SliceInstruction, SliceNode};
-pub use state::SymbolicCpuState;
+pub use state::LirExecutorState;

@@ -87,7 +87,7 @@ fn fold_undef_expression(expression: &HirExpression) -> Option<HirExpression> {
         HirExpression::Unary { value, ty, .. }
         | HirExpression::Extract { value, ty, .. }
         | HirExpression::Cast { value, ty, .. }
-        | HirExpression::Deref { pointer: value, ty } => {
+        | HirExpression::Dereference { pointer: value, ty } => {
             is_undef_expression(value).then(|| undef_expression(ty.clone()))
         }
         HirExpression::Binary { lhs, rhs, ty, .. }

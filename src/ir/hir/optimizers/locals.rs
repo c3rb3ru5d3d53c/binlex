@@ -86,7 +86,7 @@ fn collect_referenced_names_in_expression(
         HirExpression::Unary { value, .. }
         | HirExpression::Extract { value, .. }
         | HirExpression::Cast { value, .. }
-        | HirExpression::Deref { pointer: value, .. } => {
+        | HirExpression::Dereference { pointer: value, .. } => {
             collect_referenced_names_in_expression(value, names);
         }
         HirExpression::Binary { lhs, rhs, .. }
@@ -143,7 +143,7 @@ fn collect_referenced_names_in_place(place: &HirPlace, names: &mut BTreeSet<Stri
         HirPlace::Named { name, .. } => {
             names.insert(name.clone());
         }
-        HirPlace::Deref { pointer, .. }
+        HirPlace::Dereference { pointer, .. }
         | HirPlace::Memory {
             address: pointer, ..
         } => {

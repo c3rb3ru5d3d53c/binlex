@@ -46,7 +46,6 @@ pub mod rules;
 pub mod runtime;
 pub mod server;
 pub mod storage;
-pub mod symbolic;
 pub mod util;
 
 pub use assemblers::Assembler;
@@ -67,7 +66,7 @@ pub use disassemblers::DisassemblerBackend;
 pub use embeddings::Embedding;
 pub use embeddings::EmbeddingBackend;
 pub use ir::hir::{HirFunction, HirModule};
-pub use ir::lir::{LirAbi, LirAbiKind, LirAbiTrap, LirCpuKind};
+pub use ir::lir::{LirAbi, LirAbiKind, LirAbiTrap, LirCpuKind, LirExecutor, LirExecutorState};
 pub use math::entropy;
 pub use query::Query;
 pub use util::hexdump;

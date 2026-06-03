@@ -19,7 +19,7 @@ where
         HirExpression::Unary { value, .. }
         | HirExpression::Extract { value, .. }
         | HirExpression::Cast { value, .. }
-        | HirExpression::Deref { pointer: value, .. } => visit(value),
+        | HirExpression::Dereference { pointer: value, .. } => visit(value),
         HirExpression::Binary { lhs, rhs, .. }
         | HirExpression::Compare { lhs, rhs, .. }
         | HirExpression::FloatCompare { lhs, rhs, .. }
@@ -80,7 +80,7 @@ where
     F: FnMut(&mut HirExpression) + Copy,
 {
     match place {
-        HirPlace::Deref { pointer, .. }
+        HirPlace::Dereference { pointer, .. }
         | HirPlace::Memory {
             address: pointer, ..
         } => {
@@ -108,7 +108,7 @@ pub(crate) fn value_type(expression: &HirExpression) -> HirType {
         | HirExpression::Compare { ty, .. }
         | HirExpression::FloatCompare { ty, .. }
         | HirExpression::Cast { ty, .. }
-        | HirExpression::Deref { ty, .. }
+        | HirExpression::Dereference { ty, .. }
         | HirExpression::Index { ty, .. }
         | HirExpression::AddressOf { ty, .. } => ty.clone(),
         HirExpression::Call { return_types, .. }

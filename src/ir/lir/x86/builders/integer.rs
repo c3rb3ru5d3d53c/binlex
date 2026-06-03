@@ -561,6 +561,7 @@ fn lock_cmpxchg8b(machine: Architecture, operands: &[X86OperandView]) -> Option<
     Some(Lir {
         version: 1,
         status: LirStatus::Complete,
+        metadata: Default::default(),
         abi: None,
         encoding: None,
         temporaries: vec![LirTemporary {
@@ -646,6 +647,7 @@ fn lock_cmpxchg16b(machine: Architecture, operands: &[X86OperandView]) -> Option
     Some(Lir {
         version: 1,
         status: LirStatus::Complete,
+        metadata: Default::default(),
         abi: None,
         encoding: None,
         temporaries: vec![LirTemporary {

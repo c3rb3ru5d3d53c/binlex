@@ -32,6 +32,7 @@ use super::optimizers::{
 use super::print::{format_mir_function, format_mir_module};
 use crate::ir::lir::{LirAbi, LirFunction, LirModule};
 use crate::ir::mir::lower::{MirLowerError, lower_lir_to_mir, materialize_entry_parameters};
+use crate::ir::mir::mlir::MirMlirModule;
 use crate::ir::storage::IrStorage;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -378,6 +379,22 @@ impl MirModule {
 
     pub fn text(&self) -> String {
         format_mir_module(self)
+    }
+
+    pub fn mlir(&self) -> mlir::Result<MirMlirModule> {
+        MirMlirModule::from_mir(self)
+    }
+
+    pub fn from_text(text: &str) -> mlir::Result<MirMlirModule> {
+        MirMlirModule::from_text(text)
+    }
+
+    pub fn from_bytecode(bytecode: &[u8]) -> mlir::Result<MirMlirModule> {
+        MirMlirModule::from_bytecode(bytecode)
+    }
+
+    pub fn bytecode(&self) -> mlir::Result<Vec<u8>> {
+        Ok(self.mlir()?.bytecode())
     }
 
     pub fn print(&self) {

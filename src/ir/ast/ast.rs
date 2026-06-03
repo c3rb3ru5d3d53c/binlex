@@ -38,6 +38,8 @@ pub struct AstFunction {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub abi: Option<LirAbi>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub parameters: Vec<AstParameter>,
@@ -50,6 +52,18 @@ pub struct AstFunction {
 }
 
 impl AstFunction {
+    pub fn new(name: Option<String>) -> Self {
+        Self {
+            name,
+            comment: None,
+            abi: None,
+            parameters: Vec::new(),
+            returns: Vec::new(),
+            locals: Vec::new(),
+            blocks: Vec::new(),
+        }
+    }
+
     pub fn from_hir(hir: &HirFunction) -> Self {
         let mut hir = hir.clone();
         optimize_hir_for_ast(&mut hir);
@@ -68,6 +82,7 @@ impl AstFunction {
         }
         let mut function = Self {
             name: hir.name.clone(),
+            comment: None,
             abi: hir.abi.clone(),
             parameters: hir.parameters.iter().map(AstParameter::from_hir).collect(),
             returns: hir.returns.clone(),
@@ -82,6 +97,34 @@ impl AstFunction {
 
     pub fn optimize(&mut self) {
         optimize_ast_function(self);
+    }
+
+    pub fn set_comment(&mut self, comment: Option<String>) {
+        self.comment = comment;
+    }
+
+    pub fn set_returns(&mut self, returns: Vec<super::kind::AstType>) {
+        self.returns = returns;
+    }
+
+    pub fn append_return(&mut self, ty: super::kind::AstType) {
+        self.returns.push(ty);
+    }
+
+    pub fn rename_local(&mut self, name: &str, display_name: impl Into<String>) -> bool {
+        let Some(local) = self.locals.iter_mut().find(|local| local.name == name) else {
+            return false;
+        };
+        local.display_name = Some(display_name.into());
+        true
+    }
+
+    pub fn set_local_comment(&mut self, name: &str, comment: Option<String>) -> bool {
+        let Some(local) = self.locals.iter_mut().find(|local| local.name == name) else {
+            return false;
+        };
+        local.comment = comment;
+        true
     }
 
     pub fn c(&self) -> String {
@@ -139,6 +182,7 @@ fn promote_incoming_stack_parameters(function: &mut AstFunction) -> BTreeSet<Str
             function.parameters.push(AstParameter {
                 name: name.clone(),
                 ty,
+                comment: None,
             });
         }
         promoted_names.insert(name.clone());
@@ -249,6 +293,7 @@ fn collect_named_value_uses_in_statement(statement: &AstStatement, used: &mut BT
         }
         AstStatement::Break
         | AstStatement::Continue
+        | AstStatement::Comment(_)
         | AstStatement::Label(_)
         | AstStatement::Goto(AstTarget::Direct(_))
         | AstStatement::Trap
@@ -302,9 +347,10 @@ fn collect_named_value_uses_in_expression(expression: &AstExpression, used: &mut
             }
         }
         AstExpression::AddressOf { place, .. } => collect_named_value_uses_in_place(place, used),
-        AstExpression::Deref { pointer, .. } => {
+        AstExpression::Dereference { pointer, .. } => {
             collect_named_value_uses_in_expression(pointer, used)
         }
+        AstExpression::Member { base, .. } => collect_named_value_uses_in_expression(base, used),
         AstExpression::Index { base, index, .. } => {
             collect_named_value_uses_in_expression(base, used);
             collect_named_value_uses_in_expression(index, used);
@@ -315,7 +361,7 @@ fn collect_named_value_uses_in_expression(expression: &AstExpression, used: &mut
 
 fn collect_named_value_uses_in_place(place: &AstPlace, used: &mut BTreeSet<String>) {
     match place {
-        AstPlace::Deref { pointer, .. }
+        AstPlace::Dereference { pointer, .. }
         | AstPlace::Memory {
             address: pointer, ..
         } => {
@@ -397,6 +443,7 @@ fn collect_incoming_stack_slots_in_statement(
         }
         AstStatement::Break
         | AstStatement::Continue
+        | AstStatement::Comment(_)
         | AstStatement::Label(_)
         | AstStatement::Goto(AstTarget::Direct(_))
         | AstStatement::Trap
@@ -462,8 +509,11 @@ fn collect_incoming_stack_slots_in_expression(
         AstExpression::AddressOf { place, .. } => {
             collect_incoming_stack_slots_in_place(place, reads, stores);
         }
-        AstExpression::Deref { pointer, .. } => {
+        AstExpression::Dereference { pointer, .. } => {
             collect_incoming_stack_slots_in_expression(pointer, reads, stores);
+        }
+        AstExpression::Member { base, .. } => {
+            collect_incoming_stack_slots_in_expression(base, reads, stores);
         }
         AstExpression::Index { base, index, .. } => {
             collect_incoming_stack_slots_in_expression(base, reads, stores);
@@ -489,7 +539,7 @@ fn collect_incoming_stack_slots_in_place(
             }
             collect_incoming_stack_slots_in_expression(address, reads, stores);
         }
-        AstPlace::Deref { pointer, .. } => {
+        AstPlace::Dereference { pointer, .. } => {
             collect_incoming_stack_slots_in_expression(pointer, reads, stores);
         }
         AstPlace::Index { base, index, .. } => {
@@ -570,6 +620,7 @@ fn rewrite_incoming_stack_parameters_in_statement(
         }
         AstStatement::Break
         | AstStatement::Continue
+        | AstStatement::Comment(_)
         | AstStatement::Label(_)
         | AstStatement::Goto(AstTarget::Direct(_))
         | AstStatement::Trap
@@ -640,8 +691,11 @@ fn rewrite_incoming_stack_parameters_in_expression(
         AstExpression::AddressOf { place, .. } => {
             rewrite_incoming_stack_parameters_in_place(place, promoted);
         }
-        AstExpression::Deref { pointer, .. } => {
+        AstExpression::Dereference { pointer, .. } => {
             rewrite_incoming_stack_parameters_in_expression(pointer, promoted);
+        }
+        AstExpression::Member { base, .. } => {
+            rewrite_incoming_stack_parameters_in_expression(base, promoted);
         }
         AstExpression::Index { base, index, .. } => {
             rewrite_incoming_stack_parameters_in_expression(base, promoted);
@@ -657,7 +711,7 @@ fn rewrite_incoming_stack_parameters_in_place(
 ) {
     match place {
         AstPlace::Memory { address, .. }
-        | AstPlace::Deref {
+        | AstPlace::Dereference {
             pointer: address, ..
         } => {
             rewrite_incoming_stack_parameters_in_expression(address, promoted);
@@ -832,7 +886,7 @@ fn storage_from_expression(
             expression_text(address, storage)
                 .map(|address| IrStorage::memory(address, hir_type_bits(expression)))
         }
-        HirExpression::Deref { pointer, .. } => expression_text(pointer, storage)
+        HirExpression::Dereference { pointer, .. } => expression_text(pointer, storage)
             .map(|address| IrStorage::memory(address, hir_type_bits(expression))),
         HirExpression::Index { base, index, .. } => {
             let base = expression_text(base, storage)?;
@@ -914,7 +968,7 @@ fn expression_text(
         HirExpression::Load { address, .. } => {
             expression_text(address, storage).map(|address| format!("[{address}]"))
         }
-        HirExpression::Deref { pointer, .. } => {
+        HirExpression::Dereference { pointer, .. } => {
             expression_text(pointer, storage).map(|address| format!("[{address}]"))
         }
         _ => None,
@@ -1095,6 +1149,13 @@ pub struct AstModule {
 }
 
 impl AstModule {
+    pub fn new(name: Option<String>) -> Self {
+        Self {
+            name,
+            functions: Vec::new(),
+        }
+    }
+
     pub fn from_hir(hir: &HirModule) -> Self {
         Self {
             name: hir.name.clone(),

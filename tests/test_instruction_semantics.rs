@@ -1,7 +1,9 @@
 use std::collections::BTreeMap;
 
 use binlex::controlflow::{Graph, InstructionRecord};
-use binlex::ir::lir::{LirDiagnostic, LirDiagnosticKind, LirInstruction, LirStatus, LirTerminator};
+use binlex::ir::lir::{
+    LirDiagnostic, LirDiagnosticKind, LirInstruction, LirMetadata, LirStatus, LirTerminator,
+};
 use binlex::{Architecture, Configuration};
 
 fn disassemble_single(name: &str, architecture: Architecture, bytes: &[u8]) -> InstructionRecord {
@@ -63,6 +65,7 @@ fn partial_semantics(message: &str) -> LirInstruction {
     LirInstruction {
         version: 1,
         status: LirStatus::Partial,
+        metadata: LirMetadata::default(),
         abi: None,
         encoding: None,
         temporaries: Vec::new(),
@@ -81,6 +84,7 @@ fn complete_semantics() -> LirInstruction {
     LirInstruction {
         version: 1,
         status: LirStatus::Complete,
+        metadata: LirMetadata::default(),
         abi: None,
         encoding: None,
         temporaries: Vec::new(),

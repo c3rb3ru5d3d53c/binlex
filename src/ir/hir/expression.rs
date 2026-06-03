@@ -97,7 +97,7 @@ pub enum HirExpression {
         place: Box<HirPlace>,
         ty: HirType,
     },
-    Deref {
+    Dereference {
         pointer: Box<HirExpression>,
         ty: HirType,
     },

@@ -76,7 +76,7 @@ fn recover_memory_forms_in_expression(expression: &mut HirExpression) {
         ty,
     } = current
     {
-        *expression = HirExpression::Deref {
+        *expression = HirExpression::Dereference {
             pointer: address,
             ty,
         };
@@ -92,7 +92,7 @@ fn recover_memory_forms_in_place(place: &mut HirPlace) {
         ty,
     } = current
     {
-        *place = HirPlace::Deref {
+        *place = HirPlace::Dereference {
             pointer: address,
             ty,
         };

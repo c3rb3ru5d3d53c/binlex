@@ -2,7 +2,7 @@ use crate::error::Result;
 use crate::ffi;
 use std::ffi::c_void;
 
-pub fn collect_string(print: impl FnOnce(ffi::MlirStringCallback, *mut c_void)) -> Result<String> {
+pub fn collect_bytes(print: impl FnOnce(ffi::MlirStringCallback, *mut c_void)) -> Vec<u8> {
     unsafe extern "C" fn callback(string: ffi::MlirStringRef, user_data: *mut c_void) {
         let output = unsafe { &mut *(user_data as *mut Vec<u8>) };
         if string.data.is_null() || string.length == 0 {
@@ -14,5 +14,10 @@ pub fn collect_string(print: impl FnOnce(ffi::MlirStringCallback, *mut c_void)) 
 
     let mut output = Vec::new();
     print(Some(callback), &mut output as *mut _ as *mut c_void);
+    output
+}
+
+pub fn collect_string(print: impl FnOnce(ffi::MlirStringCallback, *mut c_void)) -> Result<String> {
+    let output = collect_bytes(print);
     Ok(std::str::from_utf8(&output)?.to_string())
 }

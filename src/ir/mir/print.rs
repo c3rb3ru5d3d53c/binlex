@@ -20,309 +20,222 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use super::block::MirBlockParameter;
+use super::block::{MirBlock, MirBlockParameter};
 use super::kind::{MirCastOperation, MirCompareOperation, MirFloatCompareOperation, MirType};
 use super::memory::MirAddressSpace;
 use super::mir::{MirFunction, MirModule};
-use super::operation::{MirCallClobber, MirOperation, MirOperationKind};
+use super::operation::{MirOperation, MirOperationKind};
 use super::target::MirControlTarget;
 use super::terminator::MirTerminator;
 use super::value::MirValue;
 
 pub fn format_mir_function(mir: &MirFunction) -> String {
-    let mut lines = Vec::new();
-    let name = mir.name.clone().unwrap_or_else(|| "anonymous".to_string());
-    lines.push(format!("mir.function {} {{", format_code_location(&name)));
-    for block in &mir.blocks {
-        let params = block
-            .parameters
-            .iter()
-            .map(format_block_parameter)
-            .collect::<Vec<_>>()
-            .join(", ");
-        if params.is_empty() {
-            lines.push(format!("  {}:", format_code_location(&block.name)));
-        } else {
-            lines.push(format!(
-                "  {}({}):",
-                format_code_location(&block.name),
-                params
-            ));
-        }
-        for operation in &block.operations {
-            lines.push(format!("    {}", format_operation(operation)));
-        }
-        if let Some(terminator) = &block.terminator {
-            lines.push(format!("    {}", format_terminator(terminator)));
-        }
-    }
-    lines.push("}".to_string());
-    lines.join("\n")
+    let context = crate::ir::mlir::context();
+    mir_function_operation(&context, mir)
+        .and_then(|op| op.to_string())
+        .unwrap_or_else(|error| format!("// mlir print failed: {error}"))
 }
 
 pub fn format_mir_module(module: &MirModule) -> String {
-    let name = module
-        .name
-        .clone()
-        .unwrap_or_else(|| "anonymous".to_string());
-    let mut lines = vec![format!("mir.module {} {{", format_code_location(&name))];
+    let context = crate::ir::mlir::context();
+    mir_module_operation(&context, module)
+        .and_then(|op| crate::ir::mlir::MlirDocument::from_context_and_ops(context, vec![op]))
+        .and_then(|document| document.text())
+        .unwrap_or_else(|error| format!("// mlir print failed: {error}"))
+}
 
-    for (index, function) in module.functions.iter().enumerate() {
-        if index > 0 {
-            lines.push(String::new());
-        }
-        for line in format_mir_function(function).lines() {
-            lines.push(format!("  {line}"));
-        }
+fn mir_operation_operation(
+    context: &mlir::Context,
+    operation: &MirOperation,
+) -> mlir::Result<mlir::Operation> {
+    let (name, mut attrs) = mir_operation_attrs(context, operation);
+    if let Some(result) = &operation.result {
+        attrs.push(crate::ir::mlir::string_attr(context, "result", result));
     }
-
-    lines.push("}".to_string());
-    lines.join("\n")
+    crate::ir::mlir::operation(context, name, attrs, Vec::new())
 }
 
-fn format_block_parameter(parameter: &MirBlockParameter) -> String {
-    let name = parameter.name.clone().unwrap_or_else(|| "_".to_string());
-    format!("%{}: {}", name, format_type(&parameter.ty))
+fn mir_terminator_operation(
+    context: &mlir::Context,
+    terminator: &MirTerminator,
+) -> mlir::Result<mlir::Operation> {
+    let (name, attrs) = mir_terminator_attrs(context, terminator);
+    crate::ir::mlir::operation(context, name, attrs, Vec::new())
 }
 
-fn format_operation(operation: &MirOperation) -> String {
-    let prefix = operation
-        .result
-        .as_ref()
-        .map(|result| format!("%{} = ", result))
-        .unwrap_or_default();
-    let body = match &operation.kind {
-        MirOperationKind::Copy { value, ty } => {
-            format!("mir.copy {} : {}", format_value(value), format_type(ty))
-        }
+fn mir_operation_attrs(
+    context: &mlir::Context,
+    operation: &MirOperation,
+) -> (&'static str, Vec<mlir::NamedAttribute>) {
+    match &operation.kind {
+        MirOperationKind::Copy { value, ty } => (
+            "binlex.mir.copy",
+            attrs(
+                context,
+                &[("value", format_value(value)), ("ty", format_type(ty))],
+            ),
+        ),
         MirOperationKind::Add { lhs, rhs, ty } => {
-            format!(
-                "mir.add {}, {} : {}",
-                format_value(lhs),
-                format_value(rhs),
-                format_type(ty)
-            )
+            binary_attrs(context, "binlex.mir.add", lhs, rhs, ty)
         }
         MirOperationKind::Sub { lhs, rhs, ty } => {
-            format!(
-                "mir.sub {}, {} : {}",
-                format_value(lhs),
-                format_value(rhs),
-                format_type(ty)
-            )
+            binary_attrs(context, "binlex.mir.sub", lhs, rhs, ty)
         }
         MirOperationKind::Mul { lhs, rhs, ty } => {
-            format!(
-                "mir.mul {}, {} : {}",
-                format_value(lhs),
-                format_value(rhs),
-                format_type(ty)
-            )
+            binary_attrs(context, "binlex.mir.mul", lhs, rhs, ty)
         }
         MirOperationKind::FAdd { lhs, rhs, ty } => {
-            format!(
-                "mir.fadd {}, {} : {}",
-                format_value(lhs),
-                format_value(rhs),
-                format_type(ty)
-            )
+            binary_attrs(context, "binlex.mir.fadd", lhs, rhs, ty)
         }
         MirOperationKind::FSub { lhs, rhs, ty } => {
-            format!(
-                "mir.fsub {}, {} : {}",
-                format_value(lhs),
-                format_value(rhs),
-                format_type(ty)
-            )
+            binary_attrs(context, "binlex.mir.fsub", lhs, rhs, ty)
         }
         MirOperationKind::FMul { lhs, rhs, ty } => {
-            format!(
-                "mir.fmul {}, {} : {}",
-                format_value(lhs),
-                format_value(rhs),
-                format_type(ty)
-            )
+            binary_attrs(context, "binlex.mir.fmul", lhs, rhs, ty)
         }
         MirOperationKind::FDiv { lhs, rhs, ty } => {
-            format!(
-                "mir.fdiv {}, {} : {}",
-                format_value(lhs),
-                format_value(rhs),
-                format_type(ty)
-            )
+            binary_attrs(context, "binlex.mir.fdiv", lhs, rhs, ty)
         }
         MirOperationKind::And { lhs, rhs, ty } => {
-            format!(
-                "mir.and {}, {} : {}",
-                format_value(lhs),
-                format_value(rhs),
-                format_type(ty)
-            )
+            binary_attrs(context, "binlex.mir.and", lhs, rhs, ty)
         }
         MirOperationKind::Or { lhs, rhs, ty } => {
-            format!(
-                "mir.or {}, {} : {}",
-                format_value(lhs),
-                format_value(rhs),
-                format_type(ty)
-            )
+            binary_attrs(context, "binlex.mir.or", lhs, rhs, ty)
         }
         MirOperationKind::Xor { lhs, rhs, ty } => {
-            format!(
-                "mir.xor {}, {} : {}",
-                format_value(lhs),
-                format_value(rhs),
-                format_type(ty)
-            )
+            binary_attrs(context, "binlex.mir.xor", lhs, rhs, ty)
         }
         MirOperationKind::Shl { lhs, rhs, ty } => {
-            format!(
-                "mir.shl {}, {} : {}",
-                format_value(lhs),
-                format_value(rhs),
-                format_type(ty)
-            )
+            binary_attrs(context, "binlex.mir.shl", lhs, rhs, ty)
         }
         MirOperationKind::LShr { lhs, rhs, ty } => {
-            format!(
-                "mir.lshr {}, {} : {}",
-                format_value(lhs),
-                format_value(rhs),
-                format_type(ty)
-            )
+            binary_attrs(context, "binlex.mir.lshr", lhs, rhs, ty)
         }
         MirOperationKind::AShr { lhs, rhs, ty } => {
-            format!(
-                "mir.ashr {}, {} : {}",
-                format_value(lhs),
-                format_value(rhs),
-                format_type(ty)
-            )
+            binary_attrs(context, "binlex.mir.ashr", lhs, rhs, ty)
         }
         MirOperationKind::UDiv { lhs, rhs, ty } => {
-            format!(
-                "mir.udiv {}, {} : {}",
-                format_value(lhs),
-                format_value(rhs),
-                format_type(ty)
-            )
+            binary_attrs(context, "binlex.mir.udiv", lhs, rhs, ty)
         }
         MirOperationKind::SDiv { lhs, rhs, ty } => {
-            format!(
-                "mir.sdiv {}, {} : {}",
-                format_value(lhs),
-                format_value(rhs),
-                format_type(ty)
-            )
+            binary_attrs(context, "binlex.mir.sdiv", lhs, rhs, ty)
         }
         MirOperationKind::URem { lhs, rhs, ty } => {
-            format!(
-                "mir.urem {}, {} : {}",
-                format_value(lhs),
-                format_value(rhs),
-                format_type(ty)
-            )
+            binary_attrs(context, "binlex.mir.urem", lhs, rhs, ty)
         }
         MirOperationKind::SRem { lhs, rhs, ty } => {
-            format!(
-                "mir.srem {}, {} : {}",
-                format_value(lhs),
-                format_value(rhs),
-                format_type(ty)
-            )
+            binary_attrs(context, "binlex.mir.srem", lhs, rhs, ty)
         }
         MirOperationKind::RotateLeft { lhs, rhs, ty } => {
-            format!(
-                "mir.rol {}, {} : {}",
-                format_value(lhs),
-                format_value(rhs),
-                format_type(ty)
-            )
+            binary_attrs(context, "binlex.mir.rol", lhs, rhs, ty)
         }
         MirOperationKind::RotateRight { lhs, rhs, ty } => {
-            format!(
-                "mir.ror {}, {} : {}",
-                format_value(lhs),
-                format_value(rhs),
-                format_type(ty)
-            )
+            binary_attrs(context, "binlex.mir.ror", lhs, rhs, ty)
         }
         MirOperationKind::Select {
             condition,
             when_true,
             when_false,
             ty,
-        } => format!(
-            "mir.select {}, {}, {} : {}",
-            format_value(condition),
-            format_value(when_true),
-            format_value(when_false),
-            format_type(ty)
+        } => (
+            "binlex.mir.select",
+            attrs(
+                context,
+                &[
+                    ("condition", format_value(condition)),
+                    ("true", format_value(when_true)),
+                    ("false", format_value(when_false)),
+                    ("ty", format_type(ty)),
+                ],
+            ),
         ),
-        MirOperationKind::Concat { parts, ty } => format!(
-            "mir.concat ({}) : {}",
-            parts
-                .iter()
-                .map(format_value)
-                .collect::<Vec<_>>()
-                .join(", "),
-            format_type(ty)
+        MirOperationKind::Concat { parts, ty } => (
+            "binlex.mir.concat",
+            attrs(
+                context,
+                &[
+                    (
+                        "parts",
+                        parts
+                            .iter()
+                            .map(format_value)
+                            .collect::<Vec<_>>()
+                            .join("\n"),
+                    ),
+                    ("ty", format_type(ty)),
+                ],
+            ),
         ),
-        MirOperationKind::Extract { value, lsb, ty } => format!(
-            "mir.extract {}, lsb {}, bits {} : {}",
-            format_value(value),
-            lsb,
-            type_bits(ty),
-            format_type(ty)
+        MirOperationKind::Extract { value, lsb, ty } => (
+            "binlex.mir.extract",
+            attrs(
+                context,
+                &[
+                    ("value", format_value(value)),
+                    ("lsb", lsb.to_string()),
+                    ("ty", format_type(ty)),
+                ],
+            ),
         ),
-        MirOperationKind::Not { value, ty } => {
-            format!("mir.not {} : {}", format_value(value), format_type(ty))
-        }
-        MirOperationKind::Neg { value, ty } => {
-            format!("mir.neg {} : {}", format_value(value), format_type(ty))
-        }
+        MirOperationKind::Not { value, ty } => unary_attrs(context, "binlex.mir.not", value, ty),
+        MirOperationKind::Neg { value, ty } => unary_attrs(context, "binlex.mir.neg", value, ty),
         MirOperationKind::Popcount { value, ty } => {
-            format!("mir.popcount {} : {}", format_value(value), format_type(ty))
+            unary_attrs(context, "binlex.mir.popcount", value, ty)
         }
         MirOperationKind::CountLeadingZeros { value, ty } => {
-            format!("mir.clz {} : {}", format_value(value), format_type(ty))
+            unary_attrs(context, "binlex.mir.ctlz", value, ty)
         }
         MirOperationKind::CountTrailingZeros { value, ty } => {
-            format!("mir.ctz {} : {}", format_value(value), format_type(ty))
+            unary_attrs(context, "binlex.mir.cttz", value, ty)
         }
         MirOperationKind::Load {
             address_space,
             address,
             ty,
-        } => format!(
-            "mir.load {}, {} : {}",
-            format_address_space(address_space),
-            format_value(address),
-            format_type(ty)
+        } => (
+            "binlex.mir.load",
+            attrs(
+                context,
+                &[
+                    ("space", format_address_space(address_space)),
+                    ("address", format_value(address)),
+                    ("ty", format_type(ty)),
+                ],
+            ),
         ),
         MirOperationKind::AddressOf {
             address_space,
             address,
             pointee_ty,
             ty,
-        } => format!(
-            "mir.address_of {}, {} : {} -> {}",
-            format_address_space(address_space),
-            format_value(address),
-            format_type(pointee_ty),
-            format_type(ty)
+        } => (
+            "binlex.mir.address_of",
+            attrs(
+                context,
+                &[
+                    ("space", format_address_space(address_space)),
+                    ("address", format_value(address)),
+                    ("pointee_ty", format_type(pointee_ty)),
+                    ("ty", format_type(ty)),
+                ],
+            ),
         ),
         MirOperationKind::Store {
             address_space,
             address,
             value,
             ty,
-        } => format!(
-            "mir.store {}, {}, {} : {}",
-            format_address_space(address_space),
-            format_value(address),
-            format_value(value),
-            format_type(ty)
+        } => (
+            "binlex.mir.store",
+            attrs(
+                context,
+                &[
+                    ("space", format_address_space(address_space)),
+                    ("address", format_value(address)),
+                    ("value", format_value(value)),
+                    ("ty", format_type(ty)),
+                ],
+            ),
         ),
         MirOperationKind::MemoryCopy {
             src_space,
@@ -332,35 +245,41 @@ fn format_operation(operation: &MirOperation) -> String {
             count,
             element_bits,
             decrement,
-        } => format!(
-            "mir.memcpy {}:{}, {}:{}, count {}, element_bits {}, decrement {}",
-            format_address_space(src_space),
-            format_value(src_address),
-            format_address_space(dst_space),
-            format_value(dst_address),
-            format_value(count),
-            element_bits,
-            format_value(decrement)
+        } => (
+            "binlex.mir.memcpy",
+            attrs(
+                context,
+                &[
+                    ("src_space", format_address_space(src_space)),
+                    ("src_address", format_value(src_address)),
+                    ("dst_space", format_address_space(dst_space)),
+                    ("dst_address", format_value(dst_address)),
+                    ("count", format_value(count)),
+                    ("element_bits", element_bits.to_string()),
+                    ("decrement", format_value(decrement)),
+                ],
+            ),
         ),
-        MirOperationKind::Icmp { op, lhs, rhs, ty } => format!(
-            "mir.icmp {} {}, {} : {}",
-            format_compare(op),
-            format_value(lhs),
-            format_value(rhs),
-            format_type(ty)
-        ),
-        MirOperationKind::Fcmp { op, lhs, rhs, ty } => format!(
-            "mir.fcmp {} {}, {} : {}",
-            format_float_compare(op),
-            format_value(lhs),
-            format_value(rhs),
-            format_type(ty)
-        ),
-        MirOperationKind::Cast { op, value, ty } => format!(
-            "mir.cast {} {} : {}",
-            format_cast(op),
-            format_value(value),
-            format_type(ty)
+        MirOperationKind::Icmp { op, lhs, rhs, ty } => {
+            let mut attrs = attrs(context, &[("op", format_compare(op).to_string())]);
+            attrs.extend(binary_attr_values(context, lhs, rhs, ty));
+            ("binlex.mir.icmp", attrs)
+        }
+        MirOperationKind::Fcmp { op, lhs, rhs, ty } => {
+            let mut attrs = attrs(context, &[("op", format_float_compare(op).to_string())]);
+            attrs.extend(binary_attr_values(context, lhs, rhs, ty));
+            ("binlex.mir.fcmp", attrs)
+        }
+        MirOperationKind::Cast { op, value, ty } => (
+            "binlex.mir.cast",
+            attrs(
+                context,
+                &[
+                    ("op", format_cast(op).to_string()),
+                    ("value", format_value(value)),
+                    ("ty", format_type(ty)),
+                ],
+            ),
         ),
         MirOperationKind::Call {
             target,
@@ -369,57 +288,102 @@ fn format_operation(operation: &MirOperation) -> String {
             result_types,
             clobbers,
             memory_effects,
-        } => format!(
-            "mir.call{} {}({}) -> ({}){}{}",
-            abi.as_ref()
-                .map(|abi| format!(".{}", abi.name))
-                .unwrap_or_default(),
-            format_control_target(target),
-            arguments
-                .iter()
-                .map(format_value)
-                .collect::<Vec<_>>()
-                .join(", "),
-            result_types
-                .iter()
-                .map(format_type)
-                .collect::<Vec<_>>()
-                .join(", "),
-            format_call_clobbers(clobbers),
-            format_call_memory_effects(memory_effects)
-        ),
+        } => {
+            let mut values = vec![
+                ("target", format_control_target(target)),
+                (
+                    "arguments",
+                    arguments
+                        .iter()
+                        .map(format_value)
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                ),
+                (
+                    "result_types",
+                    result_types
+                        .iter()
+                        .map(format_type)
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                ),
+                (
+                    "clobbers",
+                    clobbers
+                        .iter()
+                        .map(|clobber| {
+                            format!("%{}: {}", clobber.register, format_type(&clobber.ty))
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                ),
+                (
+                    "memory_effects",
+                    memory_effects
+                        .iter()
+                        .map(format_address_space)
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                ),
+            ];
+            if let Some(abi) = abi {
+                values.push(("abi", abi.name.clone()));
+            }
+            ("binlex.mir.call", attrs(context, &values))
+        }
         MirOperationKind::Intrinsic {
             name,
             arguments,
             result_types,
-        } => format!(
-            "mir.intrinsic {}({}) -> ({})",
-            name,
-            arguments
-                .iter()
-                .map(format_value)
-                .collect::<Vec<_>>()
-                .join(", "),
-            result_types
-                .iter()
-                .map(format_type)
-                .collect::<Vec<_>>()
-                .join(", ")
+        } => (
+            "binlex.mir.intrinsic",
+            attrs(
+                context,
+                &[
+                    ("name", name.clone()),
+                    (
+                        "arguments",
+                        arguments
+                            .iter()
+                            .map(format_value)
+                            .collect::<Vec<_>>()
+                            .join("\n"),
+                    ),
+                    (
+                        "result_types",
+                        result_types
+                            .iter()
+                            .map(format_type)
+                            .collect::<Vec<_>>()
+                            .join("\n"),
+                    ),
+                ],
+            ),
         ),
-    };
-    format!("{prefix}{body}")
+    }
 }
 
-fn format_terminator(terminator: &MirTerminator) -> String {
+fn mir_terminator_attrs(
+    context: &mlir::Context,
+    terminator: &MirTerminator,
+) -> (&'static str, Vec<mlir::NamedAttribute>) {
     match terminator {
-        MirTerminator::Jump { target, arguments } => format!(
-            "mir.jump {}({})",
-            format_control_target(target),
-            arguments
-                .iter()
-                .map(format_value)
-                .collect::<Vec<_>>()
-                .join(", ")
+        MirTerminator::Jump { target, arguments } => (
+            "binlex.mir.jump",
+            attrs(
+                context,
+                &[
+                    ("target", format_control_target(target)),
+                    (
+                        "arguments",
+                        arguments
+                            .iter()
+                            .map(format_value)
+                            .collect::<Vec<_>>()
+                            .join("\n"),
+                    ),
+                ],
+            ),
         ),
         MirTerminator::CondBr {
             condition,
@@ -427,33 +391,179 @@ fn format_terminator(terminator: &MirTerminator) -> String {
             then_arguments,
             else_target,
             else_arguments,
-        } => format!(
-            "mir.cond_br {}, {}({}), {}({})",
-            format_value(condition),
-            format_control_target(then_target),
-            then_arguments
-                .iter()
-                .map(format_value)
-                .collect::<Vec<_>>()
-                .join(", "),
-            format_control_target(else_target),
-            else_arguments
-                .iter()
-                .map(format_value)
-                .collect::<Vec<_>>()
-                .join(", ")
+        } => (
+            "binlex.mir.cond_br",
+            attrs(
+                context,
+                &[
+                    ("condition", format_value(condition)),
+                    ("then_target", format_control_target(then_target)),
+                    (
+                        "then_arguments",
+                        then_arguments
+                            .iter()
+                            .map(format_value)
+                            .collect::<Vec<_>>()
+                            .join("\n"),
+                    ),
+                    ("else_target", format_control_target(else_target)),
+                    (
+                        "else_arguments",
+                        else_arguments
+                            .iter()
+                            .map(format_value)
+                            .collect::<Vec<_>>()
+                            .join("\n"),
+                    ),
+                ],
+            ),
         ),
-        MirTerminator::Return { values } => format!(
-            "mir.return {}",
-            values
-                .iter()
-                .map(format_value)
-                .collect::<Vec<_>>()
-                .join(", ")
+        MirTerminator::Return { values } => (
+            "binlex.mir.return",
+            attrs(
+                context,
+                &[(
+                    "values",
+                    values
+                        .iter()
+                        .map(format_value)
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                )],
+            ),
         ),
-        MirTerminator::Trap => "mir.trap".to_string(),
-        MirTerminator::Unreachable => "mir.unreachable".to_string(),
+        MirTerminator::Trap => ("binlex.mir.trap", Vec::new()),
+        MirTerminator::Unreachable => ("binlex.mir.unreachable", Vec::new()),
     }
+}
+
+fn unary_attrs(
+    context: &mlir::Context,
+    name: &'static str,
+    value: &MirValue,
+    ty: &MirType,
+) -> (&'static str, Vec<mlir::NamedAttribute>) {
+    (
+        name,
+        attrs(
+            context,
+            &[("value", format_value(value)), ("ty", format_type(ty))],
+        ),
+    )
+}
+
+fn binary_attrs(
+    context: &mlir::Context,
+    name: &'static str,
+    lhs: &MirValue,
+    rhs: &MirValue,
+    ty: &MirType,
+) -> (&'static str, Vec<mlir::NamedAttribute>) {
+    (name, binary_attr_values(context, lhs, rhs, ty))
+}
+
+fn binary_attr_values(
+    context: &mlir::Context,
+    lhs: &MirValue,
+    rhs: &MirValue,
+    ty: &MirType,
+) -> Vec<mlir::NamedAttribute> {
+    attrs(
+        context,
+        &[
+            ("lhs", format_value(lhs)),
+            ("rhs", format_value(rhs)),
+            ("ty", format_type(ty)),
+        ],
+    )
+}
+
+fn attrs(context: &mlir::Context, values: &[(&str, String)]) -> Vec<mlir::NamedAttribute> {
+    values
+        .iter()
+        .map(|(name, value)| crate::ir::mlir::string_attr(context, name, value))
+        .collect()
+}
+
+fn mir_block_operation(context: &mlir::Context, block: &MirBlock) -> mlir::Result<mlir::Operation> {
+    let mut attrs = vec![crate::ir::mlir::string_attr(
+        context,
+        "sym_name",
+        &block.name,
+    )];
+    if !block.parameters.is_empty() {
+        attrs.push(crate::ir::mlir::string_attr(
+            context,
+            "parameters",
+            &block
+                .parameters
+                .iter()
+                .map(format_block_parameter)
+                .collect::<Vec<_>>()
+                .join("\n"),
+        ));
+    }
+    let mut ops = block
+        .operations
+        .iter()
+        .map(|operation| mir_operation_operation(context, operation))
+        .collect::<mlir::Result<Vec<_>>>()?;
+    if let Some(terminator) = &block.terminator {
+        ops.push(mir_terminator_operation(context, terminator)?);
+    }
+    crate::ir::mlir::operation(
+        context,
+        "binlex.mir.block",
+        attrs,
+        vec![crate::ir::mlir::region_with_ops(ops)],
+    )
+}
+
+fn mir_function_operation(
+    context: &mlir::Context,
+    function: &MirFunction,
+) -> mlir::Result<mlir::Operation> {
+    let name = function
+        .name
+        .clone()
+        .unwrap_or_else(|| "anonymous".to_string());
+    let ops = function
+        .blocks
+        .iter()
+        .map(|block| mir_block_operation(context, block))
+        .collect::<mlir::Result<Vec<_>>>()?;
+    crate::ir::mlir::operation(
+        context,
+        "binlex.mir.function",
+        vec![crate::ir::mlir::string_attr(context, "sym_name", &name)],
+        vec![crate::ir::mlir::region_with_ops(ops)],
+    )
+}
+
+pub(crate) fn mir_module_operation(
+    context: &mlir::Context,
+    module: &MirModule,
+) -> mlir::Result<mlir::Operation> {
+    let name = module
+        .name
+        .clone()
+        .unwrap_or_else(|| "anonymous".to_string());
+    let ops = module
+        .functions
+        .iter()
+        .map(|function| mir_function_operation(context, function))
+        .collect::<mlir::Result<Vec<_>>>()?;
+    crate::ir::mlir::operation(
+        context,
+        "binlex.mir.module",
+        vec![crate::ir::mlir::string_attr(context, "sym_name", &name)],
+        vec![crate::ir::mlir::region_with_ops(ops)],
+    )
+}
+
+fn format_block_parameter(parameter: &MirBlockParameter) -> String {
+    let name = parameter.name.clone().unwrap_or_else(|| "_".to_string());
+    format!("%{}: {}", name, format_type(&parameter.ty))
 }
 
 fn format_value(value: &MirValue) -> String {
@@ -471,7 +581,10 @@ fn format_typed_value(value: &MirValue) -> String {
         MirValue::Named { name, ty } => {
             let rendered = format_named_value(name);
             match ty {
-                MirType::Pointer { .. } | MirType::Custom { .. } => {
+                MirType::Pointer { .. }
+                | MirType::TypeDefinition { .. }
+                | MirType::Structure { .. }
+                | MirType::Union { .. } => {
                     format!("{rendered}:{}", format_type(ty))
                 }
                 _ => rendered,
@@ -561,14 +674,9 @@ fn format_type(ty: &MirType) -> String {
             format!("fn({parameters})->{returns}")
         }
         MirType::Memory => "mem".to_string(),
-        MirType::Custom { name } => name.clone(),
-    }
-}
-
-fn type_bits(ty: &MirType) -> u16 {
-    match ty {
-        MirType::Integer(bits) | MirType::Float(bits) => *bits,
-        _ => 0,
+        MirType::TypeDefinition { name }
+        | MirType::Structure { name, .. }
+        | MirType::Union { name, .. } => name.clone(),
     }
 }
 
@@ -589,36 +697,6 @@ fn format_address_space(address_space: &MirAddressSpace) -> String {
         MirAddressSpace::ReturnAddress { name } => format!("return_address[{name}]"),
         MirAddressSpace::Named { name } => name.clone(),
     }
-}
-
-fn format_call_clobbers(clobbers: &[MirCallClobber]) -> String {
-    if clobbers.is_empty() {
-        return String::new();
-    }
-
-    format!(
-        " clobbers [{}]",
-        clobbers
-            .iter()
-            .map(|clobber| format!("%{}: {}", clobber.register, format_type(&clobber.ty)))
-            .collect::<Vec<_>>()
-            .join(", ")
-    )
-}
-
-fn format_call_memory_effects(memory_effects: &[MirAddressSpace]) -> String {
-    if memory_effects.is_empty() {
-        return String::new();
-    }
-
-    format!(
-        " effects [{}]",
-        memory_effects
-            .iter()
-            .map(format_address_space)
-            .collect::<Vec<_>>()
-            .join(", ")
-    )
 }
 
 fn format_compare(op: &MirCompareOperation) -> &'static str {

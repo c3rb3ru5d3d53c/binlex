@@ -334,6 +334,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: Default::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -355,6 +356,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Complete,
+            metadata: Default::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),
@@ -374,6 +376,7 @@ mod tests {
         let semantics = Lir {
             version: 1,
             status: LirStatus::Partial,
+            metadata: Default::default(),
             abi: None,
             encoding: None,
             temporaries: Vec::new(),

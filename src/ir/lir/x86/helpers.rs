@@ -324,6 +324,7 @@ pub fn partial(terminator: LirTerminator, diagnostics: Vec<LirDiagnostic>) -> Li
     Lir {
         version: 1,
         status: LirStatus::Partial,
+        metadata: Default::default(),
         abi: None,
         encoding: None,
         temporaries: Vec::new(),
@@ -337,6 +338,7 @@ pub fn complete(terminator: LirTerminator, effects: Vec<LirEffect>) -> Lir {
     Lir {
         version: 1,
         status: LirStatus::Complete,
+        metadata: Default::default(),
         abi: None,
         encoding: None,
         temporaries: Vec::new(),
@@ -354,6 +356,7 @@ pub fn partial_with_effects(
     Lir {
         version: 1,
         status: LirStatus::Partial,
+        metadata: Default::default(),
         abi: None,
         encoding: None,
         temporaries: Vec::new(),

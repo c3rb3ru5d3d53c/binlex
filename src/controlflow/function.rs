@@ -1905,7 +1905,11 @@ fn is_integer_like_value(
     if depth > 16 {
         return matches!(
             mir_value_type(value),
-            MirType::Integer(_) | MirType::Float(_) | MirType::Custom { .. }
+            MirType::Integer(_)
+                | MirType::Float(_)
+                | MirType::TypeDefinition { .. }
+                | MirType::Structure { .. }
+                | MirType::Union { .. }
         );
     }
 
@@ -1914,7 +1918,11 @@ fn is_integer_like_value(
         MirValue::Named { name, ty } => {
             if matches!(
                 ty,
-                MirType::Integer(_) | MirType::Float(_) | MirType::Custom { .. }
+                MirType::Integer(_)
+                    | MirType::Float(_)
+                    | MirType::TypeDefinition { .. }
+                    | MirType::Structure { .. }
+                    | MirType::Union { .. }
             ) {
                 return true;
             }

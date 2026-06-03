@@ -235,6 +235,7 @@ fn build_casp(view: &InstructionDetailArm64) -> Option<Lir> {
     Some(Lir {
         version: 1,
         status: LirStatus::Complete,
+        metadata: Default::default(),
         abi: None,
         encoding: None,
         temporaries: vec![LirTemporary {

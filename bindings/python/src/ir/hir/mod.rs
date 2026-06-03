@@ -22,11 +22,12 @@
 
 use binlex::ir::hir::{
     format_hir_function, format_hir_module, verify_hir_function, verify_hir_module, HirBlock,
-    HirExpression, HirFunction, HirModule, HirStatement, HirValue,
+    HirExpression, HirFunction, HirLocal, HirMlirModule, HirModule, HirParameter, HirPlace,
+    HirStatement, HirTarget, HirValue,
 };
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyAny, PyModule, PyType};
+use pyo3::types::{PyAny, PyBytes, PyModule, PyType};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
@@ -122,57 +123,460 @@ macro_rules! value_wrapper {
 
 value_wrapper!(PyHirValue, "HirValue", HirValue);
 value_wrapper!(PyHirExpression, "HirExpression", HirExpression);
+value_wrapper!(PyHirPlace, "HirPlace", HirPlace);
+value_wrapper!(PyHirTarget, "HirTarget", HirTarget);
 value_wrapper!(PyHirStatement, "HirStatement", HirStatement);
 value_wrapper!(PyHirBlock, "HirBlock", HirBlock);
+value_wrapper!(PyHirParameter, "HirParameter", HirParameter);
+value_wrapper!(PyHirLocal, "HirLocal", HirLocal);
 value_wrapper!(PyHirFunction, "HirFunction", HirFunction);
 value_wrapper!(PyHirModule, "HirModule", HirModule);
 
-macro_rules! dict_methods {
-    ($name:ident) => {
-        #[pymethods]
-        impl $name {
-            #[classmethod]
-            pub fn from_dict(
-                _cls: &Bound<'_, PyType>,
-                py: Python<'_>,
-                data: Py<PyAny>,
-            ) -> PyResult<Self> {
-                let value = py_to_json_value(py, data)?;
-                let inner = serde_json::from_value(value)
-                    .map_err(|error| PyValueError::new_err(error.to_string()))?;
-                Ok(Self::from_inner(inner))
-            }
-
-            pub fn json(&self) -> PyResult<String> {
-                serde_json::to_string(&*self.inner.lock().unwrap())
-                    .map_err(|error| PyRuntimeError::new_err(error.to_string()))
-            }
-
-            pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-                json_value_to_py(
-                    py,
-                    &serde_json::to_value(&*self.inner.lock().unwrap())
-                        .map_err(|error| PyRuntimeError::new_err(error.to_string()))?,
-                )
-            }
-
-            pub fn __hash__(&self) -> isize {
-                hash_value(&*self.inner.lock().unwrap())
-            }
-
-            pub fn __str__(&self) -> PyResult<String> {
-                self.json()
-            }
-        }
-    };
+#[pyclass(name = "HirMlirModule", unsendable, skip_from_py_object)]
+pub struct PyHirMlirModule {
+    inner: HirMlirModule,
 }
 
-dict_methods!(PyHirValue);
-dict_methods!(PyHirExpression);
-dict_methods!(PyHirStatement);
+impl PyHirMlirModule {
+    pub fn from_inner(inner: HirMlirModule) -> Self {
+        Self { inner }
+    }
+}
+
+#[pymethods]
+impl PyHirMlirModule {
+    #[classmethod]
+    pub fn from_text(_cls: &Bound<'_, PyType>, text: &str) -> PyResult<Self> {
+        let inner = HirMlirModule::from_text(text)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(Self::from_inner(inner))
+    }
+
+    #[classmethod]
+    pub fn from_bytecode(
+        _cls: &Bound<'_, PyType>,
+        bytecode: &Bound<'_, PyBytes>,
+    ) -> PyResult<Self> {
+        let inner = HirMlirModule::from_bytecode(bytecode.as_bytes())
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(Self::from_inner(inner))
+    }
+
+    pub fn optimize_assignments(&self) {
+        self.inner.optimize_assignments();
+    }
+
+    pub fn optimize(&self) {
+        self.inner.optimize();
+    }
+
+    pub fn text(&self) -> String {
+        self.inner.text()
+    }
+
+    pub fn bytecode(&self, py: Python<'_>) -> Py<PyBytes> {
+        PyBytes::new(py, &self.inner.bytecode()).unbind()
+    }
+
+    pub fn operation_names(&self) -> Vec<String> {
+        self.inner.operation_names()
+    }
+
+    pub fn operation_count(&self) -> usize {
+        self.inner.operation_count()
+    }
+
+    pub fn operation_records(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(
+            py,
+            &serde_json::to_value(self.inner.operation_records())
+                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?,
+        )
+    }
+
+    pub fn print(&self) {
+        println!("{}", self.text());
+    }
+}
+
+#[pymethods]
+impl PyHirValue {
+    #[classmethod]
+    pub fn from_dict(_cls: &Bound<'_, PyType>, py: Python<'_>, data: Py<PyAny>) -> PyResult<Self> {
+        let value = py_to_json_value(py, data)?;
+        let inner = serde_json::from_value(value)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        Ok(Self::from_inner(inner))
+    }
+
+    #[classmethod]
+    pub fn named(
+        _cls: &Bound<'_, PyType>,
+        name: String,
+        ty: PyRef<'_, crate::ir::mir::PyMirType>,
+    ) -> Self {
+        Self::from_inner(HirValue::Named {
+            name,
+            ty: ty.inner.lock().unwrap().clone(),
+        })
+    }
+
+    #[classmethod]
+    pub fn integer(_cls: &Bound<'_, PyType>, value: i128, bits: u16) -> Self {
+        Self::from_inner(HirValue::Integer { value, bits })
+    }
+
+    #[classmethod]
+    pub fn boolean(_cls: &Bound<'_, PyType>, value: bool) -> Self {
+        Self::from_inner(HirValue::Boolean(value))
+    }
+
+    #[classmethod]
+    pub fn null(_cls: &Bound<'_, PyType>, ty: PyRef<'_, crate::ir::mir::PyMirType>) -> Self {
+        Self::from_inner(HirValue::Null {
+            ty: ty.inner.lock().unwrap().clone(),
+        })
+    }
+
+    #[classmethod]
+    pub fn undef(_cls: &Bound<'_, PyType>, ty: PyRef<'_, crate::ir::mir::PyMirType>) -> Self {
+        Self::from_inner(HirValue::Undef {
+            ty: ty.inner.lock().unwrap().clone(),
+        })
+    }
+
+    pub fn json(&self) -> PyResult<String> {
+        serde_json::to_string(&*self.inner.lock().unwrap())
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(
+            py,
+            &serde_json::to_value(&*self.inner.lock().unwrap())
+                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?,
+        )
+    }
+}
+
+#[pymethods]
+impl PyHirExpression {
+    #[classmethod]
+    pub fn from_dict(_cls: &Bound<'_, PyType>, py: Python<'_>, data: Py<PyAny>) -> PyResult<Self> {
+        let value = py_to_json_value(py, data)?;
+        let inner = serde_json::from_value(value)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        Ok(Self::from_inner(inner))
+    }
+
+    #[classmethod]
+    pub fn value(_cls: &Bound<'_, PyType>, value: PyRef<'_, PyHirValue>) -> Self {
+        Self::from_inner(HirExpression::Value(value.inner.lock().unwrap().clone()))
+    }
+
+    #[classmethod]
+    pub fn call(
+        _cls: &Bound<'_, PyType>,
+        py: Python<'_>,
+        target: PyRef<'_, PyHirTarget>,
+        arguments: Option<Vec<Py<PyHirExpression>>>,
+        return_types: Option<Vec<Py<crate::ir::mir::PyMirType>>>,
+    ) -> Self {
+        let arguments = arguments
+            .unwrap_or_default()
+            .into_iter()
+            .map(|value| value.borrow(py).inner.lock().unwrap().clone())
+            .collect();
+        let return_types = return_types
+            .unwrap_or_default()
+            .into_iter()
+            .map(|ty| ty.borrow(py).inner.lock().unwrap().clone())
+            .collect();
+        Self::from_inner(HirExpression::Call {
+            target: target.inner.lock().unwrap().clone(),
+            abi: None,
+            arguments,
+            return_types,
+        })
+    }
+
+    #[classmethod]
+    pub fn intrinsic(
+        _cls: &Bound<'_, PyType>,
+        py: Python<'_>,
+        name: String,
+        arguments: Option<Vec<Py<PyHirExpression>>>,
+        return_types: Option<Vec<Py<crate::ir::mir::PyMirType>>>,
+    ) -> Self {
+        let arguments = arguments
+            .unwrap_or_default()
+            .into_iter()
+            .map(|value| value.borrow(py).inner.lock().unwrap().clone())
+            .collect();
+        let return_types = return_types
+            .unwrap_or_default()
+            .into_iter()
+            .map(|ty| ty.borrow(py).inner.lock().unwrap().clone())
+            .collect();
+        Self::from_inner(HirExpression::Intrinsic {
+            name,
+            arguments,
+            return_types,
+        })
+    }
+
+    pub fn json(&self) -> PyResult<String> {
+        serde_json::to_string(&*self.inner.lock().unwrap())
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(
+            py,
+            &serde_json::to_value(&*self.inner.lock().unwrap())
+                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?,
+        )
+    }
+}
+
+#[pymethods]
+impl PyHirPlace {
+    #[classmethod]
+    pub fn from_dict(_cls: &Bound<'_, PyType>, py: Python<'_>, data: Py<PyAny>) -> PyResult<Self> {
+        let value = py_to_json_value(py, data)?;
+        let inner = serde_json::from_value(value)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        Ok(Self::from_inner(inner))
+    }
+
+    #[classmethod]
+    pub fn named(
+        _cls: &Bound<'_, PyType>,
+        name: String,
+        ty: PyRef<'_, crate::ir::mir::PyMirType>,
+    ) -> Self {
+        Self::from_inner(HirPlace::Named {
+            name,
+            ty: ty.inner.lock().unwrap().clone(),
+        })
+    }
+
+    pub fn json(&self) -> PyResult<String> {
+        serde_json::to_string(&*self.inner.lock().unwrap())
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(
+            py,
+            &serde_json::to_value(&*self.inner.lock().unwrap())
+                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?,
+        )
+    }
+}
+
+#[pymethods]
+impl PyHirTarget {
+    #[classmethod]
+    pub fn from_dict(_cls: &Bound<'_, PyType>, py: Python<'_>, data: Py<PyAny>) -> PyResult<Self> {
+        let value = py_to_json_value(py, data)?;
+        let inner = serde_json::from_value(value)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        Ok(Self::from_inner(inner))
+    }
+
+    #[classmethod]
+    pub fn direct(_cls: &Bound<'_, PyType>, name: String) -> Self {
+        Self::from_inner(HirTarget::Direct(name))
+    }
+
+    #[classmethod]
+    pub fn indirect(_cls: &Bound<'_, PyType>, expression: PyRef<'_, PyHirExpression>) -> Self {
+        Self::from_inner(HirTarget::Indirect(Box::new(
+            expression.inner.lock().unwrap().clone(),
+        )))
+    }
+
+    pub fn json(&self) -> PyResult<String> {
+        serde_json::to_string(&*self.inner.lock().unwrap())
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(
+            py,
+            &serde_json::to_value(&*self.inner.lock().unwrap())
+                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?,
+        )
+    }
+}
+
+#[pymethods]
+impl PyHirStatement {
+    #[classmethod]
+    pub fn from_dict(_cls: &Bound<'_, PyType>, py: Python<'_>, data: Py<PyAny>) -> PyResult<Self> {
+        let value = py_to_json_value(py, data)?;
+        let inner = serde_json::from_value(value)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        Ok(Self::from_inner(inner))
+    }
+
+    #[classmethod]
+    pub fn assign(
+        _cls: &Bound<'_, PyType>,
+        target: PyRef<'_, PyHirPlace>,
+        value: PyRef<'_, PyHirExpression>,
+    ) -> Self {
+        Self::from_inner(HirStatement::Assign {
+            target: target.inner.lock().unwrap().clone(),
+            value: value.inner.lock().unwrap().clone(),
+        })
+    }
+
+    #[classmethod]
+    pub fn expr(_cls: &Bound<'_, PyType>, value: PyRef<'_, PyHirExpression>) -> Self {
+        Self::from_inner(HirStatement::Expr(value.inner.lock().unwrap().clone()))
+    }
+
+    #[classmethod]
+    #[pyo3(name = "return_")]
+    pub fn return_values(
+        _cls: &Bound<'_, PyType>,
+        py: Python<'_>,
+        values: Option<Vec<Py<PyHirExpression>>>,
+    ) -> Self {
+        let values = values
+            .unwrap_or_default()
+            .into_iter()
+            .map(|value| value.borrow(py).inner.lock().unwrap().clone())
+            .collect();
+        Self::from_inner(HirStatement::Return { values })
+    }
+
+    #[classmethod]
+    pub fn label(_cls: &Bound<'_, PyType>, name: String) -> Self {
+        Self::from_inner(HirStatement::Label(name))
+    }
+
+    #[classmethod]
+    pub fn goto(_cls: &Bound<'_, PyType>, target: PyRef<'_, PyHirTarget>) -> Self {
+        Self::from_inner(HirStatement::Goto(target.inner.lock().unwrap().clone()))
+    }
+
+    #[classmethod]
+    #[pyo3(name = "break_")]
+    pub fn break_statement(_cls: &Bound<'_, PyType>) -> Self {
+        Self::from_inner(HirStatement::Break)
+    }
+
+    #[classmethod]
+    #[pyo3(name = "continue_")]
+    pub fn continue_statement(_cls: &Bound<'_, PyType>) -> Self {
+        Self::from_inner(HirStatement::Continue)
+    }
+
+    #[classmethod]
+    pub fn trap(_cls: &Bound<'_, PyType>) -> Self {
+        Self::from_inner(HirStatement::Trap)
+    }
+
+    #[classmethod]
+    pub fn unreachable(_cls: &Bound<'_, PyType>) -> Self {
+        Self::from_inner(HirStatement::Unreachable)
+    }
+
+    pub fn json(&self) -> PyResult<String> {
+        serde_json::to_string(&*self.inner.lock().unwrap())
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(
+            py,
+            &serde_json::to_value(&*self.inner.lock().unwrap())
+                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?,
+        )
+    }
+}
+
+#[pymethods]
+impl PyHirParameter {
+    #[classmethod]
+    pub fn from_dict(_cls: &Bound<'_, PyType>, py: Python<'_>, data: Py<PyAny>) -> PyResult<Self> {
+        let value = py_to_json_value(py, data)?;
+        let inner = serde_json::from_value(value)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        Ok(Self::from_inner(inner))
+    }
+
+    #[new]
+    pub fn new(name: String, ty: PyRef<'_, crate::ir::mir::PyMirType>) -> Self {
+        Self::from_inner(HirParameter {
+            name,
+            ty: ty.inner.lock().unwrap().clone(),
+        })
+    }
+
+    pub fn json(&self) -> PyResult<String> {
+        serde_json::to_string(&*self.inner.lock().unwrap())
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(
+            py,
+            &serde_json::to_value(&*self.inner.lock().unwrap())
+                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?,
+        )
+    }
+}
+
+#[pymethods]
+impl PyHirLocal {
+    #[classmethod]
+    pub fn from_dict(_cls: &Bound<'_, PyType>, py: Python<'_>, data: Py<PyAny>) -> PyResult<Self> {
+        let value = py_to_json_value(py, data)?;
+        let inner = serde_json::from_value(value)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        Ok(Self::from_inner(inner))
+    }
+
+    #[new]
+    #[pyo3(signature = (name, ty, init=None))]
+    pub fn new(
+        name: String,
+        ty: PyRef<'_, crate::ir::mir::PyMirType>,
+        init: Option<PyRef<'_, PyHirExpression>>,
+    ) -> Self {
+        Self::from_inner(HirLocal {
+            name,
+            ty: ty.inner.lock().unwrap().clone(),
+            init: init.map(|value| value.inner.lock().unwrap().clone()),
+            storage: None,
+        })
+    }
+
+    pub fn json(&self) -> PyResult<String> {
+        serde_json::to_string(&*self.inner.lock().unwrap())
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(
+            py,
+            &serde_json::to_value(&*self.inner.lock().unwrap())
+                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?,
+        )
+    }
+}
 
 #[pymethods]
 impl PyHirBlock {
+    #[new]
+    pub fn new() -> Self {
+        Self::from_inner(HirBlock::new())
+    }
+
     #[classmethod]
     pub fn from_dict(_cls: &Bound<'_, PyType>, py: Python<'_>, data: Py<PyAny>) -> PyResult<Self> {
         let value = py_to_json_value(py, data)?;
@@ -190,6 +594,13 @@ impl PyHirBlock {
             .cloned()
             .map(|statement| Py::new(py, PyHirStatement::from_inner(statement)))
             .collect()
+    }
+
+    pub fn append_statement(&mut self, statement: PyRef<'_, PyHirStatement>) {
+        self.inner
+            .lock()
+            .unwrap()
+            .append_statement(statement.inner.lock().unwrap().clone());
     }
 
     pub fn json(&self) -> PyResult<String> {
@@ -263,6 +674,22 @@ impl PyHirFunction {
             .lock()
             .unwrap()
             .append_block(block.inner.lock().unwrap().clone());
+    }
+
+    pub fn append_parameter(&mut self, parameter: PyRef<'_, PyHirParameter>) {
+        self.inner
+            .lock()
+            .unwrap()
+            .parameters
+            .push(parameter.inner.lock().unwrap().clone());
+    }
+
+    pub fn append_local(&mut self, local: PyRef<'_, PyHirLocal>) {
+        self.inner
+            .lock()
+            .unwrap()
+            .locals
+            .push(local.inner.lock().unwrap().clone());
     }
 
     pub fn blocks(&self, py: Python<'_>) -> PyResult<Vec<Py<PyHirBlock>>> {
@@ -414,6 +841,23 @@ impl PyHirModule {
         Ok(Self::from_inner(hir))
     }
 
+    #[classmethod]
+    pub fn from_text(_cls: &Bound<'_, PyType>, text: &str) -> PyResult<PyHirMlirModule> {
+        let inner = HirModule::from_text(text)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(PyHirMlirModule::from_inner(inner))
+    }
+
+    #[classmethod]
+    pub fn from_bytecode(
+        _cls: &Bound<'_, PyType>,
+        bytecode: &Bound<'_, PyBytes>,
+    ) -> PyResult<PyHirMlirModule> {
+        let inner = HirModule::from_bytecode(bytecode.as_bytes())
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(PyHirMlirModule::from_inner(inner))
+    }
+
     pub fn append_function(&mut self, function: PyRef<'_, PyHirFunction>) {
         self.inner
             .lock()
@@ -499,6 +943,26 @@ impl PyHirModule {
         format_hir_module(&self.inner.lock().unwrap())
     }
 
+    pub fn bytecode(&self, py: Python<'_>) -> PyResult<Py<PyBytes>> {
+        let bytecode = self
+            .inner
+            .lock()
+            .unwrap()
+            .bytecode()
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(PyBytes::new(py, &bytecode).unbind())
+    }
+
+    pub fn mlir(&self) -> PyResult<PyHirMlirModule> {
+        let module = self
+            .inner
+            .lock()
+            .unwrap()
+            .mlir()
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(PyHirMlirModule::from_inner(module))
+    }
+
     pub fn print(&self) -> PyResult<()> {
         self.inner.lock().unwrap().print();
         Ok(())
@@ -531,10 +995,15 @@ impl PyHirModule {
 pub fn hir_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyHirValue>()?;
     m.add_class::<PyHirExpression>()?;
+    m.add_class::<PyHirPlace>()?;
+    m.add_class::<PyHirTarget>()?;
     m.add_class::<PyHirStatement>()?;
     m.add_class::<PyHirBlock>()?;
+    m.add_class::<PyHirParameter>()?;
+    m.add_class::<PyHirLocal>()?;
     m.add_class::<PyHirFunction>()?;
     m.add_class::<PyHirModule>()?;
+    m.add_class::<PyHirMlirModule>()?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.ir.hir", m)?;
