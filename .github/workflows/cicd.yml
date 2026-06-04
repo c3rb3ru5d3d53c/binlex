@@ -49,30 +49,25 @@ jobs:
             runner: ubuntu-latest
             container: "null"
             asset: linux-x86_64
-            archive_ext: tar.gz
           - os: macos-14
             runner: macos-15
             container: "null"
             asset: macos-14-arm64
-            archive_ext: tar.gz
             macos_deployment_target: "14.0"
           - os: macos-15-intel
             runner: macos-15-intel
             container: "null"
             asset: macos-15-intel-x86_64
-            archive_ext: tar.gz
             macos_deployment_target: "15.0"
           - os: macos-15
             runner: macos-15
             container: "null"
             asset: macos-15-arm64
-            archive_ext: tar.gz
             macos_deployment_target: "15.0"
           - os: windows-latest
             runner: windows-latest
             container: "null"
             asset: windows-x86_64
-            archive_ext: zip
 
     runs-on: ${{ matrix.runner }}
     container: ${{ fromJSON(matrix.container) }}
@@ -201,7 +196,7 @@ jobs:
 
       - name: Build Project (Ubuntu)
         if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: make deb
+        run: cargo build --release --workspace --exclude binlex-python
 
       - name: Build Project (macOS)
         if: startsWith(matrix.os, 'macos-')
@@ -210,93 +205,6 @@ jobs:
       - name: Build Project (Windows)
         if: ${{ matrix.os == 'windows-latest' }}
         run: cargo build --release --workspace ${{ env.WINDOWS_CARGO_EXCLUDES }}
-
-      - name: Create Dist Directory
-        run: mkdir -p dist
-
-      - name: Copy Binary (Windows)
-        if: ${{ matrix.os == 'windows-latest' }}
-        run: |
-          copy target\release\binlex.exe dist\
-          copy target\release\binlex-mcp.exe dist\
-          copy target\release\binlex-server.exe dist\
-          copy target\release\binlex-web.exe dist\
-          copy target\release\binlex-yara.exe dist\
-          copy target\release\binlex-symbols.exe dist\
-          copy target\release\binlex-image.exe dist\
-          copy target\release\binlex-hash.exe dist\
-
-      - name: Copy Binary (macOS)
-        if: startsWith(matrix.os, 'macos-')
-        run: |
-          cp target/release/binlex dist/
-          cp target/release/binlex-mcp dist/
-          cp target/release/binlex-server dist/
-          cp target/release/binlex-web dist/
-          cp target/release/binlex-yara dist/
-          cp target/release/binlex-symbols dist/
-          cp target/release/binlex-image dist/
-          cp target/release/binlex-hash dist/
-
-      - name: Copy Binary (Ubuntu)
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: |
-          cp target/release/binlex dist/
-          cp target/release/binlex-mcp dist/
-          cp target/release/binlex-server dist/
-          cp target/release/binlex-web dist/
-          cp target/release/binlex-yara dist/
-          cp target/release/binlex-symbols dist/
-          cp target/release/binlex-image dist/
-          cp target/release/binlex-hash dist/
-          cp target/debian/*.deb dist/
-
-      - name: Package Native Artifacts (Unix)
-        if: ${{ matrix.os != 'windows-latest' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p release
-          cp -a dist "release/${ASSET_BASENAME}"
-          tar -C release -czf "dist/${ASSET_BASENAME}.tar.gz" "${ASSET_BASENAME}"
-
-      - name: Package Native Artifacts (Windows)
-        if: ${{ matrix.os == 'windows-latest' }}
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path release | Out-Null
-          Copy-Item -Recurse dist "release/$env:ASSET_BASENAME"
-          Compress-Archive -Path "release/$env:ASSET_BASENAME" -DestinationPath "dist/$env:ASSET_BASENAME.zip" -Force
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v6
-        with:
-          name: ${{ env.ASSET_BASENAME }}
-          path: dist/${{ env.ASSET_BASENAME }}.${{ matrix.archive_ext }}
-
-      - name: Summarize Native Artifacts
-        shell: bash
-        run: |
-          python - <<'PY'
-          import hashlib
-          import os
-          from pathlib import Path
-
-          archive = Path(f"dist/{os.environ['ASSET_BASENAME']}.${{ matrix.archive_ext }}")
-          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
-
-          digest = hashlib.sha256()
-          with archive.open("rb") as handle:
-              for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                  digest.update(chunk)
-
-          with summary.open("a", encoding="utf-8") as handle:
-              handle.write("## Native Artifacts (${{ matrix.os }})\n\n")
-              handle.write(f"Artifact name: `{os.environ['ASSET_BASENAME']}`\n\n")
-              handle.write("| File | Size | SHA-256 |\n")
-              handle.write("| --- | ---: | --- |\n")
-              handle.write(f"| `{archive.name}` | {archive.stat().st_size:,} bytes | `{digest.hexdigest()}` |\n\n")
-          PY
 
   python-wheels:
     name: python-wheels (${{ matrix.os }})
@@ -590,7 +498,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [ida-plugin, mcp-skills, source-code]
+        package: [source-code]
 
     steps:
       - name: Checkout Code
@@ -614,71 +522,6 @@ jobs:
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           test "${TAG_VERSION}" = "${BINLEX_VERSION}"
-
-      - name: Build IDA Plugin Package
-        if: matrix.package == 'ida-plugin'
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install build
-          mkdir -p dist
-          cd plugins/ida/
-          python -m pip install .
-          python -m build
-          binlex-ida archive --output ../../dist/binlex-${{ env.BINLEX_VERSION }}-ida.zip
-
-      - name: Upload IDA Plugin Artifacts
-        if: matrix.package == 'ida-plugin'
-        uses: actions/upload-artifact@v6
-        with:
-          name: binlex-${{ env.BINLEX_VERSION }}-ida
-          path: dist/binlex-${{ env.BINLEX_VERSION }}-ida.zip
-
-      - name: Create MCP Skills Archive
-        if: matrix.package == 'mcp-skills'
-        shell: bash
-        run: |
-          mkdir -p dist
-          python - <<'PY'
-          import shutil
-          import os
-          from pathlib import Path
-
-          source = Path("crates/binlex_tools/binlex-mcp/skills")
-          archive = Path(f"dist/binlex-{os.environ['BINLEX_VERSION']}-mcp-skills.zip")
-          shutil.make_archive(str(archive.with_suffix("")), "zip", root_dir=source.parent, base_dir=source.name)
-          PY
-
-      - name: Upload MCP Skills Artifact
-        if: matrix.package == 'mcp-skills'
-        uses: actions/upload-artifact@v6
-        with:
-          name: binlex-${{ env.BINLEX_VERSION }}-mcp-skills
-          path: dist/binlex-${{ env.BINLEX_VERSION }}-mcp-skills.zip
-
-      - name: Summarize MCP Skills Artifact
-        if: matrix.package == 'mcp-skills'
-        shell: bash
-        run: |
-          python - <<'PY'
-          import hashlib
-          import os
-          from pathlib import Path
-
-          archive = Path(f"dist/binlex-{os.environ['BINLEX_VERSION']}-mcp-skills.zip")
-          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
-
-          digest = hashlib.sha256()
-          with archive.open("rb") as handle:
-              for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                  digest.update(chunk)
-
-          with summary.open("a", encoding="utf-8") as handle:
-              handle.write("## MCP Skills Artifact\n\n")
-              handle.write(f"Artifact name: `binlex-{os.environ['BINLEX_VERSION']}-mcp-skills`\n\n")
-              handle.write("| File | Size | SHA-256 |\n")
-              handle.write("| --- | ---: | --- |\n")
-              handle.write(f"| `{archive.name}` | {archive.stat().st_size:,} bytes | `{digest.hexdigest()}` |\n\n")
-          PY
 
       - name: Create Source Code Archive
         if: matrix.package == 'source-code'
@@ -714,31 +557,6 @@ jobs:
           with summary.open("a", encoding="utf-8") as handle:
               handle.write("## Source Code Artifact\n\n")
               handle.write(f"Artifact name: `binlex-{os.environ['BINLEX_VERSION']}-source`\n\n")
-              handle.write("| File | Size | SHA-256 |\n")
-              handle.write("| --- | ---: | --- |\n")
-              handle.write(f"| `{archive.name}` | {archive.stat().st_size:,} bytes | `{digest.hexdigest()}` |\n\n")
-          PY
-
-      - name: Summarize IDA Plugin Artifact
-        if: matrix.package == 'ida-plugin'
-        shell: bash
-        run: |
-          python - <<'PY'
-          import hashlib
-          import os
-          from pathlib import Path
-
-          archive = Path(f"dist/binlex-{os.environ['BINLEX_VERSION']}-ida.zip")
-          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
-
-          digest = hashlib.sha256()
-          with archive.open("rb") as handle:
-              for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                  digest.update(chunk)
-
-          with summary.open("a", encoding="utf-8") as handle:
-              handle.write("## IDA Artifact\n\n")
-              handle.write(f"Artifact name: `binlex-{os.environ['BINLEX_VERSION']}-ida`\n\n")
               handle.write("| File | Size | SHA-256 |\n")
               handle.write("| --- | ---: | --- |\n")
               handle.write(f"| `{archive.name}` | {archive.stat().st_size:,} bytes | `{digest.hexdigest()}` |\n\n")
@@ -800,14 +618,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: binlex-mcp
-            platform: linux/amd64
-            runner: ubuntu-latest
-            dockerfile: docker/binlex-mcp.Dockerfile
-          - target: binlex-mcp
-            platform: linux/arm64
-            runner: ubuntu-24.04-arm
-            dockerfile: docker/binlex-mcp.Dockerfile
           - target: binlex-python
             platform: linux/amd64
             runner: ubuntu-latest
@@ -816,22 +626,6 @@ jobs:
             platform: linux/arm64
             runner: ubuntu-24.04-arm
             dockerfile: docker/binlex-python.Dockerfile
-          - target: binlex-server
-            platform: linux/amd64
-            runner: ubuntu-latest
-            dockerfile: docker/binlex-server.Dockerfile
-          - target: binlex-server
-            platform: linux/arm64
-            runner: ubuntu-24.04-arm
-            dockerfile: docker/binlex-server.Dockerfile
-          - target: binlex-web
-            platform: linux/amd64
-            runner: ubuntu-latest
-            dockerfile: docker/binlex-web.Dockerfile
-          - target: binlex-web
-            platform: linux/arm64
-            runner: ubuntu-24.04-arm
-            dockerfile: docker/binlex-web.Dockerfile
 
     steps:
       - name: Checkout Code
@@ -883,25 +677,10 @@ jobs:
           cache-from: type=gha,scope=docker-${{ matrix.target }}-${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=docker-${{ matrix.target }}-${{ matrix.platform }}
 
-      - name: Smoke Test binlex-mcp Image
-        if: github.event_name == 'pull_request' && matrix.target == 'binlex-mcp'
-        shell: bash
-        run: docker run --rm "${BINLEX_DOCKER_IMAGE}" binlex-mcp --help
-
       - name: Smoke Test binlex-python Image
         if: github.event_name == 'pull_request' && matrix.target == 'binlex-python'
         shell: bash
         run: docker run --rm "${BINLEX_DOCKER_IMAGE}" python -c "import binlex"
-
-      - name: Smoke Test binlex-server Image
-        if: github.event_name == 'pull_request' && matrix.target == 'binlex-server'
-        shell: bash
-        run: docker run --rm "${BINLEX_DOCKER_IMAGE}" binlex-server --help
-
-      - name: Smoke Test binlex-web Image
-        if: github.event_name == 'pull_request' && matrix.target == 'binlex-web'
-        shell: bash
-        run: docker run --rm "${BINLEX_DOCKER_IMAGE}" binlex-web --help
 
       - name: Resolve Docker Tags
         if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v'))
@@ -979,7 +758,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [binlex-mcp, binlex-python, binlex-server, binlex-web]
+        target: [binlex-python]
 
     steps:
       - name: Checkout Code

@@ -1,15 +1,9 @@
 services:
-  binlex-mcp:
-    container_name: binlex-mcp
-    restart: unless-stopped
-    environment:
-      BINLEX_MCP_CONFIG: ${BINLEX_MCP_CONFIG:-/root/.config/binlex/binlex-mcp.toml}
-      BINLEX_MCP_BASE_URL: ${BINLEX_MCP_BASE_URL:-http://127.0.0.1:3000}
-      BINLEX_MCP_SAMPLES: ${BINLEX_MCP_SAMPLES:-/root/.local/share/binlex/samples}
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./data/binlex-mcp/processors:/root/.local/share/binlex/processors
-      - ./data/binlex-mcp/config:/root/.config/binlex
-      - ./data/binlex-mcp/local:/root/.local
-      - ./data/binlex-mcp/samples:/samples
+  binlex-python:
+    image: binlex-python:${BINLEX_VERSION:-latest}
+    build:
+      context: .
+      dockerfile: docker/binlex-python.Dockerfile
+      args:
+        BINLEX_IMAGE_VERSION: ${BINLEX_VERSION:-latest}
+    command: python3

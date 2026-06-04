@@ -328,20 +328,6 @@ impl Rule {
             .add_pattern(&pattern, comment.as_deref())
     }
 
-    #[pyo3(signature = (name, parts, destructive=true))]
-    pub fn fragment_pattern(
-        &self,
-        name: String,
-        parts: usize,
-        destructive: bool,
-    ) -> PyResult<Vec<String>> {
-        self.inner
-            .lock()
-            .unwrap()
-            .fragment_pattern(&name, parts, destructive)
-            .map_err(|error| PyValueError::new_err(error.to_string()))
-    }
-
     #[pyo3(signature = (
         text,
         ascii=true,

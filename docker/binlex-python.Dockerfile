@@ -10,6 +10,7 @@ RUN set -eux; \
         ca-certificates \
         cmake \
         curl \
+        git \
         gnupg \
         libprotobuf-dev \
         libssl-dev \

@@ -6,7 +6,6 @@
 [![GitHub license](https://img.shields.io/github/license/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/blob/master/LICENSE)
 ![GitHub all releases](https://img.shields.io/github/downloads/c3rb3ru5d3d53c/binlex/total)
 ![binlex-python](https://img.shields.io/docker/pulls/c3rb3ru5d3d53c/binlex-python?logo=docker&label=binlex-python)
-![binlex-mcp](https://img.shields.io/docker/pulls/c3rb3ru5d3d53c/binlex-mcp?logo=docker&label=binlex-mcp)
 
 <table>
   <tr>
@@ -29,10 +28,8 @@ Binlex extracts instructions, basic blocks, and functions from binaries and emit
 - 🧬 Fast trait extraction for instructions, blocks, and functions
 - 🔐 Hashing and traits: MinHash, TLSH, SHA256, entropy, and wildcard patterns
 - 📈 Normalization and feature pipelines for ML-oriented similarity workflows
-- 🧰 Interfaces: CLI, Rust API, Python API/bindings, and IDA plugin
-- ⚙️ Processor framework in Rust with fast external execution over `ipc` and `http`
-- 🧠 Build you own Rust processors to perform additional analysis
-- 🎯 Tooling for YARA generation, symbol ingestion, and batch JSON workflows
+- 🧰 Interfaces: Rust API and Python API/bindings
+- 🎯 Tooling for YARA rule construction and binary analysis workflows
 
 ## Supported Targets 🌐
 
@@ -40,19 +37,9 @@ Binlex extracts instructions, basic blocks, and functions from binaries and emit
 - Formats: PE, ELF, Mach-O
 - Architectures: AMD64, I386, CIL
 
-## Included Command-Line Tool Suite 🧰
-
-- `binlex`: main CLI for binary trait extraction
-- `binlex-mcp`: Model Context Protocol server for exposing Binlex tools to MCP clients
-- `binlex-server`: processor transport server for `http` workflows
-- `binlex-hash`: hashing utility
-- `binlex-image`: image-related utility
-- `binlex-symbols`: symbol ingestion and conversion helper
-- `binlex-yara`: generate YARA rules from Binlex-style patterns or streams
-
 ## Build & Install 🛠️
 
-### Rust API & Tooling
+### Rust API
 
 ```bash
 cargo run --manifest-path xtask/Cargo.toml
@@ -72,32 +59,19 @@ maturin develop
 ### Packaging 📦
 
 ```bash
-make zst   # Arch Linux
-make deb   # Debian-based
 make wheel # Python Wheel
 ```
 
-### IDA Plugin 🧠
+### Docker
 
 ```bash
-cd plugins/ida/
-pip install .
-python -m binlex_ida install
-```
-
-### Docker Containers
-
-```bash
-# Local Build and Start
-docker compose -f compose.yml -f compose.local.yml up --build -d
-# Start Using Docker Hub
-docker compose -f compose.yml -f compose.remote.yml up -d
+docker compose build
+docker compose run --rm binlex-python python -c "import binlex; print('binlex ok')"
 ```
 ### Documentation 📚
 
 #### Guides
 
-- [Command-Line Guide](docs/command-line.md)
 - [Custom Processors](docs/processors.md)
 
 #### Examples 🧪

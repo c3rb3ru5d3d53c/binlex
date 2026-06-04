@@ -20,34 +20,12 @@ test-vex: prepare
 build: prepare
 	@$(BUILD_WORKSPACE)
 
-zst: prepare
-	@$(BUILD_WORKSPACE)
-	@makepkg
-	@mkdir -p $(OUTPUT_DIRECTORY)/zst/
-	@for file in *.pkg.tar.zst; do \
-		echo "Moving $$file to $(OUTPUT_DIRECTORY)/zst/..."; \
-		mv "$$file" $(OUTPUT_DIRECTORY)/zst/; \
-	done
-
-deb: prepare
-	@cargo install cargo-deb
-	@$(BUILD_WORKSPACE)
-	@cargo deb -p binlex-cli --no-build
-
 wheel: prepare
 	virtualenv -p python3 venv/
 	. venv/bin/activate && \
 		cd bindings/python/ && \
 		pip install maturin[patchelf] && \
 		maturin build --release
-
-ida-plugin: prepare
-	virtualenv -p python3 venv/
-	. venv/bin/activate && \
-		cd plugins/ida/ && \
-		pip install . build && \
-		python -m build && \
-		python -m binlex_ida archive --output ../../target/binlex-ida.zip
 
 clean:
 	@rm -rf pkg/

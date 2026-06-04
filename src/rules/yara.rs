@@ -516,75 +516,6 @@ impl Rule {
         &self.patterns
     }
 
-    pub fn fragment_pattern(
-        &mut self,
-        name: &str,
-        parts: usize,
-        destructive: bool,
-    ) -> Result<Vec<String>, Error> {
-        if parts < 2 {
-            return Err(Error::Validation(
-                "fragment_pattern requires at least 2 parts".to_string(),
-            ));
-        }
-
-        let source = self
-            .patterns
-            .iter()
-            .find(|pattern| pattern.name == name.trim())
-            .cloned()
-            .ok_or_else(|| Error::Validation(format!("pattern not found: {}", name.trim())))?;
-
-        if source.kind != PatternKind::Hex {
-            return Err(Error::Validation(
-                "fragment_pattern only supports hex patterns".to_string(),
-            ));
-        }
-
-        let tokens = tokenize_hex_pattern(&source.value)?;
-        if tokens.len() < parts {
-            return Err(Error::Validation(format!(
-                "cannot fragment {} hex tokens into {} parts",
-                tokens.len(),
-                parts
-            )));
-        }
-
-        let base = tokens.len() / parts;
-        let remainder = tokens.len() % parts;
-        let mut start = 0usize;
-        let mut names = Vec::with_capacity(parts);
-
-        for index in 0..parts {
-            let len = base + usize::from(index < remainder);
-            let end = start + len;
-            let fragment_name = format!("{}_fragment_{}", source.name, index);
-            let fragment_value = tokens[start..end].join(" ");
-            self.patterns.push(Pattern {
-                name: fragment_name.clone(),
-                value: fragment_value,
-                comment: source.comment.clone(),
-                kind: PatternKind::Hex,
-                ascii: false,
-                wide: false,
-                nocase: false,
-                xor: false,
-                base64: false,
-                base64wide: false,
-                fullword: false,
-                private: false,
-            });
-            names.push(fragment_name);
-            start = end;
-        }
-
-        if destructive {
-            self.remove_pattern(&source.name);
-        }
-
-        Ok(names)
-    }
-
     pub fn condition<T>(&self, value: T) -> Condition
     where
         T: Into<Condition>,
@@ -866,70 +797,6 @@ fn render_condition_group(operator: &str, parts: &[Condition]) -> String {
     parts.join(&format!(" {} ", operator))
 }
 
-fn tokenize_hex_pattern(value: &str) -> Result<Vec<String>, Error> {
-    let normalized = value
-        .trim()
-        .trim_start_matches('{')
-        .trim_end_matches('}')
-        .trim();
-
-    if normalized.is_empty() {
-        return Err(Error::Validation(
-            "hex pattern must not be empty".to_string(),
-        ));
-    }
-
-    if normalized.chars().any(char::is_whitespace) {
-        let tokens = normalized
-            .split_whitespace()
-            .map(str::trim)
-            .filter(|token| !token.is_empty())
-            .map(ToString::to_string)
-            .collect::<Vec<_>>();
-        if tokens.is_empty() {
-            return Err(Error::Validation(
-                "hex pattern must not be empty".to_string(),
-            ));
-        }
-        for token in &tokens {
-            validate_fragment_token(token)?;
-        }
-        return Ok(tokens);
-    }
-
-    if normalized.len() % 2 != 0 {
-        return Err(Error::Validation(
-            "compact hex pattern must have an even number of characters".to_string(),
-        ));
-    }
-
-    let tokens = normalized
-        .as_bytes()
-        .chunks(2)
-        .map(|chunk| std::str::from_utf8(chunk).unwrap().to_string())
-        .collect::<Vec<_>>();
-    for token in &tokens {
-        validate_fragment_token(token)?;
-    }
-    Ok(tokens)
-}
-
-fn validate_fragment_token(token: &str) -> Result<(), Error> {
-    if token.len() != 2 {
-        return Err(Error::Validation(format!(
-            "fragment_pattern only supports hex byte pairs and wildcard pairs, got: {}",
-            token
-        )));
-    }
-    if token.chars().all(|c| c == '?' || c.is_ascii_hexdigit()) {
-        return Ok(());
-    }
-    Err(Error::Validation(format!(
-        "fragment_pattern only supports hex byte pairs and wildcard pairs, got: {}",
-        token
-    )))
-}
-
 fn validate_text_modifiers(
     nocase: bool,
     xor: bool,
@@ -1137,101 +1004,13 @@ mod tests {
     }
 
     #[test]
-    fn rule_can_fragment_hex_patterns() {
-        let mut rule = Rule::new_with_options(Some("fragmented"), None);
-        let pattern = rule.add_pattern("48 8B 05 11 22 33 44 48 85 C0", Some("anchor"));
-        let fragments = rule.fragment_pattern(&pattern, 3, true).unwrap();
-        assert_eq!(
-            fragments,
-            vec![
-                "$chromosome_0_fragment_0".to_string(),
-                "$chromosome_0_fragment_1".to_string(),
-                "$chromosome_0_fragment_2".to_string()
-            ]
-        );
-        let rendered = rule.render();
-        assert!(!rendered.contains("$chromosome_0 = { 48 8B 05 11 22 33 44 48 85 C0 }"));
-        assert!(rendered.contains("$chromosome_0_fragment_0 = { 48 8B 05 11 }"));
-        assert!(rendered.contains("$chromosome_0_fragment_1 = { 22 33 44 }"));
-        assert!(rendered.contains("$chromosome_0_fragment_2 = { 48 85 C0 }"));
-    }
-
-    #[test]
-    fn rule_can_fragment_compact_hex_patterns() {
-        let mut rule = Rule::new_with_options(Some("fragmented_compact"), None);
-        let pattern = rule.add_pattern("488B05112233444885C0", None);
-        let fragments = rule.fragment_pattern(&pattern, 3, true).unwrap();
-        assert_eq!(
-            fragments,
-            vec![
-                "$chromosome_0_fragment_0".to_string(),
-                "$chromosome_0_fragment_1".to_string(),
-                "$chromosome_0_fragment_2".to_string()
-            ]
-        );
-        let rendered = rule.render();
-        assert!(!rendered.contains("$chromosome_0 = { 488B05112233444885C0 }"));
-        assert!(rendered.contains("$chromosome_0_fragment_0 = { 48 8B 05 11 }"));
-        assert!(rendered.contains("$chromosome_0_fragment_1 = { 22 33 44 }"));
-        assert!(rendered.contains("$chromosome_0_fragment_2 = { 48 85 C0 }"));
-    }
-
-    #[test]
-    fn rule_can_fragment_patterns_non_destructively() {
-        let mut rule = Rule::new_with_options(Some("fragmented_keep"), None);
-        let pattern = rule.add_pattern("48 8B 05 11 22 33 44 48 85 C0", None);
-        let _ = rule.fragment_pattern(&pattern, 3, false).unwrap();
-        let rendered = rule.render();
-        assert!(rendered.contains("$chromosome_0 = { 48 8B 05 11 22 33 44 48 85 C0 }"));
-        assert!(rendered.contains("$chromosome_0_fragment_0 = { 48 8B 05 11 }"));
-    }
-
-    #[test]
     fn rule_supports_condition_at_least() {
         let mut rule = Rule::new_with_options(Some("at_least"), None);
-        let pattern = rule.add_pattern("48 8B 05 11 22 33 44 48 85 C0", None);
-        let fragments = rule.fragment_pattern(&pattern, 3, true).unwrap();
-        rule.set_condition(rule.condition_at_least(2, fragments.clone()));
+        let patterns = vec!["$chromosome_0", "$chromosome_1", "$chromosome_2"];
+        rule.set_condition(rule.condition_at_least(2, patterns));
         assert_eq!(
             rule.get_condition_text().as_deref(),
-            Some(
-                "2 of ($chromosome_0_fragment_0, $chromosome_0_fragment_1, $chromosome_0_fragment_2)"
-            )
-        );
-    }
-
-    #[test]
-    fn rule_rejects_fragmenting_non_hex_patterns() {
-        let mut rule = Rule::new_with_options(Some("invalid_fragment"), None);
-        let text = rule
-            .add_text(
-                "powershell",
-                true,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false,
-                None,
-            )
-            .unwrap();
-        let error = rule.fragment_pattern(&text, 2, true).unwrap_err();
-        assert_eq!(
-            error.to_string(),
-            "fragment_pattern only supports hex patterns"
-        );
-    }
-
-    #[test]
-    fn rule_rejects_fragmenting_advanced_yara_hex_syntax() {
-        let mut rule = Rule::new_with_options(Some("invalid_yara_hex"), None);
-        let pattern = rule.add_pattern("de ad [1-2] be ef", None);
-        let error = rule.fragment_pattern(&pattern, 2, true).unwrap_err();
-        assert_eq!(
-            error.to_string(),
-            "fragment_pattern only supports hex byte pairs and wildcard pairs, got: [1-2]"
+            Some("2 of ($chromosome_0, $chromosome_1, $chromosome_2)")
         );
     }
 

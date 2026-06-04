@@ -1,3 +1,0 @@
-services:
-  binlex-mcp:
-    image: ${DOCKER_NAMESPACE:-c3rb3ru5d3d53c}/binlex-mcp:${BINLEX_VERSION:-latest}
