@@ -33,8 +33,8 @@ That means:
 Use the explicit lifter API:
 
 ```python
-from binlex.ir.llvm import LlvmModule
-from binlex.ir.vex import Lifter as VexLifter
+from binlex.irs.llvm import LlvmModule
+from binlex.irs.vex import Lifter as VexLifter
 
 llvm = LlvmModule(function.lir().abi().cpu(), config)
 llvm.lift_function(function)
@@ -51,8 +51,8 @@ You can also build the lifter explicitly:
 
 ```python
 from binlex import Configuration
-from binlex.ir.llvm import LlvmModule
-from binlex.ir.vex import Lifter as VexLifter
+from binlex.irs.llvm import LlvmModule
+from binlex.irs.vex import Lifter as VexLifter
 
 config = Configuration()
 
@@ -104,7 +104,7 @@ It supports:
 ### Python
 
 ```python
-from binlex.ir.llvm import LlvmModule
+from binlex.irs.llvm import LlvmModule
 
 llvm = LlvmModule(function.lir().abi().cpu(), config)
 llvm.lift_function(function)
@@ -132,7 +132,7 @@ LLVM exposes an optimizer namespace so users can choose their own pass chain.
 Python:
 
 ```python
-from binlex.ir.llvm import LlvmModule
+from binlex.irs.llvm import LlvmModule
 
 llvm = LlvmModule(function.lir().abi().cpu(), config)
 llvm.lift_function(function)
@@ -163,7 +163,7 @@ That is the supported surface.
 ### Python
 
 ```python
-from binlex.ir.vex import Lifter
+from binlex.irs.vex import Lifter
 
 vex = Lifter(config)
 vex.lift_function(function)

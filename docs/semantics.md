@@ -234,10 +234,10 @@ transport and storage without loss.
 
 ## Python Usage
 
-The Python bindings expose the same model through `binlex.ir.lir`.
+The Python bindings expose the same model through `binlex.irs.lir`.
 
 ```python
-from binlex.ir.lir import (
+from binlex.irs.lir import (
     Lir,
     LirDiagnostic,
     LirDiagnosticKind,
@@ -253,7 +253,7 @@ from binlex.ir.lir import (
 ### Example: `eax = eax + 4; ret`
 
 ```python
-from binlex.ir.lir import (
+from binlex.irs.lir import (
     Lir,
     LirEffect,
     LirExpression,
@@ -285,7 +285,7 @@ semantics = Lir(
 ### Example: partial semantics with diagnostics
 
 ```python
-from binlex.ir.lir import (
+from binlex.irs.lir import (
     Lir,
     LirDiagnostic,
     LirDiagnosticKind,

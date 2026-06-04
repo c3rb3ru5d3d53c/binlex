@@ -15,7 +15,6 @@ from . import hex, math
 from . import irs
 from . import metadata
 from . import rules
-from . import symbolic
 from . import utilities
 from binlex.core import Magic
 from . import controlflow, disassemblers, formats
@@ -44,6 +43,5 @@ __all__ = [
     "math",
     "metadata",
     "rules",
-    "symbolic",
     "utilities",
 ]

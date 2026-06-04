@@ -254,7 +254,7 @@ for function in graph.functions():
 ### Lift one function
 
 ```python
-from binlex.ir.llvm import LlvmModule
+from binlex.irs.llvm import LlvmModule
 
 llvm = LlvmModule(function.lir().abi().cpu(), config)
 llvm.lift_function(function)

@@ -68,11 +68,8 @@ make wheel # Python Wheel
 docker compose build
 docker compose run --rm binlex-python python -c "import binlex; print('binlex ok')"
 ```
+
 ### Documentation 📚
-
-#### Guides
-
-- [Custom Processors](docs/processors.md)
 
 #### Examples 🧪
 

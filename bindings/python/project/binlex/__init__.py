@@ -49,7 +49,6 @@ _LAZY_SUBMODULES = {
     "math",
     "metadata",
     "rules",
-    "symbolic",
     "utilities",
 }
 
@@ -86,6 +85,5 @@ __all__ = [
     "math",
     "metadata",
     "rules",
-    "symbolic",
     "utilities",
 ]
