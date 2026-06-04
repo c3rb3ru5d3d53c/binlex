@@ -293,7 +293,13 @@ impl<'a> Disassembler<'a> {
             }
 
             if let Some(instruction) = cfg.instruction(block_end_address) {
-                cfg.blocks.enqueue_extend(instruction.successors());
+                cfg.blocks.enqueue_extend(
+                    instruction
+                        .successors()
+                        .into_iter()
+                        .filter(|address| self.is_executable_address(*address))
+                        .collect(),
+                );
             }
         }
 
@@ -469,7 +475,13 @@ impl<'a> Disassembler<'a> {
             }
 
             if let Some(instruction) = cfg.get_instruction_record(block_end_address) {
-                cfg.blocks.enqueue_extend(instruction.successors());
+                cfg.blocks.enqueue_extend(
+                    instruction
+                        .successors()
+                        .into_iter()
+                        .filter(|address| self.is_executable_address(*address))
+                        .collect(),
+                );
             }
         }
 

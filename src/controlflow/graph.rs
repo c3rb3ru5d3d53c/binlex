@@ -904,28 +904,27 @@ impl Graph {
             return None;
         }
 
-        let mut previous_address: Option<u64> = None;
         let mut previous_instruction: Option<u64> = None;
+        let mut pc = address;
 
-        for entry in self.listing.range(address..) {
-            let record = entry.value();
-            let instruction = self.instruction(record.address)?;
-            if let Some(prev_addr) = previous_address {
-                if instruction.address != prev_addr {
-                    return None;
-                }
-            }
+        loop {
+            let instruction = self.instruction(pc);
+            let Some(instruction) = instruction else {
+                return previous_instruction;
+            };
             if address != instruction.address && instruction.is_block_start {
                 return previous_instruction;
             }
-            previous_address = Some(instruction.address + instruction.size() as u64);
             if instruction.is_jump || instruction.is_trap || instruction.is_return {
                 return Some(instruction.address);
             }
+            let size = instruction.size() as u64;
+            if size == 0 {
+                return previous_instruction;
+            }
             previous_instruction = Some(instruction.address);
+            pc = instruction.address.checked_add(size)?;
         }
-
-        None
     }
 
     fn ensure_block_layouts(&self) {
@@ -1069,7 +1068,13 @@ impl Graph {
                 return None;
             }
             let block = Block::new(block_address, self).ok()?;
-            queue.enqueue_extend(block.successor_addresses());
+            queue.enqueue_extend(
+                block
+                    .successor_addresses()
+                    .into_iter()
+                    .filter(|address| self.blocks.is_valid(*address))
+                    .collect(),
+            );
             blocks.insert(block_address);
         }
 

@@ -146,6 +146,40 @@ fn test_direct_call_outside_executable_range_is_not_enqueued_as_function() {
 }
 
 #[test]
+fn test_i386_overlapping_jump_target_does_not_enqueue_out_of_range_fallthrough() {
+    // assembly from address 0:
+    //   mov eax, 0x02ebb813
+    //   jmp 0x2
+    //
+    // The jump target at 0x2 overlaps the first instruction and decodes as:
+    //   mov eax, 0xfbeb02eb
+    //
+    // That overlapping instruction falls through to 0x7, which is the end of the
+    // executable range. Function disassembly should keep the decoded target but
+    // not chase the non-executable fallthrough as another block.
+    let bytes = vec![0xb8, 0x13, 0xb8, 0xeb, 0x02, 0xeb, 0xfb];
+    let mut ranges = BTreeMap::new();
+    ranges.insert(0u64, bytes.len() as u64);
+    let config = Configuration::new();
+    let disasm =
+        Disassembler::new(Architecture::I386, &bytes, ranges, config.clone()).expect("disasm");
+    let mut graph = Graph::new(Architecture::I386, config);
+
+    disasm
+        .disassemble_function(0, &mut graph)
+        .expect("disassemble");
+
+    assert!(
+        graph.instruction(2).is_some(),
+        "overlapping jump target should be decoded"
+    );
+    assert!(
+        !graph.blocks.is_invalid(7),
+        "out-of-range fallthrough should not be enqueued as a block"
+    );
+}
+
+#[test]
 fn test_mir_lowering_preserves_mid_block_calls() {
     // assembly:
     //   call 0xb
