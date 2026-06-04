@@ -219,8 +219,7 @@ This controlflow hierarchy is reused everywhere else in Binlex:
 - semantics are attached to `Instruction`
 - LLVM lifting can happen from `Instruction`, `Block`, or `Function`
 - VEX lifting can happen from `Instruction`, `Block`, or `Function`
-- processors attach outputs to instructions, blocks, functions, or graphs
-- JSON export is built from these same objects
+- IR accessors expose LIR, MIR, HIR, AST, and printer output as explicit objects
 
 If you are building on top of Binlex, this is the model to start from.
 
@@ -230,7 +229,7 @@ If you are building on top of Binlex, this is the model to start from.
 
 ```python
 for function in graph.functions():
-    print(function.to_dict())
+    print(hex(function.address()), function.number_of_blocks())
 ```
 
 ### Walk every block in every function
@@ -238,7 +237,7 @@ for function in graph.functions():
 ```python
 for function in graph.functions():
     for block in function.blocks():
-        print(block.to_dict())
+        print(hex(block.address()), block.number_of_instructions())
 ```
 
 ### Walk every instruction with semantics
@@ -255,9 +254,9 @@ for function in graph.functions():
 ### Lift one function
 
 ```python
-from binlex.lifters import Lifter, LifterBackend
+from binlex.ir.llvm import LlvmModule
 
-llvm = Lifter(function.architecture(), config, backend=LifterBackend.LLVM)
+llvm = LlvmModule(function.lir().abi().cpu(), config)
 llvm.lift_function(function)
 print(llvm.text())
 ```
@@ -266,5 +265,4 @@ print(llvm.text())
 
 If you are starting from controlflow, the next useful docs are:
 
-- [semantics.md](./semantics.md)
 - [lifters.md](./lifters.md)

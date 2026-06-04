@@ -306,13 +306,12 @@ semantics = Lir(
 )
 ```
 
-### Example: inspect and serialize
+### Example: inspect
 
 ```python
-print(semantics.json())
-
-data = semantics.to_dict()
-round_tripped = Lir.from_dict(data)
+print(semantics.text())
+bytecode = semantics.bytecode()
+round_tripped = Lir.from_bytecode(bytecode)
 ```
 
 The Python bindings also expose constructors for the lower-level pieces:

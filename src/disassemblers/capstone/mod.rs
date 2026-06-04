@@ -171,7 +171,7 @@ impl<'a> Disassembler<'a> {
         cfg: &'b mut Graph,
     ) -> Result<Instruction<'b>, Error> {
         let entry = self.disassemble_instruction_address(address, cfg)?;
-        cfg.get_instruction(entry).ok_or_else(|| {
+        cfg.instruction(entry).ok_or_else(|| {
             Error::other(format!(
                 "0x{entry:x}: instruction missing after disassembly"
             ))
@@ -192,7 +192,7 @@ impl<'a> Disassembler<'a> {
         cfg: &'b mut Graph,
     ) -> Result<Block<'b>, Error> {
         self.disassemble_block_address(address, cfg)?;
-        cfg.get_block(address)
+        cfg.block(address)
             .ok_or_else(|| Error::other(format!("0x{address:x}: block missing after disassembly")))
     }
 
@@ -206,7 +206,7 @@ impl<'a> Disassembler<'a> {
         cfg: &'b mut Graph,
     ) -> Result<Function<'b>, Error> {
         self.disassemble_function_address(address, cfg)?;
-        cfg.get_function(address).ok_or_else(|| {
+        cfg.function(address).ok_or_else(|| {
             Error::other(format!("0x{address:x}: function missing after disassembly"))
         })
     }

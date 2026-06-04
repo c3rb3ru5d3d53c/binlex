@@ -21,7 +21,9 @@
 // SOFTWARE.
 
 use memmap2::{Mmap, MmapMut};
+use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
+use std::hash::{Hash, Hasher};
 use std::io::{self, Error, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 
@@ -54,6 +56,62 @@ pub struct Image {
     base: u64,
     mmap: Option<Mmap>,
     mmap_mut: Option<MmapMut>,
+}
+
+pub trait VirtualImage {
+    fn read_virtual_bytes(&self, address: u64, max_len: usize) -> Result<Option<Vec<u8>>, Error>;
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ImageContext {
+    pub path: String,
+    pub base: u64,
+}
+
+impl PartialEq for ImageContext {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path && self.base == other.base
+    }
+}
+
+impl Eq for ImageContext {}
+
+impl Hash for ImageContext {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.path.hash(state);
+        self.base.hash(state);
+    }
+}
+
+impl ImageContext {
+    pub fn from_image(image: &Image) -> Self {
+        Self {
+            path: image.path.clone(),
+            base: image.base(),
+        }
+    }
+}
+
+impl VirtualImage for ImageContext {
+    fn read_virtual_bytes(&self, address: u64, max_len: usize) -> Result<Option<Vec<u8>>, Error> {
+        let Some(offset) = address.checked_sub(self.base) else {
+            return Ok(None);
+        };
+        if max_len == 0 {
+            return Ok(Some(Vec::new()));
+        }
+        let mut handle = OpenOptions::new().read(true).open(&self.path)?;
+        let size = handle.metadata()?.len();
+        if offset >= size {
+            return Ok(None);
+        }
+        let len = max_len.min((size - offset) as usize);
+        let mut bytes = vec![0; len];
+        handle.seek(SeekFrom::Start(offset))?;
+        let read = handle.read(&mut bytes)?;
+        bytes.truncate(read);
+        Ok(Some(bytes))
+    }
 }
 
 impl Image {
@@ -243,6 +301,12 @@ impl Image {
         let read = handle.read(&mut bytes)?;
         bytes.truncate(read);
         Ok(Some(bytes))
+    }
+}
+
+impl VirtualImage for Image {
+    fn read_virtual_bytes(&self, address: u64, max_len: usize) -> Result<Option<Vec<u8>>, Error> {
+        self.read_virtual_bytes(address, max_len)
     }
 }
 

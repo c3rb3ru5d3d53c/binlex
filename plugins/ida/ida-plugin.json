@@ -1,7 +1,0 @@
-{
-  "IDAMetadataDescriptorVersion": 1,
-  "plugin": {
-    "name": "Binlex",
-    "entryPoint": "main.py"
-  }
-}

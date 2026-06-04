@@ -27,15 +27,13 @@ use crate::controlflow::Function;
 use crate::controlflow::Instruction;
 use crate::controlflow::InstructionRecord;
 use crate::controlflow::Reference;
-use crate::ir::lir::Lir;
-use crate::processor::{ProcessorOutputs, ProcessorTarget};
+use crate::irs::lir::{Lir, LirInstruction};
 use crossbeam::queue::SegQueue;
 use crossbeam_skiplist::SkipMap;
 use crossbeam_skiplist::SkipSet;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Error;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -50,24 +48,37 @@ pub struct GraphQueueSnapshot {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct GraphSnapshot {
     pub architecture: String,
-    pub instructions: Vec<crate::controlflow::InstructionJson>,
+    pub instructions: Vec<GraphInstructionSnapshot>,
     #[serde(default)]
     pub symbols: BTreeMap<u64, String>,
     pub instruction_queue: GraphQueueSnapshot,
     pub block_queue: GraphQueueSnapshot,
     pub function_queue: GraphQueueSnapshot,
-    #[serde(default)]
-    pub processor_outputs: GraphProcessorOutputsSnapshot,
 }
 
-#[derive(Clone, Default, Serialize, Deserialize)]
-pub struct GraphProcessorOutputsSnapshot {
-    #[serde(default)]
-    pub instructions: HashMap<u64, ProcessorOutputs>,
-    #[serde(default)]
-    pub blocks: HashMap<u64, ProcessorOutputs>,
-    #[serde(default)]
-    pub functions: HashMap<u64, ProcessorOutputs>,
+#[derive(Clone, Serialize, Deserialize)]
+pub struct GraphInstructionSnapshot {
+    pub architecture: String,
+    pub address: u64,
+    pub is_prologue: bool,
+    pub is_block_start: bool,
+    pub is_function_start: bool,
+    pub bytes: Vec<u8>,
+    pub chromosome_mask: Vec<u8>,
+    pub pattern: String,
+    pub is_return: bool,
+    pub is_call: bool,
+    pub functions: BTreeSet<u64>,
+    pub is_jump: bool,
+    pub is_conditional: bool,
+    pub is_trap: bool,
+    pub has_indirect_target: bool,
+    pub to: BTreeSet<u64>,
+    pub edges: usize,
+    pub mnemonic: String,
+    pub disassembly: String,
+    pub operands: Vec<crate::controlflow::Operand>,
+    pub semantics: Option<LirInstruction>,
 }
 
 /// Queue structure used within `Graph` for managing addresses in processing stages.
@@ -376,13 +387,6 @@ impl Default for GraphQueue {
     }
 }
 
-/// Represents a control flow graph with instructions, blocks, and functions.
-#[derive(Default)]
-struct GraphProcessorState {
-    revisions: HashMap<ProcessorTarget, u64>,
-    outputs: HashMap<ProcessorTarget, HashMap<u64, ProcessorOutputs>>,
-}
-
 #[derive(Default)]
 struct GraphCallgraphState {
     revision: Option<u64>,
@@ -419,7 +423,6 @@ pub struct Graph {
     pub config: Configuration,
     symbols: Mutex<BTreeMap<u64, String>>,
     revision: AtomicU64,
-    processor_state: Mutex<GraphProcessorState>,
     callgraph_state: Mutex<GraphCallgraphState>,
     block_layout_state: Mutex<GraphBlockLayoutState>,
     function_layout_state: Mutex<GraphFunctionLayoutState>,
@@ -450,7 +453,6 @@ impl Graph {
             config,
             symbols: Mutex::new(symbols),
             revision: AtomicU64::new(0),
-            processor_state: Mutex::new(GraphProcessorState::default()),
             callgraph_state: Mutex::new(GraphCallgraphState::default()),
             block_layout_state: Mutex::new(GraphBlockLayoutState::default()),
             function_layout_state: Mutex::new(GraphFunctionLayoutState::default()),
@@ -462,34 +464,32 @@ impl Graph {
             .listing
             .iter()
             .map(|entry| {
-                let instruction =
-                    Instruction::new(*entry.key(), self).expect("instruction should exist");
-                let mut json = instruction.process();
-                json.chromosome.mask = crate::hex::encode(&instruction.chromosome_mask);
-                json
+                let instruction = entry.value();
+                GraphInstructionSnapshot {
+                    architecture: instruction.architecture.to_string(),
+                    address: instruction.address,
+                    is_prologue: instruction.is_prologue,
+                    is_block_start: instruction.is_block_start,
+                    is_function_start: instruction.is_function_start,
+                    bytes: instruction.bytes.clone(),
+                    chromosome_mask: instruction.chromosome_mask.clone(),
+                    pattern: instruction.pattern.clone(),
+                    is_return: instruction.is_return,
+                    is_call: instruction.is_call,
+                    functions: instruction.functions.clone(),
+                    is_jump: instruction.is_jump,
+                    is_conditional: instruction.is_conditional,
+                    is_trap: instruction.is_trap,
+                    has_indirect_target: instruction.has_indirect_target,
+                    to: instruction.to.clone(),
+                    edges: instruction.edges,
+                    mnemonic: instruction.mnemonic.clone(),
+                    disassembly: instruction.disassembly.clone(),
+                    operands: instruction.operands.clone(),
+                    semantics: instruction.semantics.clone(),
+                }
             })
             .collect();
-        let processor_outputs = {
-            let processor_state = self.processor_state.lock().unwrap();
-            GraphProcessorOutputsSnapshot {
-                instructions: processor_state
-                    .outputs
-                    .get(&ProcessorTarget::Instruction)
-                    .cloned()
-                    .unwrap_or_default(),
-                blocks: processor_state
-                    .outputs
-                    .get(&ProcessorTarget::Block)
-                    .cloned()
-                    .unwrap_or_default(),
-                functions: processor_state
-                    .outputs
-                    .get(&ProcessorTarget::Function)
-                    .cloned()
-                    .unwrap_or_default(),
-            }
-        };
-
         GraphSnapshot {
             architecture: self.architecture.to_string(),
             instructions,
@@ -497,7 +497,6 @@ impl Graph {
             instruction_queue: Self::snapshot_queue(&self.instructions),
             block_queue: Self::snapshot_queue(&self.blocks),
             function_queue: Self::snapshot_queue(&self.functions),
-            processor_outputs,
         }
     }
 
@@ -506,8 +505,9 @@ impl Graph {
         let mut graph = Self::new(architecture, config.clone());
         graph.replace_symbols(snapshot.symbols);
 
-        for json in snapshot.instructions {
-            let instruction_architecture = Architecture::from_string(&json.architecture)?;
+        for snapshot_instruction in snapshot.instructions {
+            let instruction_architecture =
+                Architecture::from_string(&snapshot_instruction.architecture)?;
             if instruction_architecture != architecture {
                 return Err(Error::other(format!(
                     "snapshot instruction architecture mismatch: expected {}, got {}",
@@ -515,70 +515,33 @@ impl Graph {
                 )));
             }
 
-            let mut instruction = Instruction::create(json.address, architecture, config.clone());
-            instruction.is_prologue = json.is_prologue;
-            instruction.is_block_start = json.is_block_start;
-            instruction.is_function_start = json.is_function_start;
-            instruction.is_return = json.is_return;
-            instruction.is_call = json.is_call;
-            instruction.is_jump = json.is_jump;
-            instruction.is_conditional = json.is_conditional;
-            instruction.is_trap = json.is_trap;
-            instruction.has_indirect_target = json.has_indirect_target;
-            instruction.edges = json.edges;
-            instruction.mnemonic = json.mnemonic;
-            instruction.disassembly = json.disassembly;
-            instruction.operands = json.operands;
-            instruction.bytes =
-                crate::hex::decode(&json.bytes).map_err(|error| Error::other(error.to_string()))?;
-            instruction.chromosome_mask = if json.chromosome.mask.is_empty() {
-                vec![0; instruction.bytes.len()]
-            } else {
-                crate::hex::decode(&json.chromosome.mask)
-                    .map_err(|error| Error::other(error.to_string()))?
-            };
-            instruction.pattern = json.chromosome.pattern;
-            instruction.functions = json
-                .callee_references
-                .iter()
-                .map(|reference| reference.address)
-                .collect();
-            instruction.to = json.branches;
-            instruction.semantics = json.semantics.map(|semantics| semantics.into_semantics());
+            let mut instruction =
+                Instruction::create(snapshot_instruction.address, architecture, config.clone());
+            instruction.is_prologue = snapshot_instruction.is_prologue;
+            instruction.is_block_start = snapshot_instruction.is_block_start;
+            instruction.is_function_start = snapshot_instruction.is_function_start;
+            instruction.is_return = snapshot_instruction.is_return;
+            instruction.is_call = snapshot_instruction.is_call;
+            instruction.is_jump = snapshot_instruction.is_jump;
+            instruction.is_conditional = snapshot_instruction.is_conditional;
+            instruction.is_trap = snapshot_instruction.is_trap;
+            instruction.has_indirect_target = snapshot_instruction.has_indirect_target;
+            instruction.edges = snapshot_instruction.edges;
+            instruction.mnemonic = snapshot_instruction.mnemonic;
+            instruction.disassembly = snapshot_instruction.disassembly;
+            instruction.operands = snapshot_instruction.operands;
+            instruction.bytes = snapshot_instruction.bytes;
+            instruction.chromosome_mask = snapshot_instruction.chromosome_mask;
+            instruction.pattern = snapshot_instruction.pattern;
+            instruction.functions = snapshot_instruction.functions;
+            instruction.to = snapshot_instruction.to;
+            instruction.semantics = snapshot_instruction.semantics;
             graph.listing.insert(instruction.address, instruction);
         }
 
         Self::restore_queue(&mut graph.instructions, snapshot.instruction_queue);
         Self::restore_queue(&mut graph.blocks, snapshot.block_queue);
         Self::restore_queue(&mut graph.functions, snapshot.function_queue);
-        {
-            let mut processor_state = graph.processor_state.lock().unwrap();
-            if !snapshot.processor_outputs.instructions.is_empty() {
-                processor_state.outputs.insert(
-                    ProcessorTarget::Instruction,
-                    snapshot.processor_outputs.instructions,
-                );
-                processor_state
-                    .revisions
-                    .insert(ProcessorTarget::Instruction, 0);
-            }
-            if !snapshot.processor_outputs.blocks.is_empty() {
-                processor_state
-                    .outputs
-                    .insert(ProcessorTarget::Block, snapshot.processor_outputs.blocks);
-                processor_state.revisions.insert(ProcessorTarget::Block, 0);
-            }
-            if !snapshot.processor_outputs.functions.is_empty() {
-                processor_state.outputs.insert(
-                    ProcessorTarget::Function,
-                    snapshot.processor_outputs.functions,
-                );
-                processor_state
-                    .revisions
-                    .insert(ProcessorTarget::Function, 0);
-                processor_state.revisions.insert(ProcessorTarget::Graph, 0);
-            }
-        }
 
         Ok(graph)
     }
@@ -734,16 +697,16 @@ impl Graph {
         self.listing.get(&address).map(|entry| f(entry.value()))
     }
 
-    pub fn get_instruction(&self, address: u64) -> Option<Instruction<'_>> {
+    pub fn instruction(&self, address: u64) -> Option<Instruction<'_>> {
         Instruction::new(address, self).ok()
     }
 
-    pub fn get_block(&self, address: u64) -> Option<Block<'_>> {
+    pub fn block(&self, address: u64) -> Option<Block<'_>> {
         let _ = self.process_blocks();
         Block::new(address, self).ok()
     }
 
-    pub fn get_function(&self, address: u64) -> Option<Function<'_>> {
+    pub fn function(&self, address: u64) -> Option<Function<'_>> {
         let _ = self.process_functions();
         Function::new(address, self).ok()
     }
@@ -834,64 +797,27 @@ impl Graph {
     }
 
     pub fn process(&self) -> Result<(), Error> {
-        self.process_instructions()?;
-        self.process_blocks()?;
-        self.process_functions()?;
-        self.process_graph()?;
-        self.process_complete()?;
         Ok(())
     }
 
     pub fn process_instructions(&self) -> Result<(), Error> {
-        self.process_target(ProcessorTarget::Instruction)
+        Ok(())
     }
 
     pub fn process_blocks(&self) -> Result<(), Error> {
-        self.process_target(ProcessorTarget::Block)
+        Ok(())
     }
 
     pub fn process_functions(&self) -> Result<(), Error> {
-        self.process_target(ProcessorTarget::Function)
+        Ok(())
     }
 
     pub fn process_graph(&self) -> Result<(), Error> {
-        self.process_target(ProcessorTarget::Graph)
+        Ok(())
     }
 
     pub fn process_complete(&self) -> Result<(), Error> {
-        self.process_instructions()?;
-        self.process_blocks()?;
-        self.process_functions()?;
-        self.process_graph()?;
-        self.process_target(ProcessorTarget::Complete)
-    }
-
-    pub fn processor_outputs(
-        &self,
-        target: ProcessorTarget,
-        address: u64,
-    ) -> Option<ProcessorOutputs> {
-        self.processor_state
-            .lock()
-            .unwrap()
-            .outputs
-            .get(&target)?
-            .get(&address)
-            .cloned()
-    }
-
-    pub fn processor_output(
-        &self,
-        target: ProcessorTarget,
-        address: u64,
-        processor_name: &str,
-    ) -> Option<Value> {
-        let processor_state = self.processor_state.lock().unwrap();
-        let outputs = processor_state.outputs.get(&target)?.get(&address)?;
-        outputs
-            .iter()
-            .find(|(name, _)| *name == processor_name)
-            .map(|(_, output)| output.clone())
+        Ok(())
     }
 
     fn ensure_callgraph(&self) {
@@ -984,7 +910,7 @@ impl Graph {
 
         for entry in self.listing.range(address..) {
             let record = entry.value();
-            let instruction = self.get_instruction(record.address)?;
+            let instruction = self.instruction(record.address)?;
             if let Some(prev_addr) = previous_address {
                 if instruction.address != prev_addr {
                     return None;
@@ -1031,7 +957,7 @@ impl Graph {
 
         for (address, terminator_address) in terminator_entries {
             terminators.insert(address, terminator_address);
-            let Some(terminator) = self.get_instruction(terminator_address) else {
+            let Some(terminator) = self.instruction(terminator_address) else {
                 continue;
             };
             let mut targets = terminator.branches();
@@ -1196,212 +1122,8 @@ impl Graph {
             .cloned()
     }
 
-    fn process_target(&self, target: ProcessorTarget) -> Result<(), Error> {
-        let enabled = crate::processor::enabled_processors_for_target(&self.config, target);
-        let revision = self.revision.load(Ordering::SeqCst);
-        {
-            let processor_state = self.processor_state.lock().unwrap();
-            if processor_state.revisions.get(&target) == Some(&revision) {
-                return Ok(());
-            }
-        }
-
-        if enabled.is_empty() {
-            let mut processor_state = self.processor_state.lock().unwrap();
-            if self.revision.load(Ordering::SeqCst) == revision {
-                if !matches!(target, ProcessorTarget::Graph | ProcessorTarget::Complete) {
-                    processor_state.outputs.entry(target).or_default();
-                }
-                processor_state.revisions.insert(target, revision);
-            }
-            return Ok(());
-        }
-
-        let mut outputs = HashMap::new();
-        let remote_processors = enabled;
-        match target {
-            ProcessorTarget::Instruction => {
-                for address in self.instructions.valid_addresses() {
-                    let instruction = match self.get_instruction(address) {
-                        Some(instruction) => instruction,
-                        None => continue,
-                    };
-                    let mut entity_outputs = Vec::new();
-                    for processor in &remote_processors {
-                        if let Some(output) = processor.process_instruction(&instruction) {
-                            entity_outputs.push((processor.name().to_string(), output));
-                        }
-                    }
-                    if !entity_outputs.is_empty() {
-                        outputs.insert(address, entity_outputs);
-                    }
-                }
-            }
-            ProcessorTarget::Block => {
-                self.ensure_block_layouts();
-                outputs = self
-                    .blocks
-                    .valid_addresses()
-                    .into_iter()
-                    .collect::<Vec<_>>()
-                    .into_par_iter()
-                    .filter_map(|address| {
-                        let block = Block::new(address, self).ok()?;
-                        let mut entity_outputs = Vec::new();
-                        for processor in &remote_processors {
-                            if let Some(output) = processor.process_block(&block) {
-                                entity_outputs.push((processor.name().to_string(), output));
-                            }
-                        }
-                        if entity_outputs.is_empty() {
-                            None
-                        } else {
-                            Some((address, entity_outputs))
-                        }
-                    })
-                    .collect();
-            }
-            ProcessorTarget::Function => {
-                self.ensure_function_layouts();
-                outputs = self
-                    .functions
-                    .valid_addresses()
-                    .into_iter()
-                    .collect::<Vec<_>>()
-                    .into_par_iter()
-                    .filter_map(|address| {
-                        let function = Function::new(address, self).ok()?;
-                        let mut entity_outputs = Vec::new();
-                        for processor in &remote_processors {
-                            if let Some(output) = processor.process_function(&function) {
-                                entity_outputs.push((processor.name().to_string(), output));
-                            }
-                        }
-                        if entity_outputs.is_empty() {
-                            None
-                        } else {
-                            Some((address, entity_outputs))
-                        }
-                    })
-                    .collect();
-            }
-            ProcessorTarget::Graph => {
-                let mut instruction_outputs = HashMap::new();
-                let mut block_outputs = HashMap::new();
-                let mut function_outputs = HashMap::new();
-                for processor in &remote_processors {
-                    crate::io::stderr::Stderr::print_debug(
-                        &self.config,
-                        format!("graph-stage invoking processor {}", processor.name()),
-                    );
-                    let Some(fanout) = processor.process_graph(self) else {
-                        crate::io::stderr::Stderr::print_debug(
-                            &self.config,
-                            format!(
-                                "graph-stage processor {} returned no fanout",
-                                processor.name()
-                            ),
-                        );
-                        continue;
-                    };
-
-                    for (address, output) in fanout.instructions {
-                        instruction_outputs
-                            .entry(address)
-                            .or_insert_with(Vec::new)
-                            .push((processor.name().to_string(), output));
-                    }
-
-                    for (address, output) in fanout.blocks {
-                        block_outputs
-                            .entry(address)
-                            .or_insert_with(Vec::new)
-                            .push((processor.name().to_string(), output));
-                    }
-
-                    for (address, output) in fanout.functions {
-                        function_outputs
-                            .entry(address)
-                            .or_insert_with(Vec::new)
-                            .push((processor.name().to_string(), output));
-                    }
-
-                    crate::io::stderr::Stderr::print_debug(
-                        &self.config,
-                        format!(
-                            "graph-stage processor {} attached instructions={} blocks={} functions={}",
-                            processor.name(),
-                            instruction_outputs
-                                .iter()
-                                .filter(|(_, outputs)| {
-                                    outputs.iter().any(|(name, _)| name == processor.name())
-                                })
-                                .count(),
-                            block_outputs
-                                .iter()
-                                .filter(|(_, outputs)| {
-                                    outputs.iter().any(|(name, _)| name == processor.name())
-                                })
-                                .count(),
-                            function_outputs
-                                .iter()
-                                .filter(|(_, outputs)| {
-                                    outputs.iter().any(|(name, _)| name == processor.name())
-                                })
-                                .count()
-                        ),
-                    );
-                }
-
-                let mut processor_state = self.processor_state.lock().unwrap();
-                if self.revision.load(Ordering::SeqCst) == revision {
-                    Self::merge_target_outputs(
-                        &mut processor_state.outputs,
-                        ProcessorTarget::Instruction,
-                        instruction_outputs,
-                    );
-                    Self::merge_target_outputs(
-                        &mut processor_state.outputs,
-                        ProcessorTarget::Block,
-                        block_outputs,
-                    );
-                    Self::merge_target_outputs(
-                        &mut processor_state.outputs,
-                        ProcessorTarget::Function,
-                        function_outputs,
-                    );
-                    processor_state.revisions.insert(target, revision);
-                }
-                return Ok(());
-            }
-            ProcessorTarget::Complete => {
-                for processor in &remote_processors {
-                    processor
-                        .process_complete(self)
-                        .map_err(|error| Error::other(error.to_string()))?;
-                }
-
-                let mut processor_state = self.processor_state.lock().unwrap();
-                if self.revision.load(Ordering::SeqCst) == revision {
-                    processor_state.revisions.insert(target, revision);
-                }
-                return Ok(());
-            }
-        }
-
-        let mut processor_state = self.processor_state.lock().unwrap();
-        if self.revision.load(Ordering::SeqCst) == revision {
-            processor_state.outputs.insert(target, outputs);
-            processor_state.revisions.insert(target, revision);
-        }
-        Ok(())
-    }
-
     fn invalidate_processor_state(&self) {
         self.revision.fetch_add(1, Ordering::SeqCst);
-        let mut processor_state = self.processor_state.lock().unwrap();
-        processor_state.revisions.clear();
-        processor_state.outputs.clear();
         let mut callgraph_state = self.callgraph_state.lock().unwrap();
         callgraph_state.revision = None;
         callgraph_state.callee_references.clear();
@@ -1435,78 +1157,14 @@ impl Graph {
             queue.insert_invalid(address);
         }
     }
-
-    fn merge_target_outputs(
-        state_outputs: &mut HashMap<ProcessorTarget, HashMap<u64, ProcessorOutputs>>,
-        target: ProcessorTarget,
-        new_outputs: HashMap<u64, ProcessorOutputs>,
-    ) {
-        let existing = state_outputs.entry(target).or_default();
-        for (address, outputs) in new_outputs {
-            let entity_outputs = existing.entry(address).or_default();
-            for (processor_name, output) in outputs {
-                if let Some(existing_output) = entity_outputs
-                    .iter_mut()
-                    .find(|(name, _)| *name == processor_name)
-                {
-                    existing_output.1 = output;
-                } else {
-                    entity_outputs.push((processor_name, output));
-                }
-            }
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Graph, GraphProcessorOutputsSnapshot, GraphQueueSnapshot, GraphSnapshot};
+    use super::Graph;
     use crate::controlflow::Instruction;
     use crate::controlflow::{Block, Function};
-    use crate::processor::ProcessorTarget;
     use crate::{Architecture, Configuration};
-    use serde_json::json;
-    use std::collections::HashMap;
-    use std::collections::{BTreeMap, BTreeSet};
-
-    #[test]
-    fn snapshot_roundtrip_preserves_processor_outputs() {
-        let config = Configuration::default();
-        let graph = Graph::new(Architecture::AMD64, config.clone());
-        let mut instruction = Instruction::create(0x1000, Architecture::AMD64, config);
-        instruction.bytes = vec![0xC3];
-        instruction.pattern = "c3".to_string();
-        graph.listing.insert(instruction.address, instruction);
-
-        let snapshot = GraphSnapshot {
-            architecture: "amd64".to_string(),
-            instructions: graph.snapshot().instructions,
-            symbols: BTreeMap::new(),
-            instruction_queue: GraphQueueSnapshot {
-                valid: BTreeSet::from([0x1000]),
-                invalid: BTreeSet::new(),
-                processed: BTreeSet::from([0x1000]),
-            },
-            block_queue: GraphQueueSnapshot::default(),
-            function_queue: GraphQueueSnapshot::default(),
-            processor_outputs: GraphProcessorOutputsSnapshot {
-                instructions: HashMap::from([(
-                    0x1000,
-                    vec![("demo".to_string(), json!({"vector": [1.0, 2.0]}))],
-                )]),
-                blocks: HashMap::new(),
-                functions: HashMap::new(),
-            },
-        };
-
-        let restored = Graph::from_snapshot(snapshot, Configuration::default())
-            .expect("snapshot should restore");
-
-        let output = restored
-            .processor_output(ProcessorTarget::Instruction, 0x1000, "demo")
-            .expect("processor output should survive snapshot roundtrip");
-        assert_eq!(output, json!({"vector": [1.0, 2.0]}));
-    }
 
     #[test]
     fn snapshot_roundtrip_preserves_wildcard_patterns_when_mask_output_disabled() {
@@ -1540,19 +1198,19 @@ mod tests {
             .expect("snapshot should restore wildcard masks");
 
         let instruction = restored
-            .get_instruction(0x1000)
+            .instruction(0x1000)
             .expect("instruction should exist after restore");
-        assert_eq!(instruction.chromosome().process().pattern, "488b??");
+        assert_eq!(instruction.chromosome().pattern(), "488b??");
 
         let block = Block::new(0x1000, &restored).expect("block should restore");
-        assert_eq!(block.chromosome_json().pattern, "488b??c3");
+        assert_eq!(block.chromosome().pattern(), "488b??c3");
 
         let function = Function::new(0x1000, &restored).expect("function should restore");
         assert_eq!(
             function
-                .chromosome_json()
+                .chromosome()
                 .expect("function chromosome should exist")
-                .pattern,
+                .pattern(),
             "488b??c3"
         );
     }

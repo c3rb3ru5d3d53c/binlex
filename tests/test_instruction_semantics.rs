@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use binlex::controlflow::{Graph, InstructionRecord};
-use binlex::ir::lir::{
+use binlex::irs::lir::{
     LirDiagnostic, LirDiagnosticKind, LirInstruction, LirMetadata, LirStatus, LirTerminator,
 };
 use binlex::{Architecture, Configuration};
@@ -37,7 +37,7 @@ fn disassemble_single(name: &str, architecture: Architecture, bytes: &[u8]) -> I
     }
 
     graph
-        .get_instruction(0)
+        .instruction(0)
         .expect("instruction should exist")
         .into_record()
 }
@@ -121,7 +121,7 @@ fn instruction_semantics_survive_snapshot_roundtrip() {
     let restored =
         Graph::from_snapshot(graph.snapshot(), config).expect("snapshot roundtrip should restore");
     let restored_instruction = restored
-        .get_instruction(0)
+        .instruction(0)
         .expect("restored instruction should exist");
     let restored_semantics = restored_instruction
         .semantics
@@ -165,7 +165,7 @@ fn graph_merge_prefers_more_complete_instruction_semantics() {
     base.merge(&mut incoming);
 
     let merged = base
-        .get_instruction(0x1000)
+        .instruction(0x1000)
         .expect("merged instruction should exist")
         .semantics
         .clone()
@@ -191,7 +191,7 @@ fn graph_update_instruction_preserves_attached_semantics() {
     graph.update_instruction(instruction);
 
     let updated = graph
-        .get_instruction(0)
+        .instruction(0)
         .expect("updated instruction should exist")
         .semantics
         .clone()

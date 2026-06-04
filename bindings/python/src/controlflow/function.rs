@@ -20,228 +20,27 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::controlflow::json_value_to_py;
 use crate::controlflow::Block;
 use crate::controlflow::EntityKind;
 use crate::controlflow::Graph;
-use crate::formats::image::Image;
 use crate::genetics::Chromosome;
 use crate::hashing::{MinHash32, SSDeep, SHA256, TLSH};
-use crate::ir::ast::PyAstFunction;
-use crate::ir::hir::PyHirFunction;
-use crate::ir::lir::LirFunction as PyLirFunction;
-use crate::ir::mir::PyMirFunction;
+use crate::irs::ast::PyAstFunction;
+use crate::irs::hir::PyHirFunction;
+use crate::irs::lir::LirFunction as PyLirFunction;
+use crate::irs::llvm::LlvmModule as PyLlvmModule;
+use crate::irs::mir::PyMirFunction;
+#[cfg(not(target_os = "windows"))]
+use crate::irs::vex::VexModule as PyVexModule;
 use crate::Architecture;
-use crate::Configuration;
 use binlex::controlflow::EntityKind as InnerEntityKind;
 use binlex::controlflow::Function as InnerFunction;
-use binlex::controlflow::FunctionJsonDeserializer as InnerFunctionJsonDeserializer;
-use binlex::hex;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::Py;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;
-
-/// Deserialize a serialized function JSON payload back into typed accessors.
-#[pyclass]
-pub struct FunctionJsonDeserializer {
-    pub inner: Arc<Mutex<InnerFunctionJsonDeserializer>>,
-    chromosome_minhash_num_hashes: usize,
-    chromosome_minhash_shingle_size: usize,
-    chromosome_minhash_seed: u64,
-    chromosome_tlsh_minimum_byte_size: usize,
-}
-
-#[pymethods]
-impl FunctionJsonDeserializer {
-    #[new]
-    #[pyo3(text_signature = "(string, config)")]
-    /// Create a deserializer from a serialized function JSON string.
-    pub fn new(py: Python, string: String, config: Py<Configuration>) -> PyResult<Self> {
-        let inner_config = config.borrow(py).inner.lock().unwrap().clone();
-        let inner = InnerFunctionJsonDeserializer::new(string, inner_config.clone())?;
-        Ok(Self {
-            inner: Arc::new(Mutex::new(inner)),
-            chromosome_minhash_num_hashes: inner_config.chromosomes.minhash.number_of_hashes,
-            chromosome_minhash_shingle_size: inner_config.chromosomes.minhash.shingle_size,
-            chromosome_minhash_seed: inner_config.chromosomes.minhash.seed,
-            chromosome_tlsh_minimum_byte_size: inner_config.chromosomes.tlsh.minimum_byte_size,
-        })
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the block addresses contained in the serialized function.
-    pub fn blocks(&self) -> Vec<u64> {
-        self.inner.lock().unwrap().blocks()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the entity kind encoded in the serialized function.
-    pub fn kind(&self) -> EntityKind {
-        let binding = self.inner.lock().unwrap();
-        EntityKind::from_inner(binding.json.kind)
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the direct `callsite -> callee` references contained in the payload.
-    pub fn callee_references(&self) -> BTreeMap<u64, u64> {
-        self.inner.lock().unwrap().callee_references()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the direct `callsite -> caller` references contained in the payload.
-    pub fn caller_references(&self) -> BTreeMap<u64, u64> {
-        self.inner.lock().unwrap().caller_references()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the total size of the function in bytes.
-    pub fn size(&self) -> usize {
-        self.inner.lock().unwrap().size()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return whether the serialized function occupies a contiguous range.
-    pub fn contiguous(&self) -> bool {
-        self.inner.lock().unwrap().contiguous()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the architecture encoded in the serialized function.
-    pub fn architecture(&self) -> PyResult<Architecture> {
-        let inner = self
-            .inner
-            .lock()
-            .unwrap()
-            .architecture()
-            .map_err(|err| pyo3::exceptions::PyRuntimeError::new_err(format!("{}", err)))?;
-        Ok(Architecture { inner })
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Decode and return the raw function bytes, if the payload contains them.
-    pub fn bytes(&self, py: Python) -> PyResult<Option<Py<PyBytes>>> {
-        let binding = self.inner.lock().unwrap();
-        let string = binding.json.bytes.clone();
-        if string.is_none() {
-            return Ok(None);
-        }
-        let bytes =
-            hex::decode(&string.unwrap()).map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
-        Ok(Some(PyBytes::new(py, &bytes).unbind()))
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the starting address of the function.
-    pub fn address(&self) -> u64 {
-        self.inner.lock().unwrap().address()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the number of instructions in the function.
-    pub fn number_of_instructions(&self) -> usize {
-        self.inner.lock().unwrap().number_of_instructions()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the number of basic blocks in the function.
-    pub fn number_of_blocks(&self) -> usize {
-        self.inner.lock().unwrap().number_of_blocks()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the average number of instructions per block.
-    pub fn average_instructions_per_block(&self) -> f64 {
-        self.inner.lock().unwrap().average_instructions_per_block()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the entropy of the function bytes, if available.
-    pub fn entropy(&self) -> Option<f64> {
-        self.inner.lock().unwrap().entropy()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the number of control-flow edges in the function.
-    pub fn edges(&self) -> usize {
-        self.inner.lock().unwrap().edges()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the SHA-256 digest for the function, if available.
-    pub fn sha256(&self) -> Option<String> {
-        self.inner.lock().unwrap().sha256()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the MinHash value for the function, if available.
-    pub fn minhash(&self) -> Option<String> {
-        self.inner.lock().unwrap().minhash()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the ssdeep value for the function, if available.
-    pub fn ssdeep(&self) -> Option<String> {
-        self.inner.lock().unwrap().ssdeep()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the TLSH value for the function, if available.
-    pub fn tlsh(&self) -> Option<String> {
-        self.inner.lock().unwrap().tlsh()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the Markov importance scores for the function, if available.
-    pub fn markov(&self) -> Option<BTreeMap<u64, f64>> {
-        self.inner.lock().unwrap().markov()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the chromosome derived from the serialized function.
-    pub fn chromosome(&self) -> Chromosome {
-        let inner_chromosome = self.inner.lock().unwrap().chromosome();
-        Chromosome {
-            inner: Arc::new(Mutex::new(inner_chromosome.unwrap())),
-            minhash_num_hashes: self.chromosome_minhash_num_hashes,
-            minhash_shingle_size: self.chromosome_minhash_shingle_size,
-            minhash_seed: self.chromosome_minhash_seed,
-            tlsh_minimum_byte_size: self.chromosome_tlsh_minimum_byte_size,
-        }
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Convert the serialized function payload into a Python dictionary.
-    pub fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
-        let json_str = self.json()?;
-        let json_module = py.import("json")?;
-        let py_dict = json_module.call_method1("loads", (json_str,))?;
-        Ok(py_dict.into())
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the normalized JSON representation of the function payload.
-    pub fn json(&self) -> PyResult<String> {
-        self.inner
-            .lock()
-            .unwrap()
-            .json()
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Print the function payload in its textual form.
-    pub fn print(&self) {
-        self.inner.lock().unwrap().print()
-    }
-
-    /// Return the JSON representation when converted to a string.
-    pub fn __str__(&self) -> PyResult<String> {
-        self.json()
-    }
-}
 
 #[pyclass]
 /// Represents a function within a control flow graph (CFG).
@@ -278,6 +77,80 @@ impl Function {
         }
 
         f(cache.as_ref().unwrap())
+    }
+}
+
+#[pyclass(skip_from_py_object)]
+pub struct FunctionCallee {
+    address: u64,
+    function_address: u64,
+    cfg: Py<Graph>,
+}
+
+impl FunctionCallee {
+    fn new(address: u64, function_address: u64, cfg: Py<Graph>) -> Self {
+        Self {
+            address,
+            function_address,
+            cfg,
+        }
+    }
+}
+
+#[pymethods]
+impl FunctionCallee {
+    #[pyo3(text_signature = "($self)")]
+    pub fn address(&self) -> u64 {
+        self.address
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn function(&self, py: Python<'_>) -> PyResult<Function> {
+        Function::new(self.function_address, self.cfg.clone_ref(py))
+    }
+
+    pub fn __str__(&self) -> String {
+        format!(
+            "FunctionCallee(address=0x{:x}, function=0x{:x})",
+            self.address, self.function_address
+        )
+    }
+}
+
+#[pyclass(skip_from_py_object)]
+pub struct FunctionCaller {
+    address: u64,
+    function_address: u64,
+    cfg: Py<Graph>,
+}
+
+impl FunctionCaller {
+    fn new(address: u64, function_address: u64, cfg: Py<Graph>) -> Self {
+        Self {
+            address,
+            function_address,
+            cfg,
+        }
+    }
+}
+
+#[pymethods]
+impl FunctionCaller {
+    #[pyo3(text_signature = "($self)")]
+    pub fn address(&self) -> u64 {
+        self.address
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn function(&self, py: Python<'_>) -> PyResult<Function> {
+        Function::new(self.function_address, self.cfg.clone_ref(py))
+    }
+
+    pub fn __str__(&self) -> String {
+        format!(
+            "FunctionCaller(address=0x{:x}, function=0x{:x})",
+            self.address, self.function_address
+        )
     }
 }
 
@@ -408,27 +281,28 @@ impl Function {
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn c(&self, py: Python<'_>) -> PyResult<String> {
-        let image = self.cfg.borrow(py).image(py);
-        if let Some(image) = image {
-            let image = image.borrow(py);
-            return self
-                .with_inner_function(py, |function| Ok(function.c_with_image(&image.inner)?));
-        }
-        self.with_inner_function(py, |function| Ok(py.detach(|| function.c())?))
+    pub fn llvm(&self, py: Python<'_>) -> PyResult<Py<PyLlvmModule>> {
+        self.with_inner_function(py, |function| {
+            let inner = function.llvm()?;
+            let cpu = binlex::irs::lir::LirCpu::from_architecture(function.architecture())
+                .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
+            Py::new(
+                py,
+                PyLlvmModule::from_inner(inner, function.cfg.config.clone(), cpu, None, None),
+            )
+        })
     }
 
-    #[pyo3(text_signature = "($self, image)")]
-    pub fn c_with_image(&self, py: Python<'_>, image: Py<Image>) -> PyResult<String> {
-        let image = image.borrow(py);
-        self.with_inner_function(py, |function| Ok(function.c_with_image(&image.inner)?))
-    }
-
+    #[cfg(not(target_os = "windows"))]
     #[pyo3(text_signature = "($self)")]
-    pub fn print_c(&self, py: Python<'_>) -> PyResult<()> {
-        let text = self.c(py)?;
-        println!("{text}");
-        Ok(())
+    pub fn vex(&self, py: Python<'_>) -> PyResult<Py<PyVexModule>> {
+        self.with_inner_function(py, |function| {
+            let inner = function.vex()?;
+            Py::new(
+                py,
+                PyVexModule::from_inner(inner, function.cfg.config.clone()),
+            )
+        })
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -492,69 +366,44 @@ impl Function {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the directly called functions.
+    /// Return direct outgoing call relationships.
     ///
     /// # Returns
-    /// - `Vec<Function>`: The directly called functions.
-    pub fn callees(&self, py: Python) -> PyResult<Vec<Function>> {
+    /// - `Vec<FunctionCallee>`: The direct outgoing call relationships.
+    pub fn callees(&self, py: Python) -> PyResult<Vec<FunctionCallee>> {
         self.with_inner_function(py, |function| {
             Ok(function
                 .callees()
                 .into_iter()
                 .map(|callee| {
-                    Function::new(callee.address(), self.cfg.clone_ref(py))
-                        .expect("failed to get callee")
+                    FunctionCallee::new(
+                        callee.address,
+                        callee.function.address(),
+                        self.cfg.clone_ref(py),
+                    )
                 })
                 .collect())
         })
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the direct caller functions.
+    /// Return direct incoming call relationships.
     ///
     /// # Returns
-    /// - `Vec<Function>`: The direct caller functions.
-    pub fn callers(&self, py: Python) -> PyResult<Vec<Function>> {
+    /// - `Vec<FunctionCaller>`: The direct incoming call relationships.
+    pub fn callers(&self, py: Python) -> PyResult<Vec<FunctionCaller>> {
         self.with_inner_function(py, |function| {
             Ok(function
                 .callers()
                 .into_iter()
                 .map(|caller| {
-                    Function::new(caller.address(), self.cfg.clone_ref(py))
-                        .expect("failed to get caller")
+                    FunctionCaller::new(
+                        caller.address,
+                        caller.function.address(),
+                        self.cfg.clone_ref(py),
+                    )
                 })
                 .collect())
-        })
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the direct `callsite -> callee` reference map.
-    pub fn callee_references(&self, py: Python) -> PyResult<BTreeMap<u64, u64>> {
-        self.with_inner_function(py, |function| Ok(function.callee_references()))
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the direct `callsite -> caller` reference map.
-    pub fn caller_references(&self, py: Python) -> PyResult<BTreeMap<u64, u64>> {
-        self.with_inner_function(py, |function| Ok(function.caller_references()))
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return all processor outputs attached to this function.
-    pub fn processors(&self, py: Python) -> PyResult<Py<PyAny>> {
-        self.with_inner_function(py, |function| {
-            let value = serde_json::to_value(function.processors())
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-            json_value_to_py(py, &value)
-        })
-    }
-
-    #[pyo3(text_signature = "($self, name)")]
-    /// Return a single processor output attached to this function.
-    pub fn processor(&self, py: Python, name: String) -> PyResult<Py<PyAny>> {
-        self.with_inner_function(py, |function| {
-            let value = function.processor(&name);
-            json_value_to_py(py, &value)
         })
     }
 
@@ -643,46 +492,8 @@ impl Function {
         self.with_inner_function(py, |function| Ok(function.end()))
     }
 
-    #[pyo3(text_signature = "($self)")]
-    /// Prints a textual representation of the function in JSON.
-    ///
-    /// # Returns
-    /// - `()` (unit): Output is sent to stdout.
-    pub fn print(&self, py: Python) -> PyResult<()> {
-        self.with_inner_function(py, |function| {
-            function.print();
-            Ok(())
-        })
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Converts the function to a JSON dictionary representation.
-    ///
-    /// # Returns
-    /// - `dict`: A Python dictionary representation of the function.
-    pub fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
-        let json_str = self.json(py)?;
-        let json_module = py.import("json")?;
-        let py_dict = json_module.call_method1("loads", (json_str,))?;
-        Ok(py_dict.into())
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Converts the function to JSON representation.
-    ///
-    /// # Returns
-    /// - `str`: JSON string representing the function.
-    pub fn json(&self, py: Python) -> PyResult<String> {
-        self.with_inner_function(py, |function| {
-            function
-                .json()
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-        })
-    }
-
-    /// Return the JSON representation when converted to a string.
-    pub fn __str__(&self, py: Python) -> PyResult<String> {
-        self.json(py)
+    pub fn __str__(&self) -> String {
+        format!("Function(address=0x{:x})", self.address)
     }
 }
 
@@ -690,7 +501,8 @@ impl Function {
 #[pyo3(name = "function")]
 pub fn function_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Function>()?;
-    m.add_class::<FunctionJsonDeserializer>()?;
+    m.add_class::<FunctionCallee>()?;
+    m.add_class::<FunctionCaller>()?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.controlflow.function", m)?;

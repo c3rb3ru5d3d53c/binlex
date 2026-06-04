@@ -21,230 +21,26 @@
 // SOFTWARE.
 
 use crate::controlflow::graph::Graph;
-use crate::controlflow::json_value_to_py;
 use crate::controlflow::EntityKind;
 use crate::controlflow::Function;
 use crate::controlflow::Instruction;
 use crate::controlflow::Reference;
 use crate::genetics::Chromosome;
 use crate::hashing::{MinHash32, SSDeep, SHA256, TLSH};
-use crate::ir::lir::LirBlock as PyLirBlock;
-use crate::ir::mir::PyMirBlock;
+use crate::irs::lir::LirBlock as PyLirBlock;
+use crate::irs::llvm::LlvmModule as PyLlvmModule;
+use crate::irs::mir::PyMirBlock;
+#[cfg(not(target_os = "windows"))]
+use crate::irs::vex::VexModule as PyVexModule;
 use crate::Architecture;
-use crate::Configuration;
 use binlex::controlflow::Block as InnerBlock;
-use binlex::controlflow::BlockJsonDeserializer as InnerBlockJsonDeserializer;
 use binlex::controlflow::EntityKind as InnerEntityKind;
-use binlex::hex;
-use binlex::Architecture as InnerArchitecture;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use pyo3::Py;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::Mutex;
-
-/// Deserialize a serialized block JSON payload back into typed accessors.
-#[pyclass]
-pub struct BlockJsonDeserializer {
-    pub inner: Arc<Mutex<InnerBlockJsonDeserializer>>,
-    chromosome_minhash_num_hashes: usize,
-    chromosome_minhash_shingle_size: usize,
-    chromosome_minhash_seed: u64,
-    chromosome_tlsh_minimum_byte_size: usize,
-}
-
-#[pymethods]
-impl BlockJsonDeserializer {
-    #[new]
-    #[pyo3(text_signature = "(string, config)")]
-    /// Create a deserializer from a serialized block JSON string.
-    pub fn new(py: Python, string: String, config: Py<Configuration>) -> PyResult<Self> {
-        let inner_config = config.borrow(py).inner.lock().unwrap().clone();
-        let inner = InnerBlockJsonDeserializer::new(string, inner_config.clone())?;
-        Ok(Self {
-            inner: Arc::new(Mutex::new(inner)),
-            chromosome_minhash_num_hashes: inner_config.chromosomes.minhash.number_of_hashes,
-            chromosome_minhash_shingle_size: inner_config.chromosomes.minhash.shingle_size,
-            chromosome_minhash_seed: inner_config.chromosomes.minhash.seed,
-            chromosome_tlsh_minimum_byte_size: inner_config.chromosomes.tlsh.minimum_byte_size,
-        })
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the direct outgoing call references contained in the block payload.
-    pub fn callee_references(&self) -> Vec<Reference> {
-        self.inner
-            .lock()
-            .unwrap()
-            .callee_references()
-            .into_iter()
-            .map(|reference| Reference { inner: reference })
-            .collect()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the architecture encoded in the serialized block.
-    pub fn architecture(&self) -> PyResult<Architecture> {
-        let inner = InnerArchitecture::from_string(&self.inner.lock().unwrap().json.architecture)
-            .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
-        Ok(Architecture { inner })
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the entity kind encoded in the serialized block.
-    pub fn kind(&self) -> EntityKind {
-        let binding = self.inner.lock().unwrap();
-        EntityKind::from_inner(binding.json.kind)
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Decode and return the raw bytes represented by the block payload.
-    pub fn bytes(&self, py: Python) -> PyResult<Py<PyBytes>> {
-        let bytes = hex::decode(&self.inner.lock().unwrap().json.bytes)
-            .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
-        Ok(PyBytes::new(py, &bytes).unbind())
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the starting address of the block.
-    pub fn address(&self) -> u64 {
-        self.inner.lock().unwrap().address()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the MinHash value for the block, if available.
-    pub fn minhash(&self) -> Option<String> {
-        self.inner.lock().unwrap().minhash()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the TLSH value for the block, if available.
-    pub fn tlsh(&self) -> Option<String> {
-        self.inner.lock().unwrap().tlsh()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the SHA-256 digest for the block, if available.
-    pub fn sha256(&self) -> Option<String> {
-        self.inner.lock().unwrap().sha256()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the ssdeep value for the block, if available.
-    pub fn ssdeep(&self) -> Option<String> {
-        self.inner.lock().unwrap().ssdeep()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the number of control-flow edges leaving this block.
-    pub fn edges(&self) -> usize {
-        self.inner.lock().unwrap().edges()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the direct outgoing control-flow references in the payload.
-    pub fn successor_references(&self) -> Vec<Reference> {
-        self.inner
-            .lock()
-            .unwrap()
-            .successor_references()
-            .into_iter()
-            .map(|reference| Reference { inner: reference })
-            .collect()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the direct incoming control-flow references in the payload.
-    pub fn predecessor_references(&self) -> Vec<Reference> {
-        self.inner
-            .lock()
-            .unwrap()
-            .predecessor_references()
-            .into_iter()
-            .map(|reference| Reference { inner: reference })
-            .collect()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the explicit branch target addresses targeted by this block.
-    pub fn branches(&self) -> BTreeSet<u64> {
-        self.inner.lock().unwrap().branches()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return whether the block ends in a conditional transfer of control.
-    pub fn is_conditional(&self) -> bool {
-        self.inner.lock().unwrap().is_conditional()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the entropy of the block bytes, if available.
-    pub fn entropy(&self) -> Option<f64> {
-        self.inner.lock().unwrap().entropy()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the sequential fallthrough address after the block, if available.
-    pub fn fallthrough(&self) -> Option<u64> {
-        self.inner.lock().unwrap().fallthrough()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the size of the block in bytes.
-    pub fn size(&self) -> usize {
-        self.inner.lock().unwrap().size()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the number of decoded instructions in the block.
-    pub fn number_of_instructions(&self) -> usize {
-        self.inner.lock().unwrap().number_of_instructions()
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the chromosome derived from the block pattern.
-    pub fn chromosome(&self) -> Chromosome {
-        let inner_chromosome = self.inner.lock().unwrap().chromosome();
-        Chromosome {
-            inner: Arc::new(Mutex::new(inner_chromosome)),
-            minhash_num_hashes: self.chromosome_minhash_num_hashes,
-            minhash_shingle_size: self.chromosome_minhash_shingle_size,
-            minhash_seed: self.chromosome_minhash_seed,
-            tlsh_minimum_byte_size: self.chromosome_tlsh_minimum_byte_size,
-        }
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Convert the block payload into a Python dictionary.
-    pub fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
-        let json_str = self.json()?;
-        let json_module = py.import("json")?;
-        let py_dict = json_module.call_method1("loads", (json_str,))?;
-        Ok(py_dict.into())
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the normalized JSON representation of the block payload.
-    pub fn json(&self) -> PyResult<String> {
-        self.inner
-            .lock()
-            .unwrap()
-            .json()
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Print the block payload in its textual form.
-    pub fn print(&self) {
-        self.inner.lock().unwrap().print()
-    }
-
-    /// Return the JSON representation when converted to a string.
-    pub fn __str__(&self) -> PyResult<String> {
-        self.json()
-    }
-}
 
 /// A class representing a control flow block in the binary analysis.
 #[pyclass]
@@ -366,6 +162,28 @@ impl Block {
     pub fn mir(&self, py: Python<'_>) -> PyResult<Py<PyMirBlock>> {
         self.with_inner_block(py, |block| {
             Py::new(py, PyMirBlock::from_inner(block.mir()?))
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn llvm(&self, py: Python<'_>) -> PyResult<Py<PyLlvmModule>> {
+        self.with_inner_block(py, |block| {
+            let inner = block.llvm()?;
+            let cpu = binlex::irs::lir::LirCpu::from_architecture(block.architecture())
+                .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
+            Py::new(
+                py,
+                PyLlvmModule::from_inner(inner, block.cfg.config.clone(), cpu, None, None),
+            )
+        })
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[pyo3(text_signature = "($self)")]
+    pub fn vex(&self, py: Python<'_>) -> PyResult<Py<PyVexModule>> {
+        self.with_inner_block(py, |block| {
+            let inner = block.vex()?;
+            Py::new(py, PyVexModule::from_inner(inner, block.cfg.config.clone()))
         })
     }
 
@@ -503,25 +321,6 @@ impl Block {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return all processor outputs attached to this block.
-    pub fn processors(&self, py: Python) -> PyResult<Py<PyAny>> {
-        self.with_inner_block(py, |block| {
-            let value = serde_json::to_value(block.processors())
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-            json_value_to_py(py, &value)
-        })
-    }
-
-    #[pyo3(text_signature = "($self, name)")]
-    /// Return a single processor output attached to this block.
-    pub fn processor(&self, py: Python, name: String) -> PyResult<Py<PyAny>> {
-        self.with_inner_block(py, |block| {
-            let value = block.processor(&name);
-            json_value_to_py(py, &value)
-        })
-    }
-
-    #[pyo3(text_signature = "($self)")]
     /// Retrieves the TLSH (Trend Micro Locality Sensitive Hash) of the block.
     pub fn tlsh(&self, py: Python) -> PyResult<TLSH> {
         self.with_inner_block(py, |block| {
@@ -585,37 +384,8 @@ impl Block {
         self.with_inner_block(py, |block| Ok(block.size()))
     }
 
-    #[pyo3(text_signature = "($self)")]
-    /// Prints a human-readable representation of the block.
-    pub fn print(&self, py: Python) -> PyResult<()> {
-        self.with_inner_block(py, |block| {
-            block.print();
-            Ok(())
-        })
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Converts the block to a Python dictionary.
-    pub fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
-        let json_str = self.json(py)?;
-        let json_module = py.import("json")?;
-        let py_dict = json_module.call_method1("loads", (json_str,))?;
-        Ok(py_dict.into())
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Converts the block to a JSON string.
-    pub fn json(&self, py: Python) -> PyResult<String> {
-        self.with_inner_block(py, |block| {
-            block
-                .json()
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-        })
-    }
-
-    /// Return the JSON representation when converted to a string.
-    pub fn __str__(&self, py: Python) -> PyResult<String> {
-        self.json(py)
+    pub fn __str__(&self) -> String {
+        format!("Block(address=0x{:x})", self.address)
     }
 }
 
@@ -623,7 +393,6 @@ impl Block {
 #[pyo3(name = "block")]
 pub fn block_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Block>()?;
-    m.add_class::<BlockJsonDeserializer>()?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.controlflow.block", m)?;

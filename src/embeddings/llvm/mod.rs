@@ -1,7 +1,7 @@
 use crate::Configuration;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::io::Stderr;
-use crate::ir::llvm::Lifter as LlvmLifter;
+use crate::irs::llvm::LlvmModule;
 use crate::math::stats::normalize_l2;
 use inkwell::context::Context;
 use inkwell::memory_buffer::MemoryBuffer;
@@ -78,22 +78,23 @@ fn extend_weighted(features: &mut Vec<f32>, values: impl IntoIterator<Item = f32
     features.extend(values.into_iter().map(|value| value * weight));
 }
 
-fn optimize_lifter(lifter: LlvmLifter) -> Result<LlvmLifter, Error> {
-    let lifter = lifter.mem2reg()?;
-    let lifter = lifter.sroa()?;
-    let lifter = lifter.gvn()?;
-    let lifter = lifter.cfg()?;
-    let lifter = lifter.dce()?;
-    Ok(lifter)
+fn optimize_module(module: LlvmModule) -> Result<LlvmModule, Error> {
+    let module = module.mem2reg()?;
+    let module = module.sroa()?;
+    let module = module.gvn()?;
+    let module = module.cfg()?;
+    let module = module.dce()?;
+    Ok(module)
 }
 
 pub(crate) fn canonical_instruction_bitcode(
     instruction: &Instruction,
     config: &Configuration,
 ) -> Result<Vec<u8>, Error> {
-    let mut lifter = LlvmLifter::from_architecture(instruction.architecture, config.clone());
-    lifter.lift_instruction(instruction)?;
-    let optimized = optimize_lifter(lifter)?;
+    let mut module =
+        LlvmModule::from_architecture_with_config(instruction.architecture, config.clone());
+    module.populate_instruction(instruction)?;
+    let optimized = optimize_module(module)?;
     Ok(optimized.bitcode())
 }
 
@@ -101,9 +102,10 @@ pub(crate) fn canonical_block_bitcode(
     block: &Block<'_>,
     config: &Configuration,
 ) -> Result<Vec<u8>, Error> {
-    let mut lifter = LlvmLifter::from_architecture(block.architecture(), config.clone());
-    lifter.lift_block(block, None)?;
-    let optimized = optimize_lifter(lifter)?;
+    let mut module =
+        LlvmModule::from_architecture_with_config(block.architecture(), config.clone());
+    module.populate_block(block, None)?;
+    let optimized = optimize_module(module)?;
     Ok(optimized.bitcode())
 }
 
@@ -111,9 +113,10 @@ pub(crate) fn canonical_function_bitcode(
     function: &Function<'_>,
     config: &Configuration,
 ) -> Result<Vec<u8>, Error> {
-    let mut lifter = LlvmLifter::from_architecture(function.architecture(), config.clone());
-    lifter.lift_function(function, None)?;
-    let optimized = optimize_lifter(lifter)?;
+    let mut module =
+        LlvmModule::from_architecture_with_config(function.architecture(), config.clone());
+    module.populate_function(function, None)?;
+    let optimized = optimize_module(module)?;
     Ok(optimized.bitcode())
 }
 

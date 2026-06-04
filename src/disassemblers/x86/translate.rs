@@ -33,7 +33,7 @@ use crate::{
         indirect as x86_indirect, targets as x86_targets,
     },
     genetics::Chromosome,
-    ir::lir::x86::{InstructionDetailX86, X86MemoryOperandView, X86OperandKind, X86OperandView},
+    irs::lir::x86::{InstructionDetailX86, X86MemoryOperandView, X86OperandKind, X86OperandView},
 };
 
 fn leak_register_name(name: String) -> &'static str {

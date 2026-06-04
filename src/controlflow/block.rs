@@ -21,247 +21,25 @@
 // SOFTWARE.
 
 use crate::Architecture;
-use crate::Configuration;
 use crate::controlflow::EntityKind;
 use crate::controlflow::Function;
 use crate::controlflow::Instruction;
 use crate::controlflow::Reference;
 use crate::controlflow::graph::Graph;
-use crate::embeddings::{Embedding, EmbeddingBackend, EmbeddingsJson};
+use crate::embeddings::{Embedding, EmbeddingBackend};
 use crate::entropy;
 use crate::genetics::Chromosome;
-use crate::genetics::ChromosomeJson;
 use crate::hashing::MinHash32;
 use crate::hashing::SHA256;
 use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
-use crate::hex;
-use crate::ir::lir::{LirAbi, LirBlock, LirCpu};
-use crate::ir::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
-use crate::ir::mir::MirBlock;
+use crate::irs::lir::LirBlock;
+use crate::irs::llvm::LlvmModule;
+use crate::irs::mir::MirBlock;
 #[cfg(not(target_os = "windows"))]
-use crate::ir::vex::{Lifter as VexLifter, VexJson};
-use crate::metadata::Attributes;
-use serde::{Deserialize, Serialize};
-use serde_json;
-use serde_json::Value;
-use std::collections::BTreeMap;
+use crate::irs::vex::VexModule;
 use std::collections::BTreeSet;
 use std::io::Error;
-use std::io::ErrorKind;
-
-/// Represents the JSON-serializable structure of a control flow block.
-#[derive(Serialize, Deserialize, Clone)]
-pub struct BlockJson {
-    /// The kind of this entity, always `"block"`.
-    pub kind: EntityKind,
-    /// The architecture of the block.
-    pub architecture: String,
-    /// The starting address of the block.
-    pub address: u64,
-    /// The sequential fallthrough block address, if any.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub fallthrough: Option<u64>,
-    /// A set of explicit branch target block addresses.
-    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
-    pub branches: BTreeSet<u64>,
-    /// The number of edges (connections) this block has.
-    pub edges: usize,
-    /// Indicates whether this block contains a conditional instruction.
-    pub conditional: bool,
-    /// The chromosome of the block in JSON format.
-    pub chromosome: ChromosomeJson,
-    /// The size of the block in bytes.
-    pub size: usize,
-    /// The raw bytes of the block in hexadecimal format.
-    pub bytes: String,
-    /// Direct outgoing call relationships from instructions in this block.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub callee_references: Vec<Reference>,
-    /// Direct outgoing control-flow relationships from this block.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub successor_references: Vec<Reference>,
-    /// Direct incoming control-flow relationships into this block.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub predecessor_references: Vec<Reference>,
-    /// The number of instructions in this block.
-    pub number_of_instructions: usize,
-    /// Instruction addresses associated with this block.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub instructions: Vec<u64>,
-    /// The entropy of the block, if enabled.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub entropy: Option<f64>,
-    /// The SHA-256 hash of the block, if enabled.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub sha256: Option<String>,
-    /// The ssdeep fuzzy hash of the block, if enabled.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ssdeep: Option<String>,
-    /// The MinHash of the block, if enabled.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub minhash: Option<String>,
-    /// The TLSH of the block, if enabled.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tlsh: Option<String>,
-    /// Indicates whether the block is contiguous.
-    pub contiguous: bool,
-    /// Optional processor outputs attached by post-processing.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub processors: Option<BTreeMap<String, Value>>,
-    /// Optional embeddings attached directly to this block.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub embeddings: Option<EmbeddingsJson>,
-    /// Attributes
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub attributes: Option<Value>,
-    /// Optional lifted representations attached to this block.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lifters: Option<LiftersJson>,
-}
-
-#[allow(dead_code)]
-#[derive(Clone)]
-pub struct BlockJsonDeserializer {
-    pub json: BlockJson,
-    pub config: Configuration,
-}
-
-impl BlockJsonDeserializer {
-    #[allow(dead_code)]
-    pub fn new(string: String, config: Configuration) -> Result<Self, Error> {
-        let json: BlockJson =
-            serde_json::from_str(&string).map_err(|error| Error::other(format!("{}", error)))?;
-        if json.kind != EntityKind::Block {
-            return Err(Error::other("deserialized JSON is not a block kind"));
-        }
-        Ok(Self {
-            json,
-            config: config.clone(),
-        })
-    }
-
-    #[allow(dead_code)]
-    pub fn chromosome(&self) -> Chromosome {
-        let bytes = hex::decode(&self.json.bytes).expect("invalid block bytes");
-        let mask = if self.json.chromosome.mask.is_empty() {
-            vec![0; bytes.len()]
-        } else {
-            hex::decode(&self.json.chromosome.mask).expect("invalid block chromosome mask")
-        };
-        Chromosome::new(bytes, mask, self.config.clone()).expect("invalid chromosome")
-    }
-
-    #[allow(dead_code)]
-    pub fn successor_references(&self) -> Vec<Reference> {
-        self.json.successor_references.clone()
-    }
-
-    #[allow(dead_code)]
-    pub fn predecessor_references(&self) -> Vec<Reference> {
-        self.json.predecessor_references.clone()
-    }
-
-    #[allow(dead_code)]
-    pub fn edges(&self) -> usize {
-        self.json.edges
-    }
-
-    #[allow(dead_code)]
-    pub fn tlsh(&self) -> Option<String> {
-        self.json.tlsh.clone()
-    }
-
-    #[allow(dead_code)]
-    pub fn ssdeep(&self) -> Option<String> {
-        self.json.ssdeep.clone()
-    }
-
-    #[allow(dead_code)]
-    pub fn callee_references(&self) -> Vec<Reference> {
-        self.json.callee_references.clone()
-    }
-
-    #[allow(dead_code)]
-    pub fn architecture(&self) -> Result<Architecture, Error> {
-        match Architecture::from_string(&self.json.architecture) {
-            Ok(result) => Ok(result),
-            Err(error) => Err(Error::new(ErrorKind::Unsupported, format!("{}", error))),
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn entropy(&self) -> Option<f64> {
-        self.json.entropy
-    }
-
-    #[allow(dead_code)]
-    pub fn kind(&self) -> EntityKind {
-        self.json.kind
-    }
-
-    #[allow(dead_code)]
-    pub fn address(&self) -> u64 {
-        self.json.address
-    }
-
-    #[allow(dead_code)]
-    pub fn size(&self) -> usize {
-        self.json.size
-    }
-
-    #[allow(dead_code)]
-    pub fn fallthrough(&self) -> Option<u64> {
-        self.json.fallthrough
-    }
-
-    #[allow(dead_code)]
-    pub fn branches(&self) -> BTreeSet<u64> {
-        self.json.branches.clone()
-    }
-
-    #[allow(dead_code)]
-    pub fn number_of_instructions(&self) -> usize {
-        self.json.number_of_instructions
-    }
-
-    #[allow(dead_code)]
-    pub fn minhash(&self) -> Option<String> {
-        self.json.minhash.clone()
-    }
-
-    #[allow(dead_code)]
-    pub fn contiguous(&self) -> bool {
-        self.json.contiguous
-    }
-
-    #[allow(dead_code)]
-    pub fn processors(&self) -> Option<BTreeMap<String, Value>> {
-        self.json.processors.clone()
-    }
-    #[allow(dead_code)]
-    pub fn sha256(&self) -> Option<String> {
-        self.json.sha256.clone()
-    }
-
-    #[allow(dead_code)]
-    pub fn is_conditional(&self) -> bool {
-        self.json.conditional
-    }
-
-    #[allow(dead_code)]
-    pub fn json(&self) -> Result<String, Error> {
-        let result = serde_json::to_string(&self.json)?;
-        Ok(result)
-    }
-
-    #[allow(dead_code)]
-    pub fn print(&self) {
-        if let Ok(json) = self.json() {
-            println!("{}", json);
-        }
-    }
-}
 
 /// Represents a control flow block within a graph.
 #[derive(Clone)]
@@ -363,197 +141,6 @@ impl<'block> Block<'block> {
         MirBlock::from_lir(None, &lir).map_err(|error| Error::other(error.to_string()))
     }
 
-    /// Prints the JSON representation of the block to standard output.
-    #[allow(dead_code)]
-    pub fn print(&self) {
-        if let Ok(json) = self.json() {
-            println!("{}", json);
-        }
-    }
-
-    /// Converts the block into a JSON string representation.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(String)` containing the JSON representation, or an `Err` if serialization fails.
-    pub fn json(&self) -> Result<String, Error> {
-        let raw = self.process();
-        let result = serde_json::to_string(&raw)?;
-        Ok(result)
-    }
-
-    /// Converts the block into a JSON string representation including `Attributes`.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(String)` containing the JSON representation, or an `Err` if serialization fails.
-    pub fn json_with_attributes(&self, attributes: Attributes) -> Result<String, Error> {
-        let raw = self.process_with_attributes(attributes);
-        let result = serde_json::to_string(&raw)?;
-        Ok(result)
-    }
-
-    /// Processes the block into its JSON-serializable representation.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `BlockJson` instance containing the block's metadata and related information.
-    pub fn process_base(&self) -> BlockJson {
-        self.process_base_with_references(
-            self.successor_references(),
-            self.predecessor_references(),
-        )
-    }
-
-    pub fn process_base_with_references(
-        &self,
-        successor_references: Vec<Reference>,
-        predecessor_references: Vec<Reference>,
-    ) -> BlockJson {
-        let (bytes, wildcard_mask) = self.payload_bytes_and_mask();
-        let chromosome = Chromosome::new(bytes.clone(), wildcard_mask, self.cfg.config.clone())
-            .expect("failed to build block chromosome");
-        let size = bytes.len();
-        let instructions = self.instruction_addresses();
-        let callee_references = self.callee_references();
-        let entropy = if self.cfg.config.blocks.entropy.enabled {
-            entropy::shannon(&bytes)
-        } else {
-            None
-        };
-        let sha256 = if self.cfg.config.blocks.sha256.enabled {
-            SHA256::new(&bytes).hexdigest()
-        } else {
-            None
-        };
-        let ssdeep = if self.cfg.config.blocks.ssdeep.enabled {
-            SSDeep::new(&bytes).hexdigest()
-        } else {
-            None
-        };
-        let minhash = if self.cfg.config.blocks.minhash.enabled {
-            if bytes.len() > self.cfg.config.blocks.minhash.maximum_byte_size
-                && self.cfg.config.blocks.minhash.maximum_byte_size_enabled
-            {
-                None
-            } else {
-                MinHash32::new(
-                    &bytes,
-                    self.cfg.config.blocks.minhash.number_of_hashes,
-                    self.cfg.config.blocks.minhash.shingle_size,
-                    self.cfg.config.blocks.minhash.seed,
-                )
-                .hexdigest()
-            }
-        } else {
-            None
-        };
-        let tlsh = if self.cfg.config.blocks.tlsh.enabled {
-            TLSH::new(&bytes, self.cfg.config.blocks.tlsh.minimum_byte_size).hexdigest()
-        } else {
-            None
-        };
-
-        BlockJson {
-            kind: EntityKind::Block,
-            address: self.address,
-            architecture: self.architecture().to_string(),
-            fallthrough: self.fallthrough(),
-            branches: self.branches(),
-            edges: self.edges(),
-            chromosome: chromosome.process(),
-            conditional: self.terminator.is_conditional,
-            size,
-            bytes: hex::encode(&bytes),
-            number_of_instructions: self.number_of_instructions(),
-            instructions,
-            callee_references,
-            successor_references,
-            predecessor_references,
-            entropy,
-            sha256,
-            ssdeep,
-            minhash,
-            tlsh,
-            contiguous: true,
-            processors: None,
-            embeddings: None,
-            attributes: None,
-            lifters: self.lifters_json(),
-        }
-    }
-
-    pub fn process(&self) -> BlockJson {
-        let mut json = self.process_base();
-        self.apply_processors(&mut json);
-        json
-    }
-
-    pub fn process_with_references(
-        &self,
-        successor_references: Vec<Reference>,
-        predecessor_references: Vec<Reference>,
-    ) -> BlockJson {
-        let mut json =
-            self.process_base_with_references(successor_references, predecessor_references);
-        self.apply_processors(&mut json);
-        json
-    }
-
-    fn apply_processors(&self, json: &mut BlockJson) {
-        if crate::processor::enabled_processors_for_target(
-            &self.cfg.config,
-            crate::processor::ProcessorTarget::Graph,
-        )
-        .iter()
-        .any(|processor| {
-            self.cfg
-                .processor_output(
-                    crate::processor::ProcessorTarget::Block,
-                    self.address,
-                    processor.name(),
-                )
-                .is_none()
-        }) {
-            let _ = self.cfg.process_graph();
-        }
-        if let Some(outputs) = self
-            .cfg
-            .processor_outputs(crate::processor::ProcessorTarget::Block, self.address)
-        {
-            for (processor_name, output) in &outputs {
-                crate::processor::apply_output(
-                    json.processors.get_or_insert_with(Default::default),
-                    processor_name,
-                    output,
-                );
-            }
-        } else {
-            for processor in crate::processor::enabled_processors_for_target(
-                &self.cfg.config,
-                crate::processor::ProcessorTarget::Block,
-            ) {
-                if let Some(output) = processor.process_block(self) {
-                    crate::processor::apply_output(
-                        json.processors.get_or_insert_with(Default::default),
-                        processor.name(),
-                        &output,
-                    );
-                }
-            }
-        }
-        if self.cfg.config.blocks.embeddings.llvm.enabled {
-            if let Some(vector) = self.embedding() {
-                json.embeddings = Some(EmbeddingsJson::llvm(vector));
-            }
-        }
-    }
-
-    /// Return all processor outputs attached to this block.
-    pub fn processors(&self) -> BTreeMap<String, Value> {
-        self.process().processors.unwrap_or_default()
-    }
-
     /// Return an embedding vector for this block using the default backend and dimensions.
     pub fn embedding(&self) -> Option<Vec<f32>> {
         self.embedding_with_options(None, None)
@@ -574,69 +161,21 @@ impl<'block> Block<'block> {
         .embed_block(self)
     }
 
-    pub fn llvm(&self, abi: Option<&LirAbi>, triple: Option<String>) -> Result<LlvmLifter, Error> {
-        let mut lifter = if let Some(triple) = triple {
-            let cpu = LirCpu::from_architecture(self.architecture())
-                .map_err(|error| Error::other(error.to_string()))?;
-            LlvmLifter::new(cpu, self.cfg.config.clone(), Some(triple))
-                .map_err(|error| Error::other(error.to_string()))?
-        } else {
-            LlvmLifter::from_architecture(self.architecture(), self.cfg.config.clone())
-        };
-        lifter.lift_block(self, abi)?;
+    pub fn llvm(&self) -> Result<LlvmModule, Error> {
+        if !self.cfg.config.blocks.lifters.llvm.enabled {
+            return Err(Error::other("block llvm module is disabled"));
+        }
+        let mut lifter =
+            LlvmModule::from_architecture_with_config(self.architecture(), self.cfg.config.clone());
+        lifter.populate_block(self, None)?;
         Ok(lifter)
     }
 
     #[cfg(not(target_os = "windows"))]
-    pub fn vex(&self, abi: Option<&LirAbi>) -> Result<VexLifter, Error> {
-        let mut lifter = VexLifter::new(self.cfg.config.clone());
-        lifter.lift_block(self, abi)?;
+    pub fn vex(&self) -> Result<VexModule, Error> {
+        let mut lifter = VexModule::with_config(None, self.cfg.config.clone());
+        lifter.populate_block(self)?;
         Ok(lifter)
-    }
-
-    fn lifters_json(&self) -> Option<LiftersJson> {
-        let llvm = if self.cfg.config.blocks.lifters.llvm.enabled {
-            let mut lifter =
-                LlvmLifter::from_architecture(self.architecture(), self.cfg.config.clone());
-            lifter.lift_block(self, None).ok()?;
-            Some(LlvmJson { text: lifter.ir() })
-        } else {
-            None
-        };
-
-        #[cfg(not(target_os = "windows"))]
-        let vex =
-            if self.cfg.config.lifters.vex.enabled && self.cfg.config.blocks.lifters.vex.enabled {
-                let mut lifter = VexLifter::new(self.cfg.config.clone());
-                lifter.lift_block(self, None).ok()?;
-                Some(VexJson { text: lifter.ir() })
-            } else {
-                None
-            };
-
-        #[cfg(not(target_os = "windows"))]
-        if llvm.is_none() && vex.is_none() {
-            return None;
-        }
-
-        #[cfg(target_os = "windows")]
-        if llvm.is_none() {
-            return None;
-        }
-
-        Some(LiftersJson {
-            llvm,
-            #[cfg(not(target_os = "windows"))]
-            vex,
-        })
-    }
-
-    /// Return a single processor output by name or an empty object when absent.
-    pub fn processor(&self, name: &str) -> Value {
-        self.processors()
-            .get(name)
-            .cloned()
-            .unwrap_or_else(|| Value::Object(Default::default()))
     }
 
     /// Blocks are contiguous.
@@ -677,28 +216,6 @@ impl<'block> Block<'block> {
                 break;
             }
         }
-        result
-    }
-
-    /// Processes the block into its JSON-serializable representation including `Attributes`.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `BlockJson` instance containing the block's metadata and `Attributes`.
-    pub fn process_with_attributes(&self, attributes: Attributes) -> BlockJson {
-        let mut result = self.process();
-        result.attributes = Some(attributes.process());
-        result
-    }
-
-    pub fn process_with_attributes_and_references(
-        &self,
-        attributes: Attributes,
-        successor_references: Vec<Reference>,
-        predecessor_references: Vec<Reference>,
-    ) -> BlockJson {
-        let mut result = self.process_with_references(successor_references, predecessor_references);
-        result.attributes = Some(attributes.process());
         result
     }
 
@@ -808,15 +325,6 @@ impl<'block> Block<'block> {
         let (raw_bytes, wildcard_mask) = self.payload_bytes_and_mask();
         Chromosome::new(raw_bytes, wildcard_mask, self.cfg.config.clone())
             .expect("failed to build block chromosome")
-    }
-
-    /// Generates a signature for the block using its address range and control flow graph.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `SignatureJson` representing the block's signature.
-    pub fn chromosome_json(&self) -> ChromosomeJson {
-        self.chromosome().process()
     }
 
     /// Retrieves the pattern string representation of the chromosome.

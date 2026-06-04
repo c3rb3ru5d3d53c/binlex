@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 
 import ctypes
-from binlex import Configuration
-from binlex.ir.lir import (
+from binlex.irs.lir import (
     LirModule,
-    LirAbi,
-    LirCpu,
+    LirBlock,
+    LirFunction,
+    LirAbiLinuxSyscall,
+    LirAbiSysv,
+    LirCpuAmd64,
     Lir,
     LirEffect,
     LirExpression,
@@ -15,19 +17,20 @@ from binlex.ir.lir import (
     LirStatus,
     LirTerminator,
     LirTrapKind,
+    LirExecutor,
+    LirExecutorState,
 )
-from binlex.symbolic import Executor, CpuState
-from binlex.lifters import Lifter
+from binlex.irs.llvm import LlvmModule
 
-configuration = Configuration()
+cpu = LirCpuAmd64()
+sysv = LirAbiSysv(cpu)
+linux_syscall = LirAbiLinuxSyscall(cpu)
 
-cpu = LirCpu.amd64()
-sysv = LirAbi.sysv(cpu)
-linux_syscall = LirAbi.linux_syscall(cpu)
-
-add_two_semantics = LirModule(
-    semantics=[
-        Lir(
+add_two_semantics = LirModule(name="add_two")
+add_two_function = LirFunction(name="add_two", abi=sysv)
+add_two_block = LirBlock(name="entry")
+add_two_block.append_instruction(
+    Lir(
             version=1,
             status=LirStatus.Complete,
             effects=[
@@ -45,14 +48,17 @@ add_two_semantics = LirModule(
                     )
                 )
             ],
-            terminator=LirTerminator.return_()
-        )
-    ]
+                            terminator=LirTerminator.return_()
+    )
 )
+add_two_function.append_block(add_two_block)
+add_two_semantics.append_function(add_two_function)
 
-write_semantics = LirModule(
-    semantics=[
-        Lir(
+write_semantics = LirModule(name="write")
+write_function = LirFunction(name="write", abi=linux_syscall)
+write_block = LirBlock(name="entry")
+write_block.append_instruction(
+    Lir(
             version=1,
             status=LirStatus.Complete,
             abi=linux_syscall,
@@ -109,14 +115,15 @@ write_semantics = LirModule(
                     )
                 ),
             ],
-            terminator=LirTerminator.return_()
-        )
-    ]
+                            terminator=LirTerminator.return_()
+    )
 )
+write_function.append_block(write_block)
+write_semantics.append_function(write_function)
 
-executor = Executor()
+executor = LirExecutor()
 
-state = CpuState(cpu)
+state = LirExecutorState(cpu)
 state.set_register("rdi", 64, 1)
 state.set_register("rsi", 64, 1)
 
@@ -128,9 +135,9 @@ result = states[0].evaluate_register("rax", 64)
 
 assert result == 2
 
-lifter = Lifter(cpu, configuration)
+lifter = LlvmModule("jit_example", cpu)
 fn_add_two = lifter.create_function("add_two", abi=sysv)
-fn_add_two.lift_function_semantics(add_two_semantics)
+fn_add_two.set_lir(add_two_semantics)
 fn_add_two.optimize_cfg()
 fn_add_two.optimize_mem2reg()
 fn_add_two.optimize_sroa()
@@ -150,7 +157,7 @@ sum = add_two(1, 1)
 assert sum == 2
 
 fn_write = lifter.create_function("write", abi=sysv)
-fn_write.lift_function_semantics(write_semantics)
+fn_write.set_lir(write_semantics)
 fn_write.optimize_cfg()
 fn_write.optimize_mem2reg()
 fn_write.optimize_sroa()

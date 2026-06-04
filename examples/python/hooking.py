@@ -6,7 +6,7 @@ from binlex import Architecture, Configuration
 from binlex.assemblers import Assembler, AssemblerBackend
 from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
-from binlex.ir.lir import Lir, LirCpu, LirModule
+from binlex.irs.lir import Lir, LirBlock, LirCpuI386, LirFunction, LirModule
 from binlex.symbolic import Executor, CpuState
 
 
@@ -68,11 +68,17 @@ instructions.sort(key=lambda instruction: instruction.address())
 assert instructions
 raw_semantics = [instruction.semantic() for instruction in instructions]
 assert all(semantic is not None for semantic in raw_semantics)
-semantics = LirModule(cast(list[Lir], raw_semantics))
+semantics = LirModule()
+semantic_function = LirFunction()
+semantic_block = LirBlock()
+for semantic in cast(list[Lir], raw_semantics):
+    semantic_block.append_instruction(semantic)
+semantic_function.append_block(semantic_block)
+semantics.append_function(semantic_function)
 
 host_print_address = instructions[-1].address()
 
-cpu = LirCpu.i386()
+cpu = LirCpuI386()
 state = CpuState(cpu)
 executor = Executor()
 state.map_memory(stack_address, stack_size)

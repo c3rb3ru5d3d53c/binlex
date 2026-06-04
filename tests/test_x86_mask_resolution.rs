@@ -19,7 +19,7 @@ fn x86_immediate_masks_full_operand_bytes_and_normalizes_them() {
         .disassemble_instruction(0, &mut graph)
         .expect("instruction should disassemble");
 
-    let instruction = graph.get_instruction(0).expect("instruction should exist");
+    let instruction = graph.instruction(0).expect("instruction should exist");
 
     assert_eq!(instruction.bytes, bytes);
     assert_eq!(

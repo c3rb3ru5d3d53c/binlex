@@ -88,14 +88,6 @@ impl File {
     pub fn read(&mut self) -> Result<(), Error> {
         self.inner.read()
     }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the JSON representation of the file metadata.
-    pub fn json(&self) -> PyResult<String> {
-        self.inner
-            .json()
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-    }
 }
 
 #[pymodule]

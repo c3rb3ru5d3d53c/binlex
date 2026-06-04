@@ -21,12 +21,10 @@
 // SOFTWARE.
 
 pub mod assemblers;
-pub mod clients;
 pub mod compression;
 pub mod config;
 pub mod controlflow;
 pub mod core;
-pub mod databases;
 pub mod decompilers;
 pub mod disassemblers;
 pub mod embeddings;
@@ -35,25 +33,21 @@ pub mod genetics;
 pub mod hashing;
 pub mod hex;
 pub mod imaging;
-pub mod indexing;
-pub mod ir;
+pub mod irs;
 pub mod math;
 pub mod metadata;
 pub mod rules;
-pub mod storage;
-pub mod util;
+pub mod utilities;
 
 pub use config::Configuration;
 pub use core::Architecture;
 pub use core::Magic;
 
 use crate::assemblers::assemblers_init;
-use crate::clients::clients_init;
 use crate::compression::compression_init;
 use crate::config::config_module_init;
 use crate::controlflow::controlflow_init;
 use crate::core::core_init;
-use crate::databases::databases_init;
 use crate::decompilers::decompilers_init;
 use crate::disassemblers::disassemblers_init;
 use crate::embeddings::embeddings_init;
@@ -62,26 +56,16 @@ use crate::genetics::genitics_init;
 use crate::hashing::hashing_init;
 use crate::hex::hex_init;
 use crate::imaging::imaging_init;
-use crate::indexing::indexing_init;
-use crate::ir::ir_init;
+use crate::irs::irs_init;
 use crate::math::{entropy_init, math_init};
 use crate::metadata::metadata_init;
 use crate::rules::rules_init;
-use crate::storage::storage_init;
-use crate::util::util_init;
-use ::binlex::runtime::{register_host_runtime, HostRuntime};
+use crate::utilities::utilities_init;
 
 use pyo3::{prelude::*, types::PyModule, wrap_pymodule};
 
 #[pymodule]
 fn binlex(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    register_host_runtime(HostRuntime::Native).map_err(
-        |error: ::binlex::runtime::HostRuntimeError| {
-            pyo3::exceptions::PyRuntimeError::new_err(error.to_string())
-        },
-    )?;
-
-    m.add_wrapped(wrap_pymodule!(clients_init))?;
     m.add_wrapped(wrap_pymodule!(assemblers_init))?;
     m.add_wrapped(wrap_pymodule!(compression_init))?;
     m.add_wrapped(wrap_pymodule!(formats_init))?;
@@ -97,15 +81,12 @@ fn binlex(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(genitics_init))?;
     m.add_wrapped(wrap_pymodule!(hashing_init))?;
     m.add_wrapped(wrap_pymodule!(imaging_init))?;
-    m.add_wrapped(wrap_pymodule!(indexing_init))?;
-    m.add_wrapped(wrap_pymodule!(databases_init))?;
     m.add_wrapped(wrap_pymodule!(decompilers_init))?;
-    m.add_wrapped(wrap_pymodule!(ir_init))?;
+    m.add_wrapped(wrap_pymodule!(irs_init))?;
     m.add_class::<Architecture>()?;
     m.add_class::<Configuration>()?;
     m.add_class::<Magic>()?;
-    m.add_wrapped(wrap_pymodule!(util_init))?;
-    m.add_wrapped(wrap_pymodule!(storage_init))?;
+    m.add_wrapped(wrap_pymodule!(utilities_init))?;
     m.add_wrapped(wrap_pymodule!(rules_init))?;
     Ok(())
 }

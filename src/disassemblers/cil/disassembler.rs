@@ -31,7 +31,7 @@ use crate::disassemblers::cil::backends::native;
 use crate::disassemblers::cil::context::DisassemblyShard;
 use crate::genetics::Chromosome;
 use crate::io::Stderr;
-use crate::ir::lir::cil::InstructionDetailCil;
+use crate::irs::lir::cil::InstructionDetailCil;
 use rayon::ThreadPoolBuilder;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::{BTreeMap, BTreeSet};
@@ -318,7 +318,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                 }
             }
 
-            if let Some(instruction) = cfg.get_instruction(block_end_address) {
+            if let Some(instruction) = cfg.instruction(block_end_address) {
                 cfg.blocks.enqueue_extend(instruction.successors());
             }
         }
@@ -532,7 +532,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfg: &'a mut Graph,
     ) -> Result<ControlFlowInstruction<'a>, Error> {
         let entry = self.disassemble_instruction_address(address, metadata_token_addresses, cfg)?;
-        cfg.get_instruction(entry).ok_or_else(|| {
+        cfg.instruction(entry).ok_or_else(|| {
             Error::other(format!(
                 "0x{entry:x}: instruction missing after disassembly"
             ))
@@ -546,7 +546,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfg: &'a mut Graph,
     ) -> Result<Block<'a>, Error> {
         self.disassemble_block_address(address, metadata_token_addresses, cfg)?;
-        cfg.get_block(address)
+        cfg.block(address)
             .ok_or_else(|| Error::other(format!("0x{address:x}: block missing after disassembly")))
     }
 
@@ -557,7 +557,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfg: &'a mut Graph,
     ) -> Result<Function<'a>, Error> {
         self.disassemble_function_address(address, metadata_token_addresses, cfg)?;
-        cfg.get_function(address).ok_or_else(|| {
+        cfg.function(address).ok_or_else(|| {
             Error::other(format!("0x{address:x}: function missing after disassembly"))
         })
     }

@@ -23,30 +23,22 @@
 """Control-flow graph wrappers for instructions, blocks, and functions."""
 
 from binlex_bindings.binlex.controlflow import Block as _BlockBinding
-from binlex_bindings.binlex.controlflow import BlockJsonDeserializer as _BlockJsonDeserializerBinding
 from binlex_bindings.binlex.controlflow import EntityKind as _EntityKindBinding
 from binlex_bindings.binlex.controlflow import Function as _FunctionBinding
-from binlex_bindings.binlex.controlflow import FunctionJsonDeserializer as _FunctionJsonDeserializerBinding
 from binlex_bindings.binlex.controlflow import Graph as _GraphBinding
 from binlex_bindings.binlex.controlflow import GraphQueue as _GraphQueueBinding
 from binlex_bindings.binlex.controlflow import Instruction as _InstructionBinding
-from binlex_bindings.binlex.controlflow import InstructionJsonDeserializer as _InstructionJsonDeserializerBinding
 from binlex_bindings.binlex.controlflow import Reference as _ReferenceBinding
 from binlex_bindings.binlex.controlflow.instruction import Operand as Operand
 from binlex_bindings.binlex.controlflow.instruction import OperandKind as OperandKind
 
 from binlex.core.architecture import _coerce_architecture
 from binlex.hashing import MinHash32, SHA256, SSDeep, TLSH
-from binlex.ir.hir import HirFunction
-from binlex.ir.lir import Lir, LirBlock, LirCpu, LirFunction, _cpu_kind_from_architecture
-from binlex.ir.mir import MirBlock, MirFunction
+from binlex.irs.hir import HirFunction
+from binlex.irs.lir import Lir, LirBlock, LirFunction
+from binlex.irs.mir import MirBlock, MirFunction
 
 EntityKind = _EntityKindBinding
-
-
-def _cpu_for_architecture(architecture):
-    return LirCpu.from_kind(_cpu_kind_from_architecture(architecture))
-
 
 def _decompiler_symbol_map(graph):
     if graph is None:
@@ -166,55 +158,6 @@ def _resolve_indirect_symbol_name(
     return {"Function": {"name": symbol_name, "bits": bits}}
 
 
-def _rewrite_lir_function_symbols(lir_function, graph):
-    symbol_map = _decompiler_symbol_map(graph)
-    if not symbol_map:
-        return lir_function
-
-    data = lir_function.to_dict()
-    changed = False
-
-    for block in data.get("blocks", []):
-        register_map = {}
-        for instruction in block.get("instructions", []):
-            for effect in instruction.get("effects", []):
-                if not isinstance(effect, dict):
-                    continue
-                item = effect.get("Set")
-                if not isinstance(item, dict):
-                    continue
-                dst = item.get("dst")
-                expression = item.get("expression")
-                if not isinstance(dst, dict) or not isinstance(expression, dict):
-                    continue
-                register = dst.get("Register")
-                if not isinstance(register, dict):
-                    continue
-                name = register.get("name")
-                if isinstance(name, str) and name:
-                    register_map[name] = expression
-
-            terminator = instruction.get("terminator") or {}
-            if not isinstance(terminator, dict):
-                continue
-            for kind in ("Call", "Jump"):
-                item = terminator.get(kind)
-                if not isinstance(item, dict):
-                    continue
-                target = item.get("target")
-                replacement = _resolve_indirect_symbol_name(
-                    instruction, target, symbol_map, register_map
-                )
-                if replacement is None:
-                    continue
-                item["target"] = replacement
-                changed = True
-
-    if not changed:
-        return lir_function
-    return LirFunction.from_dict(data)
-
-
 class Instruction:
     """Single decoded instruction tracked inside a control-flow graph."""
 
@@ -301,14 +244,6 @@ class Instruction:
         """Return normalized decoded operands."""
         return self._inner.operands()
 
-    def processors(self):
-        """Return all processor outputs attached to this instruction."""
-        return self._inner.processors()
-
-    def processor(self, name):
-        """Return a single processor output attached to this instruction."""
-        return self._inner.processor(name)
-
     def embedding(self, backend=None, dimensions=None):
         """Return an embedding vector for this instruction, if available."""
         from binlex.embeddings import Embedding, EmbeddingBackend
@@ -324,31 +259,21 @@ class Instruction:
             dimensions=dimensions,
         ).embed_instruction(self)
 
-    def llvm(self, triple=None):
+    def llvm(self):
         """Return LLVM IR for this instruction."""
-        from binlex.ir.llvm import LlvmModule
+        from binlex.irs.llvm import LlvmModule
 
         if self._config is None:
             return None
-        llvm = LlvmModule(
-            _cpu_for_architecture(self.architecture()),
-            self._config,
-            triple=triple,
-        )
-        if llvm.lift_instruction(self) is None:
-            return None
-        return llvm
+        return LlvmModule._with_inner(None, None, self._config, self._inner.llvm())
 
-    def vex(self, triple=None):
+    def vex(self):
         """Return VEX IR for this instruction."""
-        from binlex.ir.vex import Lifter
+        from binlex.irs.vex import VexModule
 
         if self._config is None:
             return None
-        vex = Lifter(self._config, triple=triple)
-        if vex.lift_instruction(self) is None:
-            return None
-        return vex
+        return VexModule._from_inner(self._inner.vex(), self._config)
 
     def lir(self):
         """Return canonical LIR for this instruction, if present."""
@@ -362,134 +287,6 @@ class Instruction:
         inner = getattr(lir, "_inner", lir)
         self._inner.set_lir(inner)
         return self
-
-    def to_dict(self):
-        """Convert the instruction to a Python dictionary."""
-        return self._inner.to_dict()
-
-    def json(self):
-        """Return the JSON representation of the instruction."""
-        return self._inner.json()
-
-    def print(self):
-        """Print the instruction representation to stdout."""
-        return self._inner.print()
-
-    def __str__(self):
-        """Return the JSON representation when converted to a string."""
-        return str(self._inner)
-
-
-class InstructionJsonDeserializer:
-    """Deserialize a serialized instruction JSON payload into typed accessors."""
-
-    def __init__(self, string, config):
-        """Create an instruction deserializer from a serialized JSON string."""
-        self._inner = _InstructionJsonDeserializerBinding(string, config)
-        self._config = config
-
-    @classmethod
-    def _from_binding(cls, binding, config=None):
-        """Wrap an existing native instruction JSON deserializer binding."""
-        result = cls.__new__(cls)
-        result._inner = binding
-        result._config = config
-        return result
-
-    def architecture(self):
-        """Return the architecture encoded in the serialized instruction."""
-        return self._inner.architecture()
-
-    def kind(self):
-        """Return the controlflow entity kind encoded in the serialized instruction."""
-        return self._inner.kind()
-
-    def address(self):
-        """Return the address of the serialized instruction."""
-        return self._inner.address()
-
-    def bytes(self):
-        """Return the decoded raw bytes for the serialized instruction."""
-        return self._inner.bytes()
-
-    def size(self):
-        """Return the size of the serialized instruction in bytes."""
-        return self._inner.size()
-
-    def mnemonic(self):
-        """Return the decoded mnemonic of the serialized instruction."""
-        return self._inner.mnemonic()
-
-    def disassembly(self):
-        """Return the canonical disassembly text of the serialized instruction."""
-        return self._inner.disassembly()
-
-    def operands(self):
-        """Return normalized decoded operands for the serialized instruction."""
-        return self._inner.operands()
-
-    def successor_block_references(self):
-        """Return the outgoing successor block references."""
-        return [Reference._from_binding(item) for item in self._inner.successor_block_references()]
-
-    def fallthrough(self):
-        """Return the sequential fallthrough instruction address, if known."""
-        return self._inner.fallthrough()
-
-    def branches(self):
-        """Return the explicit branch target addresses for this instruction."""
-        return self._inner.branches()
-
-    def successors(self):
-        """Return all outgoing CFG successor addresses for this instruction."""
-        return self._inner.successors()
-
-    def has_indirect_target(self):
-        """Return whether this instruction branches to an indirect target."""
-        return self._inner.has_indirect_target()
-
-    def is_conditional(self):
-        """Return whether this instruction is conditional."""
-        return self._inner.is_conditional()
-
-    def callees(self):
-        """Return the directly called functions."""
-        return [Function._from_binding(item, self._config) for item in self._inner.callees()]
-
-    def callee_references(self):
-        """Return the direct outgoing call references."""
-        return [Reference._from_binding(item) for item in self._inner.callee_references()]
-
-    def chromosome(self):
-        """Return the chromosome derived from this instruction, if available."""
-        return self._inner.chromosome()
-
-    def processors(self):
-        """Return all processor outputs attached to this instruction."""
-        return self._inner.processors()
-
-    def processor(self, name):
-        """Return a single processor output attached to this instruction."""
-        return self._inner.processor(name)
-
-    def lir(self):
-        """Return canonical LIR for this serialized instruction, if present."""
-        lir = self._inner.lir()
-        if lir is None:
-            return None
-        return Lir._from_inner(lir)
-
-    def to_dict(self):
-        """Convert the instruction to a Python dictionary."""
-        return self._inner.to_dict()
-
-    def json(self):
-        """Return the JSON representation of the instruction."""
-        return self._inner.json()
-
-    def print(self):
-        """Print the instruction representation to stdout."""
-        return self._inner.print()
 
     def __str__(self):
         """Return the JSON representation when converted to a string."""
@@ -586,14 +383,6 @@ class Block:
         """Return direct outgoing call references for this block."""
         return [Reference._from_binding(item) for item in self._inner.callee_references()]
 
-    def processors(self):
-        """Return all processor outputs attached to this block."""
-        return self._inner.processors()
-
-    def processor(self, name):
-        """Return a single processor output attached to this block."""
-        return self._inner.processor(name)
-
     def embedding(self, backend=None, dimensions=None):
         """Return an embedding vector for this block, if available."""
         from binlex.embeddings import Embedding, EmbeddingBackend
@@ -609,31 +398,21 @@ class Block:
             dimensions=dimensions,
         ).embed_block(self)
 
-    def llvm(self, abi=None, triple=None):
+    def llvm(self):
         """Return LLVM IR for this block."""
-        from binlex.ir.llvm import LlvmModule
+        from binlex.irs.llvm import LlvmModule
 
         if self._config is None:
             return None
-        llvm = LlvmModule(
-            _cpu_for_architecture(self.architecture()),
-            self._config,
-            triple=triple,
-        )
-        if llvm.lift_block(self, abi=abi) is None:
-            return None
-        return llvm
+        return LlvmModule._with_inner(None, None, self._config, self._inner.llvm())
 
-    def vex(self, abi=None, triple=None):
+    def vex(self):
         """Return VEX IR for this block."""
-        from binlex.ir.vex import Lifter
+        from binlex.irs.vex import VexModule
 
         if self._config is None:
             return None
-        vex = Lifter(self._config, triple=triple)
-        if vex.lift_block(self, abi=abi) is None:
-            return None
-        return vex
+        return VexModule._from_inner(self._inner.vex(), self._config)
 
     def lir(self):
         """Return canonical LIR for this block."""
@@ -667,20 +446,54 @@ class Block:
         """Return the size of this block in bytes."""
         return self._inner.size()
 
-    def print(self):
-        """Print the block representation to stdout."""
-        return self._inner.print()
-
-    def to_dict(self):
-        """Convert the block to a Python dictionary."""
-        return self._inner.to_dict()
-
-    def json(self):
-        """Return the JSON representation of the block."""
-        return self._inner.json()
-
     def __str__(self):
         """Return the JSON representation when converted to a string."""
+        return str(self._inner)
+
+
+class FunctionCallee:
+    """A direct outgoing call relationship from a function."""
+
+    @classmethod
+    def _from_binding(cls, binding, config=None, graph=None):
+        result = cls.__new__(cls)
+        result._inner = binding
+        result._config = config
+        result._graph = graph
+        return result
+
+    def address(self):
+        """Return the callsite address."""
+        return self._inner.address()
+
+    def function(self):
+        """Return the function targeted by the callsite."""
+        return Function._from_binding(self._inner.function(), self._config, self._graph)
+
+    def __str__(self):
+        return str(self._inner)
+
+
+class FunctionCaller:
+    """A direct incoming call relationship into a function."""
+
+    @classmethod
+    def _from_binding(cls, binding, config=None, graph=None):
+        result = cls.__new__(cls)
+        result._inner = binding
+        result._config = config
+        result._graph = graph
+        return result
+
+    def address(self):
+        """Return the callsite address."""
+        return self._inner.address()
+
+    def function(self):
+        """Return the function containing the callsite."""
+        return Function._from_binding(self._inner.function(), self._config, self._graph)
+
+    def __str__(self):
         return str(self._inner)
 
 
@@ -755,28 +568,12 @@ class Function:
         return self._inner.number_of_blocks()
 
     def callees(self):
-        """Return the functions directly called by this function."""
-        return [Function._from_binding(item, self._config, self._graph) for item in self._inner.callees()]
+        """Return direct outgoing call relationships."""
+        return [FunctionCallee._from_binding(item, self._config, self._graph) for item in self._inner.callees()]
 
     def callers(self):
-        """Return the functions that directly call this function."""
-        return [Function._from_binding(item, self._config, self._graph) for item in self._inner.callers()]
-
-    def callee_references(self):
-        """Return a mapping of callsite addresses to callee function addresses."""
-        return self._inner.callee_references()
-
-    def caller_references(self):
-        """Return a mapping of callsite addresses to caller function addresses."""
-        return self._inner.caller_references()
-
-    def processors(self):
-        """Return all processor outputs attached to this function."""
-        return self._inner.processors()
-
-    def processor(self, name):
-        """Return a single processor output attached to this function."""
-        return self._inner.processor(name)
+        """Return direct incoming call relationships."""
+        return [FunctionCaller._from_binding(item, self._config, self._graph) for item in self._inner.callers()]
 
     def embedding(self, backend=None, dimensions=None):
         """Return an embedding vector for this function, if available."""
@@ -793,31 +590,21 @@ class Function:
             dimensions=dimensions,
         ).embed_function(self)
 
-    def llvm(self, abi=None, triple=None):
+    def llvm(self):
         """Return LLVM IR for this function."""
-        from binlex.ir.llvm import LlvmModule
+        from binlex.irs.llvm import LlvmModule
 
         if self._config is None:
             return None
-        llvm = LlvmModule(
-            _cpu_for_architecture(self.architecture()),
-            self._config,
-            triple=triple,
-        )
-        if llvm.lift_function(self, abi=abi) is None:
-            return None
-        return llvm
+        return LlvmModule._with_inner(None, None, self._config, self._inner.llvm())
 
-    def vex(self, abi=None, triple=None):
+    def vex(self):
         """Return VEX IR for this function."""
-        from binlex.ir.vex import Lifter
+        from binlex.irs.vex import VexModule
 
         if self._config is None:
             return None
-        vex = Lifter(self._config, triple=triple)
-        if vex.lift_function(self, abi=abi) is None:
-            return None
-        return vex
+        return VexModule._from_inner(self._inner.vex(), self._config)
 
     def lir(self):
         """Return raw LIR for this function."""
@@ -857,7 +644,7 @@ class Function:
 
     def ast(self):
         """Return AST for this function."""
-        from binlex.ir.ast import AstFunction
+        from binlex.irs.ast import AstFunction
 
         cache = getattr(self._graph, "_decompilation_cache", None)
         if cache is not None:
@@ -868,32 +655,6 @@ class Function:
         if cache is not None:
             cache["ast"][self.address()] = result
         return result
-
-    def c(self, image=None):
-        """Return C-like pseudocode for this function."""
-        if image is None:
-            decompiler = getattr(self._graph, "_decompiler", None)
-            image = getattr(decompiler, "image", None)
-        cache = getattr(self._graph, "_decompilation_cache", None)
-        if cache is not None:
-            cached = cache["ast"].get(self.address())
-            if cached is None:
-                hir = cache["hir"].get(self.address())
-                if hir is not None:
-                    from binlex.ir.ast import AstFunction
-
-                    cached = AstFunction.from_hir(hir)
-                    cache["ast"][self.address()] = cached
-            if cached is not None:
-                return cached.c(image)
-        if image is not None:
-            image = getattr(image, "_inner", image)
-            return self._inner.c_with_image(image)
-        return self._inner.c()
-
-    def print_c(self):
-        """Print C-like pseudocode for this function."""
-        self._inner.print_c()
 
     def tlsh(self):
         """Return the TLSH object for this function, if available."""
@@ -927,18 +688,6 @@ class Function:
         """Return the ending address of this function, if available."""
         return self._inner.end()
 
-    def print(self):
-        """Print the function representation to stdout."""
-        return self._inner.print()
-
-    def to_dict(self):
-        """Convert the function to a Python dictionary."""
-        return self._inner.to_dict()
-
-    def json(self):
-        """Return the JSON representation of the function."""
-        return self._inner.json()
-
     def __str__(self):
         """Return the JSON representation when converted to a string."""
         return str(self._inner)
@@ -960,21 +709,21 @@ class _LLVM:
     def semantic(self):
         return self.__class__(self._owner, mode="semantic")
 
-    def ir(self):
-        lifter = self._lift()
-        return lifter.ir()
+    def text(self):
+        module = self._lift()
+        return module.text()
 
     def print(self):
-        lifter = self._lift()
-        return lifter.print()
+        module = self._lift()
+        return module.print()
 
     def bitcode(self):
-        lifter = self._lift()
-        return lifter.bitcode()
+        module = self._lift()
+        return module.bitcode()
 
     def object(self):
-        lifter = self._lift()
-        return lifter.object()
+        module = self._lift()
+        return module.object()
 
     def optimize_mem2reg(self):
         lifter = self._lift()
@@ -1005,244 +754,12 @@ class _LLVM:
         return lifter.verify()
 
     def _lift(self):
-        from binlex.ir.llvm import LlvmModule
-
-        config = getattr(self._owner, "_config", None)
-        if config is None:
-            raise RuntimeError("controlflow object is missing associated Configuration")
         if self._mode is not None:
-            config = config.clone()
-            config.lifters.llvm.mode = self._mode
-        lifter = LlvmModule(_cpu_for_architecture(self._owner.architecture()), config)
-        if isinstance(self._owner, Instruction):
-            lifter = lifter.lift_instruction(self._owner)
-        elif isinstance(self._owner, Block):
-            lifter = lifter.lift_block(self._owner)
-        elif isinstance(self._owner, Function):
-            lifter = lifter.lift_function(self._owner)
-        else:
-            raise TypeError(f"unsupported llvm owner: {type(self._owner)!r}")
-        if lifter is None:
+            raise RuntimeError("llvm mode-specific conversion must be configured before graph conversion")
+        module = self._owner.llvm()
+        if module is None:
             raise RuntimeError("llvm lift failed")
-        return lifter
-
-
-class BlockJsonDeserializer:
-    """Deserialize a serialized block JSON payload into typed accessors."""
-
-    def __init__(self, string, config):
-        """Create a block deserializer from a serialized JSON string."""
-        self._inner = _BlockJsonDeserializerBinding(string, config)
-
-    @classmethod
-    def _from_binding(cls, binding):
-        """Wrap an existing native block JSON deserializer binding."""
-        result = cls.__new__(cls)
-        result._inner = binding
-        return result
-
-    def callee_references(self):
-        """Return direct outgoing call references contained in the block payload."""
-        return [Reference._from_binding(item) for item in self._inner.callee_references()]
-
-    def architecture(self):
-        """Return the architecture encoded in the serialized block."""
-        return self._inner.architecture()
-
-    def kind(self):
-        """Return the controlflow entity kind encoded in the serialized block."""
-        return self._inner.kind()
-
-    def bytes(self):
-        """Return the decoded raw bytes for the serialized block."""
-        return self._inner.bytes()
-
-    def address(self):
-        """Return the starting address of the serialized block."""
-        return self._inner.address()
-
-    def minhash(self):
-        """Return the MinHash digest for the block, if available."""
-        return self._inner.minhash()
-
-    def tlsh(self):
-        """Return the TLSH digest for the block, if available."""
-        return self._inner.tlsh()
-
-    def sha256(self):
-        """Return the SHA-256 digest for the block, if available."""
-        return self._inner.sha256()
-
-    def ssdeep(self):
-        """Return the ssdeep digest for the block, if available."""
-        return self._inner.ssdeep()
-
-    def edges(self):
-        """Return the number of outgoing control-flow edges."""
-        return self._inner.edges()
-
-    def successor_references(self):
-        """Return direct outgoing control-flow references in the payload."""
-        return [Reference._from_binding(item) for item in self._inner.successor_references()]
-
-    def predecessor_references(self):
-        """Return direct incoming control-flow references in the payload."""
-        return [Reference._from_binding(item) for item in self._inner.predecessor_references()]
-
-    def branches(self):
-        """Return the explicit branch target addresses targeted by the block."""
-        return self._inner.branches()
-
-    def is_conditional(self):
-        """Return whether the block ends with a conditional transfer of control."""
-        return self._inner.is_conditional()
-
-    def entropy(self):
-        """Return the block entropy, if available."""
-        return self._inner.entropy()
-
-    def fallthrough(self):
-        """Return the sequential fallthrough address after the block, if available."""
-        return self._inner.fallthrough()
-
-    def size(self):
-        """Return the block size in bytes."""
-        return self._inner.size()
-
-    def number_of_instructions(self):
-        """Return the number of instructions contained in the block."""
-        return self._inner.number_of_instructions()
-
-    def chromosome(self):
-        """Return the chromosome derived from the serialized block."""
-        return self._inner.chromosome()
-
-    def to_dict(self):
-        """Convert the serialized block payload to a Python dictionary."""
-        return self._inner.to_dict()
-
-    def json(self):
-        """Return the normalized JSON representation of the block payload."""
-        return self._inner.json()
-
-    def print(self):
-        """Print the serialized block payload to stdout."""
-        return self._inner.print()
-
-    def __str__(self):
-        """Return the JSON representation when converted to a string."""
-        return str(self._inner)
-
-
-class FunctionJsonDeserializer:
-    """Deserialize a serialized function JSON payload into typed accessors."""
-
-    def __init__(self, string, config):
-        """Create a function deserializer from a serialized JSON string."""
-        self._inner = _FunctionJsonDeserializerBinding(string, config)
-
-    @classmethod
-    def _from_binding(cls, binding):
-        """Wrap an existing native function JSON deserializer binding."""
-        result = cls.__new__(cls)
-        result._inner = binding
-        return result
-
-    def blocks(self):
-        """Return the block addresses contained in the function payload."""
-        return self._inner.blocks()
-
-    def kind(self):
-        """Return the controlflow entity kind encoded in the serialized function."""
-        return self._inner.kind()
-
-    def callee_references(self):
-        """Return direct callsite-to-callee references contained in the payload."""
-        return self._inner.callee_references()
-
-    def caller_references(self):
-        """Return direct callsite-to-caller references contained in the payload."""
-        return self._inner.caller_references()
-
-    def size(self):
-        """Return the total size of the function in bytes."""
-        return self._inner.size()
-
-    def contiguous(self):
-        """Return whether the function occupies a contiguous address range."""
-        return self._inner.contiguous()
-
-    def architecture(self):
-        """Return the architecture encoded in the serialized function."""
-        return self._inner.architecture()
-
-    def bytes(self):
-        """Return the decoded raw bytes for the function, if available."""
-        return self._inner.bytes()
-
-    def address(self):
-        """Return the starting address of the function."""
-        return self._inner.address()
-
-    def number_of_instructions(self):
-        """Return the number of instructions in the function."""
-        return self._inner.number_of_instructions()
-
-    def number_of_blocks(self):
-        """Return the number of basic blocks in the function."""
-        return self._inner.number_of_blocks()
-
-    def average_instructions_per_block(self):
-        """Return the average number of instructions per block."""
-        return self._inner.average_instructions_per_block()
-
-    def entropy(self):
-        """Return the function entropy, if available."""
-        return self._inner.entropy()
-
-    def edges(self):
-        """Return the number of control-flow edges in the function."""
-        return self._inner.edges()
-
-    def sha256(self):
-        """Return the SHA-256 digest for the function, if available."""
-        return self._inner.sha256()
-
-    def minhash(self):
-        """Return the MinHash digest for the function, if available."""
-        return self._inner.minhash()
-
-    def tlsh(self):
-        """Return the TLSH digest for the function, if available."""
-        return self._inner.tlsh()
-
-    def ssdeep(self):
-        """Return the ssdeep digest for the function, if available."""
-        return self._inner.ssdeep()
-
-    def markov(self):
-        """Return the Markov importance scores for the function, if available."""
-        return self._inner.markov()
-
-    def chromosome(self):
-        """Return the chromosome derived from the serialized function."""
-        return self._inner.chromosome()
-
-    def to_dict(self):
-        """Convert the serialized function payload to a Python dictionary."""
-        return self._inner.to_dict()
-
-    def json(self):
-        """Return the normalized JSON representation of the function payload."""
-        return self._inner.json()
-
-    def print(self):
-        """Print the serialized function payload to stdout."""
-        return self._inner.print()
-
-    def __str__(self):
-        """Return the JSON representation when converted to a string."""
-        return str(self._inner)
+        return module
 
 
 class Reference:
@@ -1262,9 +779,6 @@ class Reference:
 
     def address(self):
         return self._inner.address()
-
-    def to_dict(self):
-        return self._inner.to_dict()
 
     def __str__(self):
         return str(self._inner)
@@ -1372,15 +886,24 @@ class Graph:
 
     def instruction(self, address):
         """Return the instruction at `address`, if it exists."""
-        return self.get_instruction(address)
+        result = self._inner.instruction(address)
+        if result is None:
+            return None
+        return Instruction._from_binding(result, self._config, self)
 
     def block(self, address):
         """Return the block at `address`, if it exists."""
-        return self.get_block(address)
+        result = self._inner.block(address)
+        if result is None:
+            return None
+        return Block._from_binding(result, self._config, self)
 
     def function(self, address):
         """Return the function at `address`, if it exists."""
-        return self.get_function(address)
+        result = self._inner.function(address)
+        if result is None:
+            return None
+        return Function._from_binding(result, self._config, self)
 
     @property
     def queue_instructions(self):
@@ -1409,27 +932,6 @@ class Graph:
         """Attach successor edges to an instruction."""
         return self._inner.extend_instruction_edges(address, addresses)
 
-    def get_instruction(self, address):
-        """Return the instruction at `address`, if it exists."""
-        result = self._inner.get_instruction(address)
-        if result is None:
-            return None
-        return Instruction._from_binding(result, self._config, self)
-
-    def get_block(self, address):
-        """Return the block at `address`, if it exists."""
-        result = self._inner.get_block(address)
-        if result is None:
-            return None
-        return Block._from_binding(result, self._config, self)
-
-    def get_function(self, address):
-        """Return the function at `address`, if it exists."""
-        result = self._inner.get_function(address)
-        if result is None:
-            return None
-        return Function._from_binding(result, self._config, self)
-
     def symbols(self):
         """Return the graph-owned symbol map keyed by address."""
         return dict(self._inner.symbols())
@@ -1456,11 +958,10 @@ class Graph:
 
 __all__ = [
     "Block",
-    "BlockJsonDeserializer",
     "Function",
-    "FunctionJsonDeserializer",
+    "FunctionCallee",
+    "FunctionCaller",
     "Graph",
     "GraphQueue",
     "Instruction",
-    "InstructionJsonDeserializer",
 ]

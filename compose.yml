@@ -1,20 +1,4 @@
 services:
-  binlex-server:
-    container_name: binlex-server
-    restart: unless-stopped
-    environment:
-      BINLEX_SERVER_CONFIG: ${BINLEX_SERVER_CONFIG:-/root/.config/binlex/binlex-server.toml}
-      BINLEX_SERVER_EMBEDDINGS: ${BINLEX_SERVER_EMBEDDINGS:-llvm}
-      BINLEX_SERVER_PROCESSORS: ${BINLEX_SERVER_PROCESSORS:-}
-      BINLEX_SERVER_PROCESSES: ${BINLEX_SERVER_PROCESSES:-}
-      BINLEX_SERVER_PROCESSOR_DIRECTORY: ${BINLEX_SERVER_PROCESSOR_DIRECTORY:-}
-    ports:
-      - "5000:5000"
-    volumes:
-      - ./data/binlex-server/processors:/root/.local/share/binlex/processors
-      - ./data/binlex-server/config:/root/.config
-      - ./data/binlex-server/local:/root/.local
-
   binlex-mcp:
     container_name: binlex-mcp
     restart: unless-stopped
@@ -29,23 +13,3 @@ services:
       - ./data/binlex-mcp/config:/root/.config/binlex
       - ./data/binlex-mcp/local:/root/.local
       - ./data/binlex-mcp/samples:/samples
-
-  binlex-web:
-    container_name: binlex-web
-    restart: unless-stopped
-    environment:
-      BINLEX_WEB_CONFIG: ${BINLEX_WEB_CONFIG:-/root/.config/binlex/binlex-web.toml}
-      BINLEX_WEB_LISTEN: ${BINLEX_WEB_LISTEN:-0.0.0.0}
-      BINLEX_WEB_PORT: ${BINLEX_WEB_PORT:-8000}
-      BINLEX_WEB_URL: ${BINLEX_WEB_URL:-http://127.0.0.1:8000}
-      BINLEX_WEB_SERVER_URL: ${BINLEX_WEB_SERVER_URL:-http://binlex-server:5000}
-      BINLEX_WEB_CORPUS: ${BINLEX_WEB_CORPUS:-default}
-      BINLEX_WEB_LOCK_CORPORA: ${BINLEX_WEB_LOCK_CORPORA:-}
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./data/binlex-web/config:/root/.config/binlex
-      - ./data/binlex-web/local:/root/.local
-    depends_on:
-      binlex-server:
-        condition: service_started

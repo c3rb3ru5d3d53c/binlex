@@ -25,13 +25,6 @@ fn file_direct_accessors_ignore_serialization_flags() {
     assert!(file.sha256().is_some());
     assert!(file.tlsh().is_some());
     assert!(file.entropy().is_some());
-
-    let value: serde_json::Value =
-        serde_json::from_str(&file.json().expect("file json should serialize"))
-            .expect("file json should parse");
-    assert!(value.get("sha256").is_none());
-    assert!(value.get("tlsh").is_none());
-    assert!(value.get("entropy").is_none());
 }
 
 #[test]
@@ -81,17 +74,6 @@ fn chromosome_direct_accessors_ignore_serialization_flags() {
         png.dhash().and_then(|hash| hash.hexdigest()),
         svg.dhash().and_then(|hash| hash.hexdigest())
     );
-
-    let value: serde_json::Value =
-        serde_json::from_str(&chromosome.json().expect("chromosome json should serialize"))
-            .expect("chromosome json should parse");
-    assert!(value.get("mask").is_none());
-    assert!(value.get("masked").is_none());
-    assert!(value.get("vector").is_none());
-    assert!(value.get("sha256").is_none());
-    assert!(value.get("tlsh").is_none());
-    assert!(value.get("minhash").is_none());
-    assert!(value.get("entropy").is_none());
 }
 
 #[test]
@@ -130,7 +112,7 @@ fn chromosome_bytes_zero_masked_bits_without_compaction() {
 }
 
 #[test]
-fn chromosome_json_includes_mask_and_masked_when_enabled() {
+fn chromosome_direct_accessors_include_mask_and_masked() {
     let mut config = Configuration::default();
     config.chromosomes.mask.enabled = true;
     config.chromosomes.masked.enabled = true;
@@ -143,18 +125,8 @@ fn chromosome_json_includes_mask_and_masked_when_enabled() {
     let chromosome = Chromosome::new(vec![0xAF, 0x12], vec![0x03, 0xF0], config)
         .expect("chromosome should build");
 
-    let value: serde_json::Value =
-        serde_json::from_str(&chromosome.json().expect("chromosome json should serialize"))
-            .expect("chromosome json should parse");
-
-    assert_eq!(
-        value.get("mask").and_then(|value| value.as_str()),
-        Some("03f0")
-    );
-    assert_eq!(
-        value.get("masked").and_then(|value| value.as_str()),
-        Some("ac02")
-    );
+    assert_eq!(chromosome.mask(), vec![0x03, 0xF0]);
+    assert_eq!(chromosome.masked(), vec![0xAC, 0x02]);
 }
 
 #[test]
@@ -265,15 +237,10 @@ fn function_markov_direct_accessor_ignores_serialization_flag() {
         (total - 1.0).abs() < 1e-9,
         "markov scores should be normalized"
     );
-
-    let value: serde_json::Value =
-        serde_json::from_str(&function.json().expect("function json should serialize"))
-            .expect("function json should parse");
-    assert!(value.get("markov").is_none());
 }
 
 #[test]
-fn function_markov_serializes_when_enabled() {
+fn function_markov_accessor_returns_scores_when_enabled() {
     let mut config = Configuration::default();
     config.functions.markov.enabled = true;
     let mut graph = Graph::new(Architecture::AMD64, config.clone());
@@ -303,20 +270,13 @@ fn function_markov_serializes_when_enabled() {
     assert!(graph.set_function(0x1000));
 
     let function = Function::new(0x1000, &graph).expect("function should exist");
-    let value: serde_json::Value =
-        serde_json::from_str(&function.json().expect("function json should serialize"))
-            .expect("function json should parse");
-
-    let markov = value
-        .get("markov")
-        .and_then(|value| value.as_object())
-        .expect("markov scores should be serialized");
+    let markov = function.markov();
     assert!(markov.len() >= 2);
-    assert!(markov.contains_key("4096"));
+    assert!(markov.contains_key(&0x1000));
 }
 
 #[test]
-fn function_number_of_blocks_accessor_matches_default_json() {
+fn function_number_of_blocks_accessor_matches_blocks() {
     let config = Configuration::default();
     let mut graph = Graph::new(Architecture::AMD64, config.clone());
 
@@ -347,20 +307,11 @@ fn function_number_of_blocks_accessor_matches_default_json() {
     let function = Function::new(0x1000, &graph).expect("function should exist");
     let number_of_blocks = function.number_of_blocks();
     assert!(number_of_blocks >= 1);
-
-    let value: serde_json::Value =
-        serde_json::from_str(&function.json().expect("function json should serialize"))
-            .expect("function json should parse");
-    assert_eq!(
-        value
-            .get("number_of_blocks")
-            .and_then(|value| value.as_u64()),
-        Some(number_of_blocks as u64)
-    );
+    assert_eq!(number_of_blocks, function.blocks().len());
 }
 
 #[test]
-fn noncontiguous_function_json_reports_owned_block_size() {
+fn noncontiguous_function_reports_owned_block_size() {
     let config = Configuration::default();
     let mut graph = Graph::new(Architecture::I386, config.clone());
 
@@ -385,20 +336,10 @@ fn noncontiguous_function_json_reports_owned_block_size() {
     let function = Function::new(0x1000, &graph).expect("function should exist");
     assert!(!function.contiguous());
     assert_eq!(function.size(), 6);
-
-    let value: serde_json::Value =
-        serde_json::from_str(&function.json().expect("function json should serialize"))
-            .expect("function json should parse");
-    assert_eq!(value.get("size").and_then(|value| value.as_u64()), Some(6));
-    assert_eq!(
-        value.get("contiguous").and_then(|value| value.as_bool()),
-        Some(false)
-    );
-    assert!(value.get("bytes").is_none());
 }
 
 #[test]
-fn function_call_relationship_accessors_and_json_are_consistent() {
+fn function_call_relationship_accessors_are_consistent() {
     let config = Configuration::default();
     let mut graph = Graph::new(Architecture::AMD64, config.clone());
 
@@ -447,9 +388,9 @@ fn function_call_relationship_accessors_and_json_are_consistent() {
     let caller_a_instruction =
         Instruction::new(0x1000, &graph).expect("caller A instruction should exist");
 
-    assert_eq!(caller_a.callee_references().get(&0x1000), Some(&0x3000));
     assert_eq!(caller_a.callees().len(), 1);
-    assert_eq!(caller_a.callees()[0].address(), 0x3000);
+    assert_eq!(caller_a.callees()[0].address, 0x1000);
+    assert_eq!(caller_a.callees()[0].function.address(), 0x3000);
     assert_eq!(caller_a_instruction.callees().len(), 1);
     assert_eq!(caller_a_instruction.callees()[0].address(), 0x3000);
     assert_eq!(
@@ -466,77 +407,22 @@ fn function_call_relationship_accessors_and_json_are_consistent() {
     let caller_addresses: std::collections::BTreeSet<u64> = callee
         .callers()
         .into_iter()
-        .map(|function| function.address())
+        .map(|caller| caller.function.address())
         .collect();
     assert_eq!(
         caller_addresses,
         [0x1000_u64, 0x2000_u64].into_iter().collect()
     );
-    assert_eq!(callee.caller_references().get(&0x1000), Some(&0x1000));
-    assert_eq!(callee.caller_references().get(&0x2000), Some(&0x2000));
-
-    let value: serde_json::Value = serde_json::from_str(
-        &caller_a_instruction
-            .json()
-            .expect("instruction json should serialize"),
-    )
-    .expect("instruction json should parse");
-    assert!(value.get("functions").is_none());
-    let callees = value
-        .get("callee_references")
-        .and_then(|value| value.as_array())
-        .expect("instruction callee references should be serialized");
-    assert_eq!(callees.len(), 1);
-    assert_eq!(
-        callees[0].get("location").and_then(|value| value.as_u64()),
-        Some(0x1000)
-    );
-    assert_eq!(
-        callees[0].get("address").and_then(|value| value.as_u64()),
-        Some(0x3000)
-    );
-
-    let value: serde_json::Value =
-        serde_json::from_str(&caller_a_block.json().expect("block json should serialize"))
-            .expect("block json should parse");
-    assert!(value.get("functions").is_none());
-    let callees = value
-        .get("callee_references")
-        .and_then(|value| value.as_array())
-        .expect("block callee references should be serialized");
-    assert_eq!(callees.len(), 1);
-    assert_eq!(
-        callees[0].get("location").and_then(|value| value.as_u64()),
-        Some(0x1000)
-    );
-    assert_eq!(
-        callees[0].get("address").and_then(|value| value.as_u64()),
-        Some(0x3000)
-    );
-
-    let value: serde_json::Value =
-        serde_json::from_str(&callee.json().expect("function json should serialize"))
-            .expect("function json should parse");
-    assert_eq!(
-        value
-            .get("callers")
-            .and_then(|value| value.as_object())
-            .and_then(|value| value.get("4096"))
-            .and_then(|value| value.as_u64()),
-        Some(0x1000)
-    );
-    assert_eq!(
-        value
-            .get("callers")
-            .and_then(|value| value.as_object())
-            .and_then(|value| value.get("8192"))
-            .and_then(|value| value.as_u64()),
-        Some(0x2000)
-    );
+    let caller_sites: std::collections::BTreeSet<u64> = callee
+        .callers()
+        .into_iter()
+        .map(|caller| caller.address)
+        .collect();
+    assert_eq!(caller_sites, [0x1000_u64, 0x2000_u64].into_iter().collect());
 }
 
 #[test]
-fn block_relationship_accessors_and_json_are_consistent() {
+fn block_relationship_accessors_are_consistent() {
     let config = Configuration::default();
     let mut graph = Graph::new(Architecture::AMD64, config.clone());
 
@@ -615,26 +501,6 @@ fn block_relationship_accessors_and_json_are_consistent() {
         vec![Reference::new(0x1000, 0x1005)]
     );
 
-    let value: serde_json::Value = serde_json::from_str(
-        &branch_instruction
-            .json()
-            .expect("instruction json should serialize"),
-    )
-    .expect("instruction json should parse");
-    assert!(value.get("blocks").is_none());
-    let successors = value
-        .get("successor_block_references")
-        .and_then(|value| value.as_array())
-        .expect("instruction successor block references should be serialized");
-    assert_eq!(successors.len(), 2);
-
-    let value: serde_json::Value =
-        serde_json::from_str(&entry.json().expect("block json should serialize"))
-            .expect("block json should parse");
-    assert!(value.get("blocks").is_none());
-    let successors = value
-        .get("successor_references")
-        .and_then(|value| value.as_array())
-        .expect("successor references should be serialized");
-    assert_eq!(successors.len(), 2);
+    assert_eq!(branch_instruction.successor_block_references().len(), 2);
+    assert_eq!(entry.successor_references().len(), 2);
 }

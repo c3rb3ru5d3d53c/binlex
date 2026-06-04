@@ -9,9 +9,10 @@ from binlex_bindings.binlex.formats import Image as _ImageBinding
 
 from binlex.config import Configuration
 from binlex.formats import Image
-from binlex.ir.hir import HirFunction
-from binlex.ir.lir import LirFunction
-from binlex.ir.mir import MirFunction
+from binlex.irs.hir import HirFunction
+from binlex.irs.ast import AstFunction
+from binlex.irs.lir import LirFunction
+from binlex.irs.mir import MirFunction
 
 
 class DecompilerBackend(str, Enum):
@@ -75,25 +76,30 @@ class Decompiler:
     def _cache_hir(self, address, hir):
         hir = HirFunction._from_inner(hir)
         self._graph._decompilation_cache["hir"][address] = hir
-        self._graph._decompilation_cache["ast"].pop(address, None)
         return hir
 
-    def _cache_artifacts(self, address, lir, mir, hir):
+    def _cache_ast(self, address, ast):
+        ast = AstFunction._from_inner(ast)
+        self._graph._decompilation_cache["ast"][address] = ast
+        return ast
+
+    def _cache_artifacts(self, address, lir, mir, hir, ast):
         self._cache_lir(address, lir)
         self._cache_mir(address, mir)
         self._cache_hir(address, hir)
+        self._cache_ast(address, ast)
 
     def decompile_function(self, address):
         result = self._inner.decompile_function_artifacts(address)
         if result is None:
             return None
-        lir, mir, hir = result
-        self._cache_artifacts(address, lir, mir, hir)
+        lir, mir, hir, ast = result
+        self._cache_artifacts(address, lir, mir, hir, ast)
         return self._graph.function(address)
 
     def decompile(self):
-        for address, lir, mir, hir in self._inner.decompile_artifacts():
-            self._cache_artifacts(address, lir, mir, hir)
+        for address, lir, mir, hir, ast in self._inner.decompile_artifacts():
+            self._cache_artifacts(address, lir, mir, hir, ast)
         return self
 
 __all__ = ["Decompiler", "DecompilerBackend"]

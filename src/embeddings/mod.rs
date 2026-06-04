@@ -1,6 +1,5 @@
 use crate::controlflow::{Block, Function, Instruction};
 use crate::{Architecture, Configuration};
-use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
 pub mod llvm;
@@ -89,25 +88,6 @@ impl Embedding {
             EmbeddingBackend::Llvm => llvm::function::embed(function, &self.configuration).ok(),
             EmbeddingBackend::Vex => None,
             EmbeddingBackend::Default => unreachable!(),
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct EmbeddingsJson {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub llvm: Option<LlvmEmbeddingsJson>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct LlvmEmbeddingsJson {
-    pub vector: Vec<f32>,
-}
-
-impl EmbeddingsJson {
-    pub fn llvm(vector: Vec<f32>) -> Self {
-        Self {
-            llvm: Some(LlvmEmbeddingsJson { vector }),
         }
     }
 }

@@ -20,48 +20,14 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::metadata::Attribute;
-use serde::{Deserialize, Serialize};
-
-/// Represents a JSON-serializable structure containing metadata about a tag.
-#[derive(Serialize, Deserialize, Clone)]
-pub struct TagJson {
-    /// The type of this entity, always `"tag"`.
-    #[serde(rename = "type")]
-    pub type_: String,
-    /// The tag value
-    pub value: String,
-}
-
 #[derive(Clone)]
 pub struct Tag {
-    tag: String,
+    pub tag: String,
 }
 
 impl Tag {
     #[allow(dead_code)]
     pub fn new(tag: String) -> Self {
         Self { tag }
-    }
-
-    /// Processes the function signature into its JSON-serializable representation.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `FunctionSymbolJson` struct containing metadata about the function symbol.
-    pub fn process(&self) -> TagJson {
-        TagJson {
-            type_: "tag".to_string(),
-            value: self.tag.clone(),
-        }
-    }
-
-    /// Processes the tag into an `Attribute`.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Attribute` struct containing the tag.
-    pub fn attribute(&self) -> Attribute {
-        Attribute::Tag(self.process())
     }
 }

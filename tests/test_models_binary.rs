@@ -23,7 +23,7 @@
 #[cfg(test)]
 mod tests {
     use binlex::hex;
-    use binlex::hexdump;
+    use binlex::utilities::hexdump;
 
     #[test]
     fn test_models_binary_to_hex() {
@@ -35,9 +35,9 @@ mod tests {
     #[test]
     fn test_models_binary_hexdump() {
         let data = vec![0xDE, 0xAD, 0xBE, 0xEF];
-        let result = hexdump::hexdump(&data, 0);
+        let result = hexdump::hexdump(0, &data);
         assert_eq!(
-            result, "00000000: de ad be ef                                     |....|\n",
+            result, "00000000: de ad be ef                                     |....|",
             "hexdump string does not match"
         );
     }

@@ -1,0 +1,9 @@
+pub type AstType = crate::irs::hir::HirType;
+pub type AstStructureMember = crate::irs::mir::MirStructureMember;
+pub type AstUnionMember = crate::irs::mir::MirUnionMember;
+pub type AstAddressSpace = crate::irs::hir::HirAddressSpace;
+pub type AstUnaryOperation = crate::irs::hir::HirUnaryOperation;
+pub type AstBinaryOperation = crate::irs::hir::HirBinaryOperation;
+pub type AstCompareOperation = crate::irs::hir::HirCompareOperation;
+pub type AstFloatCompareOperation = crate::irs::hir::HirFloatCompareOperation;
+pub type AstCastOperation = crate::irs::hir::HirCastOperation;

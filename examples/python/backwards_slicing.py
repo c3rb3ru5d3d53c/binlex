@@ -4,7 +4,7 @@ from binlex import Architecture
 from binlex.config import Configuration
 from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
-from binlex.ir.lir import LirCpu, LirModule
+from binlex.irs.lir import LirBlock, LirCpuAmd64, LirCpuI386, LirFunction, LirModule
 from binlex.symbolic import CpuState, Executor
 
 
@@ -15,6 +15,16 @@ input_address = 0x1000
 serial_pointer_address = 0x601040
 serial_data_address = 0x900000
 stack_top = 0x7FFFFFFF
+
+
+def module_from_semantic(semantic):
+    module = LirModule()
+    function = LirFunction()
+    block = LirBlock()
+    block.append_instruction(semantic)
+    function.append_block(block)
+    module.append_function(function)
+    return module
 
 shellcode = bytes.fromhex(
     "55"
@@ -61,7 +71,7 @@ def main():
     disassembler.disassemble_function(0, graph)
     function = graph.functions()[0]
 
-    cpu = LirCpu.amd64()
+    cpu = LirCpuAmd64()
     executor = Executor()
     state = CpuState(cpu)
 
@@ -92,7 +102,7 @@ def main():
 
             state.set_register("rip", 64, pc)
 
-            states = executor.step(LirModule(semantics=[semantic]), state)
+            states = executor.step(module_from_semantic(semantic), state)
 
             if len(states) == 1:
                 state = states[0]

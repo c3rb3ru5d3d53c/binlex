@@ -27,24 +27,20 @@ use crate::controlflow::EntityKind;
 use crate::controlflow::Function;
 use crate::controlflow::Graph;
 use crate::controlflow::Reference;
-use crate::embeddings::{Embedding, EmbeddingBackend, EmbeddingsJson};
+use crate::embeddings::{Embedding, EmbeddingBackend};
 use crate::genetics::Chromosome;
-use crate::genetics::ChromosomeJson;
-use crate::hex;
 use crate::io::Stderr;
-use crate::ir::lir::arm64::InstructionDetailArm64;
-use crate::ir::lir::cil::InstructionDetailCil;
-use crate::ir::lir::x86::InstructionDetailX86;
-use crate::ir::lir::{LirCpu, LirInstruction, LirJson};
-use crate::ir::lir::{
+use crate::irs::lir::LirInstruction;
+use crate::irs::lir::arm64::InstructionDetailArm64;
+use crate::irs::lir::cil::InstructionDetailCil;
+use crate::irs::lir::x86::InstructionDetailX86;
+use crate::irs::lir::{
     LirDiagnostic, LirDiagnosticKind, LirEffect, LirEncoding, LirStatus, LirTerminator,
 };
-use crate::ir::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
+use crate::irs::llvm::LlvmModule;
 #[cfg(not(target_os = "windows"))]
-use crate::ir::vex::{Lifter as VexLifter, VexJson};
-use crate::metadata::Attributes;
+use crate::irs::vex::VexModule;
 use serde::{Deserialize, Serialize};
-use serde_json;
 use serde_json::Value;
 use std::ops::{Deref, DerefMut};
 use std::sync::OnceLock;
@@ -129,16 +125,17 @@ impl InstructionDetail {
     pub fn build_lir(self) -> LirInstruction {
         match self.kind {
             InstructionDetailKind::X86(view) => {
-                let mut semantics = crate::ir::lir::x86::build(view.clone()).unwrap_or_else(|| {
-                    unsupported_fallthrough(
-                        view.machine.to_string(),
-                        view.address,
-                        view.mnemonic.clone(),
-                        view.operand_text.clone(),
-                        view.bytes.clone(),
-                        "x86 mnemonic not implemented",
-                    )
-                });
+                let mut semantics =
+                    crate::irs::lir::x86::build(view.clone()).unwrap_or_else(|| {
+                        unsupported_fallthrough(
+                            view.machine.to_string(),
+                            view.address,
+                            view.mnemonic.clone(),
+                            view.operand_text.clone(),
+                            view.bytes.clone(),
+                            "x86 mnemonic not implemented",
+                        )
+                    });
                 if semantics.encoding.is_none() {
                     semantics.encoding = Some(LirEncoding {
                         architecture: view.machine.to_string(),
@@ -157,7 +154,7 @@ impl InstructionDetail {
             }
             InstructionDetailKind::Arm64(view) => {
                 let mut semantics =
-                    crate::ir::lir::arm64::build(view.clone()).unwrap_or_else(|| {
+                    crate::irs::lir::arm64::build(view.clone()).unwrap_or_else(|| {
                         unsupported_fallthrough(
                             view.machine.to_string(),
                             view.address,
@@ -184,7 +181,7 @@ impl InstructionDetail {
                 semantics
             }
             InstructionDetailKind::Cil(view) => {
-                let mut semantics = crate::ir::lir::cil::build(view.clone());
+                let mut semantics = crate::irs::lir::cil::build(view.clone());
                 if semantics.encoding.is_none() {
                     semantics.encoding = Some(LirEncoding {
                         architecture: "cil".to_string(),
@@ -281,82 +278,6 @@ impl Clone for InstructionRecord {
     }
 }
 
-/// Represents a JSON-serializable view of an `Instruction`.
-#[derive(Serialize, Deserialize, Clone)]
-pub struct InstructionJson {
-    /// The kind of this entity, always `"instruction"`.
-    pub kind: EntityKind,
-    // The architecture of the instruction.
-    pub architecture: String,
-    /// The address of the instruction in memory.
-    pub address: u64,
-    /// Indicates whether this instruction is part of a function prologue.
-    pub is_prologue: bool,
-    /// Indicates whether this instruction is the start of a basic block.
-    pub is_block_start: bool,
-    /// Indicates whether this instruction is the start of a function.
-    pub is_function_start: bool,
-    /// Indicates whether this instruction is a call instruction.
-    pub is_call: bool,
-    /// Indicates whether this instruction is a return instruction.
-    pub is_return: bool,
-    /// Indicates whether this instruction is a jump instruction.
-    pub is_jump: bool,
-    /// Indicates whether this instruction is a trap instruction.
-    #[serde(default)]
-    pub is_trap: bool,
-    /// Indicates whether this instruction uses an indirect control-flow target.
-    #[serde(default)]
-    pub has_indirect_target: bool,
-    /// Indicates whether this instruction is conditional.
-    #[serde(default)]
-    pub is_conditional: bool,
-    /// The number of edges (connections) for this instruction.
-    pub edges: usize,
-    /// Stable decoded mnemonic for scripting and inspection.
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub mnemonic: String,
-    /// Canonical decoded disassembly text.
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub disassembly: String,
-    /// Normalized decoded operands.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub operands: Vec<Operand>,
-    /// The raw bytes of the instruction in hexadecimal format.
-    pub bytes: String,
-    /// The size of the instruction in bytes.
-    pub size: usize,
-    /// The chromosome
-    pub chromosome: ChromosomeJson,
-    /// The direct outgoing call references from this instruction.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub callee_references: Vec<Reference>,
-    /// The outgoing successor block references from this instruction.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub successor_block_references: Vec<Reference>,
-    /// A set of explicit branch target addresses for this instruction.
-    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
-    pub branches: BTreeSet<u64>,
-    /// The sequential fallthrough address of this instruction, if any.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub fallthrough: Option<u64>,
-    /// Optional processor outputs attached by post-processing.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub processors: Option<BTreeMap<String, Value>>,
-    /// Optional embeddings attached directly to this instruction.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub embeddings: Option<EmbeddingsJson>,
-    /// Optional canonical semantics for later lifting.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub semantics: Option<LirJson>,
-    /// Attributes
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub attributes: Option<Value>,
-    /// Optional lifted representations attached to this instruction.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lifters: Option<LiftersJson>,
-}
-
 impl InstructionRecord {
     /// Creates a new instruction record with the specified address.
     ///
@@ -433,7 +354,7 @@ impl InstructionRecord {
             return Ok(None);
         };
         match self.prepared_semantics_cache.get_or_init(|| {
-            crate::ir::llvm::prepare::prepare_instruction_semantics(&semantics)
+            crate::irs::llvm::prepare::prepare_instruction_semantics(&semantics)
                 .map_err(|error| error.to_string())
         }) {
             Ok(prepared) => Ok(Some(prepared)),
@@ -550,44 +471,6 @@ impl InstructionRecord {
         self.bytes.len()
     }
 
-    /// Converts the instruction record into its JSON-serializable representation.
-    pub fn process_base(&self) -> InstructionJson {
-        InstructionJson {
-            kind: EntityKind::Instruction,
-            architecture: self.architecture.to_string(),
-            address: self.address,
-            is_block_start: self.is_block_start,
-            bytes: hex::encode(&self.bytes),
-            size: self.size(),
-            chromosome: self.chromosome_json(),
-            is_return: self.is_return,
-            is_trap: self.is_trap,
-            is_call: self.is_call,
-            is_jump: self.is_jump,
-            has_indirect_target: self.has_indirect_target,
-            is_conditional: self.is_conditional,
-            is_function_start: self.is_function_start,
-            is_prologue: self.is_prologue,
-            edges: self.edges,
-            mnemonic: self.mnemonic.clone(),
-            disassembly: self.disassembly.clone(),
-            operands: self.operands.clone(),
-            callee_references: self.callee_references(),
-            successor_block_references: self.successor_block_references(),
-            branches: self.branches(),
-            fallthrough: self.fallthrough(),
-            processors: None,
-            embeddings: None,
-            semantics: self
-                .semantics
-                .clone()
-                .or_else(|| self.build_semantics())
-                .map(|semantics| semantics.process()),
-            attributes: None,
-            lifters: None,
-        }
-    }
-
     pub fn pattern(&self) -> String {
         self.pattern.clone()
     }
@@ -605,22 +488,6 @@ impl InstructionRecord {
         };
         Chromosome::new(self.bytes.clone(), mask, self.config.clone())
             .expect("failed to build instruction chromosome")
-    }
-
-    /// Retrieves the chromosome representing the instruction.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `ChromosomeJson` representing the instruction.
-    pub fn chromosome_json(&self) -> ChromosomeJson {
-        let mask = if self.chromosome_mask.len() == self.bytes.len() {
-            self.chromosome_mask.clone()
-        } else {
-            vec![0; self.bytes.len()]
-        };
-        Chromosome::new(self.bytes.clone(), mask, self.config.clone())
-            .expect("failed to build instruction chromosome")
-            .process()
     }
 
     /// Retrieves the set of addresses this instruction may jump or branch to.
@@ -720,34 +587,6 @@ impl<'instruction> Instruction<'instruction> {
         result
     }
 
-    pub fn process(&self) -> InstructionJson {
-        let mut json = self.process_base();
-        for processor in crate::processor::enabled_processors_for_target(
-            &self.config,
-            crate::processor::ProcessorTarget::Instruction,
-        ) {
-            if let Some(output) = processor.process_instruction(self) {
-                crate::processor::apply_output(
-                    json.processors.get_or_insert_with(Default::default),
-                    processor.name(),
-                    &output,
-                );
-            }
-        }
-        if self.config.instructions.embeddings.llvm.enabled {
-            if let Some(vector) = self.embedding() {
-                json.embeddings = Some(EmbeddingsJson::llvm(vector));
-            }
-        }
-        json.lifters = self.lifters_json();
-
-        json
-    }
-
-    pub fn processors(&self) -> BTreeMap<String, Value> {
-        self.process().processors.unwrap_or_default()
-    }
-
     /// Return an embedding vector for this instruction using the default backend and dimensions.
     pub fn embedding(&self) -> Option<Vec<f32>> {
         self.embedding_with_options(None, None)
@@ -763,95 +602,25 @@ impl<'instruction> Instruction<'instruction> {
             .embed_instruction(self)
     }
 
-    pub fn llvm(&self, triple: Option<String>) -> Result<LlvmLifter, Error> {
-        let mut lifter = if let Some(triple) = triple {
-            let cpu = LirCpu::from_architecture(self.architecture)
-                .map_err(|error| Error::other(error.to_string()))?;
-            LlvmLifter::new(cpu, self.config.clone(), Some(triple))
-                .map_err(|error| Error::other(error.to_string()))?
-        } else {
-            LlvmLifter::from_architecture(self.architecture, self.config.clone())
-        };
-        lifter.lift_instruction(self)?;
+    pub fn llvm(&self) -> Result<LlvmModule, Error> {
+        if !self.config.instructions.lifters.llvm.enabled {
+            return Err(Error::other("instruction llvm module is disabled"));
+        }
+        let mut lifter =
+            LlvmModule::from_architecture_with_config(self.architecture, self.config.clone());
+        lifter.populate_instruction(self)?;
         Ok(lifter)
     }
 
     #[cfg(not(target_os = "windows"))]
-    pub fn vex(&self) -> Result<VexLifter, Error> {
-        let mut lifter = VexLifter::new(self.config.clone());
-        lifter.lift_instruction(self)?;
+    pub fn vex(&self) -> Result<VexModule, Error> {
+        let mut lifter = VexModule::with_config(None, self.config.clone());
+        lifter.populate_instruction(self)?;
         Ok(lifter)
-    }
-
-    fn lifters_json(&self) -> Option<LiftersJson> {
-        let llvm = if self.config.instructions.lifters.llvm.enabled {
-            let mut lifter = LlvmLifter::from_architecture(self.architecture, self.config.clone());
-            lifter.lift_instruction(self).ok()?;
-            Some(LlvmJson { text: lifter.ir() })
-        } else {
-            None
-        };
-
-        #[cfg(not(target_os = "windows"))]
-        let vex = if self.config.lifters.vex.enabled && self.config.instructions.lifters.vex.enabled
-        {
-            let mut lifter = VexLifter::new(self.config.clone());
-            lifter.lift_instruction(self).ok()?;
-            Some(VexJson { text: lifter.ir() })
-        } else {
-            None
-        };
-
-        #[cfg(not(target_os = "windows"))]
-        if llvm.is_none() && vex.is_none() {
-            return None;
-        }
-
-        #[cfg(target_os = "windows")]
-        if llvm.is_none() {
-            return None;
-        }
-
-        Some(LiftersJson {
-            llvm,
-            #[cfg(not(target_os = "windows"))]
-            vex,
-        })
-    }
-
-    pub fn processor(&self, name: &str) -> Value {
-        self.processors()
-            .get(name)
-            .cloned()
-            .unwrap_or_else(|| Value::Object(Default::default()))
-    }
-
-    pub fn process_with_attributes(&self, attributes: Attributes) -> InstructionJson {
-        let mut result = self.process();
-        result.attributes = Some(attributes.process());
-        result
-    }
-
-    pub fn json_with_attributes(&self, attributes: Attributes) -> Result<String, Error> {
-        let raw = self.process_with_attributes(attributes);
-        let result = serde_json::to_string(&raw)?;
-        Ok(result)
-    }
-
-    pub fn json(&self) -> Result<String, Error> {
-        let raw = self.process();
-        let result = serde_json::to_string(&raw)?;
-        Ok(result)
     }
 
     pub fn kind(&self) -> EntityKind {
         EntityKind::Instruction
-    }
-
-    pub fn print(&self) {
-        if let Ok(json) = self.json() {
-            println!("{}", json);
-        }
     }
 }
 

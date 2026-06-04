@@ -4,7 +4,7 @@ from binlex import Architecture, Configuration
 from binlex.assemblers import Assembler
 from binlex.controlflow import Graph
 from binlex.disassemblers import Disassembler
-from binlex.ir.lir import LirCpu, LirModule, LirStatus
+from binlex.irs.lir import LirCpuAmd64, LirCpuI386, LirModule, LirStatus
 from binlex.symbolic import CpuState, Executor
 
 
@@ -85,7 +85,7 @@ for instruction in instructions:
 executor = Executor()
 executor.set_breakpoint(payload_address)
 
-state = CpuState(LirCpu.amd64())
+state = CpuState(LirCpuAmd64())
 state.map_memory(0, len(image_bytes))
 state.write_memory(0, image_bytes)
 state.set_register("rip", 64, 0)

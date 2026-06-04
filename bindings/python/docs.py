@@ -21,7 +21,6 @@ DEFAULT_ARGS = [
     "--output-directory",
     "docs",
     "binlex",
-    "!binlex.disassemblers.ida",
 ]
 
 

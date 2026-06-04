@@ -33,14 +33,15 @@ That means:
 Use the explicit lifter API:
 
 ```python
-from binlex.lifters import Lifter, LifterBackend
+from binlex.ir.llvm import LlvmModule
+from binlex.ir.vex import Lifter as VexLifter
 
-llvm = Lifter(function.architecture(), config, backend=LifterBackend.LLVM)
+llvm = LlvmModule(function.lir().abi().cpu(), config)
 llvm.lift_function(function)
 llvm.print()
 print(llvm.text())
 
-vex = Lifter(function.architecture(), config, backend=LifterBackend.VEX)
+vex = VexLifter(config)
 vex.lift_function(function)
 vex.print()
 print(vex.text())
@@ -50,16 +51,17 @@ You can also build the lifter explicitly:
 
 ```python
 from binlex import Configuration
-from binlex.lifters import Lifter, LifterBackend
+from binlex.ir.llvm import LlvmModule
+from binlex.ir.vex import Lifter as VexLifter
 
 config = Configuration()
 
-llvm = Lifter(function.architecture(), config, backend=LifterBackend.LLVM)
+llvm = LlvmModule(function.lir().abi().cpu(), config)
 llvm.lift_function(function)
 llvm.print()
 print(llvm.text())
 
-vex = Lifter(function.architecture(), config, backend=LifterBackend.VEX)
+vex = VexLifter(config)
 vex.lift_function(function)
 vex.print()
 print(vex.text())
@@ -68,17 +70,20 @@ print(vex.text())
 ## Common Rust Usage
 
 ```rust
-use binlex::{Architecture, Configuration};
-use binlex::lifters::{Lifter, LifterBackend};
+use binlex::Configuration;
+use binlex::ir::llvm::Lifter as LlvmLifter;
+use binlex::ir::vex::Lifter as VexLifter;
+use binlex::ir::lir::{LirCpu, LirCpuKind};
 
 let config = Configuration::default();
+let cpu = LirCpu::from_kind(LirCpuKind::Amd64)?;
 
-let mut llvm = Lifter::new(Architecture::AMD64, config.clone(), LifterBackend::Llvm)?;
+let mut llvm = LlvmLifter::new(cpu, config.clone(), None)?;
 llvm.lift_function(&function)?;
 llvm.print();
 println!("{}", llvm.text()?);
 
-let mut vex = Lifter::new(Architecture::AMD64, config, LifterBackend::Vex)?;
+let mut vex = VexLifter::new(config);
 vex.lift_function(&function)?;
 vex.print();
 println!("{}", vex.text()?);
@@ -93,37 +98,31 @@ It supports:
 - `text()`
 - `print()`
 - `bitcode()`
-- `normalized()`
 - `verify()`
-- `optimizers()`
+- explicit optimizer methods
 
 ### Python
 
 ```python
-from binlex.lifters import Lifter, LifterBackend
+from binlex.ir.llvm import LlvmModule
 
-llvm = Lifter(function.architecture(), config, backend=LifterBackend.LLVM)
+llvm = LlvmModule(function.lir().abi().cpu(), config)
 llvm.lift_function(function)
 llvm.print()
 print(llvm.text())
 bitcode = llvm.bitcode()
-normalized_text = llvm.normalized().text()
 ```
 
 ### Rust
 
 ```rust
-let mut llvm = binlex::lifters::Lifter::new(
-    Architecture::AMD64,
-    config.clone(),
-    binlex::lifters::LifterBackend::Llvm,
-)?;
+let cpu = binlex::ir::lir::LirCpu::from_kind(binlex::ir::lir::LirCpuKind::Amd64)?;
+let mut llvm = binlex::ir::llvm::Lifter::new(cpu, config.clone(), None)?;
 llvm.lift_function(&function)?;
 
 llvm.print();
 let text = llvm.text()?;
 let bitcode = llvm.bitcode()?;
-let normalized = llvm.normalized()?.text()?;
 ```
 
 ### LLVM Optimizers
@@ -133,20 +132,16 @@ LLVM exposes an optimizer namespace so users can choose their own pass chain.
 Python:
 
 ```python
-from binlex.lifters import Lifter, LifterBackend
+from binlex.ir.llvm import LlvmModule
 
-llvm = Lifter(function.architecture(), config, backend=LifterBackend.LLVM)
+llvm = LlvmModule(function.lir().abi().cpu(), config)
 llvm.lift_function(function)
 
-optimized = (
-    llvm
-    .optimizers()
-    .mem2reg()
-    .instcombine()
-    .cfg()
-)
-optimized.print()
-text = optimized.text()
+llvm.optimize_mem2reg()
+llvm.optimize_instcombine()
+llvm.optimize_cfg()
+llvm.print()
+text = llvm.text()
 ```
 
 The result remains an LLVM artifact, so you can still call:
@@ -154,29 +149,6 @@ The result remains an LLVM artifact, so you can still call:
 - `text()`
 - `print()`
 - `bitcode()`
-- `normalized()`
-
-### Normalized LLVM
-
-`normalized()` is intended for similarity-oriented canonicalization, not heavy optimization.
-
-It is useful when you want:
-
-- stable naming
-- reduced address noise
-- more comparable LLVM output across inputs
-
-Example:
-
-```python
-from binlex.lifters import Lifter, LifterBackend
-
-llvm = Lifter(function.architecture(), config, backend=LifterBackend.LLVM)
-llvm.lift_function(function)
-llvm.normalized().print()
-print(llvm.normalized().text())
-```
-
 ## VEX Lifter
 
 VEX is intentionally simpler.
@@ -191,9 +163,9 @@ That is the supported surface.
 ### Python
 
 ```python
-from binlex.lifters import Lifter, LifterBackend
+from binlex.ir.vex import Lifter
 
-vex = Lifter(function.architecture(), config, backend=LifterBackend.VEX)
+vex = Lifter(config)
 vex.lift_function(function)
 vex.print()
 print(vex.text())
@@ -202,7 +174,7 @@ print(vex.text())
 ### Rust
 
 ```rust
-let mut vex = binlex::lifters::vex::Lifter::new(config);
+let mut vex = binlex::ir::vex::Lifter::new(config);
 vex.lift_function(&function)?;
 vex.print();
 println!("{}", vex.text());
@@ -274,12 +246,6 @@ enabled = false
 [binlex.functions.lifters.vex]
 enabled = false
 ```
-
-When enabled, JSON includes:
-
-- `lifters.llvm.text`
-- `lifters.llvm.normalized.text` when configured
-- `lifters.vex.text`
 
 ## Configuration
 

@@ -1,40 +1,36 @@
 from __future__ import annotations
 
 from . import assemblers
-from .clients import Server, Web
+from .assemblers import Assembler, AssemblerBackend
 from binlex.config import Configuration
 from binlex.core import Architecture
 from .decompilers import Decompiler, DecompilerBackend
 from .disassemblers import Disassembler, DisassemblerBackend
-from . import clients
 from . import compression
 from . import decompilers
 from . import embeddings
 from . import genetics
 from . import hashing
 from . import hex, math
-from . import ir
-from . import indexing
-from . import databases
+from . import irs
 from . import metadata
 from . import rules
 from . import symbolic
-from . import util
+from . import utilities
 from binlex.core import Magic
-from . import controlflow, disassemblers, formats, storage
+from . import controlflow, disassemblers, formats
 
 __all__ = [
     "Architecture",
+    "Assembler",
+    "AssemblerBackend",
     "Configuration",
     "Decompiler",
     "DecompilerBackend",
     "Disassembler",
     "DisassemblerBackend",
     "Magic",
-    "Server",
-    "Web",
     "assemblers",
-    "clients",
     "compression",
     "controlflow",
     "decompilers",
@@ -44,13 +40,10 @@ __all__ = [
     "genetics",
     "hashing",
     "hex",
-    "ir",
-    "indexing",
-    "databases",
+    "irs",
     "math",
     "metadata",
     "rules",
     "symbolic",
-    "storage",
-    "util",
+    "utilities",
 ]

@@ -28,15 +28,14 @@ and higher-level subpackages that wrap the compiled Rust extension.
 
 from importlib import import_module
 
-from .clients import Server, Web
 from .config import Configuration
 from .core import Architecture, Magic
+from .assemblers import Assembler, AssemblerBackend
 from .decompilers import Decompiler, DecompilerBackend
 from .disassemblers import Disassembler, DisassemblerBackend
 
 _LAZY_SUBMODULES = {
     "assemblers",
-    "clients",
     "compression",
     "controlflow",
     "decompilers",
@@ -46,15 +45,12 @@ _LAZY_SUBMODULES = {
     "genetics",
     "hashing",
     "hex",
-    "ir",
-    "indexing",
-    "databases",
+    "irs",
     "math",
     "metadata",
     "rules",
     "symbolic",
-    "storage",
-    "util",
+    "utilities",
 }
 
 
@@ -68,16 +64,15 @@ def __getattr__(name):
 
 __all__ = [
     "Architecture",
+    "Assembler",
+    "AssemblerBackend",
     "Configuration",
     "Decompiler",
     "DecompilerBackend",
     "Disassembler",
     "DisassemblerBackend",
     "Magic",
-    "Server",
-    "Web",
     "assemblers",
-    "clients",
     "compression",
     "controlflow",
     "decompilers",
@@ -87,13 +82,10 @@ __all__ = [
     "genetics",
     "hashing",
     "hex",
-    "ir",
-    "indexing",
-    "databases",
+    "irs",
     "math",
     "metadata",
     "rules",
     "symbolic",
-    "storage",
-    "util",
+    "utilities",
 ]

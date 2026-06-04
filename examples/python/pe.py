@@ -47,4 +47,4 @@ graph = Graph(pe.architecture(), config)
 disassembler.disassemble(pe.dotnet_entrypoint_virtual_addresses(), graph)
 
 for function in graph.functions():
-    function.print()
+    print(function)

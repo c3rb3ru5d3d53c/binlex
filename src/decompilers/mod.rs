@@ -24,9 +24,10 @@ use crate::Configuration;
 use crate::config::RAYON_WORKER_STACK_SIZE;
 use crate::controlflow::{Function, Graph};
 use crate::formats::Image;
-use crate::ir::hir::HirFunction;
-use crate::ir::lir::LirFunction;
-use crate::ir::mir::{
+use crate::irs::ast::AstFunction;
+use crate::irs::hir::HirFunction;
+use crate::irs::lir::LirFunction;
+use crate::irs::mir::{
     MirBlockParameter, MirControlTarget, MirFunction, MirOperationKind, MirType, MirValue,
 };
 use rayon::ThreadPoolBuilder;
@@ -48,6 +49,7 @@ pub struct DecompiledFunction {
     pub lir: LirFunction,
     pub mir: MirFunction,
     pub hir: HirFunction,
+    pub ast: AstFunction,
 }
 
 pub struct Decompiler<'a> {
@@ -89,7 +91,7 @@ impl<'a> Decompiler<'a> {
     }
 
     pub fn function(&self, address: u64) -> Option<Function<'a>> {
-        self.graph.get_function(address)
+        self.graph.function(address)
     }
 
     fn optimize_lir(&self, lir: &mut LirFunction) {
@@ -114,11 +116,13 @@ impl<'a> Decompiler<'a> {
                 function.trim_mir_call_arguments(&mut mir, &self.graph.symbols())?;
                 let hir = HirFunction::from_mir(None, &mir)
                     .map_err(|error| Error::other(error.to_string()))?;
+                let ast = AstFunction::from_hir(&hir).with_image(self.image);
                 Ok(DecompiledFunction {
                     address: function.address(),
                     lir,
                     mir,
                     hir,
+                    ast,
                 })
             }
         }

@@ -177,34 +177,11 @@ impl Chromosome {
         PyBytes::new(py, &self.inner.lock().unwrap().masked()).unbind()
     }
 
-    #[pyo3(text_signature = "($self)")]
-    /// Print the chromosome representation to stdout.
-    pub fn print(&self) {
-        self.inner.lock().unwrap().print();
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Convert the chromosome to a Python dictionary.
-    pub fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
-        let json_str = self.json(py)?;
-        let json_module = py.import("json")?;
-        let py_dict = json_module.call_method1("loads", (json_str,))?;
-        Ok(py_dict.into())
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the JSON representation of the chromosome.
-    pub fn json(&self, _py: Python) -> PyResult<String> {
-        self.inner
-            .lock()
-            .unwrap()
-            .json()
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-    }
-
-    /// Return the JSON representation when converted to a string.
-    pub fn __str__(&self, py: Python) -> PyResult<String> {
-        self.json(py)
+    pub fn __str__(&self) -> String {
+        format!(
+            "Chromosome(size={})",
+            self.inner.lock().unwrap().bytes().len()
+        )
     }
 }
 

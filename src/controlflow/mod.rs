@@ -36,11 +36,7 @@ pub enum EntityKind {
 }
 
 pub use block::Block;
-pub use block::BlockJson;
-pub use block::BlockJsonDeserializer;
-pub use function::Function;
-pub use function::FunctionJson;
-pub use function::FunctionJsonDeserializer;
+pub use function::{Function, FunctionCallee, FunctionCaller};
 pub use graph::Graph;
 pub use graph::GraphQueue;
 pub use graph::GraphQueueSnapshot;
@@ -50,7 +46,6 @@ pub use instruction::ImmediateOperand;
 pub use instruction::Instruction;
 pub use instruction::InstructionDetail;
 pub use instruction::InstructionDetailKind;
-pub use instruction::InstructionJson;
 pub use instruction::InstructionRecord;
 pub use instruction::MemoryOperand;
 pub use instruction::Operand;

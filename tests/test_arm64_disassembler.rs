@@ -42,7 +42,7 @@ fn test_arm64_absolute_register_jump_table_recovers_all_targets() {
         .disassemble_function(0, &mut graph)
         .expect("disassemble");
 
-    let instruction = graph.get_instruction(16).expect("jump table instruction");
+    let instruction = graph.instruction(16).expect("jump table instruction");
     assert!(
         instruction.has_indirect_target,
         "jump table should be marked as indirect"
@@ -93,7 +93,7 @@ fn test_arm64_relative_register_jump_table_recovers_all_targets() {
         .disassemble_function(0, &mut graph)
         .expect("disassemble");
 
-    let instruction = graph.get_instruction(20).expect("jump table instruction");
+    let instruction = graph.instruction(20).expect("jump table instruction");
     assert!(
         instruction.has_indirect_target,
         "jump table should be marked as indirect"
@@ -130,7 +130,7 @@ fn test_arm64_prologue_and_adr_executable_address_requires_target_prologue() {
         .disassemble_function(0, &mut graph)
         .expect("disassemble");
 
-    let prologue = graph.get_instruction(0).expect("prologue instruction");
+    let prologue = graph.instruction(0).expect("prologue instruction");
     assert!(
         prologue.is_block_start,
         "function start should start a block"
@@ -144,7 +144,7 @@ fn test_arm64_prologue_and_adr_executable_address_requires_target_prologue() {
         "common ARM64 frame setup should be marked"
     );
 
-    let adr = graph.get_instruction(8).expect("adr instruction");
+    let adr = graph.instruction(8).expect("adr instruction");
     assert!(
         adr.functions.is_empty(),
         "adr should not promote an executable target that lacks a prologue"
@@ -167,7 +167,7 @@ fn test_arm64_memory_instruction_masks_addressing_bits_only() {
         .disassemble_instruction(0, &mut graph)
         .expect("disassemble");
 
-    let instruction = graph.get_instruction(0).expect("instruction");
+    let instruction = graph.instruction(0).expect("instruction");
     assert_eq!(instruction.bytes, bytes);
     assert_eq!(instruction.chromosome_mask, vec![0xE0, 0xFF, 0x1F, 0x00]);
     assert_eq!(instruction.pattern, "?3????f8");
@@ -189,7 +189,7 @@ fn test_arm64_pair_memory_instruction_masks_pair_addressing_bits_only() {
         .disassemble_instruction(0, &mut graph)
         .expect("disassemble");
 
-    let instruction = graph.get_instruction(0).expect("instruction");
+    let instruction = graph.instruction(0).expect("instruction");
     assert_eq!(instruction.bytes, bytes);
     assert_eq!(instruction.chromosome_mask, vec![0xE0, 0xFF, 0x3F, 0x00]);
     assert_eq!(instruction.pattern, "?d????a9");
@@ -223,7 +223,7 @@ fn test_arm64_register_indirect_jump_resolves_target_through_adr_add() {
         .disassemble_function(0, &mut graph)
         .expect("disassemble");
 
-    let instruction = graph.get_instruction(8).expect("indirect jump instruction");
+    let instruction = graph.instruction(8).expect("indirect jump instruction");
     assert!(
         instruction.has_indirect_target,
         "register-indirect jump should be marked as indirect"
@@ -260,7 +260,7 @@ fn test_arm64_register_indirect_call_resolves_function_target_through_mov() {
         .disassemble_function(0, &mut graph)
         .expect("disassemble");
 
-    let instruction = graph.get_instruction(8).expect("indirect call instruction");
+    let instruction = graph.instruction(8).expect("indirect call instruction");
     assert!(
         instruction.is_call,
         "instruction should be identified as call"
@@ -311,7 +311,7 @@ fn test_arm64_conditional_controlflow_instructions_recover_targets_and_edges() {
         .expect("disassemble");
 
     for (address, target) in [(0u64, 0x14u64), (4, 0x18), (8, 0x1c), (12, 0x20)] {
-        let instruction = graph.get_instruction(address).expect("conditional branch");
+        let instruction = graph.instruction(address).expect("conditional branch");
         assert!(instruction.is_jump, "conditional branch should be a jump");
         assert!(
             instruction.is_conditional,
@@ -347,7 +347,7 @@ fn test_arm64_direct_call_tracks_function_target() {
         .disassemble_instruction(0, &mut graph)
         .expect("disassemble");
 
-    let instruction = graph.get_instruction(0).expect("direct call instruction");
+    let instruction = graph.instruction(0).expect("direct call instruction");
     assert!(
         instruction.is_call,
         "instruction should be identified as call"
@@ -381,7 +381,7 @@ fn test_arm64_register_copy_cycle_does_not_overflow_indirect_target_resolution()
         .disassemble_function(0, &mut graph)
         .expect("disassemble");
 
-    let instruction = graph.get_instruction(8).expect("indirect jump instruction");
+    let instruction = graph.instruction(8).expect("indirect jump instruction");
     assert!(
         instruction.has_indirect_target,
         "register-indirect jump should still be marked as indirect"

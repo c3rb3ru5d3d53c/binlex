@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 
-from binlex import Architecture, Configuration
+from binlex import Architecture, Assembler, Configuration, Disassembler
 from binlex.controlflow import Graph
-from binlex.assemblers import Assembler
-from binlex.ir.lir import LirAbi, LirCpu
-from binlex.disassemblers import Disassembler
+from binlex.irs.lir import LirAbiStdcall, LirCpuI386
 from binlex.formats import ELF
 
 configuration = Configuration()
@@ -38,7 +36,7 @@ graph = Graph(Architecture.I386, configuration)
 
 disassembler = Disassembler(Architecture.I386, data, {0: len(data)}, configuration)
 
-cpu = LirCpu.i386()
+cpu = LirCpuI386()
 
 function = disassembler.disassemble_function(0x00, graph)
 print("Polymorphic Shellcode")
@@ -46,12 +44,11 @@ for block in function.blocks():
     for instruction in block.instructions():
         print(f"{hex(instruction.address())}: {instruction.disassembly()}")
 
-
-llvm = function.lift(abi=LirAbi.stdcall(cpu))
+llvm = function.llvm()
 
 assert llvm
 
-llvm.set_name("_start")
+llvm.set_abi(LirAbiStdcall(cpu))
 llvm.optimize_cfg()
 llvm.optimize_gvn()
 llvm.optimize_instcombine()
@@ -63,7 +60,7 @@ assert obj
 
 elf = ELF(obj, configuration)
 
-start = elf.symbol_name_to_file_offset("_start")
+start = elf.symbol_name_to_file_offset("function_0")
 
 assert start is not None
 

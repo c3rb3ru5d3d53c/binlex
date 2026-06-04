@@ -21,12 +21,10 @@
 // SOFTWARE.
 
 pub mod assemblers;
-pub mod clients;
 pub mod compression;
 pub mod config;
 pub mod controlflow;
 pub mod core;
-pub mod databases;
 pub mod decompilers;
 pub mod disassemblers;
 pub mod embeddings;
@@ -35,18 +33,12 @@ pub mod genetics;
 pub mod hashing;
 pub mod hex;
 pub mod imaging;
-pub mod indexing;
 pub mod io;
-pub mod ir;
+pub mod irs;
 pub mod math;
 pub mod metadata;
-pub mod processor;
-pub mod query;
 pub mod rules;
-pub mod runtime;
-pub mod server;
-pub mod storage;
-pub mod util;
+pub mod utilities;
 
 pub use assemblers::Assembler;
 pub use assemblers::AssemblerBackend;
@@ -65,8 +57,10 @@ pub use disassemblers::Disassembler;
 pub use disassemblers::DisassemblerBackend;
 pub use embeddings::Embedding;
 pub use embeddings::EmbeddingBackend;
-pub use ir::hir::{HirFunction, HirModule};
-pub use ir::lir::{LirAbi, LirAbiKind, LirAbiTrap, LirCpuKind, LirExecutor, LirExecutorState};
+pub use irs::hir::{HirFunction, HirModule};
+pub use irs::lir::{
+    LirAbi, LirAbiCdecl, LirAbiFastcall, LirAbiKind, LirAbiLinuxSyscall, LirAbiStdcall, LirAbiSysv,
+    LirAbiTrap, LirAbiWindows64, LirAbiWindowsSyscall, LirCpuAmd64, LirCpuArm64, LirCpuCil,
+    LirCpuI386, LirCpuKind, LirExecutor, LirExecutorState,
+};
 pub use math::entropy;
-pub use query::Query;
-pub use util::hexdump;

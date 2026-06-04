@@ -6,8 +6,6 @@
 [![GitHub license](https://img.shields.io/github/license/c3rb3ru5d3d53c/binlex)](https://github.com/c3rb3ru5d3d53c/binlex/blob/master/LICENSE)
 ![GitHub all releases](https://img.shields.io/github/downloads/c3rb3ru5d3d53c/binlex/total)
 ![binlex-python](https://img.shields.io/docker/pulls/c3rb3ru5d3d53c/binlex-python?logo=docker&label=binlex-python)
-![binlex-server](https://img.shields.io/docker/pulls/c3rb3ru5d3d53c/binlex-server?logo=docker&label=binlex-server)
-![binlex-web](https://img.shields.io/docker/pulls/c3rb3ru5d3d53c/binlex-web?logo=docker&label=binlex-web)
 ![binlex-mcp](https://img.shields.io/docker/pulls/c3rb3ru5d3d53c/binlex-mcp?logo=docker&label=binlex-mcp)
 
 <table>

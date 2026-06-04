@@ -27,13 +27,10 @@ pub mod instruction;
 pub mod reference;
 
 pub use crate::controlflow::block::Block;
-pub use crate::controlflow::block::BlockJsonDeserializer;
-pub use crate::controlflow::function::Function;
-pub use crate::controlflow::function::FunctionJsonDeserializer;
+pub use crate::controlflow::function::{Function, FunctionCallee, FunctionCaller};
 pub use crate::controlflow::graph::Graph;
 pub use crate::controlflow::graph::GraphQueue;
 pub use crate::controlflow::instruction::Instruction;
-pub use crate::controlflow::instruction::InstructionJsonDeserializer;
 pub use crate::controlflow::reference::Reference;
 
 use crate::controlflow::block::block_init;
@@ -123,12 +120,11 @@ pub fn controlflow_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<GraphQueue>()?;
     m.add_class::<EntityKind>()?;
     m.add_class::<Instruction>()?;
-    m.add_class::<InstructionJsonDeserializer>()?;
     m.add_class::<PyReference>()?;
     m.add_class::<Block>()?;
-    m.add_class::<BlockJsonDeserializer>()?;
     m.add_class::<Function>()?;
-    m.add_class::<FunctionJsonDeserializer>()?;
+    m.add_class::<FunctionCallee>()?;
+    m.add_class::<FunctionCaller>()?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.controlflow", m)?;

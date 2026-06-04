@@ -27,19 +27,17 @@ use crate::controlflow::Function;
 use crate::controlflow::Graph;
 use crate::controlflow::Reference;
 use crate::genetics::Chromosome;
-use crate::ir::lir::Lir as PyLir;
-use crate::Architecture;
-use crate::Configuration;
+use crate::irs::lir::Lir as PyLir;
+use crate::irs::llvm::LlvmModule as PyLlvmModule;
+#[cfg(not(target_os = "windows"))]
+use crate::irs::vex::VexModule as PyVexModule;
 use binlex::controlflow::EntityKind as InnerEntityKind;
 use binlex::controlflow::Instruction as RawInnerInstruction;
-use binlex::controlflow::InstructionJson as InnerInstructionJson;
 use binlex::controlflow::Operand as InnerOperand;
 use binlex::controlflow::OperandKind as InnerOperandKind;
-use binlex::genetics::Chromosome as InnerChromosome;
-use binlex::hex;
 use pyo3::class::basic::CompareOp;
 use pyo3::prelude::*;
-use pyo3::types::{PyAny, PyBytes, PyType};
+use pyo3::types::{PyAny, PyBytes};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::BTreeSet;
 use std::hash::{Hash, Hasher};
@@ -149,17 +147,6 @@ impl Operand {
 
 #[pymethods]
 impl Operand {
-    #[staticmethod]
-    pub fn from_dict(_cls: &Bound<'_, PyType>, py: Python<'_>, data: Py<PyAny>) -> PyResult<Self> {
-        let json_module = py.import("json")?;
-        let json_str = json_module
-            .call_method1("dumps", (data,))?
-            .extract::<String>()?;
-        let inner: InnerOperand = serde_json::from_str(&json_str)
-            .map_err(|error| pyo3::exceptions::PyValueError::new_err(error.to_string()))?;
-        Ok(Self::from_inner(inner))
-    }
-
     pub fn kind(&self) -> OperandKind {
         let binding = self.inner.lock().unwrap();
         OperandKind::from_operand_kind(&binding.kind)
@@ -284,24 +271,8 @@ impl Operand {
         }
     }
 
-    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let value = serde_json::to_value(self.inner.lock().unwrap().clone())
-            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
-        json_value_to_py(py, &value)
-    }
-
-    pub fn json(&self) -> PyResult<String> {
-        serde_json::to_string(&*self.inner.lock().unwrap())
-            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
-    }
-
-    pub fn print(&self) -> PyResult<()> {
-        println!("{}", self.json()?);
-        Ok(())
-    }
-
-    pub fn __str__(&self) -> PyResult<String> {
-        self.json()
+    pub fn __str__(&self) -> String {
+        format!("{:?}", *self.inner.lock().unwrap())
     }
 
     pub fn __hash__(&self) -> isize {
@@ -316,214 +287,6 @@ impl Operand {
             CompareOp::Ne => *lhs != *rhs,
             _ => false,
         }
-    }
-}
-
-/// Deserialize a serialized instruction JSON payload back into typed accessors.
-#[pyclass]
-pub struct InstructionJsonDeserializer {
-    pub inner: Arc<Mutex<InnerInstructionJson>>,
-    pub config: binlex::Configuration,
-    chromosome_minhash_num_hashes: usize,
-    chromosome_minhash_shingle_size: usize,
-    chromosome_minhash_seed: u64,
-    chromosome_tlsh_minimum_byte_size: usize,
-}
-
-#[pymethods]
-impl InstructionJsonDeserializer {
-    #[new]
-    #[pyo3(text_signature = "(string, config)")]
-    pub fn new(py: Python<'_>, string: String, config: Py<Configuration>) -> PyResult<Self> {
-        let inner_config = config.borrow(py).inner.lock().unwrap().clone();
-        let inner: InnerInstructionJson = serde_json::from_str(&string)
-            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
-        if inner.kind != InnerEntityKind::Instruction {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "serialized payload is not an instruction kind",
-            ));
-        }
-        Ok(Self {
-            inner: Arc::new(Mutex::new(inner)),
-            config: inner_config.clone(),
-            chromosome_minhash_num_hashes: inner_config.chromosomes.minhash.number_of_hashes,
-            chromosome_minhash_shingle_size: inner_config.chromosomes.minhash.shingle_size,
-            chromosome_minhash_seed: inner_config.chromosomes.minhash.seed,
-            chromosome_tlsh_minimum_byte_size: inner_config.chromosomes.tlsh.minimum_byte_size,
-        })
-    }
-
-    pub fn architecture(&self) -> PyResult<Architecture> {
-        let inner = binlex::Architecture::from_string(&self.inner.lock().unwrap().architecture)
-            .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
-        Ok(Architecture { inner })
-    }
-
-    pub fn kind(&self) -> EntityKind {
-        let binding = self.inner.lock().unwrap();
-        EntityKind::from_inner(binding.kind)
-    }
-
-    pub fn address(&self) -> u64 {
-        self.inner.lock().unwrap().address
-    }
-
-    pub fn bytes(&self, py: Python<'_>) -> PyResult<Py<PyBytes>> {
-        let bytes = hex::decode(&self.inner.lock().unwrap().bytes)
-            .map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
-        Ok(PyBytes::new(py, &bytes).unbind())
-    }
-
-    pub fn size(&self) -> usize {
-        self.inner.lock().unwrap().size
-    }
-
-    pub fn mnemonic(&self) -> String {
-        self.inner.lock().unwrap().mnemonic.clone()
-    }
-
-    pub fn disassembly(&self) -> String {
-        self.inner.lock().unwrap().disassembly.clone()
-    }
-
-    pub fn operands(&self, py: Python<'_>) -> PyResult<Vec<Py<Operand>>> {
-        self.inner
-            .lock()
-            .unwrap()
-            .operands
-            .iter()
-            .cloned()
-            .map(|operand| Py::new(py, Operand::from_inner(operand)))
-            .collect()
-    }
-
-    pub fn successor_block_references(&self) -> Vec<Reference> {
-        self.inner
-            .lock()
-            .unwrap()
-            .successor_block_references
-            .iter()
-            .cloned()
-            .map(|reference| Reference { inner: reference })
-            .collect()
-    }
-
-    pub fn fallthrough(&self) -> Option<u64> {
-        self.inner.lock().unwrap().fallthrough
-    }
-
-    pub fn branches(&self) -> BTreeSet<u64> {
-        self.inner.lock().unwrap().branches.clone()
-    }
-
-    pub fn successors(&self) -> BTreeSet<u64> {
-        let binding = self.inner.lock().unwrap();
-        let mut result = binding.branches.clone();
-        if let Some(fallthrough) = binding.fallthrough {
-            result.insert(fallthrough);
-        }
-        result
-    }
-
-    pub fn has_indirect_target(&self) -> bool {
-        self.inner.lock().unwrap().has_indirect_target
-    }
-
-    pub fn is_conditional(&self) -> bool {
-        self.inner.lock().unwrap().is_conditional
-    }
-
-    pub fn callee_references(&self) -> Vec<Reference> {
-        self.inner
-            .lock()
-            .unwrap()
-            .callee_references
-            .iter()
-            .cloned()
-            .map(|reference| Reference { inner: reference })
-            .collect()
-    }
-
-    pub fn callees(&self) -> BTreeSet<u64> {
-        self.inner
-            .lock()
-            .unwrap()
-            .callee_references
-            .iter()
-            .map(|reference| reference.address)
-            .collect()
-    }
-
-    pub fn chromosome(&self) -> PyResult<Chromosome> {
-        let binding = self.inner.lock().unwrap();
-        let bytes =
-            hex::decode(&binding.bytes).map_err(pyo3::exceptions::PyRuntimeError::new_err)?;
-        let mask = if binding.chromosome.mask.is_empty() {
-            vec![0; bytes.len()]
-        } else {
-            hex::decode(&binding.chromosome.mask)
-                .map_err(pyo3::exceptions::PyRuntimeError::new_err)?
-        };
-        let chromosome = InnerChromosome::new(bytes, mask, self.config.clone())
-            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
-        Ok(Chromosome {
-            inner: Arc::new(Mutex::new(chromosome)),
-            minhash_num_hashes: self.chromosome_minhash_num_hashes,
-            minhash_shingle_size: self.chromosome_minhash_shingle_size,
-            minhash_seed: self.chromosome_minhash_seed,
-            tlsh_minimum_byte_size: self.chromosome_tlsh_minimum_byte_size,
-        })
-    }
-
-    pub fn processors(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let value = serde_json::to_value(self.inner.lock().unwrap().processors.clone())
-            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
-        json_value_to_py(py, &value)
-    }
-
-    pub fn processor(&self, py: Python<'_>, name: String) -> PyResult<Py<PyAny>> {
-        let value = self
-            .inner
-            .lock()
-            .unwrap()
-            .processors
-            .as_ref()
-            .and_then(|items| items.get(&name))
-            .cloned()
-            .unwrap_or(serde_json::Value::Null);
-        json_value_to_py(py, &value)
-    }
-
-    pub fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        let json_str = self.json()?;
-        let json_module = py.import("json")?;
-        let py_dict = json_module.call_method1("loads", (json_str,))?;
-        Ok(py_dict.into())
-    }
-
-    pub fn lir(&self, py: Python<'_>) -> PyResult<Option<Py<PyLir>>> {
-        let binding = self.inner.lock().unwrap();
-        let Some(semantics) = binding.semantics.as_ref() else {
-            return Ok(None);
-        };
-        Ok(Some(Py::new(
-            py,
-            PyLir::from_inner(semantics.clone().into_semantics()),
-        )?))
-    }
-
-    pub fn json(&self) -> PyResult<String> {
-        serde_json::to_string(&*self.inner.lock().unwrap())
-            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
-    }
-
-    pub fn print(&self) -> PyResult<()> {
-        println!("{}", self.json()?);
-        Ok(())
-    }
-
-    pub fn __str__(&self) -> PyResult<String> {
-        self.json()
     }
 }
 
@@ -603,6 +366,31 @@ impl Instruction {
                 minhash_seed: inner_config.chromosomes.minhash.seed,
                 tlsh_minimum_byte_size: inner_config.chromosomes.tlsh.minimum_byte_size,
             })
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn llvm(&self, py: Python<'_>) -> PyResult<Py<PyLlvmModule>> {
+        self.with_inner_instruction(py, |instruction| {
+            let inner = instruction.llvm()?;
+            let cpu = binlex::irs::lir::LirCpu::from_architecture(instruction.architecture)
+                .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
+            Py::new(
+                py,
+                PyLlvmModule::from_inner(inner, instruction.config.clone(), cpu, None, None),
+            )
+        })
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[pyo3(text_signature = "($self)")]
+    pub fn vex(&self, py: Python<'_>) -> PyResult<Py<PyVexModule>> {
+        self.with_inner_instruction(py, |instruction| {
+            let inner = instruction.vex()?;
+            Py::new(
+                py,
+                PyVexModule::from_inner(inner, instruction.config.clone()),
+            )
         })
     }
 
@@ -729,25 +517,6 @@ impl Instruction {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return all processor outputs attached to this instruction.
-    pub fn processors(&self, py: Python) -> PyResult<Py<PyAny>> {
-        self.with_inner_instruction(py, |instruction| {
-            let value = serde_json::to_value(instruction.processors())
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?;
-            json_value_to_py(py, &value)
-        })
-    }
-
-    #[pyo3(text_signature = "($self, name)")]
-    /// Return a single processor output attached to this instruction.
-    pub fn processor(&self, py: Python, name: String) -> PyResult<Py<PyAny>> {
-        self.with_inner_instruction(py, |instruction| {
-            let value = instruction.processor(&name);
-            json_value_to_py(py, &value)
-        })
-    }
-
-    #[pyo3(text_signature = "($self)")]
     /// Return the canonical LIR for this instruction, building it on demand if possible.
     pub fn lir(&self, py: Python) -> PyResult<Option<Py<PyLir>>> {
         self.with_inner_instruction(py, |instruction| {
@@ -777,37 +546,8 @@ impl Instruction {
         Ok(())
     }
 
-    #[pyo3(text_signature = "($self)")]
-    /// Convert the instruction to a Python dictionary.
-    pub fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
-        let json_str = self.json(py)?;
-        let json_module = py.import("json")?;
-        let py_dict = json_module.call_method1("loads", (json_str,))?;
-        Ok(py_dict.into())
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return the JSON representation of the instruction.
-    pub fn json(&self, py: Python) -> PyResult<String> {
-        self.with_inner_instruction(py, |instruction| {
-            instruction
-                .json()
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))
-        })
-    }
-
-    /// Return the JSON representation when converted to a string.
-    pub fn __str__(&self, py: Python) -> PyResult<String> {
-        self.json(py)
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Print the instruction representation to stdout.
-    pub fn print(&self, py: Python) -> PyResult<()> {
-        self.with_inner_instruction(py, |instruction| {
-            instruction.print();
-            Ok(())
-        })
+    pub fn __str__(&self) -> String {
+        format!("Instruction(address=0x{:x})", self.address)
     }
 }
 
@@ -816,7 +556,6 @@ impl Instruction {
 pub fn instruction_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<OperandKind>()?;
     m.add_class::<Operand>()?;
-    m.add_class::<InstructionJsonDeserializer>()?;
     m.add_class::<Instruction>()?;
     py.import("sys")?
         .getattr("modules")?

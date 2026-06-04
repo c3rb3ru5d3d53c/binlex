@@ -23,7 +23,6 @@
 
 # Example on Finding common sub sequences
 
-import json
 from binlex.genetics import Chromosome
 from binlex import Configuration
 
@@ -32,7 +31,5 @@ configuration = Configuration()
 lhs = Chromosome('deadbeef',configuration)
 rhs = Chromosome('fedeadbeeffe', configuration)
 
-print(json.dumps({
-    "lhs": json.loads(lhs.json()),
-    "rhs": json.loads(rhs.json()),
-}))
+print("lhs", lhs.pattern(), lhs.masked())
+print("rhs", rhs.pattern(), rhs.masked())

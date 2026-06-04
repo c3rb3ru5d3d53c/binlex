@@ -25,7 +25,7 @@ use binlex::decompilers::{Decompiler, DecompilerBackend};
 use binlex::disassemblers::capstone::Disassembler;
 use binlex::formats::Image;
 use binlex::hex;
-use binlex::ir::mir::MirFunction;
+use binlex::irs::mir::MirFunction;
 use binlex::{Architecture, Configuration};
 use std::collections::BTreeMap;
 
@@ -90,7 +90,7 @@ fn test_full_function_disassembly() {
     assert_eq!(func.blocks.len(), 23, "incorrect block count");
     let mut collected = Vec::<u8>::new();
     for addr in graph.instruction_addresses().iter().copied() {
-        let instr = graph.get_instruction(addr).unwrap();
+        let instr = graph.instruction(addr).unwrap();
         collected.extend(instr.bytes());
     }
     assert_eq!(hex::encode(&collected), hex, "listing bytes mismatch");
@@ -126,7 +126,7 @@ fn test_direct_call_outside_executable_range_is_not_enqueued_as_function() {
         .disassemble_instruction(0, &mut graph)
         .expect("disassemble");
 
-    let instruction = graph.get_instruction(0).expect("instruction");
+    let instruction = graph.instruction(0).expect("instruction");
     assert!(
         instruction.is_call,
         "instruction should be identified as call"
@@ -398,7 +398,7 @@ fn test_direct_jump_inside_executable_range_is_not_enqueued_as_function() {
         .disassemble_instruction(0, &mut graph)
         .expect("disassemble");
 
-    let instruction = graph.get_instruction(0).expect("instruction");
+    let instruction = graph.instruction(0).expect("instruction");
     assert!(
         instruction.is_jump,
         "instruction should be identified as jump"
@@ -436,7 +436,7 @@ fn test_i386_indirect_call_absolute_memory_resolves_function_target() {
         .disassemble_instruction(0, &mut graph)
         .expect("disassemble");
 
-    let instruction = graph.get_instruction(0).expect("instruction");
+    let instruction = graph.instruction(0).expect("instruction");
     assert!(
         instruction.is_call,
         "instruction should be identified as call"
@@ -475,7 +475,7 @@ fn test_i386_indirect_jump_absolute_memory_resolves_block_target_only() {
         .disassemble_instruction(0, &mut graph)
         .expect("disassemble");
 
-    let instruction = graph.get_instruction(0).expect("instruction");
+    let instruction = graph.instruction(0).expect("instruction");
     assert!(
         instruction.is_jump,
         "instruction should be identified as jump"
@@ -527,7 +527,7 @@ fn test_i386_indexed_jump_table_memory_recovers_all_targets() {
         .disassemble_function(0, &mut graph)
         .expect("disassemble");
 
-    let instruction = graph.get_instruction(5).expect("jump table instruction");
+    let instruction = graph.instruction(5).expect("jump table instruction");
     assert!(
         instruction.has_indirect_target,
         "jump table should be marked as indirect"
@@ -576,7 +576,7 @@ fn test_i386_register_jump_table_recovers_all_targets() {
         .disassemble_function(0, &mut graph)
         .expect("disassemble");
 
-    let instruction = graph.get_instruction(12).expect("jump table instruction");
+    let instruction = graph.instruction(12).expect("jump table instruction");
     assert_eq!(
         instruction.to,
         [0x24u64, 0x25u64, 0x26u64].into_iter().collect(),
@@ -624,7 +624,7 @@ fn test_amd64_relative_register_jump_table_recovers_all_targets() {
         .disassemble_function(0, &mut graph)
         .expect("disassemble");
 
-    let instruction = graph.get_instruction(19).expect("jump table instruction");
+    let instruction = graph.instruction(19).expect("jump table instruction");
     assert_eq!(
         instruction.to,
         [0x30u64, 0x31u64, 0x32u64].into_iter().collect(),
@@ -651,7 +651,7 @@ fn test_i386_lea_absolute_memory_resolves_executable_address() {
         .disassemble_instruction(0, &mut graph)
         .expect("disassemble");
 
-    let instruction = graph.get_instruction(0).expect("instruction");
+    let instruction = graph.instruction(0).expect("instruction");
     assert_eq!(
         instruction.functions,
         [6u64].into_iter().collect(),
@@ -746,7 +746,7 @@ fn test_return_instruction_has_zero_edges() {
         .disassemble_instruction(0, &mut graph)
         .expect("disassemble");
 
-    let instruction = graph.get_instruction(0).expect("instruction");
+    let instruction = graph.instruction(0).expect("instruction");
     assert!(
         instruction.is_return,
         "instruction should be identified as return"

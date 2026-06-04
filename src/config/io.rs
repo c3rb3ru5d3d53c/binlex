@@ -38,7 +38,7 @@ impl Configuration {
 
     pub fn from_file(file_path: &str) -> Result<Configuration, Error> {
         let toml_string = fs::read_to_string(file_path)?;
-        let mut config: Configuration = toml::from_str(&toml_string).map_err(|error| {
+        let config: Configuration = toml::from_str(&toml_string).map_err(|error| {
             Error::new(
                 ErrorKind::InvalidData,
                 format!(
@@ -47,10 +47,6 @@ impl Configuration {
                 ),
             )
         })?;
-        if config.processors.max_payload_bytes == 4 * 1024 * 1024 {
-            config.processors.max_payload_bytes =
-                super::ConfigProcessors::default().max_payload_bytes;
-        }
         Ok(config)
     }
 
@@ -67,7 +63,6 @@ impl Configuration {
                     .ok_or_else(|| Error::other("invalid default configuration path"))?,
             )?;
         }
-        Self::ensure_default_processor_directory()?;
         Ok(path)
     }
 
@@ -112,17 +107,10 @@ impl Configuration {
             }
             if !config_file_path.exists() {
                 self.write_to_file(config_file_path.to_str().unwrap())?;
-                Self::ensure_default_processor_directory()?;
                 return Ok(());
             }
         }
         Err(Error::other("default configuration already exists"))
-    }
-
-    pub fn ensure_default_processor_directory() -> Result<PathBuf, Error> {
-        let path = PathBuf::from(Self::default_processor_directory());
-        fs::create_dir_all(&path)?;
-        Ok(path)
     }
 
     #[allow(dead_code)]

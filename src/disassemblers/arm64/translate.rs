@@ -37,8 +37,8 @@ use crate::{
         indirect as arm64_indirect, targets as arm64_targets,
     },
     genetics::Chromosome,
-    ir::lir::arm64::operand::Arm64ShiftKind,
-    ir::lir::arm64::{
+    irs::lir::arm64::operand::Arm64ShiftKind,
+    irs::lir::arm64::{
         Arm64MemoryOperandView, Arm64OperandKind, Arm64OperandView, InstructionDetailArm64,
     },
 };

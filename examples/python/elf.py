@@ -45,4 +45,4 @@ graph = Graph(elf.architecture(), configuration)
 disassembler.disassemble(elf.entrypoint_virtual_addresses(), graph)
 
 for function in graph.functions():
-    function.print()
+    print(function)

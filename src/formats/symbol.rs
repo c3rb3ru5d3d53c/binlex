@@ -20,11 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::metadata::Attribute;
-use serde::{Deserialize, Serialize};
-use serde_json;
 use std::fmt;
-use std::io::Error;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum SymbolKind {
@@ -49,44 +45,6 @@ impl fmt::Display for SymbolKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
-}
-
-/// Represents a JSON-serializable structure containing metadata about a function symbol.
-#[derive(Serialize, Deserialize)]
-pub struct SymbolIoJson {
-    /// The type of this entity.
-    #[serde(rename = "type")]
-    pub type_: String,
-    /// The type of symbol
-    pub symbol_type: String,
-    /// Names associated with the function symbol.
-    pub name: String,
-    /// The offset of the function symbol, if available.
-    pub file_offset: Option<u64>,
-    /// The relative virtual address of the function symbol, if available.
-    pub relative_virtual_address: Option<u64>,
-    /// The virtual address of the function symbol, if available.
-    pub virtual_address: Option<u64>,
-    /// The slice associated with the function symbol, MachO format only
-    pub slice: Option<usize>,
-}
-
-/// Represents a JSON-serializable structure containing metadata about a function symbol.
-#[derive(Serialize, Deserialize, Clone)]
-pub struct SymbolJson {
-    #[serde(rename = "type")]
-    /// The type always `symbol`.
-    pub type_: String,
-    /// The type of symbol.
-    pub symbol_type: String,
-    /// Names associated with the function symbol.
-    pub name: String,
-    /// The canonical address of the function symbol.
-    pub address: u64,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub username: String,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub timestamp: String,
 }
 
 /// Represents a structure containing metadata about a function symbol.
@@ -132,50 +90,6 @@ impl Symbol {
 
     pub fn relative_virtual_address(&self) -> Option<u64> {
         self.relative_virtual_address
-    }
-
-    /// Processes the function signature into its JSON-serializable representation.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `FunctionSymbolJson` struct containing metadata about the function symbol.
-    pub fn process(&self) -> SymbolJson {
-        SymbolJson {
-            type_: "symbol".to_string(),
-            symbol_type: self.kind.to_string(),
-            name: self.name.clone(),
-            address: self.virtual_address.unwrap_or(self.file_offset),
-            username: String::new(),
-            timestamp: String::new(),
-        }
-    }
-
-    /// Processes the tag into an `Attribute`.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Attribute` struct containing the tag.
-    pub fn attribute(&self) -> Attribute {
-        Attribute::Symbol(self.process())
-    }
-
-    /// Prints the JSON representation of the function symbol to standard output.
-    #[allow(dead_code)]
-    pub fn print(&self) {
-        if let Ok(json) = self.json() {
-            println!("{}", json);
-        }
-    }
-
-    /// Converts the function symbol metadata into a JSON string representation.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(String)` containing the JSON representation, or an `Err` if serialization fails.
-    pub fn json(&self) -> Result<String, Error> {
-        let raw = self.process();
-        let result = serde_json::to_string(&raw)?;
-        Ok(result)
     }
 
     /// Demangles a Microsoft Visual C++ (MSVC) mangled symbol name.

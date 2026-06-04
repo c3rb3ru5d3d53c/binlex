@@ -20,9 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::ir::llvm::Mode as LlvmMode;
+use crate::irs::llvm::Mode as LlvmMode;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
@@ -30,37 +29,6 @@ use std::sync::Arc;
 pub struct ConfigFileRoot {
     #[serde(rename = "binlex")]
     pub binlex: ConfigData,
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq)]
-pub struct ConfigProcessorTarget {
-    pub enabled: bool,
-    #[serde(flatten, default)]
-    pub options: BTreeMap<String, ConfigProcessorValue>,
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq)]
-pub struct ConfigProcessorTransport {
-    pub enabled: bool,
-    #[serde(flatten, default)]
-    pub options: BTreeMap<String, ConfigProcessorValue>,
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq)]
-pub struct ConfigProcessorTransports {
-    pub ipc: ConfigProcessorTransport,
-    pub http: ConfigProcessorTransport,
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq)]
-#[serde(untagged)]
-pub enum ConfigProcessorValue {
-    Bool(bool),
-    Integer(i64),
-    Float(f64),
-    String(String),
-    Array(Vec<ConfigProcessorValue>),
-    Table(BTreeMap<String, ConfigProcessorValue>),
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -215,10 +183,6 @@ pub struct ConfigData {
     pub minimal: bool,
     pub debug: bool,
     #[serde(default)]
-    pub storage: ConfigStorage,
-    #[serde(default)]
-    pub databases: ConfigDatabases,
-    #[serde(default)]
     pub index: ConfigIndex,
     pub formats: ConfigFormats,
     pub imaging: ConfigImaging,
@@ -234,61 +198,10 @@ pub struct ConfigData {
     pub lifters: ConfigLifters,
     #[serde(default)]
     pub embeddings: ConfigEmbeddings,
-    #[serde(default)]
-    pub processors: ConfigProcessors,
 }
 
 #[derive(Clone)]
 pub struct Configuration(pub(crate) Arc<ConfigData>);
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigStorage {
-    #[serde(default)]
-    pub local: ConfigStorageLocal,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigStorageLocal {
-    pub directory: String,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigDatabases {
-    #[serde(default)]
-    pub local: ConfigDatabaseLocal,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigDatabaseLocal {
-    pub path: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq)]
-pub struct ConfigProcessor {
-    pub enabled: bool,
-    pub instructions: ConfigProcessorTarget,
-    pub blocks: ConfigProcessorTarget,
-    pub functions: ConfigProcessorTarget,
-    pub graph: ConfigProcessorTarget,
-    pub complete: ConfigProcessorTarget,
-    #[serde(flatten, default)]
-    pub options: BTreeMap<String, ConfigProcessorValue>,
-    pub transport: ConfigProcessorTransports,
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq)]
-pub struct ConfigProcessors {
-    pub enabled: bool,
-    pub path: Option<String>,
-    pub processes: usize,
-    pub compression: bool,
-    pub restart_on_crash: bool,
-    pub max_payload_bytes: usize,
-    pub idle_timeout_ms: u64,
-    pub max_queue_depth: usize,
-    #[serde(flatten, default)]
-    pub processors: BTreeMap<String, ConfigProcessor>,
-}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigDisassembler {

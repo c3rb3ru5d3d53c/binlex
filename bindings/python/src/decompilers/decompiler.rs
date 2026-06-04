@@ -22,9 +22,10 @@
 
 use crate::controlflow::{Function, Graph};
 use crate::formats::Image;
-use crate::ir::hir::PyHirFunction;
-use crate::ir::lir::LirFunction as PyLirFunction;
-use crate::ir::mir::PyMirFunction;
+use crate::irs::ast::PyAstFunction;
+use crate::irs::hir::PyHirFunction;
+use crate::irs::lir::LirFunction as PyLirFunction;
+use crate::irs::mir::PyMirFunction;
 use crate::Configuration;
 use binlex::decompilers::{DecompiledFunction, Decompiler as InnerDecompiler, DecompilerBackend};
 use pyo3::exceptions::{PyRuntimeError, PyTypeError};
@@ -46,12 +47,19 @@ impl Decompiler {
     fn decompile_artifact_to_python(
         py: Python<'_>,
         artifact: DecompiledFunction,
-    ) -> PyResult<(u64, Py<PyLirFunction>, Py<PyMirFunction>, Py<PyHirFunction>)> {
+    ) -> PyResult<(
+        u64,
+        Py<PyLirFunction>,
+        Py<PyMirFunction>,
+        Py<PyHirFunction>,
+        Py<PyAstFunction>,
+    )> {
         Ok((
             artifact.address,
             Py::new(py, PyLirFunction::from_inner(artifact.lir))?,
             Py::new(py, PyMirFunction::from_inner(artifact.mir))?,
             Py::new(py, PyHirFunction::from_inner(artifact.hir))?,
+            Py::new(py, PyAstFunction::from_inner(artifact.ast))?,
         ))
     }
 }
@@ -115,13 +123,7 @@ impl Decompiler {
     #[pyo3(text_signature = "($self, address)")]
     pub fn function(&self, py: Python<'_>, address: u64) -> PyResult<Option<Function>> {
         let cfg = self.graph.clone_ref(py);
-        if self
-            .graph_inner
-            .lock()
-            .unwrap()
-            .get_function(address)
-            .is_none()
-        {
+        if self.graph_inner.lock().unwrap().function(address).is_none() {
             return Ok(None);
         }
         Ok(Some(Function::new(address, cfg)?))
@@ -132,7 +134,14 @@ impl Decompiler {
         &self,
         py: Python<'_>,
         address: u64,
-    ) -> PyResult<Option<(Py<PyLirFunction>, Py<PyMirFunction>, Py<PyHirFunction>)>> {
+    ) -> PyResult<
+        Option<(
+            Py<PyLirFunction>,
+            Py<PyMirFunction>,
+            Py<PyHirFunction>,
+            Py<PyAstFunction>,
+        )>,
+    > {
         let graph_inner = self.graph_inner.clone();
         let configuration = self.inner_configuration.clone();
         let backend = self.backend;
@@ -144,8 +153,8 @@ impl Decompiler {
         let Some(artifact) = artifact else {
             return Ok(None);
         };
-        let (_, lir, mir, hir) = Self::decompile_artifact_to_python(py, artifact)?;
-        Ok(Some((lir, mir, hir)))
+        let (_, lir, mir, hir, ast) = Self::decompile_artifact_to_python(py, artifact)?;
+        Ok(Some((lir, mir, hir, ast)))
     }
 
     #[pyo3(text_signature = "($self, address)")]
@@ -160,7 +169,15 @@ impl Decompiler {
     pub fn decompile_artifacts(
         &self,
         py: Python<'_>,
-    ) -> PyResult<Vec<(u64, Py<PyLirFunction>, Py<PyMirFunction>, Py<PyHirFunction>)>> {
+    ) -> PyResult<
+        Vec<(
+            u64,
+            Py<PyLirFunction>,
+            Py<PyMirFunction>,
+            Py<PyHirFunction>,
+            Py<PyAstFunction>,
+        )>,
+    > {
         let graph_inner = self.graph_inner.clone();
         let configuration = self.inner_configuration.clone();
         let backend = self.backend;

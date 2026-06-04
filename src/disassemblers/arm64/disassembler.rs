@@ -162,7 +162,7 @@ impl<'a> Disassembler<'a> {
             Some(started_at) => started_at,
             None => {
                 let instruction = cfg
-                    .get_instruction(address)
+                    .instruction(address)
                     .expect("instruction cached after begin_instruction");
                 return Ok(instruction.address);
             }
@@ -172,7 +172,7 @@ impl<'a> Disassembler<'a> {
             self.finish_instruction_invalid(address, cfg, instruction_started_at);
         };
 
-        if let Some(instruction) = cfg.get_instruction(address) {
+        if let Some(instruction) = cfg.instruction(address) {
             return Ok(instruction.address);
         }
 
@@ -321,7 +321,7 @@ impl<'a> Disassembler<'a> {
                 }
             }
 
-            if let Some(instruction) = cfg.get_instruction(block_end_address) {
+            if let Some(instruction) = cfg.instruction(block_end_address) {
                 cfg.blocks.enqueue_extend(instruction.successors());
             }
         }
@@ -337,7 +337,7 @@ impl<'a> Disassembler<'a> {
         cfg: &'g mut Graph,
     ) -> Result<Instruction<'g>, Error> {
         let entry = self.disassemble_instruction_address(address, cfg)?;
-        cfg.get_instruction(entry).ok_or_else(|| {
+        cfg.instruction(entry).ok_or_else(|| {
             Error::other(format!(
                 "0x{entry:x}: instruction missing after disassembly"
             ))
@@ -350,7 +350,7 @@ impl<'a> Disassembler<'a> {
         cfg: &'g mut Graph,
     ) -> Result<Block<'g>, Error> {
         self.disassemble_block_address(address, cfg)?;
-        cfg.get_block(address)
+        cfg.block(address)
             .ok_or_else(|| Error::other(format!("0x{address:x}: block missing after disassembly")))
     }
 
@@ -360,7 +360,7 @@ impl<'a> Disassembler<'a> {
         cfg: &'g mut Graph,
     ) -> Result<Function<'g>, Error> {
         self.disassemble_function_address(address, cfg)?;
-        cfg.get_function(address).ok_or_else(|| {
+        cfg.function(address).ok_or_else(|| {
             Error::other(format!("0x{address:x}: function missing after disassembly"))
         })
     }
@@ -809,7 +809,7 @@ impl<'a> Disassembler<'a> {
         self.metric_inc(&self.metrics.instructions_processed, 1);
         cfg.instructions.insert_processed(address);
 
-        if cfg.get_instruction(address).is_some() {
+        if cfg.instruction(address).is_some() {
             self.metric_elapsed(&self.metrics.instruction_time_us, instruction_started_at);
             return Ok(None);
         }

@@ -20,12 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod attribute;
 pub mod symbol_type;
 pub mod tag;
 
-pub use attribute::Attribute;
-pub use attribute::Attributes;
 pub use symbol_type::SymbolType;
 pub use tag::Tag;
-pub use tag::TagJson;

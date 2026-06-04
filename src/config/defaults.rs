@@ -21,14 +21,12 @@
 // SOFTWARE.
 
 use super::{
-    ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDatabaseLocal, ConfigDatabases,
-    ConfigDecompiler, ConfigDisassembler, ConfigDisassemblerSweep, ConfigEmbeddings,
-    ConfigEntityEmbeddings, ConfigEntityLifters, ConfigFile, ConfigFormats, ConfigFunctions,
-    ConfigHashEnabled, ConfigHeuristicEntropy, ConfigHeuristicFeatures, ConfigImaging,
-    ConfigImagingMinhash, ConfigImagingTLSH, ConfigIndex, ConfigIndexLocal, ConfigInstructions,
-    ConfigLifters, ConfigLiftersLLVM, ConfigLiftersVex, ConfigMarkov, ConfigMinhash, ConfigMmap,
-    ConfigMmapCache, ConfigProcessors, ConfigStorage, ConfigStorageLocal, ConfigTLSH,
-    Configuration,
+    ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDecompiler, ConfigDisassembler,
+    ConfigDisassemblerSweep, ConfigEmbeddings, ConfigEntityEmbeddings, ConfigEntityLifters,
+    ConfigFile, ConfigFormats, ConfigFunctions, ConfigHashEnabled, ConfigHeuristicEntropy,
+    ConfigHeuristicFeatures, ConfigImaging, ConfigImagingMinhash, ConfigImagingTLSH, ConfigIndex,
+    ConfigIndexLocal, ConfigInstructions, ConfigLifters, ConfigLiftersLLVM, ConfigLiftersVex,
+    ConfigMarkov, ConfigMinhash, ConfigMmap, ConfigMmapCache, ConfigTLSH, Configuration,
 };
 use std::env;
 
@@ -58,8 +56,6 @@ impl Configuration {
             threads: 0,
             minimal: false,
             debug: false,
-            storage: ConfigStorage::default(),
-            databases: ConfigDatabases::default(),
             index: ConfigIndex::default(),
             formats: ConfigFormats {
                 file: ConfigFile {
@@ -165,7 +161,6 @@ impl Configuration {
             decompiler: ConfigDecompiler::default(),
             lifters: ConfigLifters::default(),
             embeddings: ConfigEmbeddings::default(),
-            processors: ConfigProcessors::default(),
         })
     }
 
@@ -253,39 +248,6 @@ impl Configuration {
             .expect("failed to convert local index directory to string")
             .to_owned()
     }
-
-    pub fn default_local_storage_directory() -> String {
-        dirs::data_local_dir()
-            .or_else(dirs::data_dir)
-            .unwrap_or_else(|| env::temp_dir())
-            .join(DIRECTORY)
-            .join("storage")
-            .to_str()
-            .expect("failed to convert local storage directory to string")
-            .to_owned()
-    }
-
-    pub fn default_local_database_path() -> String {
-        dirs::data_local_dir()
-            .or_else(dirs::data_dir)
-            .unwrap_or_else(|| env::temp_dir())
-            .join(DIRECTORY)
-            .join("local.db")
-            .to_str()
-            .expect("failed to convert local database path to string")
-            .to_owned()
-    }
-
-    pub fn default_processor_directory() -> String {
-        dirs::data_local_dir()
-            .or_else(dirs::data_dir)
-            .unwrap_or_else(|| env::temp_dir())
-            .join(DIRECTORY)
-            .join("processors")
-            .to_str()
-            .expect("failed to convert processor directory to string")
-            .to_owned()
-    }
 }
 
 impl Default for Configuration {
@@ -298,38 +260,6 @@ impl Default for ConfigIndex {
     fn default() -> Self {
         Self {
             local: ConfigIndexLocal::default(),
-        }
-    }
-}
-
-impl Default for ConfigDatabases {
-    fn default() -> Self {
-        Self {
-            local: ConfigDatabaseLocal::default(),
-        }
-    }
-}
-
-impl Default for ConfigStorage {
-    fn default() -> Self {
-        Self {
-            local: ConfigStorageLocal::default(),
-        }
-    }
-}
-
-impl Default for ConfigStorageLocal {
-    fn default() -> Self {
-        Self {
-            directory: Configuration::default_local_storage_directory(),
-        }
-    }
-}
-
-impl Default for ConfigDatabaseLocal {
-    fn default() -> Self {
-        Self {
-            path: Configuration::default_local_database_path(),
         }
     }
 }

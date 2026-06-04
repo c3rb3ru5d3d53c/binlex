@@ -1,5 +1,5 @@
-"""Metadata attribute helpers for the Python bindings."""
+"""Metadata helpers for the Python bindings."""
 
-from binlex_bindings.binlex.metadata import Attribute, SymbolType
+from binlex_bindings.binlex.metadata import SymbolType
 
-__all__ = ["Attribute", "SymbolType"]
+__all__ = ["SymbolType"]

@@ -50,4 +50,4 @@ for slice in macho.slices():
   disassembler.disassemble(slice.entrypoint_virtual_addresses(), graph)
 
   for function in graph.functions():
-    function.print()
+    print(function)

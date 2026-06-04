@@ -49,17 +49,11 @@ impl Reference {
         self.inner.address
     }
 
-    #[pyo3(text_signature = "($self)")]
-    pub fn to_dict(&self, py: Python) -> PyResult<Py<PyAny>> {
-        let dict = pyo3::types::PyDict::new(py);
-        dict.set_item("location", self.location())?;
-        dict.set_item("address", self.address())?;
-        Ok(dict.into())
-    }
-
-    pub fn __str__(&self, py: Python) -> PyResult<String> {
-        let json = py.import("json")?;
-        let value = self.to_dict(py)?;
-        json.call_method1("dumps", (value,))?.extract()
+    pub fn __str__(&self) -> String {
+        format!(
+            "Reference(location=0x{:x}, address=0x{:x})",
+            self.location(),
+            self.address()
+        )
     }
 }

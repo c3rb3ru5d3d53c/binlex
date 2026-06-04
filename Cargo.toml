@@ -35,7 +35,6 @@ rayon = "1.10.0"
 crossbeam = "0.8.4"
 crossbeam-skiplist = "0.1.3"
 lz4 = "1.28.1"
-interprocess = "2.2.3"
 pdb = "0.8.0"
 memmap2 = "0.9.5"
 dirs = "6.0.0"
@@ -44,21 +43,9 @@ glob = "0.3.2"
 indexmap = "2.7.1"
 cxx = "=1.0.138"
 image = { version = "0.25.8", default-features = false, features = ["png"] }
-axum = "0.8.4"
-tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread", "signal"] }
-reqwest = { version = "0.12.23", default-features = false, features = ["blocking", "cookies", "json", "rustls-tls"] }
-burn = { version = "0.21.0-pre.2", default-features = false, features = ["std", "dispatch", "ndarray", "cuda", "vulkan"] }
-semver = "1.0.27"
 base64 = "0.22.1"
-object_store = { version = "0.13.1", features = ["fs"] }
-lancedb = { version = "0.27.1", default-features = false }
-arrow-array = { version = "57.0.0", default-features = false }
-arrow-schema = { version = "57.0.0", default-features = false }
-futures = "0.3.31"
-tracing = "0.1.41"
 winnow = "0.7.15"
 chrono = { version = "0.4.42", features = ["serde"] }
-rusqlite = { version = "0.37.0", features = ["bundled"] }
 yara-x = "1.14.0"
 z3 = { version = "0.20.0", features = ["vendored"] }
 z3-sys = { version = "0.11.0", features = ["vendored"] }
@@ -75,16 +62,6 @@ members = [
     "bindings/python/",
     "crates/mlir",
     "crates/llvm-asm",
-    "crates/binlex_tools/binlex",
-    "crates/binlex_tools/binlex-hash",
-    "crates/binlex_tools/binlex-image",
-    "crates/binlex_tools/binlex-mcp",
-    "crates/binlex_tools/binlex-server",
-    "crates/binlex_tools/binlex-symbols",
-    "crates/binlex_tools/binlex-test",
-    "crates/binlex_tools/binlex-web",
-    "crates/binlex_tools/binlex-yara",
-    "crates/binlex_processors/example",
 ]
 
 [workspace.package]

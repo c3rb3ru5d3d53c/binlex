@@ -194,14 +194,6 @@ impl Graph {
     pub(crate) fn set_image(&self, image: Py<Image>) {
         *self.image.lock().unwrap() = Some(image);
     }
-
-    pub(crate) fn image(&self, py: Python<'_>) -> Option<Py<Image>> {
-        self.image
-            .lock()
-            .unwrap()
-            .as_ref()
-            .map(|image| image.clone_ref(py))
-    }
 }
 
 #[pymethods]
@@ -418,14 +410,8 @@ impl Graph {
 
     #[pyo3(text_signature = "($self, address)")]
     /// Return the instruction at `address`, if it exists in the graph.
-    pub fn get_instruction(&self, py: Python, address: u64) -> Option<Instruction> {
-        if self
-            .inner
-            .lock()
-            .unwrap()
-            .get_instruction(address)
-            .is_none()
-        {
+    pub fn instruction(&self, py: Python, address: u64) -> Option<Instruction> {
+        if self.inner.lock().unwrap().instruction(address).is_none() {
             return None;
         }
         let cfg = self.clone_handle();
@@ -436,8 +422,8 @@ impl Graph {
 
     #[pyo3(text_signature = "($self, address)")]
     /// Return the block at `address`, if it exists in the graph.
-    pub fn get_block(&self, py: Python, address: u64) -> Option<Block> {
-        if self.inner.lock().unwrap().get_block(address).is_none() {
+    pub fn block(&self, py: Python, address: u64) -> Option<Block> {
+        if self.inner.lock().unwrap().block(address).is_none() {
             return None;
         }
         let cfg = self.clone_handle();
@@ -448,8 +434,8 @@ impl Graph {
 
     #[pyo3(text_signature = "($self, address)")]
     /// Return the function at `address`, if it exists in the graph.
-    pub fn get_function(&self, py: Python, address: u64) -> Option<Function> {
-        if self.inner.lock().unwrap().get_function(address).is_none() {
+    pub fn function(&self, py: Python, address: u64) -> Option<Function> {
+        if self.inner.lock().unwrap().function(address).is_none() {
             return None;
         }
         let cfg = self.clone_handle();

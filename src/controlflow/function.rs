@@ -21,262 +21,31 @@
 // SOFTWARE.
 
 use crate::Architecture;
-use crate::Configuration;
 use crate::controlflow::Block;
 use crate::controlflow::EntityKind;
 use crate::controlflow::Graph;
 use crate::controlflow::Instruction;
-use crate::embeddings::{Embedding, EmbeddingBackend, EmbeddingsJson};
+use crate::embeddings::{Embedding, EmbeddingBackend};
 use crate::entropy;
 use crate::genetics::Chromosome;
-use crate::genetics::ChromosomeJson;
 use crate::hashing::MinHash32;
 use crate::hashing::SHA256;
 use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
-use crate::hex;
-use crate::ir::ast::AstFunction;
-use crate::ir::hir::HirFunction;
-use crate::ir::lir::{
-    LirAbi, LirCpu, LirEffect, LirExpression, LirFunction, LirLocation, LirOperationBinary,
-    LirTerminator,
+use crate::irs::ast::AstFunction;
+use crate::irs::hir::HirFunction;
+use crate::irs::lir::{
+    LirEffect, LirExpression, LirFunction, LirLocation, LirOperationBinary, LirTerminator,
 };
-use crate::ir::llvm::{Lifter as LlvmLifter, LiftersJson, LlvmJson};
-use crate::ir::mir::{
+use crate::irs::llvm::LlvmModule;
+use crate::irs::mir::{
     MirAddressSpace, MirBlockParameter, MirControlTarget, MirFunction, MirOperationKind, MirType,
     MirValue,
 };
 #[cfg(not(target_os = "windows"))]
-use crate::ir::vex::{Lifter as VexLifter, VexJson};
-use crate::metadata::Attributes;
-use serde::{Deserialize, Serialize};
-use serde_json;
-use serde_json::Value;
+use crate::irs::vex::VexModule;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Error;
-
-/// Represents a JSON-serializable structure containing metadata about a function.
-#[derive(Serialize, Deserialize, Clone)]
-pub struct FunctionJson {
-    /// The kind of this entity, typically `"function"`.
-    pub kind: EntityKind,
-    /// The architecture of the function.
-    pub architecture: String,
-    /// The starting address of the function.
-    pub address: u64,
-    /// The number of edges (connections) in the function.
-    pub edges: usize,
-    /// The chromosome of the function in JSON format.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub chromosome: Option<ChromosomeJson>,
-    /// The size of the function in bytes, if available.
-    pub size: usize,
-    /// The raw bytes of the function in hexadecimal format, if available.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub bytes: Option<String>,
-    /// A map of callsite addresses to directly called function addresses.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub callees: BTreeMap<u64, u64>,
-    /// A map of callsite addresses to caller function addresses.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub callers: BTreeMap<u64, u64>,
-    /// The set of block addresses contained within the function.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub blocks: Vec<u64>,
-    /// The number of instructions in the function.
-    pub number_of_instructions: usize,
-    /// Number of blocks
-    pub number_of_blocks: usize,
-    /// The cyclomatic complexity of the function.
-    pub cyclomatic_complexity: usize,
-    /// Average Instructions per Block
-    pub average_instructions_per_block: f64,
-    /// The entropy of the function, if enabled.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub entropy: Option<f64>,
-    /// The SHA-256 hash of the function, if enabled.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub sha256: Option<String>,
-    /// The ssdeep fuzzy hash of the function, if enabled.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ssdeep: Option<String>,
-    /// The MinHash of the function, if enabled.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub minhash: Option<String>,
-    /// The TLSH of the function, if enabled.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tlsh: Option<String>,
-    /// The Markov-derived block importance scores, if enabled.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub markov: Option<BTreeMap<u64, f64>>,
-    /// Indicates whether the function is contiguous.
-    pub contiguous: bool,
-    /// Optional processor outputs attached by post-processing.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub processors: Option<BTreeMap<String, Value>>,
-    /// Optional embeddings attached directly to this function.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub embeddings: Option<EmbeddingsJson>,
-    /// Attributes
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub attributes: Option<Value>,
-    /// Optional lifted representations attached to this function.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lifters: Option<LiftersJson>,
-}
-
-#[allow(dead_code)]
-#[derive(Clone)]
-pub struct FunctionJsonDeserializer {
-    pub json: FunctionJson,
-    pub config: Configuration,
-}
-
-impl FunctionJsonDeserializer {
-    #[allow(dead_code)]
-    pub fn new(string: String, config: Configuration) -> Result<Self, Error> {
-        let json: FunctionJson =
-            serde_json::from_str(&string).map_err(|error| Error::other(format!("{}", error)))?;
-        if json.kind != EntityKind::Function {
-            return Err(Error::other("deserialized JSON is not a function kind"));
-        }
-        Ok(Self {
-            json,
-            config: config.clone(),
-        })
-    }
-
-    #[allow(dead_code)]
-    pub fn address(&self) -> u64 {
-        self.json.address
-    }
-
-    #[allow(dead_code)]
-    pub fn kind(&self) -> EntityKind {
-        self.json.kind
-    }
-
-    pub fn blocks(&self) -> Vec<u64> {
-        self.json.blocks.clone()
-    }
-
-    #[allow(dead_code)]
-    pub fn bytes(&self) -> Option<Vec<u8>> {
-        self.json.bytes.as_ref()?;
-        hex::decode(&self.json.bytes.clone().unwrap()).ok()
-    }
-
-    #[allow(dead_code)]
-    pub fn average_instructions_per_block(&self) -> f64 {
-        self.json.average_instructions_per_block
-    }
-
-    #[allow(dead_code)]
-    pub fn cyclomatic_complexity(&self) -> usize {
-        self.json.cyclomatic_complexity
-    }
-
-    #[allow(dead_code)]
-    pub fn size(&self) -> usize {
-        self.json.size
-    }
-
-    #[allow(dead_code)]
-    pub fn callee_references(&self) -> BTreeMap<u64, u64> {
-        self.json.callees.clone()
-    }
-
-    #[allow(dead_code)]
-    pub fn caller_references(&self) -> BTreeMap<u64, u64> {
-        self.json.callers.clone()
-    }
-
-    #[allow(dead_code)]
-    pub fn architecture(&self) -> Result<Architecture, Error> {
-        Architecture::from_string(&self.json.architecture)
-    }
-
-    #[allow(dead_code)]
-    pub fn entropy(&self) -> Option<f64> {
-        self.json.entropy
-    }
-
-    #[allow(dead_code)]
-    pub fn sha256(&self) -> Option<String> {
-        self.json.sha256.clone()
-    }
-
-    #[allow(dead_code)]
-    pub fn ssdeep(&self) -> Option<String> {
-        self.json.ssdeep.clone()
-    }
-
-    #[allow(dead_code)]
-    pub fn tlsh(&self) -> Option<String> {
-        self.json.tlsh.clone()
-    }
-
-    #[allow(dead_code)]
-    pub fn minhash(&self) -> Option<String> {
-        self.json.minhash.clone()
-    }
-
-    #[allow(dead_code)]
-    pub fn markov(&self) -> Option<BTreeMap<u64, f64>> {
-        self.json.markov.clone()
-    }
-
-    #[allow(dead_code)]
-    pub fn contiguous(&self) -> bool {
-        self.json.contiguous
-    }
-
-    #[allow(dead_code)]
-    pub fn processors(&self) -> Option<BTreeMap<String, Value>> {
-        self.json.processors.clone()
-    }
-
-    #[allow(dead_code)]
-    pub fn edges(&self) -> usize {
-        self.json.edges
-    }
-
-    #[allow(dead_code)]
-    pub fn chromosome(&self) -> Option<Chromosome> {
-        let chromosome = self.json.chromosome.clone();
-        chromosome.as_ref()?;
-        let bytes = self.bytes()?;
-        let mask = if chromosome.as_ref()?.mask.is_empty() {
-            vec![0; bytes.len()]
-        } else {
-            hex::decode(&chromosome.unwrap().mask).ok()?
-        };
-        Chromosome::new(bytes, mask, self.config.clone()).ok()
-    }
-
-    #[allow(dead_code)]
-    pub fn number_of_blocks(&self) -> usize {
-        self.json.number_of_blocks
-    }
-
-    #[allow(dead_code)]
-    pub fn number_of_instructions(&self) -> usize {
-        self.json.number_of_instructions
-    }
-
-    #[allow(dead_code)]
-    pub fn json(&self) -> Result<String, Error> {
-        let result = serde_json::to_string(&self.json)?;
-        Ok(result)
-    }
-
-    #[allow(dead_code)]
-    pub fn print(&self) {
-        if let Ok(json) = self.json() {
-            println!("{}", json);
-        }
-    }
-}
 
 /// Represents a control flow function within a graph.
 #[derive(Clone)]
@@ -289,6 +58,24 @@ pub struct Function<'function> {
     pub blocks: BTreeMap<u64, Block<'function>>,
 }
 
+/// A direct outgoing call relationship from a function.
+#[derive(Clone)]
+pub struct FunctionCallee<'graph> {
+    /// The callsite address inside the source function.
+    pub address: u64,
+    /// The function targeted by the callsite.
+    pub function: Function<'graph>,
+}
+
+/// A direct incoming call relationship into a function.
+#[derive(Clone)]
+pub struct FunctionCaller<'graph> {
+    /// The callsite address inside the caller function.
+    pub address: u64,
+    /// The function containing the callsite.
+    pub function: Function<'graph>,
+}
+
 impl<'function> Function<'function> {
     fn contiguous_payload_bytes_and_mask(&self) -> Option<(Vec<u8>, Vec<u8>, u64)> {
         let end = self.effective_end()?;
@@ -296,7 +83,7 @@ impl<'function> Function<'function> {
         let mut wildcard_mask = Vec::new();
         let mut pc = self.address;
         while pc < end {
-            let instruction = self.cfg.get_instruction(pc)?;
+            let instruction = self.cfg.instruction(pc)?;
             bytes.extend_from_slice(&instruction.bytes);
             if instruction.chromosome_mask.len() == instruction.bytes.len() {
                 wildcard_mask.extend_from_slice(&instruction.chromosome_mask);
@@ -401,215 +188,6 @@ impl<'function> Function<'function> {
         edges - nodes + 2 * components
     }
 
-    /// Processes the function into its JSON-serializable representation.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `FunctionJson` struct containing metadata about the function.
-    pub fn process_base(&self) -> FunctionJson {
-        self.process_base_with_references(self.callee_references(), self.caller_references())
-    }
-
-    pub fn process_base_with_references(
-        &self,
-        callee_references: BTreeMap<u64, u64>,
-        caller_references: BTreeMap<u64, u64>,
-    ) -> FunctionJson {
-        let contiguous_payload = self.contiguous_payload_bytes_and_mask();
-        let contiguous = contiguous_payload.is_some();
-        let block_addresses = self.block_addresses();
-        let number_of_blocks = block_addresses.len();
-        let number_of_instructions: usize = self
-            .blocks
-            .values()
-            .map(|block| block.number_of_instructions())
-            .sum();
-        let edges: usize = self.blocks.values().map(|block| block.edges()).sum();
-        let size = contiguous_payload
-            .as_ref()
-            .map(|(bytes, _, _)| bytes.len())
-            .unwrap_or_else(|| self.block_payload_size());
-        let bytes = contiguous_payload
-            .as_ref()
-            .map(|(bytes, _, _)| bytes.clone());
-        let bytes_hex = bytes.as_ref().map(|bytes| hex::encode(bytes));
-        let chromosome = if contiguous {
-            contiguous_payload
-                .as_ref()
-                .and_then(|(bytes, wildcard_mask, _)| {
-                    Chromosome::new(
-                        bytes.clone(),
-                        wildcard_mask.clone(),
-                        self.cfg.config.clone(),
-                    )
-                    .ok()
-                    .map(|chromosome| chromosome.process())
-                })
-        } else {
-            None
-        };
-        let entropy = if self.cfg.config.functions.entropy.enabled {
-            if let Some((bytes, _, _)) = &contiguous_payload {
-                entropy::shannon(bytes)
-            } else {
-                self.entropy()
-            }
-        } else {
-            None
-        };
-        let sha256 = if self.cfg.config.functions.sha256.enabled {
-            bytes
-                .as_ref()
-                .and_then(|bytes| SHA256::new(bytes).hexdigest())
-        } else {
-            None
-        };
-        let ssdeep = if self.cfg.config.functions.ssdeep.enabled {
-            bytes
-                .as_ref()
-                .and_then(|bytes| SSDeep::new(bytes).hexdigest())
-        } else {
-            None
-        };
-        let tlsh = if self.cfg.config.functions.tlsh.enabled {
-            bytes.as_ref().and_then(|bytes| {
-                TLSH::new(bytes, self.cfg.config.functions.tlsh.minimum_byte_size).hexdigest()
-            })
-        } else {
-            None
-        };
-        let minhash = if self.cfg.config.functions.minhash.enabled {
-            bytes.as_ref().and_then(|bytes| {
-                if bytes.len() > self.cfg.config.functions.minhash.maximum_byte_size
-                    && self.cfg.config.functions.minhash.maximum_byte_size_enabled
-                {
-                    None
-                } else {
-                    MinHash32::new(
-                        bytes,
-                        self.cfg.config.functions.minhash.number_of_hashes,
-                        self.cfg.config.functions.minhash.shingle_size,
-                        self.cfg.config.functions.minhash.seed,
-                    )
-                    .hexdigest()
-                }
-            })
-        } else {
-            None
-        };
-        let markov = if self.cfg.config.functions.markov.enabled {
-            Some(self.markov())
-        } else {
-            None
-        };
-
-        FunctionJson {
-            address: self.address,
-            kind: EntityKind::Function,
-            edges,
-            chromosome,
-            bytes: bytes_hex,
-            size,
-            callees: callee_references,
-            callers: caller_references,
-            blocks: block_addresses,
-            number_of_blocks,
-            number_of_instructions,
-            cyclomatic_complexity: if edges < number_of_blocks {
-                0
-            } else {
-                edges - number_of_blocks + 2
-            },
-            average_instructions_per_block: if number_of_blocks == 0 {
-                0.0
-            } else {
-                number_of_instructions as f64 / number_of_blocks as f64
-            },
-            entropy,
-            sha256,
-            ssdeep,
-            minhash,
-            tlsh,
-            markov,
-            contiguous,
-            processors: None,
-            embeddings: None,
-            architecture: self.architecture().to_string(),
-            attributes: None,
-            lifters: self.lifters_json(),
-        }
-    }
-
-    pub fn process(&self) -> FunctionJson {
-        let mut json = self.process_base();
-        self.apply_processors(&mut json);
-        json
-    }
-
-    pub fn process_with_references(
-        &self,
-        callee_references: BTreeMap<u64, u64>,
-        caller_references: BTreeMap<u64, u64>,
-    ) -> FunctionJson {
-        let mut json = self.process_base_with_references(callee_references, caller_references);
-        self.apply_processors(&mut json);
-        json
-    }
-
-    fn apply_processors(&self, json: &mut FunctionJson) {
-        if crate::processor::enabled_processors_for_target(
-            &self.cfg.config,
-            crate::processor::ProcessorTarget::Graph,
-        )
-        .iter()
-        .any(|processor| {
-            self.cfg
-                .processor_output(
-                    crate::processor::ProcessorTarget::Function,
-                    self.address,
-                    processor.name(),
-                )
-                .is_none()
-        }) {
-            let _ = self.cfg.process_graph();
-        }
-        if let Some(outputs) = self
-            .cfg
-            .processor_outputs(crate::processor::ProcessorTarget::Function, self.address)
-        {
-            for (processor_name, output) in &outputs {
-                crate::processor::apply_output(
-                    json.processors.get_or_insert_with(Default::default),
-                    processor_name,
-                    output,
-                );
-            }
-        } else {
-            for processor in crate::processor::enabled_processors_for_target(
-                &self.cfg.config,
-                crate::processor::ProcessorTarget::Function,
-            ) {
-                if let Some(output) = processor.process_function(self) {
-                    crate::processor::apply_output(
-                        json.processors.get_or_insert_with(Default::default),
-                        processor.name(),
-                        &output,
-                    );
-                }
-            }
-        }
-        if self.cfg.config.functions.embeddings.llvm.enabled {
-            if let Some(vector) = self.embedding() {
-                json.embeddings = Some(EmbeddingsJson::llvm(vector));
-            }
-        }
-    }
-
-    /// Return all processor outputs attached to this function.
-    pub fn processors(&self) -> BTreeMap<String, Value> {
-        self.process().processors.unwrap_or_default()
-    }
-
     /// Return an embedding vector for this function using the default backend and dimensions.
     pub fn embedding(&self) -> Option<Vec<f32>> {
         self.embedding_with_options(None, None)
@@ -630,70 +208,21 @@ impl<'function> Function<'function> {
         .embed_function(self)
     }
 
-    pub fn llvm(&self, abi: Option<&LirAbi>, triple: Option<String>) -> Result<LlvmLifter, Error> {
-        let mut lifter = if let Some(triple) = triple {
-            let cpu = LirCpu::from_architecture(self.architecture())
-                .map_err(|error| Error::other(error.to_string()))?;
-            LlvmLifter::new(cpu, self.cfg.config.clone(), Some(triple))
-                .map_err(|error| Error::other(error.to_string()))?
-        } else {
-            LlvmLifter::from_architecture(self.architecture(), self.cfg.config.clone())
-        };
-        lifter.lift_function(self, abi)?;
+    pub fn llvm(&self) -> Result<LlvmModule, Error> {
+        if !self.cfg.config.functions.lifters.llvm.enabled {
+            return Err(Error::other("function llvm module is disabled"));
+        }
+        let mut lifter =
+            LlvmModule::from_architecture_with_config(self.architecture(), self.cfg.config.clone());
+        lifter.populate_function(self, None)?;
         Ok(lifter)
     }
 
     #[cfg(not(target_os = "windows"))]
-    pub fn vex(&self, abi: Option<&LirAbi>) -> Result<VexLifter, Error> {
-        let mut lifter = VexLifter::new(self.cfg.config.clone());
-        lifter.lift_function(self, abi)?;
+    pub fn vex(&self) -> Result<VexModule, Error> {
+        let mut lifter = VexModule::with_config(None, self.cfg.config.clone());
+        lifter.populate_function(self)?;
         Ok(lifter)
-    }
-
-    fn lifters_json(&self) -> Option<LiftersJson> {
-        let llvm = if self.cfg.config.functions.lifters.llvm.enabled {
-            let mut lifter =
-                LlvmLifter::from_architecture(self.architecture(), self.cfg.config.clone());
-            lifter.lift_function(self, None).ok()?;
-            Some(LlvmJson { text: lifter.ir() })
-        } else {
-            None
-        };
-
-        #[cfg(not(target_os = "windows"))]
-        let vex = if self.cfg.config.lifters.vex.enabled
-            && self.cfg.config.functions.lifters.vex.enabled
-        {
-            let mut lifter = VexLifter::new(self.cfg.config.clone());
-            lifter.lift_function(self, None).ok()?;
-            Some(VexJson { text: lifter.ir() })
-        } else {
-            None
-        };
-
-        #[cfg(not(target_os = "windows"))]
-        if llvm.is_none() && vex.is_none() {
-            return None;
-        }
-
-        #[cfg(target_os = "windows")]
-        if llvm.is_none() {
-            return None;
-        }
-
-        Some(LiftersJson {
-            llvm,
-            #[cfg(not(target_os = "windows"))]
-            vex,
-        })
-    }
-
-    /// Return a single processor output by name or an empty object when absent.
-    pub fn processor(&self, name: &str) -> Value {
-        self.processors()
-            .get(name)
-            .cloned()
-            .unwrap_or_else(|| Value::Object(Default::default()))
     }
 
     /// Retrives the number of blocks in the function.
@@ -705,60 +234,8 @@ impl<'function> Function<'function> {
         self.blocks.len()
     }
 
-    /// Processes the function into its JSON-serializable representation including `Attributes`
-    ///
-    /// # Returns
-    ///
-    /// Returns a `FunctionJson` instance containing the function's metadata and `Attributes`.
-    pub fn process_with_attributes(&self, attributes: Attributes) -> FunctionJson {
-        let mut result = self.process();
-        result.attributes = Some(attributes.process());
-        result
-    }
-
-    pub fn process_with_attributes_and_references(
-        &self,
-        attributes: Attributes,
-        callee_references: BTreeMap<u64, u64>,
-        caller_references: BTreeMap<u64, u64>,
-    ) -> FunctionJson {
-        let mut result = self.process_with_references(callee_references, caller_references);
-        result.attributes = Some(attributes.process());
-        result
-    }
-
-    /// Prints the JSON representation of the function to standard output.
-    #[allow(dead_code)]
-    pub fn print(&self) {
-        if let Ok(json) = self.json() {
-            println!("{}", json);
-        }
-    }
-
-    /// Converts the function metadata into a JSON string representation.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(String)` containing the JSON representation, or an `Err` if serialization fails.
-    pub fn json(&self) -> Result<String, Error> {
-        let raw = self.process();
-        let result = serde_json::to_string(&raw)?;
-        Ok(result)
-    }
-
     pub fn kind(&self) -> EntityKind {
         EntityKind::Function
-    }
-
-    /// Converts the function metadata into a JSON string representation including `Attributes`.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(String)` containing the JSON representation, or an `Err` if serialization fails.
-    pub fn json_with_attributes(&self, attributes: Attributes) -> Result<String, Error> {
-        let raw = self.process_with_attributes(attributes);
-        let result = serde_json::to_string(&raw)?;
-        Ok(result)
     }
 
     /// Generates the function's chromosome if the function is contiguous.
@@ -769,18 +246,6 @@ impl<'function> Function<'function> {
     pub fn chromosome(&self) -> Option<Chromosome> {
         let (bytes, wildcard_mask, _) = self.contiguous_payload_bytes_and_mask()?;
         Chromosome::new(bytes, wildcard_mask, self.cfg.config.clone()).ok()
-    }
-
-    /// Generates the function's chromosome JSON if the function is contiguous.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Some(ChromosomeJson)` if the function is contiguous; otherwise, `None`.
-    pub fn chromosome_json(&self) -> Option<ChromosomeJson> {
-        if !self.contiguous() {
-            return None;
-        }
-        Some(self.chromosome()?.process())
     }
 
     /// Retrieves the pattern string representation of the chromosome.
@@ -855,7 +320,7 @@ impl<'function> Function<'function> {
     }
 
     fn resolve_indirect_symbol_address(
-        encoding: Option<&crate::ir::lir::LirEncoding>,
+        encoding: Option<&crate::irs::lir::LirEncoding>,
         expression: &LirExpression,
         register_map: &BTreeMap<String, LirExpression>,
         depth: usize,
@@ -892,7 +357,7 @@ impl<'function> Function<'function> {
     }
 
     fn resolve_indirect_symbol_name(
-        encoding: Option<&crate::ir::lir::LirEncoding>,
+        encoding: Option<&crate::irs::lir::LirEncoding>,
         target: &LirExpression,
         symbol_map: &BTreeMap<u64, String>,
         register_map: &BTreeMap<String, LirExpression>,
@@ -920,7 +385,7 @@ impl<'function> Function<'function> {
             _ => return None,
         };
 
-        if !matches!(space, crate::ir::lir::LirAddressSpace::Default) {
+        if !matches!(space, crate::irs::lir::LirAddressSpace::Default) {
             return None;
         }
 
@@ -929,7 +394,7 @@ impl<'function> Function<'function> {
     }
 
     fn resolve_symbol_name(
-        encoding: Option<&crate::ir::lir::LirEncoding>,
+        encoding: Option<&crate::irs::lir::LirEncoding>,
         target: &LirExpression,
         symbol_map: &BTreeMap<u64, String>,
         register_map: &BTreeMap<String, LirExpression>,
@@ -944,14 +409,14 @@ impl<'function> Function<'function> {
     }
 
     fn canonicalize_indirect_target_address(
-        encoding: Option<&crate::ir::lir::LirEncoding>,
+        encoding: Option<&crate::irs::lir::LirEncoding>,
         target: &mut LirExpression,
         register_map: &BTreeMap<String, LirExpression>,
     ) -> bool {
         let LirExpression::Load { space, addr, .. } = target else {
             return false;
         };
-        if !matches!(space, crate::ir::lir::LirAddressSpace::Default) {
+        if !matches!(space, crate::irs::lir::LirAddressSpace::Default) {
             return false;
         }
         let Some(address) = Self::resolve_indirect_symbol_address(encoding, addr, register_map, 0)
@@ -1108,14 +573,6 @@ impl<'function> Function<'function> {
         Ok(AstFunction::from_hir(&self.hir()?))
     }
 
-    pub fn c(&self) -> Result<String, Error> {
-        Ok(self.ast()?.c())
-    }
-
-    pub fn c_with_image(&self, image: &crate::formats::Image) -> Result<String, Error> {
-        Ok(self.ast()?.c_with_image(image))
-    }
-
     pub(crate) fn trim_mir_call_arguments(
         &self,
         mir: &mut MirFunction,
@@ -1167,7 +624,7 @@ impl<'function> Function<'function> {
                         if address == self.address {
                             continue;
                         }
-                        let Some(callee) = self.cfg.get_function(address) else {
+                        let Some(callee) = self.cfg.function(address) else {
                             trim_import_or_external_call_arguments(
                                 operation,
                                 &target_name,
@@ -1206,7 +663,7 @@ impl<'function> Function<'function> {
 
         let mut observed = Vec::<Option<MirType>>::new();
         let callers = self
-            .caller_references()
+            .direct_caller_references()
             .values()
             .copied()
             .collect::<BTreeSet<_>>();
@@ -1215,7 +672,7 @@ impl<'function> Function<'function> {
             if caller_address == self.address {
                 continue;
             }
-            let Some(caller) = self.cfg.get_function(caller_address) else {
+            let Some(caller) = self.cfg.function(caller_address) else {
                 continue;
             };
             let caller_mir = caller.mir()?;
@@ -1371,7 +828,7 @@ impl<'function> Function<'function> {
         let mut bytes = Vec::<u8>::new();
         let mut pc = self.address;
         while pc < end {
-            let instruction = self.cfg.get_instruction(pc)?;
+            let instruction = self.cfg.instruction(pc)?;
             bytes.extend(&instruction.bytes);
             pc += instruction.size() as u64;
         }
@@ -1390,7 +847,7 @@ impl<'function> Function<'function> {
             .max()
             .unwrap_or(self.address);
 
-        let mut queue: Vec<u64> = self.callee_references().values().copied().collect();
+        let mut queue: Vec<u64> = self.direct_callee_references().values().copied().collect();
         let mut visited = std::collections::BTreeSet::<u64>::new();
 
         while let Some(callee_address) = queue.pop() {
@@ -1417,7 +874,7 @@ impl<'function> Function<'function> {
                 end = callee_end;
             }
 
-            queue.extend(callee.callee_references().values().copied());
+            queue.extend(callee.direct_callee_references().values().copied());
         }
 
         if self
@@ -1427,7 +884,7 @@ impl<'function> Function<'function> {
             .any(|entry| entry.value().has_indirect_target())
         {
             let mut pc = end;
-            while let Some(instruction) = self.cfg.get_instruction(pc) {
+            while let Some(instruction) = self.cfg.instruction(pc) {
                 pc += instruction.size() as u64;
                 end = pc;
             }
@@ -1540,7 +997,7 @@ impl<'function> Function<'function> {
     /// # Returns
     ///
     /// Returns a `BTreeMap<u64, u64>` containing `callsite -> callee` pairs.
-    pub fn callee_references(&self) -> BTreeMap<u64, u64> {
+    pub(crate) fn direct_callee_references(&self) -> BTreeMap<u64, u64> {
         self.cfg.function_callee_references(self.address)
     }
 
@@ -1549,42 +1006,32 @@ impl<'function> Function<'function> {
     /// # Returns
     ///
     /// Returns a `BTreeMap<u64, u64>` containing `callsite -> caller` pairs.
-    pub fn caller_references(&self) -> BTreeMap<u64, u64> {
+    pub(crate) fn direct_caller_references(&self) -> BTreeMap<u64, u64> {
         self.cfg.function_caller_references(self.address)
     }
 
-    /// Retrieves the directly called functions.
-    pub fn callees(&self) -> Vec<Function<'function>> {
-        let mut seen = BTreeSet::<u64>::new();
-        let mut result = Vec::<Function<'function>>::new();
-
-        for callee_address in self.callee_references().values().copied() {
-            if !seen.insert(callee_address) {
-                continue;
-            }
-            if let Ok(function) = Function::new(callee_address, self.cfg) {
-                result.push(function);
-            }
-        }
-
-        result
+    /// Retrieves direct outgoing call relationships.
+    pub fn callees(&self) -> Vec<FunctionCallee<'function>> {
+        self.direct_callee_references()
+            .into_iter()
+            .filter_map(|(address, function_address)| {
+                Function::new(function_address, self.cfg)
+                    .ok()
+                    .map(|function| FunctionCallee { address, function })
+            })
+            .collect()
     }
 
-    /// Retrieves the direct caller functions.
-    pub fn callers(&self) -> Vec<Function<'function>> {
-        let mut seen = BTreeSet::<u64>::new();
-        let mut result = Vec::<Function<'function>>::new();
-
-        for caller_address in self.caller_references().values().copied() {
-            if !seen.insert(caller_address) {
-                continue;
-            }
-            if let Ok(function) = Function::new(caller_address, self.cfg) {
-                result.push(function);
-            }
-        }
-
-        result
+    /// Retrieves direct incoming call relationships.
+    pub fn callers(&self) -> Vec<FunctionCaller<'function>> {
+        self.direct_caller_references()
+            .into_iter()
+            .filter_map(|(address, function_address)| {
+                Function::new(function_address, self.cfg)
+                    .ok()
+                    .map(|function| FunctionCaller { address, function })
+            })
+            .collect()
     }
 
     /// Computes normalized Markov-derived importance scores for blocks in the function.
@@ -1691,7 +1138,7 @@ impl<'function> Function<'function> {
 }
 
 fn trim_import_or_external_call_arguments(
-    operation: &mut crate::ir::mir::MirOperation,
+    operation: &mut crate::irs::mir::MirOperation,
     target: &str,
     entry_parameter_names: &BTreeSet<String>,
 ) {
@@ -1720,7 +1167,7 @@ fn import_prototype_arity(target: &str) -> Option<usize> {
     }
 }
 
-fn trim_local_call_metadata(operation: &mut crate::ir::mir::MirOperation, keep: usize) {
+fn trim_local_call_metadata(operation: &mut crate::irs::mir::MirOperation, keep: usize) {
     let MirOperationKind::Call {
         arguments,
         clobbers,
@@ -1753,7 +1200,7 @@ fn trim_local_call_metadata(operation: &mut crate::ir::mir::MirOperation, keep: 
 }
 
 fn trim_external_call_arguments(
-    operation: &mut crate::ir::mir::MirOperation,
+    operation: &mut crate::irs::mir::MirOperation,
     entry_parameter_names: &BTreeSet<String>,
 ) {
     let MirOperationKind::Call {
@@ -1797,29 +1244,29 @@ fn trim_external_call_arguments(
 }
 
 fn is_meaningful_external_argument(
-    argument: &crate::ir::mir::MirValue,
+    argument: &crate::irs::mir::MirValue,
     entry_parameter_names: &BTreeSet<String>,
 ) -> bool {
     match argument {
-        crate::ir::mir::MirValue::Named { name, .. } => {
+        crate::irs::mir::MirValue::Named { name, .. } => {
             if name.starts_with("arg") && !entry_parameter_names.contains(name) {
                 return false;
             }
             true
         }
-        crate::ir::mir::MirValue::Undef { .. } => false,
-        crate::ir::mir::MirValue::Integer { .. }
-        | crate::ir::mir::MirValue::Boolean(_)
-        | crate::ir::mir::MirValue::Null { .. } => true,
+        crate::irs::mir::MirValue::Undef { .. } => false,
+        crate::irs::mir::MirValue::Integer { .. }
+        | crate::irs::mir::MirValue::Boolean(_)
+        | crate::irs::mir::MirValue::Null { .. } => true,
     }
 }
 
 fn argument_uses_entry_parameter(
-    argument: &crate::ir::mir::MirValue,
+    argument: &crate::irs::mir::MirValue,
     entry_parameter_names: &BTreeSet<String>,
 ) -> bool {
     match argument {
-        crate::ir::mir::MirValue::Named { name, .. } => entry_parameter_names.contains(name),
+        crate::irs::mir::MirValue::Named { name, .. } => entry_parameter_names.contains(name),
         _ => false,
     }
 }
@@ -2172,18 +1619,18 @@ fn rewrite_value_types_in_operation(kind: &mut MirOperationKind, name: &str, ty:
 }
 
 fn rewrite_value_types_in_terminator(
-    terminator: &mut crate::ir::mir::MirTerminator,
+    terminator: &mut crate::irs::mir::MirTerminator,
     name: &str,
     ty: &MirType,
 ) {
     match terminator {
-        crate::ir::mir::MirTerminator::Jump { target, arguments } => {
+        crate::irs::mir::MirTerminator::Jump { target, arguments } => {
             rewrite_control_target_value_type(target, name, ty);
             for argument in arguments {
                 rewrite_named_value_type(argument, name, ty);
             }
         }
-        crate::ir::mir::MirTerminator::CondBr {
+        crate::irs::mir::MirTerminator::CondBr {
             condition,
             then_target,
             then_arguments,
@@ -2200,12 +1647,12 @@ fn rewrite_value_types_in_terminator(
                 rewrite_named_value_type(argument, name, ty);
             }
         }
-        crate::ir::mir::MirTerminator::Return { values } => {
+        crate::irs::mir::MirTerminator::Return { values } => {
             for value in values {
                 rewrite_named_value_type(value, name, ty);
             }
         }
-        crate::ir::mir::MirTerminator::Trap | crate::ir::mir::MirTerminator::Unreachable => {}
+        crate::irs::mir::MirTerminator::Trap | crate::irs::mir::MirTerminator::Unreachable => {}
     }
 }
 
