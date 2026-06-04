@@ -583,6 +583,7 @@ impl<'function> Function<'function> {
             .iter()
             .filter_map(|parameter| parameter.name.clone())
             .collect::<BTreeSet<_>>();
+        let defs = build_mir_defs(mir);
         let symbol_to_address = symbol_map
             .iter()
             .map(|(address, name)| (name.clone(), *address))
@@ -602,6 +603,7 @@ impl<'function> Function<'function> {
                                 operation,
                                 &target_name,
                                 &entry_parameter_names,
+                                &defs,
                             );
                             continue;
                         }
@@ -610,6 +612,7 @@ impl<'function> Function<'function> {
                                 operation,
                                 &target_name,
                                 &entry_parameter_names,
+                                &defs,
                             );
                             continue;
                         };
@@ -618,6 +621,7 @@ impl<'function> Function<'function> {
                                 operation,
                                 &target_name,
                                 &entry_parameter_names,
+                                &defs,
                             );
                             continue;
                         }
@@ -629,6 +633,7 @@ impl<'function> Function<'function> {
                                 operation,
                                 &target_name,
                                 &entry_parameter_names,
+                                &defs,
                             );
                             continue;
                         };
@@ -640,7 +645,7 @@ impl<'function> Function<'function> {
                         trim_local_call_metadata(operation, keep);
                     }
                     MirControlTarget::FunctionIndirect(_) | MirControlTarget::BlockIndirect(_) => {
-                        trim_external_call_arguments(operation, &entry_parameter_names);
+                        trim_external_call_arguments(operation, &entry_parameter_names, &defs);
                     }
                 }
             }
@@ -1141,11 +1146,12 @@ fn trim_import_or_external_call_arguments(
     operation: &mut crate::irs::mir::MirOperation,
     target: &str,
     entry_parameter_names: &BTreeSet<String>,
+    defs: &BTreeMap<String, MirOperationKind>,
 ) {
     if let Some(arity) = import_prototype_arity(target) {
         trim_local_call_metadata(operation, arity);
     } else {
-        trim_external_call_arguments(operation, entry_parameter_names);
+        trim_external_call_arguments(operation, entry_parameter_names, defs);
     }
 }
 
@@ -1202,6 +1208,7 @@ fn trim_local_call_metadata(operation: &mut crate::irs::mir::MirOperation, keep:
 fn trim_external_call_arguments(
     operation: &mut crate::irs::mir::MirOperation,
     entry_parameter_names: &BTreeSet<String>,
+    defs: &BTreeMap<String, MirOperationKind>,
 ) {
     let MirOperationKind::Call {
         arguments,
@@ -1216,7 +1223,7 @@ fn trim_external_call_arguments(
     let mut filtered_arguments = Vec::with_capacity(arguments.len());
     let mut uses_entry_arguments = false;
     for argument in arguments.iter() {
-        if is_meaningful_external_argument(argument, entry_parameter_names) {
+        if is_meaningful_external_argument(argument, entry_parameter_names, defs) {
             filtered_arguments.push(argument.clone());
         }
         if argument_uses_entry_parameter(argument, entry_parameter_names) {
@@ -1246,11 +1253,12 @@ fn trim_external_call_arguments(
 fn is_meaningful_external_argument(
     argument: &crate::irs::mir::MirValue,
     entry_parameter_names: &BTreeSet<String>,
+    defs: &BTreeMap<String, MirOperationKind>,
 ) -> bool {
     match argument {
         crate::irs::mir::MirValue::Named { name, .. } => {
             if name.starts_with("arg") && !entry_parameter_names.contains(name) {
-                return false;
+                return !name.starts_with("arg_") && defs.contains_key(name);
             }
             true
         }

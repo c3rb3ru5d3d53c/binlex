@@ -48,6 +48,10 @@ fn pattern_matches_bytes(pattern: &str, bytes: &[u8]) -> bool {
     true
 }
 
+fn mir_text_contains_call_target(text: &str, target: &str) -> bool {
+    text.contains("\"binlex.mir.call\"") && text.contains(&format!("target = \"{target}\""))
+}
+
 #[test]
 fn test_block_split_pending() {
     // assembly: jz 0x4; nop; nop; ret
@@ -171,13 +175,16 @@ fn test_mir_lowering_preserves_mid_block_calls() {
     );
 
     let raw_mir = MirFunction::from_lir(None, &lir).expect("raw mir");
-    assert!(raw_mir.text().contains("mir.call @callee("));
+    assert!(mir_text_contains_call_target(&raw_mir.text(), "@callee"));
     assert!(!raw_mir.text().contains("@block_0(%arg0: i64"));
     assert!(!raw_mir.text().contains("%rax"));
     assert!(!raw_mir.text().contains("%rcx"));
 
     let optimized_mir = function.mir().expect("optimized mir");
-    assert!(optimized_mir.text().contains("mir.call @callee("));
+    assert!(mir_text_contains_call_target(
+        &optimized_mir.text(),
+        "@callee"
+    ));
     assert!(!optimized_mir.text().contains("@block_0(%arg0: i64"));
     assert!(!optimized_mir.text().contains("%rax"));
     assert!(!optimized_mir.text().contains("%rcx"));
@@ -193,7 +200,10 @@ fn test_mir_lowering_preserves_mid_block_calls() {
     .decompile_function(0)
     .expect("decompile")
     .expect("decompiled function");
-    assert!(decompiled.mir.text().contains("mir.call @callee("));
+    assert!(mir_text_contains_call_target(
+        &decompiled.mir.text(),
+        "@callee"
+    ));
 }
 
 #[test]
@@ -227,7 +237,7 @@ fn test_external_call_metadata_is_trimmed_to_meaningful_arguments() {
     let text = mir.text();
 
     assert!(
-        text.contains("mir.call @puts!GLIBC_2.2.5("),
+        mir_text_contains_call_target(&text, "@puts!GLIBC_2.2.5"),
         "expected external call target to remain symbolized"
     );
     assert!(
@@ -239,14 +249,15 @@ fn test_external_call_metadata_is_trimmed_to_meaningful_arguments() {
         "unexpected generic incoming[args] effect for external call without entry parameters"
     );
     assert!(
-        text.contains(": ptr<i8>"),
+        text.contains("ty = \"ptr<i8>\""),
         "expected caller MIR to propagate pointer-like argument typing"
     );
 
     let external = Function::new(0x10, &graph).expect("external function");
     let external_mir = external.mir().expect("external mir").text();
     assert!(
-        external_mir.contains("@block_10(%arg0: ptr<i8>)"),
+        external_mir.contains("parameters = \"%arg0: ptr<i8>\"")
+            && external_mir.contains("sym_name = \"block_10\""),
         "expected observed import signature to materialize pointer-like external callee MIR"
     );
 }
@@ -282,7 +293,7 @@ fn test_indirect_call_metadata_is_trimmed_to_meaningful_arguments() {
     let text = mir.text();
 
     assert!(
-        text.contains("mir.call function_indirect"),
+        text.contains("\"binlex.mir.call\"") && text.contains("target = \"function_indirect"),
         "expected indirect call target to remain indirect"
     );
     assert!(
@@ -294,11 +305,11 @@ fn test_indirect_call_metadata_is_trimmed_to_meaningful_arguments() {
         "unexpected generic incoming[args] effect for indirect call without entry parameters"
     );
     assert!(
-        text.contains("mir.load default, %bin_"),
+        text.contains("\"binlex.mir.load\"") && text.contains("result = \"load_"),
         "expected indirect-call fixture to keep the load-derived pointer value visible"
     );
     assert!(
-        text.contains(": ptr<i8>"),
+        text.contains("ty = \"ptr<i8>\""),
         "expected indirect-call MIR to propagate pointer-like typing onto the load-derived value"
     );
     assert!(
@@ -370,7 +381,7 @@ fn test_windows64_import_call_narrows_to_observed_argument_count() {
     let function = Function::new(0, &graph).expect("function");
     let text = function.mir().expect("mir").text();
     assert!(
-        text.contains("mir.call @ntdll.dll!RtlSetLastWin32Error("),
+        mir_text_contains_call_target(&text, "@ntdll.dll!RtlSetLastWin32Error"),
         "expected import call to remain symbolized"
     );
     assert!(

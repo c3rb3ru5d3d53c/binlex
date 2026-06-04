@@ -36,10 +36,12 @@ fn disassemble_single(name: &str, architecture: Architecture, bytes: &[u8]) -> I
         }
     }
 
-    graph
+    let mut instruction = graph
         .instruction(0)
         .expect("instruction should exist")
-        .into_record()
+        .into_record();
+    instruction.semantics = instruction.build_semantics();
+    instruction
 }
 
 fn assert_partial_semantics(name: &str, architecture: Architecture, bytes: &[u8]) {

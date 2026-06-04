@@ -65,5 +65,5 @@ pub(super) fn lift_instruction_to_llvm(name: &str, bytes: &[u8]) -> String {
     lifter
         .verify()
         .unwrap_or_else(|error| panic!("{name}: llvm module should verify: {error}"));
-    lifter.ir()
+    lifter.text()
 }

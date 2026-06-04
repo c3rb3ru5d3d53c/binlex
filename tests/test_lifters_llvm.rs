@@ -172,7 +172,8 @@ fn assert_all_instruction_semantics_status(graph: &Graph, status: LirStatus) {
     for instruction in instructions {
         let semantics = instruction
             .semantics
-            .as_ref()
+            .clone()
+            .or_else(|| instruction.build_semantics())
             .expect("instruction should have semantics");
         assert_eq!(
             semantics.status, status,
@@ -1408,7 +1409,8 @@ fn llvm_lifter_preserves_unsupported_instruction_fallback() {
     let instruction = graph.instruction(0).expect("instruction");
     let semantics = instruction
         .semantics
-        .as_ref()
+        .clone()
+        .or_else(|| instruction.build_semantics())
         .expect("unsupported instruction should still have fallback semantics");
     assert_eq!(semantics.status, binlex::irs::lir::LirStatus::Partial);
     assert!(
@@ -1575,12 +1577,16 @@ fn llvm_supported_semantics_cases_are_complete() {
         let graph = disassemble_graph(*architecture, bytes);
         verify_instruction_and_block_lifts(&graph);
         for instruction in graph.instructions() {
-            let semantics = instruction.semantics.as_ref().unwrap_or_else(|| {
-                panic!(
-                    "{name}: instruction 0x{:x} missing semantics",
-                    instruction.address
-                )
-            });
+            let semantics = instruction
+                .semantics
+                .clone()
+                .or_else(|| instruction.build_semantics())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{name}: instruction 0x{:x} missing semantics",
+                        instruction.address
+                    )
+                });
             assert_eq!(
                 semantics.status,
                 LirStatus::Complete,
@@ -1600,12 +1606,16 @@ fn llvm_accuracy_gated_semantics_cases_remain_partial() {
         verify_instruction_and_block_lifts(&graph);
         let expected = partial_addresses.iter().copied().collect::<BTreeSet<_>>();
         for instruction in graph.instructions() {
-            let semantics = instruction.semantics.as_ref().unwrap_or_else(|| {
-                panic!(
-                    "{name}: instruction 0x{:x} missing semantics",
-                    instruction.address
-                )
-            });
+            let semantics = instruction
+                .semantics
+                .clone()
+                .or_else(|| instruction.build_semantics())
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{name}: instruction 0x{:x} missing semantics",
+                        instruction.address
+                    )
+                });
             if expected.contains(&instruction.address) {
                 assert_eq!(
                     semantics.status,

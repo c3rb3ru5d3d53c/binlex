@@ -702,12 +702,12 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
 #[cfg(test)]
 mod tests {
+    use crate::Architecture;
     use crate::irs::lir::{
         Lir, LirAbi, LirAbiKind, LirCpu, LirCpuKind, LirEffect, LirExpression, LirLocation,
         LirMetadata, LirModule, LirStatus, LirTerminator, LirTrapKind,
     };
     use crate::irs::llvm::LlvmModule;
-    use crate::{Architecture, Configuration};
 
     fn cpu_kind(architecture: Architecture) -> LirCpuKind {
         match architecture {

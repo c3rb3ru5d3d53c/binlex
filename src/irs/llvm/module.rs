@@ -1243,7 +1243,6 @@ impl LlvmModule {
 #[cfg(test)]
 mod jit_tests {
     use super::LlvmModule;
-    use crate::Configuration;
     use crate::irs::lir::{
         Lir, LirAbi, LirCpu, LirEffect, LirExpression, LirLocation, LirMetadata, LirModule,
         LirOperationBinary, LirStatus, LirTerminator,
