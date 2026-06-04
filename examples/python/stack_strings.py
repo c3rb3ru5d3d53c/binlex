@@ -5,8 +5,14 @@ from binlex import Configuration
 from binlex.assemblers import Assembler
 from binlex.controlflow import Graph
 from binlex.disassemblers import Disassembler
-from binlex.irs.lir import LirBlock, LirCpuAmd64, LirCpuI386, LirFunction, LirModule
-from binlex.symbolic import CpuState, Executor
+from binlex.irs.lir import (
+    LirBlock,
+    LirCpuI386,
+    LirExecutor,
+    LirExecutorState,
+    LirFunction,
+    LirModule,
+)
 
 assembly = """
 sub esp, 32
@@ -54,19 +60,17 @@ function = graph.function(0)
 assert function, "failed"
 
 cpu = LirCpuI386()
-executor = Executor()
-state = CpuState(cpu)
+executor = LirExecutor()
+state = LirExecutorState(cpu)
 state.set_register("esp", 32, stack_base)
 state.map_memory(stack_base - stack_size, stack_size)
 
-semantics = LirModule()
-semantic_function = LirFunction()
-semantic_block = LirBlock()
+semantics = LirModule(name="stack_strings")
+semantic_function = LirFunction(name="entry")
+semantic_block = LirBlock(name="entry")
 for block in function.blocks():
     for instruction in block.instructions():
-        semantic = instruction.semantic()
-        if semantic is not None:
-            semantic_block.append_instruction(semantic)
+        semantic_block.append_instruction(instruction.lir())
 semantic_function.append_block(semantic_block)
 semantics.append_function(semantic_function)
 

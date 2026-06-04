@@ -4,8 +4,15 @@ from binlex import Architecture, Configuration
 from binlex.assemblers import Assembler
 from binlex.controlflow import Graph
 from binlex.disassemblers import Disassembler
-from binlex.irs.lir import LirCpuAmd64, LirCpuI386, LirModule, LirStatus
-from binlex.symbolic import CpuState, Executor
+from binlex.irs.lir import (
+    LirBlock,
+    LirCpuAmd64,
+    LirExecutor,
+    LirExecutorState,
+    LirFunction,
+    LirModule,
+    LirStatus,
+)
 
 
 configuration = Configuration()
@@ -75,17 +82,20 @@ tail_instructions = disassembler.disassemble_block(tail_address, graph).instruct
 payload_address = tail_instructions[-1].address() + len(tail_instructions[-1].bytes())
 instructions.extend(tail_instructions)
 
-semantics = LirModule()
+semantics = LirModule(name="self_modifying_shellcode")
+semantic_function = LirFunction(name="entry")
+semantic_block = LirBlock(name="entry")
 for instruction in instructions:
-    semantic = instruction.semantic()
-    assert semantic is not None
+    semantic = instruction.lir()
     assert semantic.status() == LirStatus.Complete
-    semantics.append_semantic(semantic)
+    semantic_block.append_instruction(semantic)
+semantic_function.append_block(semantic_block)
+semantics.append_function(semantic_function)
 
-executor = Executor()
+executor = LirExecutor()
 executor.set_breakpoint(payload_address)
 
-state = CpuState(LirCpuAmd64())
+state = LirExecutorState(LirCpuAmd64())
 state.map_memory(0, len(image_bytes))
 state.write_memory(0, image_bytes)
 state.set_register("rip", 64, 0)

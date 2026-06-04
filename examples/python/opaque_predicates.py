@@ -3,8 +3,14 @@
 import binlex
 from binlex.controlflow import Graph
 from binlex.disassemblers import Disassembler
-from binlex.irs.lir import LirBlock, LirCpuAmd64, LirCpuI386, LirFunction, LirModule
-from binlex.symbolic import CpuState, Executor
+from binlex.irs.lir import (
+    LirBlock,
+    LirCpuI386,
+    LirExecutor,
+    LirExecutorState,
+    LirFunction,
+    LirModule,
+)
 
 
 architecture = binlex.Architecture.I386
@@ -15,9 +21,9 @@ config = binlex.Configuration()
 
 
 def module_from_semantic(semantic):
-    module = LirModule()
-    function = LirFunction()
-    block = LirBlock()
+    module = LirModule(name="instruction")
+    function = LirFunction(name="instruction")
+    block = LirBlock(name="entry")
     block.append_instruction(semantic)
     function.append_block(block)
     module.append_function(function)
@@ -38,17 +44,14 @@ function = graph.function(0x00)
 assert function, 'failed to disassemble function'
 
 cpu = LirCpuI386()
-executor = Executor()
-state = CpuState(cpu)
+executor = LirExecutor()
+state = LirExecutorState(cpu)
 
 for block in function.blocks():
     for instruction in block.instructions():
         print(f"{hex(instruction.address())}: {instruction.disassembly()}")
 
-        semantic = instruction.semantic()
-
-        if semantic is None:
-            continue
+        semantic = instruction.lir()
 
         successors = executor.step(module_from_semantic(semantic), state)
 

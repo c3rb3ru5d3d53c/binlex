@@ -2,10 +2,12 @@
 
 from binlex import Architecture, Assembler, Configuration, Disassembler
 from binlex.controlflow import Graph
-from binlex.irs.lir import LirAbiStdcall, LirCpuI386
 from binlex.formats import ELF
+from binlex.irs.lir import LirAbiStdcall, LirCpuI386, LirModule
+from binlex.irs.llvm import LlvmModule
 
 configuration = Configuration()
+cpu = LirCpuI386()
 
 assembler = Assembler(Architecture.I386, configuration)
 
@@ -36,19 +38,18 @@ graph = Graph(Architecture.I386, configuration)
 
 disassembler = Disassembler(Architecture.I386, data, {0: len(data)}, configuration)
 
-cpu = LirCpuI386()
-
 function = disassembler.disassemble_function(0x00, graph)
 print("Polymorphic Shellcode")
 for block in function.blocks():
     for instruction in block.instructions():
         print(f"{hex(instruction.address())}: {instruction.disassembly()}")
 
-llvm = function.llvm()
+module = LirModule(name="polymorphic_shellcode")
+module.append_function(function.lir())
 
-assert llvm
-
+llvm = LlvmModule(module.name(), cpu, triple="i386-unknown-unknown")
 llvm.set_abi(LirAbiStdcall(cpu))
+llvm.from_lir(module, configuration)
 llvm.optimize_cfg()
 llvm.optimize_gvn()
 llvm.optimize_instcombine()
@@ -60,7 +61,7 @@ assert obj
 
 elf = ELF(obj, configuration)
 
-start = elf.symbol_name_to_file_offset("function_0")
+start = elf.symbol_name_to_file_offset(function.lir().name() or "function_0")
 
 assert start is not None
 

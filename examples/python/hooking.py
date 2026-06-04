@@ -6,11 +6,18 @@ from binlex import Architecture, Configuration
 from binlex.assemblers import Assembler, AssemblerBackend
 from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
-from binlex.irs.lir import Lir, LirBlock, LirCpuI386, LirFunction, LirModule
-from binlex.symbolic import Executor, CpuState
+from binlex.irs.lir import (
+    Lir,
+    LirBlock,
+    LirCpuI386,
+    LirExecutor,
+    LirExecutorState,
+    LirFunction,
+    LirModule,
+)
 
 
-def hook_code(_: int, state: CpuState):
+def hook_code(_: int, state: LirExecutorState):
     esp = state.evaluate_register("esp", 32)
     assert esp is not None
     return_address = state.evaluate_memory(esp, 4)
@@ -66,11 +73,10 @@ disassembler.disassemble({code_address}, graph)
 instructions = graph.instructions()
 instructions.sort(key=lambda instruction: instruction.address())
 assert instructions
-raw_semantics = [instruction.semantic() for instruction in instructions]
-assert all(semantic is not None for semantic in raw_semantics)
-semantics = LirModule()
-semantic_function = LirFunction()
-semantic_block = LirBlock()
+raw_semantics = [instruction.lir() for instruction in instructions]
+semantics = LirModule(name="hooking")
+semantic_function = LirFunction(name="entry")
+semantic_block = LirBlock(name="entry")
 for semantic in cast(list[Lir], raw_semantics):
     semantic_block.append_instruction(semantic)
 semantic_function.append_block(semantic_block)
@@ -79,8 +85,8 @@ semantics.append_function(semantic_function)
 host_print_address = instructions[-1].address()
 
 cpu = LirCpuI386()
-state = CpuState(cpu)
-executor = Executor()
+state = LirExecutorState(cpu)
+executor = LirExecutor()
 state.map_memory(stack_address, stack_size)
 state.map_memory(message_address, 0x1000)
 state.write_memory(message_address, message)

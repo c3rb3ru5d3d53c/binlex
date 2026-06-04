@@ -4,8 +4,14 @@ from binlex import Architecture
 from binlex.config import Configuration
 from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
-from binlex.irs.lir import LirBlock, LirCpuAmd64, LirCpuI386, LirFunction, LirModule
-from binlex.symbolic import CpuState, Executor
+from binlex.irs.lir import (
+    LirBlock,
+    LirCpuAmd64,
+    LirExecutor,
+    LirExecutorState,
+    LirFunction,
+    LirModule,
+)
 
 
 function_address = 0x40056D
@@ -18,9 +24,9 @@ stack_top = 0x7FFFFFFF
 
 
 def module_from_semantic(semantic):
-    module = LirModule()
-    function = LirFunction()
-    block = LirBlock()
+    module = LirModule(name="instruction")
+    function = LirFunction(name="instruction")
+    block = LirBlock(name="entry")
     block.append_instruction(semantic)
     function.append_block(block)
     module.append_function(function)
@@ -72,8 +78,8 @@ def main():
     function = graph.functions()[0]
 
     cpu = LirCpuAmd64()
-    executor = Executor()
-    state = CpuState(cpu)
+    executor = LirExecutor()
+    state = LirExecutorState(cpu)
 
     state.map_memory(input_address, 5)
     state.symbolize_memory(input_address, 5, "input")
@@ -93,10 +99,7 @@ def main():
     done = False
     for block in function.blocks():
         for instruction in block.instructions():
-            semantic = instruction.semantic()
-
-            if not semantic:
-                continue
+            semantic = instruction.lir()
 
             pc = instruction.address()
 

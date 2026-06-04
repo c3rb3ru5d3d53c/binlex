@@ -2,20 +2,26 @@
 
 import ctypes
 from binlex.irs.lir import (
-    LirModule,
-    LirBlock,
-    LirFunction,
+    Lir,
     LirAbiLinuxSyscall,
     LirAbiSysv,
+    LirBlock,
     LirCpuAmd64,
-    Lir,
-    LirEffect,
-    LirExpression,
-    LirLocation,
+    LirEffectSet,
+    LirEffectTrap,
+    LirExpressionAddressOf,
+    LirExpressionBinary,
+    LirExpressionCast,
+    LirExpressionConst,
+    LirExpressionRead,
+    LirFunction,
+    LirLocationRegister,
+    LirLocationStackMemory,
+    LirModule,
     LirOperationBinary,
     LirOperationCast,
     LirStatus,
-    LirTerminator,
+    LirTerminatorReturn,
     LirTrapKind,
     LirExecutor,
     LirExecutorState,
@@ -31,24 +37,20 @@ add_two_function = LirFunction(name="add_two", abi=sysv)
 add_two_block = LirBlock(name="entry")
 add_two_block.append_instruction(
     Lir(
-            version=1,
-            status=LirStatus.Complete,
-            effects=[
-                LirEffect.set(
-                    LirLocation.register("rax", 64),
-                    LirExpression.binary(
-                        LirOperationBinary.Add,
-                        LirExpression.read(
-                            LirLocation.register("rdi", 64)
-                        ),
-                        LirExpression.read(
-                            LirLocation.register("rsi", 64)
-                        ),
-                        64
-                    )
-                )
-            ],
-                            terminator=LirTerminator.return_()
+        version=1,
+        status=LirStatus.Complete,
+        effects=[
+            LirEffectSet(
+                LirLocationRegister("rax", 64),
+                LirExpressionBinary(
+                    LirOperationBinary.Add,
+                    LirExpressionRead(LirLocationRegister("rdi", 64)),
+                    LirExpressionRead(LirLocationRegister("rsi", 64)),
+                    64,
+                ),
+            )
+        ],
+        terminator=LirTerminatorReturn(),
     )
 )
 add_two_function.append_block(add_two_block)
@@ -59,63 +61,54 @@ write_function = LirFunction(name="write", abi=linux_syscall)
 write_block = LirBlock(name="entry")
 write_block.append_instruction(
     Lir(
-            version=1,
-            status=LirStatus.Complete,
-            abi=linux_syscall,
-            effects=[
-                LirEffect.set(
-                    LirLocation.stack_memory("stack", 8, 64),
-                    LirExpression.read(
-                        LirLocation.register("rdi", 64)
-                    )
+        version=1,
+        status=LirStatus.Complete,
+        abi=linux_syscall,
+        effects=[
+            LirEffectSet(
+                LirLocationStackMemory("stack", 8, 64),
+                LirExpressionRead(LirLocationRegister("rdi", 64)),
+            ),
+            LirEffectSet(
+                LirLocationStackMemory("stack", 0, 8),
+                LirExpressionCast(
+                    LirOperationCast.Truncate,
+                    LirExpressionBinary(
+                        LirOperationBinary.Add,
+                        LirExpressionRead(LirLocationRegister("rdi", 64)),
+                        LirExpressionConst(48, 64),
+                        64,
+                    ),
+                    8,
                 ),
-                LirEffect.set(
-                    LirLocation.stack_memory("stack", 0, 8),
-                    LirExpression.cast(
-                        LirOperationCast.Truncate,
-                        LirExpression.binary(
-                            LirOperationBinary.Add,
-                            LirExpression.read(
-                                LirLocation.register("rdi", 64)
-                            ),
-                            LirExpression.const(48, 64),
-                            64
-                        ),
-                        8
-                    )
-                ),
-                LirEffect.set(
-                    LirLocation.stack_memory("stack", 1, 8),
-                    LirExpression.const(10, 8)
-                ),
-                LirEffect.set(
-                    LirLocation.register("rax", 64),
-                    LirExpression.const(1, 64)
-                ),
-                LirEffect.set(
-                    LirLocation.register("rdi", 64),
-                    LirExpression.const(1, 64)
-                ),
-                LirEffect.set(
-                    LirLocation.register("rsi", 64),
-                    LirExpression.address_of(
-                        LirLocation.stack_memory("stack", 0, 8),
-                        64
-                    )
-                ),
-                LirEffect.set(
-                    LirLocation.register("rdx", 64),
-                    LirExpression.const(2, 64)
-                ),
-                LirEffect.trap(LirTrapKind.Syscall),
-                LirEffect.set(
-                    LirLocation.register("rax", 64),
-                    LirExpression.read(
-                        LirLocation.stack_memory("stack", 8, 64)
-                    )
-                ),
-            ],
-                            terminator=LirTerminator.return_()
+            ),
+            LirEffectSet(
+                LirLocationStackMemory("stack", 1, 8),
+                LirExpressionConst(10, 8),
+            ),
+            LirEffectSet(
+                LirLocationRegister("rax", 64),
+                LirExpressionConst(1, 64),
+            ),
+            LirEffectSet(
+                LirLocationRegister("rdi", 64),
+                LirExpressionConst(1, 64),
+            ),
+            LirEffectSet(
+                LirLocationRegister("rsi", 64),
+                LirExpressionAddressOf(LirLocationStackMemory("stack", 0, 8), 64),
+            ),
+            LirEffectSet(
+                LirLocationRegister("rdx", 64),
+                LirExpressionConst(2, 64),
+            ),
+            LirEffectTrap(LirTrapKind.Syscall),
+            LirEffectSet(
+                LirLocationRegister("rax", 64),
+                LirExpressionRead(LirLocationStackMemory("stack", 8, 64)),
+            ),
+        ],
+        terminator=LirTerminatorReturn(),
     )
 )
 write_function.append_block(write_block)
