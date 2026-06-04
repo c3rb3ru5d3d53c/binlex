@@ -9,7 +9,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::I386,
         bytes: &[0xf3, 0x0f, 0x6f, 0x43, 0x03],
         expected_status: None,
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: Some(X86FixtureSpec {
             registers: &[
                 (I386Register::Eax, 0x1122_3344),
@@ -41,7 +41,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::I386,
         bytes: &[0xf3, 0x0f, 0x7f, 0x43, 0x03],
         expected_status: None,
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: Some(X86FixtureSpec {
             registers: &[
                 (I386Register::Eax, 0x1122_3344),
@@ -67,7 +67,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::I386,
         bytes: &[0xf3, 0x0f, 0x6f, 0x44, 0x24, 0x03],
         expected_status: None,
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: Some(X86FixtureSpec {
             registers: &[
                 (I386Register::Eax, 0x1122_3344),
@@ -99,7 +99,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::I386,
         bytes: &[0xf3, 0x0f, 0x7f, 0x44, 0x24, 0x03],
         expected_status: None,
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: Some(X86FixtureSpec {
             registers: &[
                 (I386Register::Eax, 0x1122_3344),
@@ -125,7 +125,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::I386,
         bytes: &[0xf3, 0x0f, 0x6f, 0x45, 0xf3],
         expected_status: None,
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: Some(X86FixtureSpec {
             registers: &[
                 (I386Register::Eax, 0x1122_3344),
@@ -157,7 +157,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::I386,
         bytes: &[0xf3, 0x0f, 0x7f, 0x45, 0xf3],
         expected_status: None,
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: Some(X86FixtureSpec {
             registers: &[
                 (I386Register::Eax, 0x1122_3344),

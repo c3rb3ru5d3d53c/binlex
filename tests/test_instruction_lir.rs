@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use binlex::controlflow::{Graph, InstructionRecord};
 use binlex::irs::lir::{
-    LirDiagnostic, LirDiagnosticKind, LirInstruction, LirMetadata, LirStatus, LirTerminator,
+    Lir, LirDiagnostic, LirDiagnosticKind, LirMetadata, LirStatus, LirTerminator,
 };
 use binlex::{Architecture, Configuration};
 
@@ -40,31 +40,31 @@ fn disassemble_single(name: &str, architecture: Architecture, bytes: &[u8]) -> I
         .instruction(0)
         .expect("instruction should exist")
         .into_record();
-    instruction.semantics = instruction.build_semantics();
+    instruction.lir = instruction.build_lir();
     instruction
 }
 
-fn assert_partial_semantics(name: &str, architecture: Architecture, bytes: &[u8]) {
+fn assert_partial_lir(name: &str, architecture: Architecture, bytes: &[u8]) {
     let instruction = disassemble_single(name, architecture, bytes);
-    let semantics = instruction
-        .semantics
+    let lir = instruction
+        .lir
         .as_ref()
-        .unwrap_or_else(|| panic!("{name}: missing semantics"));
+        .unwrap_or_else(|| panic!("{name}: missing lir"));
 
     assert_eq!(
-        semantics.status,
+        lir.status,
         LirStatus::Partial,
-        "{name}: expected partial semantics, got {:?}",
-        semantics.status
+        "{name}: expected partial lir, got {:?}",
+        lir.status
     );
     assert!(
-        !semantics.diagnostics.is_empty(),
-        "{name}: expected diagnostics for partial semantics"
+        !lir.diagnostics.is_empty(),
+        "{name}: expected diagnostics for partial lir"
     );
 }
 
-fn partial_semantics(message: &str) -> LirInstruction {
-    LirInstruction {
+fn partial_lir(message: &str) -> Lir {
+    Lir {
         version: 1,
         status: LirStatus::Partial,
         metadata: LirMetadata::default(),
@@ -82,8 +82,8 @@ fn partial_semantics(message: &str) -> LirInstruction {
     }
 }
 
-fn complete_semantics() -> LirInstruction {
-    LirInstruction {
+fn complete_lir() -> Lir {
+    Lir {
         version: 1,
         status: LirStatus::Complete,
         metadata: LirMetadata::default(),
@@ -97,24 +97,24 @@ fn complete_semantics() -> LirInstruction {
 }
 
 #[test]
-fn accuracy_gated_semantics_regressions_stay_partial() {
+fn accuracy_gated_lir_regressions_stay_partial() {
     let cases: [(&str, Architecture, Vec<u8>); 0] = [];
 
     for (name, architecture, bytes) in cases {
-        assert_partial_semantics(name, architecture, &bytes);
+        assert_partial_lir(name, architecture, &bytes);
     }
 }
 
 #[test]
-fn instruction_semantics_survive_snapshot_roundtrip() {
+fn instruction_lir_survive_snapshot_roundtrip() {
     let instruction = disassemble_single("adc eax, ebx", Architecture::I386, &[0x11, 0xd8]);
     let original_mnemonic = instruction.mnemonic();
     let original_disassembly = instruction.disassembly();
     let original_operands = instruction.operands();
     let original = instruction
-        .semantics
+        .lir
         .clone()
-        .expect("instruction should carry semantics");
+        .expect("instruction should carry lir");
 
     let config = Configuration::default();
     let mut graph = Graph::new(Architecture::I386, config.clone());
@@ -125,28 +125,22 @@ fn instruction_semantics_survive_snapshot_roundtrip() {
     let restored_instruction = restored
         .instruction(0)
         .expect("restored instruction should exist");
-    let restored_semantics = restored_instruction
-        .semantics
+    let restored_lir = restored_instruction
+        .lir
         .as_ref()
-        .expect("restored instruction should keep semantics");
+        .expect("restored instruction should keep lir");
 
-    assert_eq!(restored_semantics.status, original.status);
-    assert_eq!(
-        restored_semantics.terminator.kind(),
-        original.terminator.kind()
-    );
-    assert_eq!(restored_semantics.effects.len(), original.effects.len());
-    assert_eq!(
-        restored_semantics.diagnostics.len(),
-        original.diagnostics.len()
-    );
+    assert_eq!(restored_lir.status, original.status);
+    assert_eq!(restored_lir.terminator.kind(), original.terminator.kind());
+    assert_eq!(restored_lir.effects.len(), original.effects.len());
+    assert_eq!(restored_lir.diagnostics.len(), original.diagnostics.len());
     assert_eq!(restored_instruction.mnemonic(), original_mnemonic);
     assert_eq!(restored_instruction.disassembly(), original_disassembly);
     assert_eq!(restored_instruction.operands(), original_operands);
 }
 
 #[test]
-fn graph_merge_prefers_more_complete_instruction_semantics() {
+fn graph_merge_prefers_more_complete_instruction_lir() {
     let config = Configuration::default();
     let mut base = Graph::new(Architecture::AMD64, config.clone());
     let mut incoming = Graph::new(Architecture::AMD64, config.clone());
@@ -155,13 +149,13 @@ fn graph_merge_prefers_more_complete_instruction_semantics() {
         InstructionRecord::create(0x1000, Architecture::AMD64, config.clone());
     partial_instruction.bytes = vec![0x90];
     partial_instruction.pattern = "90".to_string();
-    partial_instruction.semantics = Some(partial_semantics("partial semantics"));
+    partial_instruction.lir = Some(partial_lir("partial lir"));
     base.insert_instruction(partial_instruction);
 
     let mut complete_instruction = InstructionRecord::create(0x1000, Architecture::AMD64, config);
     complete_instruction.bytes = vec![0x90];
     complete_instruction.pattern = "90".to_string();
-    complete_instruction.semantics = Some(complete_semantics());
+    complete_instruction.lir = Some(complete_lir());
     incoming.insert_instruction(complete_instruction);
 
     base.merge(&mut incoming);
@@ -169,24 +163,24 @@ fn graph_merge_prefers_more_complete_instruction_semantics() {
     let merged = base
         .instruction(0x1000)
         .expect("merged instruction should exist")
-        .semantics
+        .lir
         .clone()
-        .expect("merged instruction should keep semantics");
+        .expect("merged instruction should keep lir");
 
     assert_eq!(merged.status, LirStatus::Complete);
     assert!(merged.diagnostics.is_empty());
 }
 
 #[test]
-fn graph_update_instruction_preserves_attached_semantics() {
+fn graph_update_instruction_preserves_attached_lir() {
     let config = Configuration::default();
     let mut graph = Graph::new(Architecture::I386, config.clone());
     let mut instruction =
         disassemble_single("btc eax, 1", Architecture::I386, &[0x0f, 0xba, 0xf8, 0x01]);
     let original = instruction
-        .semantics
+        .lir
         .clone()
-        .expect("instruction should have semantics");
+        .expect("instruction should have lir");
 
     graph.insert_instruction(instruction.clone());
     instruction.pattern = "0f baf8 01".replace(' ', "");
@@ -195,9 +189,9 @@ fn graph_update_instruction_preserves_attached_semantics() {
     let updated = graph
         .instruction(0)
         .expect("updated instruction should exist")
-        .semantics
+        .lir
         .clone()
-        .expect("updated instruction should retain semantics");
+        .expect("updated instruction should retain lir");
 
     assert_eq!(updated.status, original.status);
     assert_eq!(updated.effects.len(), original.effects.len());

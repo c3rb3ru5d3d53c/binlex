@@ -1,11 +1,11 @@
 use crate::controlflow::Block as PyBlock;
 use crate::irs::lir::abis::extract_abi;
-use crate::irs::lir::{LirCpu as PySemanticCpu, LirModule as PyLirModule};
+use crate::irs::lir::{LirCpu as PyLirCpu, LirFunction as PyLirFunction, LirModule as PyLirModule};
 use crate::Configuration;
 use binlex::controlflow::{Block, Function, Graph, Instruction, InstructionRecord};
 use binlex::core::Architecture;
 use binlex::io::Stderr;
-use binlex::irs::lir::{LirAbi, LirCpuKind, LirInstruction, LirModule, LirTerminator};
+use binlex::irs::lir::{Lir, LirAbi, LirCpuKind, LirModule, LirTerminator};
 use binlex::irs::llvm::{JittedFunction as InnerJittedFunction, LlvmModule as InnerLlvmModule};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
@@ -15,12 +15,11 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
 enum ModuleItemDef {
-    BlockSemantics {
-        semantics: LirModule,
-        abi: Option<LirAbi>,
+    BlockLir {
+        lir: LirModule,
     },
-    FunctionSemantics {
-        semantics: LirModule,
+    FunctionLir {
+        lir: LirModule,
         abi: Option<LirAbi>,
         name: Option<String>,
     },
@@ -39,7 +38,7 @@ enum ModuleOverrideDef {
 struct CreatedFunctionDef {
     name: String,
     abi: Option<LirAbi>,
-    body_semantics: Option<LirModule>,
+    body_lir: Option<LirModule>,
     blocks: Vec<CreatedBlockDef>,
     raw_ir: Option<String>,
     raw_bitcode: Option<Vec<u8>>,
@@ -54,7 +53,7 @@ enum CreatedBlockDef {
     },
     LirModule {
         name: Option<String>,
-        semantics: LirModule,
+        lir: LirModule,
     },
 }
 
@@ -112,18 +111,14 @@ impl BuildState {
         }
         for item in self.items.clone() {
             match item {
-                ModuleItemDef::BlockSemantics { semantics, abi } => {
-                    inner.populate_block_lir(&semantics, abi.as_ref())?;
+                ModuleItemDef::BlockLir { lir } => {
+                    inner.populate_block_lir(&lir, None)?;
                 }
-                ModuleItemDef::FunctionSemantics {
-                    semantics,
-                    abi,
-                    name,
-                } => {
+                ModuleItemDef::FunctionLir { lir, abi, name } => {
                     if let Some(name) = name {
-                        inner.populate_function_lir_named(&semantics, abi.as_ref(), &name)?;
+                        inner.populate_function_lir_named(&lir, abi.as_ref(), &name)?;
                     } else {
-                        inner.populate_function_lir(&semantics, abi.as_ref())?;
+                        inner.populate_function_lir(&lir, abi.as_ref())?;
                     }
                 }
                 ModuleItemDef::CreatedFunction { function } => {
@@ -155,7 +150,7 @@ fn architecture_from_cpu(cpu: &binlex::irs::lir::LirCpu) -> Result<Architecture,
         Some(LirCpuKind::Arm64) => Ok(Architecture::ARM64),
         Some(LirCpuKind::Cil) => Ok(Architecture::CIL),
         None => Err(Error::other(
-            "llvm builder requires a built-in semantic CPU kind",
+            "llvm builder requires a built-in lir CPU kind",
         )),
     }
 }
@@ -184,8 +179,8 @@ fn compile_created_function(
     if let Some(bitcode) = &function.raw_bitcode {
         return inner.link_bitcode_module(bitcode, Some(&function.name));
     }
-    if let Some(semantics) = &function.body_semantics {
-        return inner.populate_function_lir_named(semantics, function.abi.as_ref(), &function.name);
+    if let Some(lir) = &function.body_lir {
+        return inner.populate_function_lir_named(lir, function.abi.as_ref(), &function.name);
     }
 
     let architecture = architecture_from_cpu(cpu)?;
@@ -216,7 +211,7 @@ fn compile_created_function(
                     block_labels.insert(block_address, name.clone());
                 }
             }
-            CreatedBlockDef::LirModule { name, semantics } => {
+            CreatedBlockDef::LirModule { name, lir } => {
                 let block_address = next_block_base;
                 if entry_address.is_none() {
                     entry_address = Some(block_address);
@@ -228,12 +223,8 @@ fn compile_created_function(
                     .blocks
                     .get(index + 1)
                     .map(|_| next_block_base + 0x1000);
-                let instructions = semantics
-                    .instructions()
-                    .into_iter()
-                    .cloned()
-                    .collect::<Vec<_>>();
-                insert_semantics_block(
+                let instructions = lir.instructions().into_iter().cloned().collect::<Vec<_>>();
+                insert_lir_block(
                     &mut graph,
                     architecture,
                     block_address,
@@ -250,41 +241,36 @@ fn compile_created_function(
     let entry_address = entry_address.ok_or_else(|| Error::other("function contains no blocks"))?;
     graph.set_function(entry_address);
     let function_graph = Function::new(entry_address, &graph)?;
-    inner.populate_function_named(
-        &function_graph,
-        function.abi.as_ref(),
-        &function.name,
-        Some(&block_labels),
-    )
+    inner.populate_function_named(&function_graph, None, &function.name, Some(&block_labels))
 }
 
-fn insert_semantics_block(
+fn insert_lir_block(
     graph: &mut Graph,
     architecture: Architecture,
     block_address: u64,
-    semantics: &[LirInstruction],
+    lirs: &[Lir],
     next_block_address: Option<u64>,
     config: &binlex::Configuration,
 ) {
-    for (index, semantic) in semantics.iter().enumerate() {
+    for (index, lir) in lirs.iter().enumerate() {
         let address = block_address + index as u64;
         let mut record = Instruction::create(address, architecture, config.clone());
         record.bytes = vec![0x90];
-        record.mnemonic = "semantic".to_string();
-        record.disassembly = "semantic".to_string();
+        record.mnemonic = "lir".to_string();
+        record.disassembly = "lir".to_string();
         record.pattern = "90".to_string();
-        record.semantics = Some(semantic.clone());
+        record.lir = Some(lir.clone());
         if index == 0 {
             record.is_block_start = true;
         }
-        if index == semantics.len() - 1 {
-            match &semantic.terminator {
+        if index == lirs.len() - 1 {
+            match &lir.terminator {
                 LirTerminator::Return { .. } => {
                     record.is_return = true;
                 }
                 LirTerminator::Jump { target } => {
                     record.is_jump = true;
-                    if let Some(address) = semantic_expression_u64(&target) {
+                    if let Some(address) = lir_expression_u64(&target) {
                         record.to.insert(address);
                     } else if let Some(next) = next_block_address {
                         record.to.insert(next);
@@ -297,10 +283,10 @@ fn insert_semantics_block(
                 } => {
                     record.is_jump = true;
                     record.is_conditional = true;
-                    if let Some(address) = semantic_expression_u64(&true_target) {
+                    if let Some(address) = lir_expression_u64(&true_target) {
                         record.to.insert(address);
                     }
-                    if let Some(address) = semantic_expression_u64(&false_target) {
+                    if let Some(address) = lir_expression_u64(&false_target) {
                         record.to.insert(address);
                     }
                 }
@@ -329,7 +315,7 @@ fn insert_semantics_block(
     }
 }
 
-fn semantic_expression_u64(expression: &binlex::irs::lir::LirExpression) -> Option<u64> {
+fn lir_expression_u64(expression: &binlex::irs::lir::LirExpression) -> Option<u64> {
     match expression {
         binlex::irs::lir::LirExpression::Const { value, .. } => (*value).try_into().ok(),
         _ => None,
@@ -396,7 +382,7 @@ impl LlvmModule {
     pub fn new(
         py: Python<'_>,
         name: Option<String>,
-        cpu: Py<PySemanticCpu>,
+        cpu: Py<PyLirCpu>,
         triple: Option<String>,
     ) -> PyResult<Self> {
         let inner_cpu = cpu.borrow(py).inner.clone();
@@ -416,7 +402,7 @@ impl LlvmModule {
         _cls: &Bound<'_, pyo3::types::PyType>,
         py: Python<'_>,
         name: Option<String>,
-        cpu: Py<PySemanticCpu>,
+        cpu: Py<PyLirCpu>,
         config: Py<Configuration>,
         triple: Option<String>,
     ) -> PyResult<Self> {
@@ -473,44 +459,24 @@ impl LlvmModule {
         rebuild_state(&mut state, &self.config, "llvm set abi failed")
     }
 
-    #[pyo3(signature = (semantics, abi=None), text_signature = "($self, semantics, abi=None)")]
-    pub fn append_block_lir(
-        &self,
-        py: Python<'_>,
-        semantics: Py<PyLirModule>,
-        abi: Option<Py<PyAny>>,
-    ) -> bool {
-        let semantics = semantics.borrow(py).inner.lock().unwrap().clone();
-        let abi = match abi {
-            Some(value) => match extract_abi(value.bind(py)) {
-                Ok(abi) => Some(abi),
-                Err(err) => {
-                    Stderr::print_debug(
-                        &self.config,
-                        format!("llvm append block lir failed: {}", err),
-                    );
-                    return false;
-                }
-            },
-            None => None,
-        };
+    #[pyo3(signature = (lir), text_signature = "($self, lir)")]
+    pub fn append_block_lir(&self, py: Python<'_>, lir: Py<PyLirModule>) -> bool {
+        let lir = lir.borrow(py).inner.lock().unwrap().clone();
         let mut state = self.state.lock().unwrap();
-        state
-            .items
-            .push(ModuleItemDef::BlockSemantics { semantics, abi });
+        state.items.push(ModuleItemDef::BlockLir { lir });
         state.mark_dirty();
         true
     }
 
-    #[pyo3(signature = (semantics, abi=None, name=None), text_signature = "($self, semantics, abi=None, name=None)")]
+    #[pyo3(signature = (lir, abi=None, name=None), text_signature = "($self, lir, abi=None, name=None)")]
     pub fn append_function_lir(
         &self,
         py: Python<'_>,
-        semantics: Py<PyLirModule>,
+        lir: Py<PyLirModule>,
         abi: Option<Py<PyAny>>,
         name: Option<String>,
     ) -> bool {
-        let semantics = semantics.borrow(py).inner.lock().unwrap().clone();
+        let lir = lir.borrow(py).inner.lock().unwrap().clone();
         let abi = match abi {
             Some(value) => match extract_abi(value.bind(py)) {
                 Ok(abi) => Some(abi),
@@ -525,33 +491,22 @@ impl LlvmModule {
             None => None,
         };
         let mut state = self.state.lock().unwrap();
-        state.items.push(ModuleItemDef::FunctionSemantics {
-            semantics,
-            abi,
-            name,
-        });
+        state
+            .items
+            .push(ModuleItemDef::FunctionLir { lir, abi, name });
         state.mark_dirty();
         true
     }
 
-    #[pyo3(signature = (name, abi=None), text_signature = "($self, name, abi=None)")]
-    pub fn create_function(
-        &self,
-        py: Python<'_>,
-        name: String,
-        abi: Option<Py<PyAny>>,
-    ) -> PyResult<LiftedFunction> {
-        let abi = match abi {
-            Some(value) => Some(extract_abi(value.bind(py))?),
-            None => None,
-        };
+    #[pyo3(name = "_create_function", signature = (name), text_signature = "($self, name)")]
+    pub fn create_function(&self, name: String) -> PyResult<LiftedFunction> {
         let mut state = self.state.lock().unwrap();
         let index = state.items.len();
         state.items.push(ModuleItemDef::CreatedFunction {
             function: CreatedFunctionDef {
                 name,
-                abi,
-                body_semantics: None,
+                abi: None,
+                body_lir: None,
                 blocks: Vec::new(),
                 raw_ir: None,
                 raw_bitcode: None,
@@ -841,10 +796,10 @@ impl LiftedFunction {
         let Some(ModuleItemDef::CreatedFunction { function }) = item else {
             return false;
         };
-        if function.body_semantics.is_some() {
+        if function.body_lir.is_some() {
             Stderr::print_debug(
                 &state.config,
-                "llvm function block append failed: function already has semantic body".to_string(),
+                "llvm function block append failed: function already has lir body".to_string(),
             );
             return false;
         }
@@ -864,43 +819,46 @@ impl LiftedFunction {
         true
     }
 
-    #[pyo3(signature = (semantics, name=None), text_signature = "($self, semantics, name=None)")]
+    #[pyo3(signature = (lir, name=None), text_signature = "($self, lir, name=None)")]
     pub fn append_block_lir(
         &self,
         py: Python<'_>,
-        semantics: Py<PyLirModule>,
+        lir: Py<PyLirModule>,
         name: Option<String>,
     ) -> bool {
-        let semantics = semantics.borrow(py).inner.lock().unwrap().clone();
+        let lir = lir.borrow(py).inner.lock().unwrap().clone();
         let mut state = self.state.lock().unwrap();
         let item = state.items.get_mut(self.index);
         let Some(ModuleItemDef::CreatedFunction { function }) = item else {
             return false;
         };
-        if function.body_semantics.is_some() {
+        if function.body_lir.is_some() {
             Stderr::print_debug(
                 &state.config,
-                "llvm semantic block append failed: function already has semantic body".to_string(),
+                "llvm lir block append failed: function already has lir body".to_string(),
             );
             return false;
         }
         if function.raw_ir.is_some() || function.raw_bitcode.is_some() {
             Stderr::print_debug(
                 &state.config,
-                "llvm semantic block append failed: function already has raw llvm body".to_string(),
+                "llvm lir block append failed: function already has raw llvm body".to_string(),
             );
             return false;
         }
         function
             .blocks
-            .push(CreatedBlockDef::LirModule { name, semantics });
+            .push(CreatedBlockDef::LirModule { name, lir });
         state.mark_dirty();
         true
     }
 
-    #[pyo3(signature = (semantics), text_signature = "($self, semantics)")]
-    pub fn set_lir(&self, py: Python<'_>, semantics: Py<PyLirModule>) -> bool {
-        let semantics = semantics.borrow(py).inner.lock().unwrap().clone();
+    #[pyo3(signature = (lir), text_signature = "($self, lir)")]
+    pub fn set_lir(&self, py: Python<'_>, lir: Py<PyLirFunction>) -> bool {
+        let lir_function = lir.borrow(py).inner.lock().unwrap().clone();
+        let abi = lir_function.abi.clone();
+        let mut lir = LirModule::new(lir_function.name.clone());
+        lir.append_function(lir_function);
         let mut state = self.state.lock().unwrap();
         let item = state.items.get_mut(self.index);
         let Some(ModuleItemDef::CreatedFunction { function }) = item else {
@@ -909,19 +867,19 @@ impl LiftedFunction {
         if !function.blocks.is_empty() {
             Stderr::print_debug(
                 &state.config,
-                "llvm function semantics append failed: function already has blocks".to_string(),
+                "llvm function lir append failed: function already has blocks".to_string(),
             );
             return false;
         }
         if function.raw_ir.is_some() || function.raw_bitcode.is_some() {
             Stderr::print_debug(
                 &state.config,
-                "llvm function semantics append failed: function already has raw llvm body"
-                    .to_string(),
+                "llvm function lir append failed: function already has raw llvm body".to_string(),
             );
             return false;
         }
-        function.body_semantics = Some(semantics);
+        function.abi = abi;
+        function.body_lir = Some(lir);
         state.mark_dirty();
         true
     }
@@ -932,7 +890,8 @@ impl LiftedFunction {
         let Some(ModuleItemDef::CreatedFunction { function }) = item else {
             return false;
         };
-        function.body_semantics = None;
+        function.abi = None;
+        function.body_lir = None;
         function.blocks.clear();
         function.raw_bitcode = None;
         function.raw_ir = Some(text);
@@ -946,7 +905,8 @@ impl LiftedFunction {
         let Some(ModuleItemDef::CreatedFunction { function }) = item else {
             return false;
         };
-        function.body_semantics = None;
+        function.abi = None;
+        function.body_lir = None;
         function.blocks.clear();
         function.raw_ir = None;
         function.raw_bitcode = Some(bitcode);
@@ -1298,8 +1258,8 @@ fn block_preview_lifter(
         .ok_or_else(|| Error::other("lifted block is invalid"))?;
     let preview = CreatedFunctionDef {
         name: block_preview_function_name(&function.name, &block, block_index),
-        abi: function.abi.clone(),
-        body_semantics: None,
+        abi: None,
+        body_lir: None,
         blocks: vec![block],
         raw_ir: None,
         raw_bitcode: None,

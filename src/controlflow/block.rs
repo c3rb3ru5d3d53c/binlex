@@ -117,9 +117,9 @@ impl<'block> Block<'block> {
             .into_iter()
             .map(|instruction| {
                 instruction
-                    .semantics
+                    .lir
                     .clone()
-                    .or_else(|| instruction.build_semantics())
+                    .or_else(|| instruction.build_lir())
                     .ok_or_else(|| {
                         Error::other(format!(
                             "Block -> 0x{:x}: instruction 0x{:x} has no LIR",

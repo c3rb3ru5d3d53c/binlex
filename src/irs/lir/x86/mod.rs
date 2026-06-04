@@ -35,35 +35,35 @@ pub use instruction::InstructionDetailX86;
 pub use operand::{X86MemoryOperandView, X86OperandKind, X86OperandView};
 
 pub fn build(view: InstructionDetailX86) -> Option<Lir> {
-    if let Some(semantics) = builders::control::build(view.machine, &view) {
-        return Some(semantics);
+    if let Some(lir) = builders::control::build(view.machine, &view) {
+        return Some(lir);
     }
-    if let Some(semantics) = builders::stack::build(&view) {
-        return Some(semantics);
+    if let Some(lir) = builders::stack::build(&view) {
+        return Some(lir);
     }
-    if let Some(semantics) = builders::integer::build(view.machine, &view) {
-        return Some(semantics);
+    if let Some(lir) = builders::integer::build(view.machine, &view) {
+        return Some(lir);
     }
-    if let Some(semantics) = builders::logic::build(view.machine, &view) {
-        return Some(semantics);
+    if let Some(lir) = builders::logic::build(view.machine, &view) {
+        return Some(lir);
     }
-    if let Some(semantics) = builders::bit::build(view.machine, &view) {
-        return Some(semantics);
+    if let Some(lir) = builders::bit::build(view.machine, &view) {
+        return Some(lir);
     }
-    if let Some(semantics) = builders::shift::build(view.machine, &view) {
-        return Some(semantics);
+    if let Some(lir) = builders::shift::build(view.machine, &view) {
+        return Some(lir);
     }
-    if let Some(semantics) = builders::fp::build(view.machine, &view) {
-        return Some(semantics);
+    if let Some(lir) = builders::fp::build(view.machine, &view) {
+        return Some(lir);
     }
-    if let Some(semantics) = builders::string::build(view.machine, &view) {
-        return Some(semantics);
+    if let Some(lir) = builders::string::build(view.machine, &view) {
+        return Some(lir);
     }
-    if let Some(semantics) = builders::system::build(&view) {
-        return Some(semantics);
+    if let Some(lir) = builders::system::build(&view) {
+        return Some(lir);
     }
-    if let Some(semantics) = builders::vector::build(view.machine, &view) {
-        return Some(semantics);
+    if let Some(lir) = builders::vector::build(view.machine, &view) {
+        return Some(lir);
     }
     None
 }

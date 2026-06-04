@@ -9,6 +9,6 @@ pub(crate) const SAMPLES: &[Arm64Sample] = &[Arm64Sample {
 }];
 
 #[test]
-fn cpyetn_semantics_regressions_stay_complete() {
+fn cpyetn_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }

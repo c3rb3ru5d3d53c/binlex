@@ -23,7 +23,7 @@ Graph
 This structure is the foundation for:
 
 - similarity analysis
-- semantics
+- lir
 - lifting
 - processor output attachment
 - JSON export
@@ -169,7 +169,7 @@ It contains:
 - bytes
 - architecture
 - controlflow properties
-- optional semantics
+- optional lir
 - optional processor outputs
 
 Instructions are usually accessed through a block, but they can also be looked up directly from the graph.
@@ -216,7 +216,7 @@ The important point is that Binlex function identity is based on controlflow str
 
 This controlflow hierarchy is reused everywhere else in Binlex:
 
-- semantics are attached to `Instruction`
+- lir are attached to `Instruction`
 - LLVM lifting can happen from `Instruction`, `Block`, or `Function`
 - VEX lifting can happen from `Instruction`, `Block`, or `Function`
 - IR accessors expose LIR, MIR, HIR, AST, and printer output as explicit objects
@@ -240,15 +240,15 @@ for function in graph.functions():
         print(hex(block.address()), block.number_of_instructions())
 ```
 
-### Walk every instruction with semantics
+### Walk every instruction with lir
 
 ```python
 for function in graph.functions():
     for block in function.blocks():
         for instruction in block.instructions():
-            semantics = instruction.semantic()
-            if semantics is not None:
-                print(hex(instruction.address()), semantics.status())
+            lir = instruction.lir()
+            if lir is not None:
+                print(hex(instruction.address()), lir.status())
 ```
 
 ### Lift one function

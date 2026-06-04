@@ -5,7 +5,7 @@ use unicorn_engine::Unicorn;
 use unicorn_engine::unicorn_const::{Arch, Mode, Prot};
 use unicorn_engine_sys::RegisterARM64;
 
-use crate::irs::lir::cpus::{LirCpuKind, semantic_register_name};
+use crate::irs::lir::cpus::{LirCpuKind, lir_register_name};
 
 use super::fixtures::{Arm64CpuState, Arm64Execution, Arm64Fixture, Arm64Transition};
 
@@ -100,7 +100,7 @@ pub(crate) fn unicorn_arm64_execution(
     }
 }
 
-pub(crate) fn semantic_name_for_arch_register(register: &str) -> String {
+pub(crate) fn lir_name_for_arch_register(register: &str) -> String {
     if matches!(register, "n" | "z" | "c" | "v") {
         return register.to_string();
     }
@@ -110,93 +110,93 @@ pub(crate) fn semantic_name_for_arch_register(register: &str) -> String {
     if register == "fpcr" {
         return FPCR_SEMANTIC_NAME.to_string();
     }
-    semantic_register_name(LirCpuKind::Arm64, register)
+    lir_register_name(LirCpuKind::Arm64, register)
         .unwrap_or_else(|| panic!("unsupported arm64 fixture register: {register}"))
 }
 
-fn semantic_name_to_unicorn_register(name: &str) -> RegisterARM64 {
-    fn matches_semantic(name: &str, arch_name: &str) -> bool {
-        name == arch_name || name == semantic_name_for_arch_register(arch_name)
+fn lir_name_to_unicorn_register(name: &str) -> RegisterARM64 {
+    fn matches_lir(name: &str, arch_name: &str) -> bool {
+        name == arch_name || name == lir_name_for_arch_register(arch_name)
     }
 
     match name {
         "n" | "z" | "c" | "v" => RegisterARM64::NZCV,
         TPIDR_EL0_SEMANTIC_NAME => RegisterARM64::TPIDR_EL0,
         FPCR_SEMANTIC_NAME => RegisterARM64::FPCR,
-        name if matches_semantic(name, "w0") => RegisterARM64::W0,
-        name if matches_semantic(name, "w1") => RegisterARM64::W1,
-        name if matches_semantic(name, "w2") => RegisterARM64::W2,
-        name if matches_semantic(name, "w3") => RegisterARM64::W3,
-        name if matches_semantic(name, "w4") => RegisterARM64::W4,
-        name if matches_semantic(name, "w5") => RegisterARM64::W5,
-        name if matches_semantic(name, "w6") => RegisterARM64::W6,
-        name if matches_semantic(name, "w7") => RegisterARM64::W7,
-        name if matches_semantic(name, "w8") => RegisterARM64::W8,
-        name if matches_semantic(name, "w9") => RegisterARM64::W9,
-        name if matches_semantic(name, "w10") => RegisterARM64::W10,
-        name if matches_semantic(name, "w11") => RegisterARM64::W11,
-        name if matches_semantic(name, "w12") => RegisterARM64::W12,
-        name if matches_semantic(name, "w13") => RegisterARM64::W13,
-        name if matches_semantic(name, "w14") => RegisterARM64::W14,
-        name if matches_semantic(name, "w15") => RegisterARM64::W15,
-        name if matches_semantic(name, "w16") => RegisterARM64::W16,
-        name if matches_semantic(name, "w17") => RegisterARM64::W17,
-        name if matches_semantic(name, "w18") => RegisterARM64::W18,
-        name if matches_semantic(name, "w19") => RegisterARM64::W19,
-        name if matches_semantic(name, "w20") => RegisterARM64::W20,
-        name if matches_semantic(name, "w21") => RegisterARM64::W21,
-        name if matches_semantic(name, "w22") => RegisterARM64::W22,
-        name if matches_semantic(name, "w23") => RegisterARM64::W23,
-        name if matches_semantic(name, "w24") => RegisterARM64::W24,
-        name if matches_semantic(name, "w25") => RegisterARM64::W25,
-        name if matches_semantic(name, "w26") => RegisterARM64::W26,
-        name if matches_semantic(name, "w27") => RegisterARM64::W27,
-        name if matches_semantic(name, "w28") => RegisterARM64::W28,
-        name if matches_semantic(name, "w29") => RegisterARM64::W29,
-        name if matches_semantic(name, "w30") => RegisterARM64::W30,
-        name if matches_semantic(name, "h0") => RegisterARM64::H0,
-        name if matches_semantic(name, "d0") => RegisterARM64::D0,
-        name if matches_semantic(name, "d1") => RegisterARM64::D1,
-        name if matches_semantic(name, "d2") => RegisterARM64::D2,
-        name if matches_semantic(name, "d3") => RegisterARM64::D3,
-        name if matches_semantic(name, "s0") => RegisterARM64::S0,
-        name if matches_semantic(name, "s1") => RegisterARM64::S1,
-        name if matches_semantic(name, "q0") || matches_semantic(name, "v0") => RegisterARM64::V0,
-        name if matches_semantic(name, "q1") || matches_semantic(name, "v1") => RegisterARM64::V1,
-        name if matches_semantic(name, "q2") || matches_semantic(name, "v2") => RegisterARM64::V2,
-        name if matches_semantic(name, "q3") || matches_semantic(name, "v3") => RegisterARM64::V3,
-        name if matches_semantic(name, "x0") => RegisterARM64::X0,
-        name if matches_semantic(name, "x1") => RegisterARM64::X1,
-        name if matches_semantic(name, "x2") => RegisterARM64::X2,
-        name if matches_semantic(name, "x3") => RegisterARM64::X3,
-        name if matches_semantic(name, "x4") => RegisterARM64::X4,
-        name if matches_semantic(name, "x5") => RegisterARM64::X5,
-        name if matches_semantic(name, "x6") => RegisterARM64::X6,
-        name if matches_semantic(name, "x7") => RegisterARM64::X7,
-        name if matches_semantic(name, "x8") => RegisterARM64::X8,
-        name if matches_semantic(name, "x9") => RegisterARM64::X9,
-        name if matches_semantic(name, "x10") => RegisterARM64::X10,
-        name if matches_semantic(name, "x11") => RegisterARM64::X11,
-        name if matches_semantic(name, "x12") => RegisterARM64::X12,
-        name if matches_semantic(name, "x13") => RegisterARM64::X13,
-        name if matches_semantic(name, "x14") => RegisterARM64::X14,
-        name if matches_semantic(name, "x15") => RegisterARM64::X15,
-        name if matches_semantic(name, "x16") => RegisterARM64::X16,
-        name if matches_semantic(name, "x17") => RegisterARM64::X17,
-        name if matches_semantic(name, "x18") => RegisterARM64::X18,
-        name if matches_semantic(name, "x19") => RegisterARM64::X19,
-        name if matches_semantic(name, "x20") => RegisterARM64::X20,
-        name if matches_semantic(name, "x21") => RegisterARM64::X21,
-        name if matches_semantic(name, "x22") => RegisterARM64::X22,
-        name if matches_semantic(name, "x23") => RegisterARM64::X23,
-        name if matches_semantic(name, "x24") => RegisterARM64::X24,
-        name if matches_semantic(name, "x25") => RegisterARM64::X25,
-        name if matches_semantic(name, "x26") => RegisterARM64::X26,
-        name if matches_semantic(name, "x27") => RegisterARM64::X27,
-        name if matches_semantic(name, "x28") => RegisterARM64::X28,
-        name if matches_semantic(name, "x29") => RegisterARM64::FP,
-        name if matches_semantic(name, "x30") => RegisterARM64::LR,
-        name if matches_semantic(name, "sp") => RegisterARM64::SP,
+        name if matches_lir(name, "w0") => RegisterARM64::W0,
+        name if matches_lir(name, "w1") => RegisterARM64::W1,
+        name if matches_lir(name, "w2") => RegisterARM64::W2,
+        name if matches_lir(name, "w3") => RegisterARM64::W3,
+        name if matches_lir(name, "w4") => RegisterARM64::W4,
+        name if matches_lir(name, "w5") => RegisterARM64::W5,
+        name if matches_lir(name, "w6") => RegisterARM64::W6,
+        name if matches_lir(name, "w7") => RegisterARM64::W7,
+        name if matches_lir(name, "w8") => RegisterARM64::W8,
+        name if matches_lir(name, "w9") => RegisterARM64::W9,
+        name if matches_lir(name, "w10") => RegisterARM64::W10,
+        name if matches_lir(name, "w11") => RegisterARM64::W11,
+        name if matches_lir(name, "w12") => RegisterARM64::W12,
+        name if matches_lir(name, "w13") => RegisterARM64::W13,
+        name if matches_lir(name, "w14") => RegisterARM64::W14,
+        name if matches_lir(name, "w15") => RegisterARM64::W15,
+        name if matches_lir(name, "w16") => RegisterARM64::W16,
+        name if matches_lir(name, "w17") => RegisterARM64::W17,
+        name if matches_lir(name, "w18") => RegisterARM64::W18,
+        name if matches_lir(name, "w19") => RegisterARM64::W19,
+        name if matches_lir(name, "w20") => RegisterARM64::W20,
+        name if matches_lir(name, "w21") => RegisterARM64::W21,
+        name if matches_lir(name, "w22") => RegisterARM64::W22,
+        name if matches_lir(name, "w23") => RegisterARM64::W23,
+        name if matches_lir(name, "w24") => RegisterARM64::W24,
+        name if matches_lir(name, "w25") => RegisterARM64::W25,
+        name if matches_lir(name, "w26") => RegisterARM64::W26,
+        name if matches_lir(name, "w27") => RegisterARM64::W27,
+        name if matches_lir(name, "w28") => RegisterARM64::W28,
+        name if matches_lir(name, "w29") => RegisterARM64::W29,
+        name if matches_lir(name, "w30") => RegisterARM64::W30,
+        name if matches_lir(name, "h0") => RegisterARM64::H0,
+        name if matches_lir(name, "d0") => RegisterARM64::D0,
+        name if matches_lir(name, "d1") => RegisterARM64::D1,
+        name if matches_lir(name, "d2") => RegisterARM64::D2,
+        name if matches_lir(name, "d3") => RegisterARM64::D3,
+        name if matches_lir(name, "s0") => RegisterARM64::S0,
+        name if matches_lir(name, "s1") => RegisterARM64::S1,
+        name if matches_lir(name, "q0") || matches_lir(name, "v0") => RegisterARM64::V0,
+        name if matches_lir(name, "q1") || matches_lir(name, "v1") => RegisterARM64::V1,
+        name if matches_lir(name, "q2") || matches_lir(name, "v2") => RegisterARM64::V2,
+        name if matches_lir(name, "q3") || matches_lir(name, "v3") => RegisterARM64::V3,
+        name if matches_lir(name, "x0") => RegisterARM64::X0,
+        name if matches_lir(name, "x1") => RegisterARM64::X1,
+        name if matches_lir(name, "x2") => RegisterARM64::X2,
+        name if matches_lir(name, "x3") => RegisterARM64::X3,
+        name if matches_lir(name, "x4") => RegisterARM64::X4,
+        name if matches_lir(name, "x5") => RegisterARM64::X5,
+        name if matches_lir(name, "x6") => RegisterARM64::X6,
+        name if matches_lir(name, "x7") => RegisterARM64::X7,
+        name if matches_lir(name, "x8") => RegisterARM64::X8,
+        name if matches_lir(name, "x9") => RegisterARM64::X9,
+        name if matches_lir(name, "x10") => RegisterARM64::X10,
+        name if matches_lir(name, "x11") => RegisterARM64::X11,
+        name if matches_lir(name, "x12") => RegisterARM64::X12,
+        name if matches_lir(name, "x13") => RegisterARM64::X13,
+        name if matches_lir(name, "x14") => RegisterARM64::X14,
+        name if matches_lir(name, "x15") => RegisterARM64::X15,
+        name if matches_lir(name, "x16") => RegisterARM64::X16,
+        name if matches_lir(name, "x17") => RegisterARM64::X17,
+        name if matches_lir(name, "x18") => RegisterARM64::X18,
+        name if matches_lir(name, "x19") => RegisterARM64::X19,
+        name if matches_lir(name, "x20") => RegisterARM64::X20,
+        name if matches_lir(name, "x21") => RegisterARM64::X21,
+        name if matches_lir(name, "x22") => RegisterARM64::X22,
+        name if matches_lir(name, "x23") => RegisterARM64::X23,
+        name if matches_lir(name, "x24") => RegisterARM64::X24,
+        name if matches_lir(name, "x25") => RegisterARM64::X25,
+        name if matches_lir(name, "x26") => RegisterARM64::X26,
+        name if matches_lir(name, "x27") => RegisterARM64::X27,
+        name if matches_lir(name, "x28") => RegisterARM64::X28,
+        name if matches_lir(name, "x29") => RegisterARM64::FP,
+        name if matches_lir(name, "x30") => RegisterARM64::LR,
+        name if matches_lir(name, "sp") => RegisterARM64::SP,
         other => arch_register_to_unicorn(other),
     }
 }
@@ -319,7 +319,7 @@ fn write_arm64_register(emu: &mut Unicorn<'_, ()>, register: &str, value: u128) 
 }
 
 fn read_arm64_register(emu: &Unicorn<'_, ()>, name: &str) -> u128 {
-    let unicorn_register = semantic_name_to_unicorn_register(name);
+    let unicorn_register = lir_name_to_unicorn_register(name);
     if is_long_arm64_register(unicorn_register) {
         let bytes = emu
             .reg_read_long(unicorn_register)
@@ -377,25 +377,25 @@ fn build_arm64_program(
     program.extend_from_slice(bytes);
     if watched_vector_registers
         .iter()
-        .any(|name| name == &semantic_name_for_arch_register("v0"))
+        .any(|name| name == &lir_name_for_arch_register("v0"))
     {
         program.extend_from_slice(&[0x80, 0x03, 0x80, 0x3d]);
     }
     if watched_vector_registers
         .iter()
-        .any(|name| name == &semantic_name_for_arch_register("v1"))
+        .any(|name| name == &lir_name_for_arch_register("v1"))
     {
         program.extend_from_slice(&[0x81, 0x07, 0x80, 0x3d]);
     }
     if watched_vector_registers
         .iter()
-        .any(|name| name == &semantic_name_for_arch_register("v2"))
+        .any(|name| name == &lir_name_for_arch_register("v2"))
     {
         program.extend_from_slice(&[0x82, 0x0b, 0x80, 0x3d]);
     }
     if watched_vector_registers
         .iter()
-        .any(|name| name == &semantic_name_for_arch_register("v3"))
+        .any(|name| name == &lir_name_for_arch_register("v3"))
     {
         program.extend_from_slice(&[0x83, 0x0f, 0x80, 0x3d]);
     }
@@ -429,25 +429,25 @@ fn watched_vector_memory_ranges(watched_vector_registers: &[String]) -> Vec<(u64
     let mut ranges = Vec::new();
     if watched_vector_registers
         .iter()
-        .any(|name| name == &semantic_name_for_arch_register("v0"))
+        .any(|name| name == &lir_name_for_arch_register("v0"))
     {
         ranges.push((ARM64_VECTOR_OUTPUT_ADDRESS, 16));
     }
     if watched_vector_registers
         .iter()
-        .any(|name| name == &semantic_name_for_arch_register("v1"))
+        .any(|name| name == &lir_name_for_arch_register("v1"))
     {
         ranges.push((ARM64_VECTOR_OUTPUT_ADDRESS + 16, 16));
     }
     if watched_vector_registers
         .iter()
-        .any(|name| name == &semantic_name_for_arch_register("v2"))
+        .any(|name| name == &lir_name_for_arch_register("v2"))
     {
         ranges.push((ARM64_VECTOR_OUTPUT_ADDRESS + 32, 16));
     }
     if watched_vector_registers
         .iter()
-        .any(|name| name == &semantic_name_for_arch_register("v3"))
+        .any(|name| name == &lir_name_for_arch_register("v3"))
     {
         ranges.push((ARM64_VECTOR_OUTPUT_ADDRESS + 48, 16));
     }

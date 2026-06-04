@@ -520,14 +520,10 @@ impl Instruction {
     /// Return the canonical LIR for this instruction, building it on demand if possible.
     pub fn lir(&self, py: Python) -> PyResult<Option<Py<PyLir>>> {
         self.with_inner_instruction(py, |instruction| {
-            let Some(semantics) = instruction
-                .semantics
-                .clone()
-                .or_else(|| instruction.build_semantics())
-            else {
+            let Some(lir) = instruction.lir.clone().or_else(|| instruction.build_lir()) else {
                 return Ok(None);
             };
-            Ok(Some(Py::new(py, PyLir::from_inner(semantics))?))
+            Ok(Some(Py::new(py, PyLir::from_inner(lir))?))
         })
     }
 

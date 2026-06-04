@@ -82,15 +82,15 @@ tail_instructions = disassembler.disassemble_block(tail_address, graph).instruct
 payload_address = tail_instructions[-1].address() + len(tail_instructions[-1].bytes())
 instructions.extend(tail_instructions)
 
-semantics = LirModule(name="self_modifying_shellcode")
-semantic_function = LirFunction(name="entry")
-semantic_block = LirBlock(name="entry")
+lir_module = LirModule(name="self_modifying_shellcode")
+lir_function = LirFunction(name="entry")
+lir_block = LirBlock(name="entry")
 for instruction in instructions:
-    semantic = instruction.lir()
-    assert semantic.status() == LirStatus.Complete
-    semantic_block.append_instruction(semantic)
-semantic_function.append_block(semantic_block)
-semantics.append_function(semantic_function)
+    instruction_lir = instruction.lir()
+    assert instruction_lir.status() == LirStatus.Complete
+    lir_block.append_instruction(instruction_lir)
+lir_function.append_block(lir_block)
+lir_module.append_function(lir_function)
 
 executor = LirExecutor()
 executor.set_breakpoint(payload_address)
@@ -100,7 +100,7 @@ state.map_memory(0, len(image_bytes))
 state.write_memory(0, image_bytes)
 state.set_register("rip", 64, 0)
 
-decrypted_states = executor.run(semantics, state)
+decrypted_states = executor.run(lir_module, state)
 executor.clear_breakpoints()
 
 assert decrypted_states

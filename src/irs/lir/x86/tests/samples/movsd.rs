@@ -3,7 +3,7 @@ use super::{
 };
 use crate::{Architecture, irs::lir::LirStatus};
 
-use super::super::support::{I386Fixture, interpret_amd64_semantics};
+use super::super::support::{I386Fixture, interpret_amd64_lir};
 
 const fn vec128(low: u64, high: u64) -> u128 {
     ((high as u128) << 64) | (low as u128)
@@ -16,7 +16,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::AMD64,
         bytes: &[0xf2, 0x0f, 0x10, 0xc1],
         expected_status: Some(LirStatus::Complete),
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: None,
     },
     X86Sample {
@@ -25,7 +25,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::AMD64,
         bytes: &[0xc5, 0xeb, 0x10, 0xc1],
         expected_status: Some(LirStatus::Complete),
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: None,
     },
     X86Sample {
@@ -34,7 +34,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::AMD64,
         bytes: &[0xf2, 0x0f, 0x10, 0xc1],
         expected_status: None,
-        semantics_fixture: Some(X86FixtureSpec {
+        lir_fixture: Some(X86FixtureSpec {
             registers: &[
                 (
                     I386Register::Xmm0,
@@ -53,24 +53,24 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
 ];
 
 #[test]
-fn movsd_semantics_regressions_stay_complete() {
+fn movsd_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }
 
 #[test]
-fn movsd_semantics_match_unicorn_transitions() {
+fn movsd_lir_match_unicorn_transitions() {
     assert_conformance_cases(SAMPLES);
 }
 
 // Unicorn 2.1.5 mis-models `vmovsd xmm0, xmm2, xmm1` for the tested VEX form:
 // it zeroes the upper 64 bits of xmm0 instead of preserving them from the
-// second source operand. Keep this as a semantics-only regression until we
+// second source operand. Keep this as a lir-only regression until we
 // either confirm a Unicorn fix or switch this case to a different oracle.
 #[test]
-fn vmovsd_semantics_preserve_upper_lane_from_second_source() {
+fn vmovsd_lir_preserve_upper_lane_from_second_source() {
     let low_src = 0xbff4_0000_0000_0000u64;
     let upper_src = 0x1122_3344_5566_7788u64;
-    let transition = interpret_amd64_semantics(
+    let transition = interpret_amd64_lir(
         "vmovsd xmm0, xmm2, xmm1",
         &[0xc5, 0xeb, 0x10, 0xc1],
         I386Fixture {
@@ -93,6 +93,6 @@ fn vmovsd_semantics_preserve_upper_lane_from_second_source() {
     assert_eq!(
         xmm0,
         vec128(low_src, upper_src),
-        "vmovsd semantics should take the low 64 bits from the third operand and preserve the upper 64 bits from the second operand"
+        "vmovsd lir should take the low 64 bits from the third operand and preserve the upper 64 bits from the second operand"
     );
 }

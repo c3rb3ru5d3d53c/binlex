@@ -706,8 +706,8 @@ class _LLVM:
     def intrinsic(self):
         return self.__class__(self._owner, mode="intrinsic")
 
-    def semantic(self):
-        return self.__class__(self._owner, mode="semantic")
+    def lir(self):
+        return self.__class__(self._owner, mode="lir")
 
     def text(self):
         module = self._lift()

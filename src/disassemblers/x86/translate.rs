@@ -40,7 +40,7 @@ fn leak_register_name(name: String) -> &'static str {
     Box::leak(name.into_boxed_str())
 }
 
-fn semantic_register_name(name: String) -> String {
+fn lir_register_name(name: String) -> String {
     if let Some(index) = name
         .strip_prefix("st(")
         .and_then(|suffix| suffix.strip_suffix(')'))
@@ -50,7 +50,7 @@ fn semantic_register_name(name: String) -> String {
     name
 }
 
-fn semantic_operand_view(
+fn lir_operand_view(
     disassembler: &x86_capstone::Disassembler<'_>,
     operand: &ArchOperand,
 ) -> X86OperandView {
@@ -70,7 +70,7 @@ fn semantic_operand_view(
             size_bits,
             register_name: disassembler
                 .register_name(reg)
-                .map(semantic_register_name)
+                .map(lir_register_name)
                 .map(leak_register_name),
             immediate: None,
             memory: None,
@@ -90,17 +90,17 @@ fn semantic_operand_view(
             memory: Some(X86MemoryOperandView {
                 base_register_name: disassembler
                     .register_name(mem.base())
-                    .map(semantic_register_name)
+                    .map(lir_register_name)
                     .map(leak_register_name),
                 index_register_name: disassembler
                     .register_name(mem.index())
-                    .map(semantic_register_name)
+                    .map(lir_register_name)
                     .map(leak_register_name),
                 scale: mem.scale(),
                 displacement: mem.disp(),
                 segment_register_name: disassembler
                     .register_name(mem.segment())
-                    .map(semantic_register_name)
+                    .map(lir_register_name)
                     .map(leak_register_name),
             }),
         },
@@ -114,7 +114,7 @@ fn semantic_operand_view(
     }
 }
 
-fn semantic_instruction_view(
+fn lir_instruction_view(
     disassembler: &x86_capstone::Disassembler<'_>,
     machine: Architecture,
     instruction: &Insn,
@@ -128,7 +128,7 @@ fn semantic_instruction_view(
         instruction.bytes().to_vec(),
         operands
             .iter()
-            .map(|operand| semantic_operand_view(disassembler, operand))
+            .map(|operand| lir_operand_view(disassembler, operand))
             .collect(),
     )
 }
@@ -230,7 +230,7 @@ pub(crate) fn build_instruction(
     let bytes = instruction.bytes().to_vec();
     let mnemonic = instruction.mnemonic().unwrap_or("").to_string();
     let disassembly = disassembly_text(instruction);
-    let semantic_view = semantic_instruction_view(disassembler, machine, instruction, &operands);
+    let lir_view = lir_instruction_view(disassembler, machine, instruction, &operands);
     let mut blinstruction = Instruction::create(
         instruction.address(),
         cfg.architecture(),
@@ -250,7 +250,7 @@ pub(crate) fn build_instruction(
     blinstruction.disassembly = disassembly;
     blinstruction.has_indirect_target = has_indirect_target;
     blinstruction.operands = normalized_operands;
-    blinstruction.set_instruction_detail(InstructionDetail::x86(semantic_view));
+    blinstruction.set_instruction_detail(InstructionDetail::x86(lir_view));
 
     if let Some(addr) = conditional_target {
         blinstruction.to.insert(addr);

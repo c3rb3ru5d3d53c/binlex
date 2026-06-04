@@ -97,8 +97,8 @@ fn wrap_state(
     )
 }
 
-fn collect_semantics(py: Python<'_>, semantics: Py<PyLirModule>) -> ::binlex::irs::lir::LirModule {
-    semantics.borrow(py).inner.lock().unwrap().clone()
+fn collect_lir(py: Python<'_>, lir: Py<PyLirModule>) -> ::binlex::irs::lir::LirModule {
+    lir.borrow(py).inner.lock().unwrap().clone()
 }
 
 #[pymethods]
@@ -112,20 +112,20 @@ impl LirExecutor {
         }
     }
 
-    #[pyo3(text_signature = "($self, semantics, state)")]
+    #[pyo3(text_signature = "($self, lir, state)")]
     pub fn step(
         &self,
         py: Python<'_>,
-        semantics: Py<PyLirModule>,
+        lir: Py<PyLirModule>,
         state: PyRef<'_, LirExecutorState>,
     ) -> PyResult<Vec<Py<LirExecutorState>>> {
-        let semantics = collect_semantics(py, semantics);
+        let lir = collect_lir(py, lir);
         let state_guard = state.inner.lock().unwrap();
         let states = self
             .inner
             .lock()
             .unwrap()
-            .step(&semantics, &state_guard)
+            .step(&lir, &state_guard)
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
         states
             .into_iter()
@@ -133,16 +133,16 @@ impl LirExecutor {
             .collect()
     }
 
-    #[pyo3(text_signature = "($self, semantics, state, steps=None)")]
-    #[pyo3(signature = (semantics, state, steps=None))]
+    #[pyo3(text_signature = "($self, lir, state, steps=None)")]
+    #[pyo3(signature = (lir, state, steps=None))]
     pub fn run(
         &self,
         py: Python<'_>,
-        semantics: Py<PyLirModule>,
+        lir: Py<PyLirModule>,
         state: PyRef<'_, LirExecutorState>,
         steps: Option<usize>,
     ) -> PyResult<Vec<Py<LirExecutorState>>> {
-        let owned = collect_semantics(py, semantics);
+        let owned = collect_lir(py, lir);
         let hooks = self
             .hooks
             .lock()

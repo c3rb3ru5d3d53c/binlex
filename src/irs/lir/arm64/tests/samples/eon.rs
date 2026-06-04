@@ -32,11 +32,11 @@ pub(crate) const SAMPLES: &[Arm64Sample] = &[
 ];
 
 #[test]
-fn eon_semantics_regressions_stay_complete() {
+fn eon_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }
 
 #[test]
-fn eon_semantics_match_unicorn_transitions() {
+fn eon_lir_match_unicorn_transitions() {
     assert_conformance_cases(SAMPLES);
 }

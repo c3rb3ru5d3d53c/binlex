@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{Architecture, irs::lir::LirStatus};
 
-use super::super::support::{WideI386Fixture, interpret_amd64_wide_semantics};
+use super::super::support::{WideI386Fixture, interpret_amd64_wide_lir};
 
 const fn vec128(bytes: [u8; 16]) -> u128 {
     u128::from_le_bytes(bytes)
@@ -17,7 +17,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::AMD64,
         bytes: &[0x66, 0x0f, 0x38, 0x17, 0xc1],
         expected_status: Some(LirStatus::Complete),
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: None,
     },
     X86Sample {
@@ -26,7 +26,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::AMD64,
         bytes: &[0xc4, 0xe2, 0x79, 0x17, 0xc1],
         expected_status: Some(LirStatus::Complete),
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: None,
     },
     X86Sample {
@@ -35,7 +35,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::AMD64,
         bytes: &[0x66, 0x0f, 0x38, 0x17, 0xc1],
         expected_status: None,
-        semantics_fixture: Some(X86FixtureSpec {
+        lir_fixture: Some(X86FixtureSpec {
             registers: &[
                 (
                     I386Register::Xmm0,
@@ -60,17 +60,17 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
 ];
 
 #[test]
-fn ptest_semantics_regressions_stay_complete() {
+fn ptest_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }
 
 #[test]
-fn ptest_semantics_match_unicorn_transitions() {
+fn ptest_lir_match_unicorn_transitions() {
     assert_conformance_cases(SAMPLES);
 }
 
 #[test]
-fn vptest_semantics_wide_regression_stays_stable() {
+fn vptest_lir_wide_regression_stays_stable() {
     let ymm0 = vec![
         0x10, 0x80, 0x20, 0x70, 0x30, 0x60, 0x40, 0x50, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x11,
         0x22, 0x01, 0x81, 0x02, 0x82, 0x03, 0x83, 0x04, 0x84, 0x05, 0x85, 0x06, 0x86, 0x07, 0x87,
@@ -82,7 +82,7 @@ fn vptest_semantics_wide_regression_stays_stable() {
         0x87, 0x78,
     ];
 
-    let (_, flags) = interpret_amd64_wide_semantics(
+    let (_, flags) = interpret_amd64_wide_lir(
         "vptest ymm0, ymm1",
         &[0xc4, 0xe2, 0x7d, 0x17, 0xc1],
         WideI386Fixture {

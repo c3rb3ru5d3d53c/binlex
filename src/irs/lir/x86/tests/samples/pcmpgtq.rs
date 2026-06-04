@@ -20,7 +20,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::AMD64,
         bytes: &[0x66, 0x0f, 0x38, 0x37, 0xc1],
         expected_status: Some(LirStatus::Complete),
-        semantics_fixture: Some(X86FixtureSpec {
+        lir_fixture: Some(X86FixtureSpec {
             registers: &[
                 (I386Register::Xmm0, u128::from_le_bytes(XMM0_BYTES)),
                 (I386Register::Xmm1, u128::from_le_bytes(XMM1_BYTES)),
@@ -36,7 +36,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::AMD64,
         bytes: &[0xc4, 0xe2, 0x71, 0x37, 0xc2],
         expected_status: Some(LirStatus::Complete),
-        semantics_fixture: Some(X86FixtureSpec {
+        lir_fixture: Some(X86FixtureSpec {
             registers: &[
                 (I386Register::Xmm1, u128::from_le_bytes(XMM1_BYTES)),
                 (I386Register::Xmm2, u128::from_le_bytes(XMM2_BYTES)),
@@ -49,11 +49,11 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
 ];
 
 #[test]
-fn pcmpgtq_semantics_regressions_stay_complete() {
+fn pcmpgtq_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }
 
 #[test]
-fn pcmpgtq_semantics_match_unicorn_transitions() {
+fn pcmpgtq_lir_match_unicorn_transitions() {
     assert_conformance_cases(SAMPLES);
 }

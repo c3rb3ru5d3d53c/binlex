@@ -8,11 +8,11 @@ use inkwell::values::BasicMetadataValueEnum;
 use std::io::Error;
 
 impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
-    pub(super) fn lower_semantics(&mut self, semantics: &Lir) -> Result<(), Error> {
-        for effect in &semantics.effects {
+    pub(super) fn lower_lir(&mut self, lir: &Lir) -> Result<(), Error> {
+        for effect in &lir.effects {
             self.lower_effect(effect)?;
         }
-        self.lower_terminator(&semantics.terminator)
+        self.lower_terminator(&lir.terminator)
     }
 
     fn lower_effect(&mut self, effect: &LirEffect) -> Result<(), Error> {
@@ -69,7 +69,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     sanitize_symbol(&render_address_space(space)),
                     element_bits
                 );
-                self.record_semantic_lowering(
+                self.record_lir_lowering(
                     "effect_helper",
                     format!(
                         "MemorySet bits={} space={} helper={}",
@@ -129,7 +129,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     sanitize_symbol(&render_address_space(dst_space)),
                     element_bits
                 );
-                self.record_semantic_lowering(
+                self.record_lir_lowering(
                     "effect_helper",
                     format!(
                         "MemoryCopy bits={} src_space={} dst_space={} helper={}",
@@ -183,7 +183,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     sanitize_symbol(&render_address_space(space)),
                     bits
                 );
-                self.record_semantic_lowering(
+                self.record_lir_lowering(
                     "effect_helper",
                     format!(
                         "AtomicCmpXchg bits={} space={} helper={}",
@@ -280,7 +280,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             }
             LirEffect::Push { stack, expression } => {
                 let helper_name = format!("binlex_effect_push_{}", sanitize_symbol(stack));
-                self.record_semantic_lowering(
+                self.record_lir_lowering(
                     "effect_helper",
                     format!("Push stack={} helper={}", stack, helper_name),
                 );
@@ -294,7 +294,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             LirEffect::Pop { stack, dst } => {
                 let bits = dst.bits();
                 let helper_name = format!("binlex_effect_pop_{}_{}", sanitize_symbol(stack), bits);
-                self.record_semantic_lowering(
+                self.record_lir_lowering(
                     "effect_helper",
                     format!("Pop stack={} bits={} helper={}", stack, bits, helper_name),
                 );
@@ -308,7 +308,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             }
             LirEffect::Fence { kind } => {
                 let helper_name = format!("binlex_fence_{}", render_fence_kind(kind));
-                self.record_semantic_lowering(
+                self.record_lir_lowering(
                     "effect_helper",
                     format!("Fence {} helper={}", render_fence_kind(kind), helper_name),
                 );
@@ -319,14 +319,14 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             }
             LirEffect::Trap { kind } => {
                 if self
-                    .current_semantics_abi
+                    .current_lir_abi
                     .as_ref()
                     .is_some_and(|abi| abi.is_native_syscall())
                 {
                     return self.lower_native_trap(kind);
                 }
                 let helper_name = format!("binlex_trap_{}", render_trap_kind(kind));
-                self.record_semantic_lowering(
+                self.record_lir_lowering(
                     "effect_helper",
                     format!("Trap {} helper={}", render_trap_kind(kind), helper_name),
                 );
@@ -337,7 +337,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             }
             LirEffect::Intrinsic { name, args, .. } => {
                 let helper_name = format!("binlex_effect_{}", sanitize_symbol(name));
-                self.record_semantic_lowering(
+                self.record_lir_lowering(
                     "effect_intrinsic",
                     format!("name={} args={} helper={}", name, args.len(), helper_name),
                 );
@@ -354,7 +354,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
     fn lower_terminator(&mut self, terminator: &LirTerminator) -> Result<(), Error> {
         if self
-            .current_semantics_abi
+            .current_lir_abi
             .as_ref()
             .is_some_and(|abi| abi.is_native_syscall())
             && matches!(terminator, LirTerminator::Trap)
@@ -381,7 +381,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         match terminator {
             LirTerminator::FallThrough => {}
             LirTerminator::Jump { target } => {
-                self.record_semantic_lowering("terminator_helper", "Jump helper=binlex_term_jump");
+                self.record_lir_lowering("terminator_helper", "Jump helper=binlex_term_jump");
                 let helper = self.declare_void_helper(
                     "binlex_term_jump",
                     &[self.context.i64_type().into()],
@@ -398,10 +398,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 true_target,
                 false_target,
             } => {
-                self.record_semantic_lowering(
-                    "terminator_helper",
-                    "Branch helper=binlex_term_branch",
-                );
+                self.record_lir_lowering("terminator_helper", "Branch helper=binlex_term_branch");
                 let helper = self.declare_void_helper(
                     "binlex_term_branch",
                     &[
@@ -437,7 +434,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                         does_return.unwrap_or(true),
                     );
                 }
-                self.record_semantic_lowering(
+                self.record_lir_lowering(
                     "terminator_helper",
                     format!(
                         "Call helper=binlex_term_call does_return={}",
@@ -491,7 +488,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                             .map_err(|err| Error::other(err.to_string()))?;
                         return Ok(());
                     }
-                    self.record_semantic_lowering(
+                    self.record_lir_lowering(
                         "terminator_helper",
                         "Return helper=binlex_term_return",
                     );
@@ -511,7 +508,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .map_err(|err| Error::other(err.to_string()))?;
             }
             LirTerminator::Trap => {
-                self.record_semantic_lowering("terminator_helper", "Trap helper=binlex_term_trap");
+                self.record_lir_lowering("terminator_helper", "Trap helper=binlex_term_trap");
                 let helper = self.declare_void_helper("binlex_term_trap", &[], false);
                 self.builder
                     .build_call(helper, &[], "")
@@ -530,7 +527,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         let target = self
             .module
             .get_function(name)
-            .ok_or_else(|| Error::other(format!("unknown semantic function target {name}")))?;
+            .ok_or_else(|| Error::other(format!("unknown lir function target {name}")))?;
         let callee_abi = self.known_function_abis.get(name).cloned();
         let mut args = Vec::<BasicMetadataValueEnum<'ctx>>::new();
         if let Some(abi) = callee_abi.as_ref() {
@@ -555,7 +552,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 args.push(value.into());
             }
         }
-        self.record_semantic_lowering(
+        self.record_lir_lowering(
             "terminator_direct_call",
             format!(
                 "target={} args={} does_return={}",
@@ -622,7 +619,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             &[self.context.i64_type().into(), self.int_type(bits).into()],
             false,
         );
-        self.record_semantic_lowering(
+        self.record_lir_lowering(
             "store_helper",
             format!(
                 "space={} bits={} helper={}",

@@ -8,7 +8,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::I386,
         bytes: &[0x0f, 0x44, 0xc3],
         expected_status: None,
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: Some(X86FixtureSpec {
             registers: &[
                 (I386Register::Eax, 0x1122_3344),
@@ -30,7 +30,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::AMD64,
         bytes: &[0x48, 0x0f, 0x44, 0xc3],
         expected_status: None,
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: Some(X86FixtureSpec {
             registers: &[
                 (I386Register::Rax, 0x1122_3344_5566_7788),

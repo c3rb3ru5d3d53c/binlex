@@ -27,7 +27,7 @@ use crate::controlflow::Function;
 use crate::controlflow::Instruction;
 use crate::controlflow::InstructionRecord;
 use crate::controlflow::Reference;
-use crate::irs::lir::{Lir, LirInstruction};
+use crate::irs::lir::Lir;
 use crossbeam::queue::SegQueue;
 use crossbeam_skiplist::SkipMap;
 use crossbeam_skiplist::SkipSet;
@@ -78,7 +78,7 @@ pub struct GraphInstructionSnapshot {
     pub mnemonic: String,
     pub disassembly: String,
     pub operands: Vec<crate::controlflow::Operand>,
-    pub semantics: Option<LirInstruction>,
+    pub lir: Option<Lir>,
 }
 
 /// Queue structure used within `Graph` for managing addresses in processing stages.
@@ -486,7 +486,7 @@ impl Graph {
                     mnemonic: instruction.mnemonic.clone(),
                     disassembly: instruction.disassembly.clone(),
                     operands: instruction.operands.clone(),
-                    semantics: instruction.semantics.clone(),
+                    lir: instruction.lir.clone(),
                 }
             })
             .collect();
@@ -535,7 +535,7 @@ impl Graph {
             instruction.pattern = snapshot_instruction.pattern;
             instruction.functions = snapshot_instruction.functions;
             instruction.to = snapshot_instruction.to;
-            instruction.semantics = snapshot_instruction.semantics;
+            instruction.lir = snapshot_instruction.lir;
             graph.listing.insert(instruction.address, instruction);
         }
 
@@ -748,9 +748,8 @@ impl Graph {
         if existing.instruction_detail.is_none() {
             existing.instruction_detail = incoming.instruction_detail;
         }
-        existing.semantics =
-            Graph::merge_instruction_semantics(existing.semantics, incoming.semantics);
-        existing.reset_prepared_semantics_cache();
+        existing.lir = Graph::merge_instruction_lir(existing.lir, incoming.lir);
+        existing.reset_prepared_lir_cache();
         existing
     }
 
@@ -765,11 +764,11 @@ impl Graph {
         }
     }
 
-    fn merge_instruction_semantics(existing: Option<Lir>, incoming: Option<Lir>) -> Option<Lir> {
+    fn merge_instruction_lir(existing: Option<Lir>, incoming: Option<Lir>) -> Option<Lir> {
         match (existing, incoming) {
             (None, None) => None,
-            (Some(semantics), None) => Some(semantics),
-            (None, Some(semantics)) => Some(semantics),
+            (Some(lir), None) => Some(lir),
+            (None, Some(lir)) => Some(lir),
             (Some(existing), Some(incoming)) => {
                 if existing.status >= incoming.status {
                     Some(existing)

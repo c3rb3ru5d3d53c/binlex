@@ -256,7 +256,7 @@ pub(crate) fn extract_abi(value: &Bound<'_, PyAny>) -> PyResult<InnerLirAbi> {
             return Ok(abi.inner.clone());
         }
     }
-    Err(PyTypeError::new_err("expected a semantic ABI instance"))
+    Err(PyTypeError::new_err("expected a lir ABI instance"))
 }
 
 pub(crate) fn register_abi_classes(m: &Bound<'_, PyModule>) -> PyResult<()> {

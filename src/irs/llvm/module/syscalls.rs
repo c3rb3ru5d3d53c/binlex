@@ -7,7 +7,7 @@ use std::io::Error;
 
 impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     pub(super) fn lower_native_trap(&mut self, kind: &LirTrapKind) -> Result<(), Error> {
-        match (kind, self.current_semantics_abi.as_ref(), self.architecture) {
+        match (kind, self.current_lir_abi.as_ref(), self.architecture) {
             (LirTrapKind::Syscall, Some(abi), Architecture::ARM64) if abi.is_linux_syscall() => {
                 self.emit_arm64_linux_syscall_native()
             }
@@ -39,7 +39,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             _ => Err(Error::other(format!(
                 "unsupported native trap lowering: kind={} abi={} architecture={}",
                 render_trap_kind(kind),
-                self.current_semantics_abi
+                self.current_lir_abi
                     .as_ref()
                     .map(|abi| abi.name.clone())
                     .unwrap_or_else(|| "none".to_string()),
@@ -49,7 +49,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     }
 
     fn emit_arm64_linux_syscall_native(&mut self) -> Result<(), Error> {
-        self.record_semantic_lowering(
+        self.record_lir_lowering(
             "effect_native",
             "Trap syscall lowered as native arm64 linux syscall",
         );
@@ -105,7 +105,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     }
 
     fn emit_arm64_windows_syscall_native(&mut self) -> Result<(), Error> {
-        self.record_semantic_lowering(
+        self.record_lir_lowering(
             "effect_native",
             "Trap syscall lowered as native arm64 windows syscall",
         );
@@ -172,7 +172,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     }
 
     fn emit_amd64_linux_syscall_native(&mut self) -> Result<(), Error> {
-        self.record_semantic_lowering(
+        self.record_lir_lowering(
             "effect_native",
             "Trap syscall lowered as native amd64 linux syscall",
         );
@@ -245,7 +245,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     }
 
     fn emit_amd64_windows_syscall_native(&mut self) -> Result<(), Error> {
-        self.record_semantic_lowering(
+        self.record_lir_lowering(
             "effect_native",
             "Trap syscall lowered as native amd64 windows syscall",
         );
@@ -300,7 +300,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     }
 
     fn load_amd64_windows_syscall_r10(&mut self) -> Result<IntValue<'ctx>, Error> {
-        let r10_name = self.semantic_register_name("r10")?;
+        let r10_name = self.lir_register_name("r10")?;
         let r10_location = LirLocation::Register {
             name: r10_name.clone(),
             bits: 64,
@@ -310,7 +310,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             return self.load_native_syscall_register_bits(&r10_name, 64);
         }
 
-        let rcx_name = self.semantic_register_name("rcx")?;
+        let rcx_name = self.lir_register_name("rcx")?;
         let rcx_location = LirLocation::Register {
             name: rcx_name,
             bits: 64,
@@ -328,7 +328,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     }
 
     fn emit_i386_linux_syscall_native(&mut self) -> Result<(), Error> {
-        self.record_semantic_lowering(
+        self.record_lir_lowering(
             "effect_native",
             "Trap interrupt lowered as native i386 linux syscall",
         );
@@ -401,7 +401,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     }
 
     fn emit_i386_windows_syscall_native(&mut self) -> Result<(), Error> {
-        self.record_semantic_lowering(
+        self.record_lir_lowering(
             "effect_native",
             "Trap interrupt lowered as native i386 windows syscall",
         );
@@ -437,7 +437,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     }
 
     fn emit_i386_linux_sysenter_native(&mut self) -> Result<(), Error> {
-        self.record_semantic_lowering(
+        self.record_lir_lowering(
             "effect_native",
             "Trap x86.sysenter lowered as native i386 linux sysenter",
         );
@@ -512,7 +512,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     }
 
     fn emit_i386_windows_sysenter_native(&mut self) -> Result<(), Error> {
-        self.record_semantic_lowering(
+        self.record_lir_lowering(
             "effect_native",
             "Trap x86.sysenter lowered as native i386 windows syscall",
         );
@@ -554,13 +554,13 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     }
 
     fn native_trap_abi(&self, kind: &LirTrapKind) -> Result<&LirAbiTrap, Error> {
-        self.current_semantics_abi
+        self.current_lir_abi
             .as_ref()
             .and_then(|abi| abi.trap(kind))
             .ok_or_else(|| Error::other(format!("missing trap abi for {}", render_trap_kind(kind))))
     }
 
-    fn semantic_register_name(&self, register_name: &str) -> Result<String, Error> {
+    fn lir_register_name(&self, register_name: &str) -> Result<String, Error> {
         let cpu_kind = match self.architecture {
             Architecture::I386 => LirCpuKind::I386,
             Architecture::AMD64 => LirCpuKind::Amd64,
@@ -568,11 +568,11 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             Architecture::CIL => LirCpuKind::Cil,
             Architecture::UNKNOWN => {
                 return Err(Error::other(
-                    "cannot resolve semantic register names for unknown architecture",
+                    "cannot resolve lir register names for unknown architecture",
                 ));
             }
         };
-        crate::irs::lir::cpus::semantic_register_name(cpu_kind, register_name)
+        crate::irs::lir::cpus::lir_register_name(cpu_kind, register_name)
             .ok_or_else(|| Error::other(format!("unknown lir cpu register {register_name}")))
     }
 
@@ -585,7 +585,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 render_trap_kind(kind)
             )));
         };
-        Ok((self.semantic_register_name(name)?, *bits))
+        Ok((self.lir_register_name(name)?, *bits))
     }
 
     fn trap_number_name(&self, kind: &LirTrapKind) -> Result<(String, u16), Error> {
@@ -596,7 +596,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 render_trap_kind(kind)
             )));
         };
-        Ok((self.semantic_register_name(name)?, *bits))
+        Ok((self.lir_register_name(name)?, *bits))
     }
 
     fn trap_result_name(&self, kind: &LirTrapKind, index: usize) -> Result<(String, u16), Error> {
@@ -608,7 +608,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 render_trap_kind(kind)
             )));
         };
-        Ok((self.semantic_register_name(name)?, *bits))
+        Ok((self.lir_register_name(name)?, *bits))
     }
 
     fn load_native_syscall_register(&mut self, name: &str) -> Result<IntValue<'ctx>, Error> {
@@ -724,21 +724,21 @@ mod tests {
         LirAbi::from_kind(kind, &cpu).expect("abi")
     }
 
-    fn semantic_register_location(
+    fn lir_register_location(
         architecture: Architecture,
         register_name: &str,
         bits: u16,
     ) -> LirLocation {
         let cpu = LirCpu::from_kind(cpu_kind(architecture)).expect("cpu");
         let name = cpu
-            .semantic_register_name(register_name)
-            .expect("semantic register name");
+            .lir_register_name(register_name)
+            .expect("lir register name");
         LirLocation::Register { name, bits }
     }
 
     #[test]
     fn arm64_linux_syscall_native_lowering_emits_svc_inline_asm() {
-        let mut semantics = Lir {
+        let mut lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -747,25 +747,25 @@ mod tests {
             temporaries: Vec::new(),
             effects: vec![
                 LirEffect::Set {
-                    dst: semantic_register_location(Architecture::ARM64, "x0", 64),
+                    dst: lir_register_location(Architecture::ARM64, "x0", 64),
                     expression: LirExpression::Const { value: 1, bits: 64 },
                 },
                 LirEffect::Set {
-                    dst: semantic_register_location(Architecture::ARM64, "x1", 64),
+                    dst: lir_register_location(Architecture::ARM64, "x1", 64),
                     expression: LirExpression::Const {
                         value: 0x620000,
                         bits: 64,
                     },
                 },
                 LirEffect::Set {
-                    dst: semantic_register_location(Architecture::ARM64, "x2", 64),
+                    dst: lir_register_location(Architecture::ARM64, "x2", 64),
                     expression: LirExpression::Const {
                         value: 14,
                         bits: 64,
                     },
                 },
                 LirEffect::Set {
-                    dst: semantic_register_location(Architecture::ARM64, "x8", 64),
+                    dst: lir_register_location(Architecture::ARM64, "x8", 64),
                     expression: LirExpression::Const {
                         value: 64,
                         bits: 64,
@@ -778,7 +778,7 @@ mod tests {
             terminator: LirTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(builtin_abi(
+        lir.set_abi(Some(builtin_abi(
             Architecture::ARM64,
             LirAbiKind::LinuxSyscall,
         )));
@@ -786,8 +786,8 @@ mod tests {
 
         let mut lifter = LlvmModule::from_architecture(Architecture::ARM64);
         lifter
-            .populate_function_lir(&LirModule::from_instructions(vec![semantics]), Some(&abi))
-            .expect("lift semantics");
+            .populate_function_lir(&LirModule::from_instructions(vec![lir]), Some(&abi))
+            .expect("lift lir");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -798,7 +798,7 @@ mod tests {
 
     #[test]
     fn amd64_linux_syscall_native_lowering_emits_syscall_inline_asm() {
-        let mut semantics = Lir {
+        let mut lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -807,7 +807,7 @@ mod tests {
             temporaries: Vec::new(),
             effects: vec![
                 LirEffect::Set {
-                    dst: semantic_register_location(Architecture::AMD64, "rax", 64),
+                    dst: lir_register_location(Architecture::AMD64, "rax", 64),
                     expression: LirExpression::Const { value: 1, bits: 64 },
                 },
                 LirEffect::Trap {
@@ -817,7 +817,7 @@ mod tests {
             terminator: LirTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(builtin_abi(
+        lir.set_abi(Some(builtin_abi(
             Architecture::AMD64,
             LirAbiKind::LinuxSyscall,
         )));
@@ -825,8 +825,8 @@ mod tests {
 
         let mut lifter = LlvmModule::from_architecture(Architecture::AMD64);
         lifter
-            .populate_function_lir(&LirModule::from_instructions(vec![semantics]), Some(&abi))
-            .expect("lift semantics");
+            .populate_function_lir(&LirModule::from_instructions(vec![lir]), Some(&abi))
+            .expect("lift lir");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -837,7 +837,7 @@ mod tests {
 
     #[test]
     fn explicit_function_syscall_abi_controls_native_syscall_lowering() {
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -846,14 +846,14 @@ mod tests {
             temporaries: Vec::new(),
             effects: vec![
                 LirEffect::Set {
-                    dst: semantic_register_location(Architecture::AMD64, "rax", 64),
+                    dst: lir_register_location(Architecture::AMD64, "rax", 64),
                     expression: LirExpression::Const {
                         value: 60,
                         bits: 64,
                     },
                 },
                 LirEffect::Set {
-                    dst: semantic_register_location(Architecture::AMD64, "rdi", 64),
+                    dst: lir_register_location(Architecture::AMD64, "rdi", 64),
                     expression: LirExpression::Const { value: 0, bits: 64 },
                 },
                 LirEffect::Trap {
@@ -868,10 +868,10 @@ mod tests {
         let mut lifter = LlvmModule::from_architecture(Architecture::AMD64);
         lifter
             .populate_function_lir(
-                &LirModule::from_instructions(vec![semantics]),
+                &LirModule::from_instructions(vec![lir]),
                 Some(&function_abi),
             )
-            .expect("lift semantics");
+            .expect("lift lir");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -882,7 +882,7 @@ mod tests {
 
     #[test]
     fn amd64_windows_syscall_native_lowering_emits_syscall_inline_asm() {
-        let mut semantics = Lir {
+        let mut lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -891,7 +891,7 @@ mod tests {
             temporaries: Vec::new(),
             effects: vec![
                 LirEffect::Set {
-                    dst: semantic_register_location(Architecture::AMD64, "rax", 64),
+                    dst: lir_register_location(Architecture::AMD64, "rax", 64),
                     expression: LirExpression::Const {
                         value: 0x55,
                         bits: 64,
@@ -904,7 +904,7 @@ mod tests {
             terminator: LirTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(builtin_abi(
+        lir.set_abi(Some(builtin_abi(
             Architecture::AMD64,
             LirAbiKind::WindowsSyscall,
         )));
@@ -912,8 +912,8 @@ mod tests {
 
         let mut lifter = LlvmModule::from_architecture(Architecture::AMD64);
         lifter
-            .populate_function_lir(&LirModule::from_instructions(vec![semantics]), Some(&abi))
-            .expect("lift semantics");
+            .populate_function_lir(&LirModule::from_instructions(vec![lir]), Some(&abi))
+            .expect("lift lir");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -923,8 +923,8 @@ mod tests {
     }
 
     #[test]
-    fn amd64_windows_syscall_preserves_r10_from_rcx_prep_semantics() {
-        let mut semantics = Lir {
+    fn amd64_windows_syscall_preserves_r10_from_rcx_prep_lir() {
+        let mut lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -943,14 +943,14 @@ mod tests {
                     },
                 },
                 LirEffect::Set {
-                    dst: semantic_register_location(Architecture::AMD64, "r10", 64),
+                    dst: lir_register_location(Architecture::AMD64, "r10", 64),
                     expression: LirExpression::Read(Box::new(LirLocation::Register {
                         name: "rcx".to_string(),
                         bits: 64,
                     })),
                 },
                 LirEffect::Set {
-                    dst: semantic_register_location(Architecture::AMD64, "rax", 64),
+                    dst: lir_register_location(Architecture::AMD64, "rax", 64),
                     expression: LirExpression::Const {
                         value: 0x55,
                         bits: 64,
@@ -963,7 +963,7 @@ mod tests {
             terminator: LirTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(builtin_abi(
+        lir.set_abi(Some(builtin_abi(
             Architecture::AMD64,
             LirAbiKind::WindowsSyscall,
         )));
@@ -971,8 +971,8 @@ mod tests {
 
         let mut lifter = LlvmModule::from_architecture(Architecture::AMD64);
         lifter
-            .populate_function_lir(&LirModule::from_instructions(vec![semantics]), Some(&abi))
-            .expect("lift semantics");
+            .populate_function_lir(&LirModule::from_instructions(vec![lir]), Some(&abi))
+            .expect("lift lir");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -985,7 +985,7 @@ mod tests {
 
     #[test]
     fn amd64_windows_syscall_uses_rcx_for_r10_when_prep_is_missing() {
-        let mut semantics = Lir {
+        let mut lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -994,14 +994,14 @@ mod tests {
             temporaries: Vec::new(),
             effects: vec![
                 LirEffect::Set {
-                    dst: semantic_register_location(Architecture::AMD64, "rcx", 64),
+                    dst: lir_register_location(Architecture::AMD64, "rcx", 64),
                     expression: LirExpression::Const {
                         value: 0x1122_3344_5566_7788,
                         bits: 64,
                     },
                 },
                 LirEffect::Set {
-                    dst: semantic_register_location(Architecture::AMD64, "rax", 64),
+                    dst: lir_register_location(Architecture::AMD64, "rax", 64),
                     expression: LirExpression::Const {
                         value: 0x55,
                         bits: 64,
@@ -1014,7 +1014,7 @@ mod tests {
             terminator: LirTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(builtin_abi(
+        lir.set_abi(Some(builtin_abi(
             Architecture::AMD64,
             LirAbiKind::WindowsSyscall,
         )));
@@ -1022,8 +1022,8 @@ mod tests {
 
         let mut lifter = LlvmModule::from_architecture(Architecture::AMD64);
         lifter
-            .populate_function_lir(&LirModule::from_instructions(vec![semantics]), Some(&abi))
-            .expect("lift semantics");
+            .populate_function_lir(&LirModule::from_instructions(vec![lir]), Some(&abi))
+            .expect("lift lir");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -1034,7 +1034,7 @@ mod tests {
 
     #[test]
     fn i386_linux_syscall_native_lowering_emits_int_0x80_inline_asm() {
-        let mut semantics = Lir {
+        let mut lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -1043,7 +1043,7 @@ mod tests {
             temporaries: Vec::new(),
             effects: vec![
                 LirEffect::Set {
-                    dst: semantic_register_location(Architecture::I386, "eax", 32),
+                    dst: lir_register_location(Architecture::I386, "eax", 32),
                     expression: LirExpression::Const { value: 4, bits: 32 },
                 },
                 LirEffect::Trap {
@@ -1053,7 +1053,7 @@ mod tests {
             terminator: LirTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(builtin_abi(
+        lir.set_abi(Some(builtin_abi(
             Architecture::I386,
             LirAbiKind::LinuxSyscall,
         )));
@@ -1061,8 +1061,8 @@ mod tests {
 
         let mut lifter = LlvmModule::from_architecture(Architecture::I386);
         lifter
-            .populate_function_lir(&LirModule::from_instructions(vec![semantics]), Some(&abi))
-            .expect("lift semantics");
+            .populate_function_lir(&LirModule::from_instructions(vec![lir]), Some(&abi))
+            .expect("lift lir");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -1073,7 +1073,7 @@ mod tests {
 
     #[test]
     fn i386_windows_syscall_native_lowering_emits_int_0x2e_inline_asm() {
-        let mut semantics = Lir {
+        let mut lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -1082,7 +1082,7 @@ mod tests {
             temporaries: Vec::new(),
             effects: vec![
                 LirEffect::Set {
-                    dst: semantic_register_location(Architecture::I386, "eax", 32),
+                    dst: lir_register_location(Architecture::I386, "eax", 32),
                     expression: LirExpression::Const {
                         value: 0x55,
                         bits: 32,
@@ -1095,7 +1095,7 @@ mod tests {
             terminator: LirTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(builtin_abi(
+        lir.set_abi(Some(builtin_abi(
             Architecture::I386,
             LirAbiKind::WindowsSyscall,
         )));
@@ -1103,8 +1103,8 @@ mod tests {
 
         let mut lifter = LlvmModule::from_architecture(Architecture::I386);
         lifter
-            .populate_function_lir(&LirModule::from_instructions(vec![semantics]), Some(&abi))
-            .expect("lift semantics");
+            .populate_function_lir(&LirModule::from_instructions(vec![lir]), Some(&abi))
+            .expect("lift lir");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -1115,7 +1115,7 @@ mod tests {
 
     #[test]
     fn i386_linux_sysenter_native_lowering_emits_sysenter_inline_asm() {
-        let mut semantics = Lir {
+        let mut lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -1124,7 +1124,7 @@ mod tests {
             temporaries: Vec::new(),
             effects: vec![
                 LirEffect::Set {
-                    dst: semantic_register_location(Architecture::I386, "eax", 32),
+                    dst: lir_register_location(Architecture::I386, "eax", 32),
                     expression: LirExpression::Const { value: 4, bits: 32 },
                 },
                 LirEffect::Trap {
@@ -1136,7 +1136,7 @@ mod tests {
             terminator: LirTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(builtin_abi(
+        lir.set_abi(Some(builtin_abi(
             Architecture::I386,
             LirAbiKind::LinuxSyscall,
         )));
@@ -1144,8 +1144,8 @@ mod tests {
 
         let mut lifter = LlvmModule::from_architecture(Architecture::I386);
         lifter
-            .populate_function_lir(&LirModule::from_instructions(vec![semantics]), Some(&abi))
-            .expect("lift semantics");
+            .populate_function_lir(&LirModule::from_instructions(vec![lir]), Some(&abi))
+            .expect("lift lir");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -1156,7 +1156,7 @@ mod tests {
 
     #[test]
     fn i386_windows_sysenter_native_lowering_emits_sysenter_inline_asm() {
-        let mut semantics = Lir {
+        let mut lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -1165,7 +1165,7 @@ mod tests {
             temporaries: Vec::new(),
             effects: vec![
                 LirEffect::Set {
-                    dst: semantic_register_location(Architecture::I386, "eax", 32),
+                    dst: lir_register_location(Architecture::I386, "eax", 32),
                     expression: LirExpression::Const {
                         value: 0x55,
                         bits: 32,
@@ -1180,7 +1180,7 @@ mod tests {
             terminator: LirTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(builtin_abi(
+        lir.set_abi(Some(builtin_abi(
             Architecture::I386,
             LirAbiKind::WindowsSyscall,
         )));
@@ -1188,8 +1188,8 @@ mod tests {
 
         let mut lifter = LlvmModule::from_architecture(Architecture::I386);
         lifter
-            .populate_function_lir(&LirModule::from_instructions(vec![semantics]), Some(&abi))
-            .expect("lift semantics");
+            .populate_function_lir(&LirModule::from_instructions(vec![lir]), Some(&abi))
+            .expect("lift lir");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -1200,7 +1200,7 @@ mod tests {
 
     #[test]
     fn arm64_windows_syscall_native_lowering_emits_svc_inline_asm() {
-        let mut semantics = Lir {
+        let mut lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -1209,11 +1209,11 @@ mod tests {
             temporaries: Vec::new(),
             effects: vec![
                 LirEffect::Set {
-                    dst: semantic_register_location(Architecture::ARM64, "x0", 64),
+                    dst: lir_register_location(Architecture::ARM64, "x0", 64),
                     expression: LirExpression::Const { value: 1, bits: 64 },
                 },
                 LirEffect::Set {
-                    dst: semantic_register_location(Architecture::ARM64, "x8", 64),
+                    dst: lir_register_location(Architecture::ARM64, "x8", 64),
                     expression: LirExpression::Const {
                         value: 0x55,
                         bits: 64,
@@ -1226,7 +1226,7 @@ mod tests {
             terminator: LirTerminator::Trap,
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(builtin_abi(
+        lir.set_abi(Some(builtin_abi(
             Architecture::ARM64,
             LirAbiKind::WindowsSyscall,
         )));
@@ -1234,8 +1234,8 @@ mod tests {
 
         let mut lifter = LlvmModule::from_architecture(Architecture::ARM64);
         lifter
-            .populate_function_lir(&LirModule::from_instructions(vec![semantics]), Some(&abi))
-            .expect("lift semantics");
+            .populate_function_lir(&LirModule::from_instructions(vec![lir]), Some(&abi))
+            .expect("lift lir");
         lifter.verify().expect("verify");
         let text = lifter.text();
 

@@ -14,7 +14,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::AMD64,
         bytes: &[0xf3, 0x0f, 0x16, 0xc1],
         expected_status: Some(LirStatus::Complete),
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: None,
     },
     X86Sample {
@@ -23,7 +23,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::AMD64,
         bytes: &[0xf3, 0x0f, 0x16, 0xc1],
         expected_status: None,
-        semantics_fixture: Some(X86FixtureSpec {
+        lir_fixture: Some(X86FixtureSpec {
             registers: &[
                 (I386Register::Xmm0, 0),
                 (
@@ -42,11 +42,11 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
 ];
 
 #[test]
-fn movshdup_semantics_regressions_stay_complete() {
+fn movshdup_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }
 
 #[test]
-fn movshdup_semantics_match_unicorn_transitions() {
+fn movshdup_lir_match_unicorn_transitions() {
     assert_conformance_cases(SAMPLES);
 }

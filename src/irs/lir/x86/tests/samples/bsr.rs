@@ -13,7 +13,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[X86Sample {
     architecture: Architecture::I386,
     bytes: &[0x0f, 0xbd, 0xc8],
     expected_status: Some(LirStatus::Complete),
-    semantics_fixture: Some(X86FixtureSpec {
+    lir_fixture: Some(X86FixtureSpec {
         registers: &[(I386Register::Eax, 0x0000_0010), (I386Register::Ecx, 0)],
         eflags: 1 << 1,
         memory: &[],
@@ -22,12 +22,12 @@ pub(crate) const SAMPLES: &[X86Sample] = &[X86Sample {
 }];
 
 #[test]
-fn bsr_semantics_regressions_stay_complete() {
+fn bsr_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }
 
 #[test]
-fn bsr_semantics_match_unicorn_transitions() {
+fn bsr_lir_match_unicorn_transitions() {
     assert_conformance_cases(SAMPLES);
 }
 

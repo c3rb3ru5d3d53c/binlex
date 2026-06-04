@@ -573,11 +573,11 @@ pub(crate) const SAMPLES: &[Arm64Sample] = &[
 ];
 
 #[test]
-fn msr_semantics_regressions_stay_complete() {
+fn msr_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }
 
 #[test]
-fn msr_semantics_match_unicorn_transitions() {
+fn msr_lir_match_unicorn_transitions() {
     assert_conformance_cases(SAMPLES);
 }

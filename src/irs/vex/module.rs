@@ -6,16 +6,16 @@ use crate::Configuration;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::core::Architecture;
 use crate::irs::lir::{
-    LirAddressSpace, LirBlock, LirDiagnostic, LirEffect, LirExpression, LirFunction,
-    LirInstruction, LirLocation, LirModule, LirOperationBinary, LirOperationCast,
-    LirOperationCompare, LirOperationUnary, LirTerminator,
+    Lir, LirAddressSpace, LirBlock, LirDiagnostic, LirEffect, LirExpression, LirFunction,
+    LirLocation, LirModule, LirOperationBinary, LirOperationCast, LirOperationCompare,
+    LirOperationUnary, LirTerminator,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct InstructionRequest {
     address: u64,
     bytes: Vec<u8>,
-    semantics: LirInstruction,
+    lir: Lir,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -239,14 +239,14 @@ impl VexModule {
         Ok(InstructionRequest {
             address: instruction.address,
             bytes: instruction.bytes.clone(),
-            semantics: instruction
-                .semantics
+            lir: instruction
+                .lir
                 .as_ref()
                 .ok_or_else(|| {
                     Error::new(
                         ErrorKind::InvalidInput,
                         format!(
-                            "instruction 0x{:x} is missing semantics required for VEX lifting",
+                            "instruction 0x{:x} is missing lir required for VEX lifting",
                             instruction.address
                         ),
                     )
@@ -397,7 +397,7 @@ fn render_lir_block_statements(block: &LirBlock) -> Vec<String> {
     lines
 }
 
-fn render_lir_instruction_body(instruction: &LirInstruction) -> Vec<String> {
+fn render_lir_instruction_body(instruction: &Lir) -> Vec<String> {
     let address = instruction
         .encoding
         .as_ref()
@@ -465,7 +465,7 @@ fn render_instruction_body(instruction: &InstructionRequest) -> Vec<String> {
         instruction.bytes.len()
     )];
 
-    for temp in &instruction.semantics.temporaries {
+    for temp in &instruction.lir.temporaries {
         let name = temp
             .name
             .as_deref()
@@ -474,17 +474,17 @@ fn render_instruction_body(instruction: &InstructionRequest) -> Vec<String> {
         lines.push(format!("   t{}:{}{}", temp.id, temp.bits, name));
     }
 
-    for effect in &instruction.semantics.effects {
+    for effect in &instruction.lir.effects {
         lines.push(format!("   {}", render_effect(effect)));
     }
 
-    for diagnostic in &instruction.semantics.diagnostics {
+    for diagnostic in &instruction.lir.diagnostics {
         lines.push(format!("   ; diag {}", render_diagnostic(diagnostic)));
     }
 
     lines.push(format!(
         "   {}",
-        render_terminator(&instruction.semantics.terminator)
+        render_terminator(&instruction.lir.terminator)
     ));
     lines
 }

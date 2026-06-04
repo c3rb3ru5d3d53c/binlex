@@ -14,11 +14,11 @@ pub(crate) const SAMPLES: &[Arm64Sample] = &[Arm64Sample {
 }];
 
 #[test]
-fn smin_semantics_regressions_stay_complete() {
+fn smin_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }
 
 #[test]
-fn smin_semantics_match_unicorn_transitions() {
+fn smin_lir_match_unicorn_transitions() {
     assert_conformance_cases(SAMPLES);
 }

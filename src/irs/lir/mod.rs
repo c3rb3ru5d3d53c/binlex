@@ -44,8 +44,8 @@ pub use executor::{
     LirExecutor, LirExecutorError, LirExecutorState, Slice, SliceInstruction, SliceNode,
 };
 pub use ir::{
-    LirAddressSpace, LirBlock, LirData, LirDiagnostic, LirDiagnosticKind, LirEffect, LirEffectKind,
-    LirEncoding, LirExpression, LirExpressionKind, LirFenceKind, LirFunction, LirInstruction,
+    Lir, LirAddressSpace, LirBlock, LirData, LirDiagnostic, LirDiagnosticKind, LirEffect,
+    LirEffectKind, LirEncoding, LirExpression, LirExpressionKind, LirFenceKind, LirFunction,
     LirLocation, LirLocationKind, LirMetadata, LirModule, LirOperation, LirOperationBinary,
     LirOperationCast, LirOperationCompare, LirOperationUnary, LirStatus, LirTemporary,
     LirTerminator, LirTerminatorKind, LirTrapKind, normalize_instruction_lir,
@@ -57,5 +57,3 @@ pub use optimizers::{
     optimize_intrinsics, optimize_noops,
 };
 pub use print::{format_lir_block, format_lir_function, format_lir_instruction, format_lir_module};
-
-pub(crate) use ir::LirInstruction as Lir;

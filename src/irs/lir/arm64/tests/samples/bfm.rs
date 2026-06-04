@@ -25,11 +25,11 @@ pub(crate) const SAMPLES: &[Arm64Sample] = &[
 ];
 
 #[test]
-fn bfm_semantics_regressions_stay_complete() {
+fn bfm_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }
 
 #[test]
-fn bfm_semantics_match_unicorn_transitions() {
+fn bfm_lir_match_unicorn_transitions() {
     assert_conformance_cases(SAMPLES);
 }

@@ -20,11 +20,11 @@ shellcode = bytes.fromhex("31c085c075029090c3")
 config = binlex.Configuration()
 
 
-def module_from_semantic(semantic):
+def module_from_lir(lir):
     module = LirModule(name="instruction")
     function = LirFunction(name="instruction")
     block = LirBlock(name="entry")
-    block.append_instruction(semantic)
+    block.append_instruction(lir)
     function.append_block(block)
     module.append_function(function)
     return module
@@ -51,9 +51,9 @@ for block in function.blocks():
     for instruction in block.instructions():
         print(f"{hex(instruction.address())}: {instruction.disassembly()}")
 
-        semantic = instruction.lir()
+        lir = instruction.lir()
 
-        successors = executor.step(module_from_semantic(semantic), state)
+        successors = executor.step(module_from_lir(lir), state)
 
         states = [successor for successor in successors if successor.satisfiable()]
 

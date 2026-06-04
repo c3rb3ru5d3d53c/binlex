@@ -10,7 +10,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::I386,
         bytes: &[0xd1, 0xd0],
         expected_status: Some(LirStatus::Complete),
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: None,
     },
     X86Sample {
@@ -19,7 +19,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::AMD64,
         bytes: &[0x48, 0xd1, 0xd0],
         expected_status: Some(LirStatus::Complete),
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: None,
     },
     X86Sample {
@@ -28,7 +28,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::I386,
         bytes: &[0xd1, 0xd0],
         expected_status: None,
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: Some(X86FixtureSpec {
             registers: &[
                 (I386Register::Eax, 0x8123_4567),
@@ -47,7 +47,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
 ];
 
 #[test]
-fn rcl_semantics_regressions_stay_complete() {
+fn rcl_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }
 

@@ -43,7 +43,7 @@ use crate::{
     },
 };
 
-fn semantic_register_bits(reg_id: u16) -> u16 {
+fn lir_register_bits(reg_id: u16) -> u16 {
     match RegId(reg_id).0 as u32 {
         id if id == Arm64Reg::ARM64_REG_WSP || id == Arm64Reg::ARM64_REG_WZR => 32,
         id if (Arm64Reg::ARM64_REG_W0..=Arm64Reg::ARM64_REG_W30).contains(&id) => 32,
@@ -65,7 +65,7 @@ fn semantic_register_bits(reg_id: u16) -> u16 {
     }
 }
 
-fn canonical_semantic_register_id(reg_id: u16) -> u16 {
+fn canonical_lir_register_id(reg_id: u16) -> u16 {
     match RegId(reg_id).0 as u32 {
         id if id == Arm64Reg::ARM64_REG_FP => Arm64Reg::ARM64_REG_X29 as u16,
         id if id == Arm64Reg::ARM64_REG_LR => Arm64Reg::ARM64_REG_X30 as u16,
@@ -74,11 +74,11 @@ fn canonical_semantic_register_id(reg_id: u16) -> u16 {
     }
 }
 
-fn semantic_register_name_from_id(reg_id: u16) -> String {
-    format!("reg_{}", canonical_semantic_register_id(reg_id))
+fn lir_register_name_from_id(reg_id: u16) -> String {
+    format!("reg_{}", canonical_lir_register_id(reg_id))
 }
 
-fn semantic_register_id_from_text(token: &str) -> Option<u16> {
+fn lir_register_id_from_text(token: &str) -> Option<u16> {
     let normalized = token.trim().to_ascii_lowercase();
     match normalized.as_str() {
         "sp" => Some(Arm64Reg::ARM64_REG_SP as u16),
@@ -88,7 +88,7 @@ fn semantic_register_id_from_text(token: &str) -> Option<u16> {
         "xzr" => Some(Arm64Reg::ARM64_REG_XZR as u16),
         "wzr" => Some(Arm64Reg::ARM64_REG_WZR as u16),
         _ => {
-            let (prefix, number) = semantic_parse_indexed_register(&normalized)?;
+            let (prefix, number) = lir_parse_indexed_register(&normalized)?;
             let id = match prefix {
                 'x' if number <= 28 => Arm64Reg::ARM64_REG_X0 as u32 + number as u32,
                 'x' if number == 29 => Arm64Reg::ARM64_REG_X29 as u32,
@@ -107,7 +107,7 @@ fn semantic_register_id_from_text(token: &str) -> Option<u16> {
     }
 }
 
-fn semantic_named_register(
+fn lir_named_register(
     register_id: u16,
     size_bits: u16,
     vector_index: Option<u32>,
@@ -115,7 +115,7 @@ fn semantic_named_register(
     Arm64OperandView {
         kind: Arm64OperandKind::Register,
         size_bits,
-        register_name: Some(semantic_register_name_from_id(register_id)),
+        register_name: Some(lir_register_name_from_id(register_id)),
         immediate: None,
         float: None,
         memory: None,
@@ -126,7 +126,7 @@ fn semantic_named_register(
     }
 }
 
-fn semantic_parse_indexed_register(token: &str) -> Option<(char, u16)> {
+fn lir_parse_indexed_register(token: &str) -> Option<(char, u16)> {
     let normalized = token.trim().to_ascii_lowercase();
     let mut chars = normalized.chars();
     let prefix = chars.next()?;
@@ -134,7 +134,7 @@ fn semantic_parse_indexed_register(token: &str) -> Option<(char, u16)> {
     Some((prefix, number))
 }
 
-fn semantic_register_from_text(token: &str) -> Option<Arm64OperandView> {
+fn lir_register_from_text(token: &str) -> Option<Arm64OperandView> {
     let normalized = token.trim().to_ascii_lowercase();
     let lane_index = normalized
         .split_once('[')
@@ -148,7 +148,7 @@ fn semantic_register_from_text(token: &str) -> Option<Arm64OperandView> {
         .map(|(base, _)| base)
         .unwrap_or_else(|| normalized.as_str())
         .trim();
-    let register_id = semantic_register_id_from_text(base)?;
+    let register_id = lir_register_id_from_text(base)?;
     let size_bits = match base.chars().next()? {
         'w' => 32,
         'x' => 64,
@@ -159,16 +159,13 @@ fn semantic_register_from_text(token: &str) -> Option<Arm64OperandView> {
         'b' => 8,
         _ => 64,
     };
-    Some(semantic_named_register(register_id, size_bits, lane_index))
+    Some(lir_named_register(register_id, size_bits, lane_index))
 }
 
-fn semantic_memory_from_text(token: &str) -> Option<Arm64OperandView> {
+fn lir_memory_from_text(token: &str) -> Option<Arm64OperandView> {
     let inner = token.trim().strip_prefix('[')?.strip_suffix(']')?.trim();
     let mut parts = inner.split(',').map(str::trim);
-    let base_register_name = parts
-        .next()
-        .and_then(semantic_register_from_text)?
-        .register_name;
+    let base_register_name = parts.next().and_then(lir_register_from_text)?.register_name;
     let mut index_register_name = None;
     let mut displacement = 0;
     if let Some(second) = parts.next() {
@@ -182,7 +179,7 @@ fn semantic_memory_from_text(token: &str) -> Option<Arm64OperandView> {
                 immediate.parse::<i32>().ok()?
             };
         } else {
-            index_register_name = semantic_register_from_text(second)?.register_name;
+            index_register_name = lir_register_from_text(second)?.register_name;
         }
     }
     Some(Arm64OperandView {
@@ -203,7 +200,7 @@ fn semantic_memory_from_text(token: &str) -> Option<Arm64OperandView> {
     })
 }
 
-fn semantic_operand_view(
+fn lir_operand_view(
     _disassembler: &arm64_capstone::Disassembler<'_>,
     operand: &ArchOperand,
 ) -> Arm64OperandView {
@@ -247,8 +244,8 @@ fn semantic_operand_view(
     };
     match op.op_type {
         Arm64OperandType::Reg(reg) => Arm64OperandView {
-            size_bits: semantic_register_bits(reg.0),
-            register_name: Some(semantic_register_name_from_id(reg.0)),
+            size_bits: lir_register_bits(reg.0),
+            register_name: Some(lir_register_name_from_id(reg.0)),
             ..common(Arm64OperandKind::Register)
         },
         Arm64OperandType::Imm(value) | Arm64OperandType::Cimm(value) => Arm64OperandView {
@@ -261,12 +258,12 @@ fn semantic_operand_view(
                 base_register_name: if mem.base().0 == 0 {
                     None
                 } else {
-                    Some(semantic_register_name_from_id(mem.base().0))
+                    Some(lir_register_name_from_id(mem.base().0))
                 },
                 index_register_name: if mem.index().0 == 0 {
                     None
                 } else {
-                    Some(semantic_register_name_from_id(mem.index().0))
+                    Some(lir_register_name_from_id(mem.index().0))
                 },
                 displacement: mem.disp(),
             }),
@@ -287,16 +284,13 @@ fn semantic_operand_view(
     }
 }
 
-fn semantic_normalize_special_operands(
-    instruction: &Insn,
-    operand_views: &mut Vec<Arm64OperandView>,
-) {
+fn lir_normalize_special_operands(instruction: &Insn, operand_views: &mut Vec<Arm64OperandView>) {
     let mnemonic = instruction.mnemonic().unwrap_or("").to_ascii_lowercase();
     let op_str = instruction.op_str().unwrap_or("");
     match mnemonic.as_str() {
         "mrs" => {
             if let Some(token) = op_str.split(',').next()
-                && let Some(register) = semantic_register_from_text(token)
+                && let Some(register) = lir_register_from_text(token)
             {
                 if let Some(existing) = operand_views
                     .iter_mut()
@@ -310,7 +304,7 @@ fn semantic_normalize_special_operands(
         }
         "msr" => {
             if let Some(token) = op_str.rsplit(',').next()
-                && let Some(register) = semantic_register_from_text(token)
+                && let Some(register) = lir_register_from_text(token)
             {
                 if let Some(existing) = operand_views
                     .iter_mut()
@@ -336,7 +330,7 @@ fn semantic_normalize_special_operands(
                         .unwrap_or("");
                     format!("{}{}", register.trim(), lane_suffix)
                 })
-                && let Some(parsed) = semantic_register_from_text(&register_token)
+                && let Some(parsed) = lir_register_from_text(&register_token)
             {
                 if let Some(existing) = operand_views
                     .iter_mut()
@@ -362,7 +356,7 @@ fn semantic_normalize_special_operands(
                 && !operand_views
                     .iter()
                     .any(|operand| operand.kind == Arm64OperandKind::Memory)
-                && let Some(memory) = semantic_memory_from_text(&memory_token)
+                && let Some(memory) = lir_memory_from_text(&memory_token)
             {
                 operand_views.push(memory);
             }
@@ -371,7 +365,7 @@ fn semantic_normalize_special_operands(
     }
 }
 
-fn semantic_instruction_view(
+fn lir_instruction_view(
     disassembler: &arm64_capstone::Disassembler<'_>,
     machine: Architecture,
     instruction: &Insn,
@@ -380,9 +374,9 @@ fn semantic_instruction_view(
 ) -> InstructionDetailArm64 {
     let mut operand_views = operands
         .iter()
-        .map(|operand| semantic_operand_view(disassembler, operand))
+        .map(|operand| lir_operand_view(disassembler, operand))
         .collect::<Vec<_>>();
-    semantic_normalize_special_operands(instruction, &mut operand_views);
+    lir_normalize_special_operands(instruction, &mut operand_views);
     InstructionDetailArm64::new(
         machine,
         instruction.address(),
@@ -513,7 +507,7 @@ pub(crate) fn build_instruction(
         .get_instruction_condition_code(instruction)
         .ok()
         .flatten();
-    let semantic_view = semantic_instruction_view(
+    let lir_view = lir_instruction_view(
         disassembler,
         machine,
         instruction,
@@ -539,7 +533,7 @@ pub(crate) fn build_instruction(
     blinstruction.disassembly = disassembly;
     blinstruction.has_indirect_target = has_indirect_target;
     blinstruction.operands = normalized_operands;
-    blinstruction.set_instruction_detail(InstructionDetail::arm64(semantic_view));
+    blinstruction.set_instruction_detail(InstructionDetail::arm64(lir_view));
 
     if let Some(addr) = conditional_target {
         blinstruction.to.insert(addr);

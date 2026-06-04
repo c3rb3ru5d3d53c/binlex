@@ -23,38 +23,36 @@ pub(crate) fn disassemble_arm64_single(name: &str, bytes: &[u8]) -> InstructionR
         .expect("instruction should exist")
 }
 
-pub(crate) fn semantics(name: &str, bytes: &[u8]) -> Lir {
+pub(crate) fn lir(name: &str, bytes: &[u8]) -> Lir {
     disassemble_arm64_single(name, bytes)
-        .build_semantics()
-        .expect("instruction should build semantics")
+        .build_lir()
+        .expect("instruction should build lir")
 }
 
-pub(crate) fn assert_semantics_status(name: &str, bytes: &[u8], expected_status: LirStatus) -> Lir {
-    let semantics = semantics(name, bytes);
+pub(crate) fn assert_lir_status(name: &str, bytes: &[u8], expected_status: LirStatus) -> Lir {
+    let lir = lir(name, bytes);
     assert_eq!(
-        semantics.status,
+        lir.status,
         expected_status,
-        "{name}: expected {:?} semantics, got {:?} with diagnostics {:?}",
+        "{name}: expected {:?} lir, got {:?} with diagnostics {:?}",
         expected_status,
-        semantics.status,
-        semantics
-            .diagnostics
+        lir.status,
+        lir.diagnostics
             .iter()
             .map(|diagnostic| diagnostic.message.clone())
             .collect::<Vec<_>>()
     );
     if expected_status == LirStatus::Complete {
         assert!(
-            semantics.diagnostics.is_empty(),
+            lir.diagnostics.is_empty(),
             "{name}: expected no diagnostics, got {:?}",
-            semantics
-                .diagnostics
+            lir.diagnostics
                 .iter()
                 .map(|diagnostic| diagnostic.message.clone())
                 .collect::<Vec<_>>()
         );
     }
-    semantics
+    lir
 }
 
 pub(crate) fn lift_instruction_to_llvm(name: &str, bytes: &[u8]) -> String {

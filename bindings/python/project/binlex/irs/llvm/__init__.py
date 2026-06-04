@@ -86,24 +86,28 @@ class LlvmModule:
             return self
         return None
 
-    def append_block_lir(self, semantics, abi=None):
-        semantics = getattr(semantics, "_inner", semantics)
-        if not self._inner.append_block_lir(semantics, abi):
+    def append_block_lir(self, lir):
+        lir_module = _module_for_block(lir)
+        if not self._inner.append_block_lir(lir_module._inner):
             return None
         return self
 
-    def append_function_lir(self, semantics, abi=None, name=None):
-        semantics = getattr(semantics, "_inner", semantics)
-        if not self._inner.append_function_lir(semantics, abi, name):
+    def append_function_lir(self, lir, name=None):
+        function = lir
+        lir_module = _module_for_function(lir, name)
+        abi = _call_or_value(function, "abi")
+        if not self._inner.append_function_lir(lir_module._inner, abi, name):
             return None
         return self
 
-    def create_function(self, name, abi=None):
-        inner = self._inner.create_function(name, abi)
-        return LlvmFunction(self, inner)
+    def append_function(self, function):
+        if not isinstance(function, LlvmFunction):
+            raise TypeError("function must be an LlvmFunction")
+        function._bind_to_module(self)
+        return self
 
     def functions(self):
-        return [LlvmFunction(self, inner) for inner in self._inner.functions()]
+        return [LlvmFunction(_module=self, _inner=inner) for inner in self._inner.functions()]
 
     def clear(self):
         if self._inner.clear():
@@ -182,9 +186,13 @@ class LlvmModule:
 
 
 class LlvmFunction:
-    def __init__(self, module, inner):
-        self._module = module
-        self._inner = inner
+    def __init__(self, name=None, _module=None, _inner=None):
+        self._module = _module
+        self._inner = _inner
+        self._name = name
+        self._blocks = []
+        self._body = None
+        self._optimizers = []
 
     @classmethod
     def from_lir(cls, lir_function, cpu, config, triple=None):
@@ -195,91 +203,178 @@ class LlvmFunction:
         module.from_lir(lir_module, config)
         return module.functions()[0]
 
+    def _require_inner(self):
+        if self._inner is None:
+            raise RuntimeError("LLVM function must be appended to a module first")
+        return self._inner
+
+    def _bind_to_module(self, module):
+        if self._inner is not None:
+            if self._module is module:
+                return self
+            raise RuntimeError("LLVM function is already appended to a module")
+        inner = module._inner._create_function(self._name)
+        self._module = module
+        self._inner = inner
+        if self._body is not None:
+            kind, value = self._body
+            if kind == "lir":
+                if not inner.set_lir(value):
+                    raise RuntimeError("failed to set LLVM function LIR")
+            elif kind == "text":
+                if not inner.set_text(value):
+                    raise RuntimeError("failed to set LLVM function text")
+            elif kind == "bitcode":
+                if not inner.set_bitcode(value):
+                    raise RuntimeError("failed to set LLVM function bitcode")
+        for kind, value, name in self._blocks:
+            if kind == "cfg":
+                if not inner.append_block(value._inner, name):
+                    raise RuntimeError("failed to append LLVM function block")
+            elif kind == "lir":
+                if not inner.append_block_lir(value, name):
+                    raise RuntimeError("failed to append LLVM function LIR block")
+        for optimizer in self._optimizers:
+            getattr(self, optimizer)()
+        return self
+
     def name(self):
-        return self._inner.name()
+        if self._inner is not None:
+            return self._inner.name()
+        return self._name
 
     def set_name(self, name):
+        if self._inner is None:
+            self._name = name
+            return self
         if self._inner.set_name(name):
+            self._name = name
             return self
         return None
 
     def blocks(self):
+        if self._inner is None:
+            return []
         return [LlvmBlock(self, inner) for inner in self._inner.blocks()]
 
     def append_block(self, block, name=None):
+        if self._body is not None:
+            return None
+        if self._inner is None:
+            self._blocks.append(("cfg", block, name))
+            return self
         if self._inner.append_block(block._inner, name):
             return self
         return None
 
-    def append_block_lir(self, semantics, name=None):
-        semantics = getattr(semantics, "_inner", semantics)
-        if self._inner.append_block_lir(semantics, name):
+    def append_block_lir(self, lir, name=None):
+        lir_module = _module_for_block(lir, name)
+        inner = lir_module._inner
+        if self._body is not None:
+            return None
+        if self._inner is None:
+            self._blocks.append(("lir", inner, name))
+            return self
+        if self._inner.append_block_lir(inner, name):
             return self
         return None
 
-    def set_lir(self, semantics):
-        semantics = getattr(semantics, "_inner", semantics)
-        if self._inner.set_lir(semantics):
+    def set_lir(self, lir):
+        lir = getattr(lir, "_inner", lir)
+        if self._blocks:
+            return None
+        if self._inner is None:
+            self._body = ("lir", lir)
+            return self
+        if self._inner.set_lir(lir):
             return self
         return None
 
     def optimize_mem2reg(self):
+        if self._inner is None:
+            self._optimizers.append("optimize_mem2reg")
+            return self
         if self._inner.optimize_mem2reg():
             return self
         return None
 
     def optimize_instcombine(self):
+        if self._inner is None:
+            self._optimizers.append("optimize_instcombine")
+            return self
         if self._inner.optimize_instcombine():
             return self
         return None
 
     def optimize_cfg(self):
+        if self._inner is None:
+            self._optimizers.append("optimize_cfg")
+            return self
         if self._inner.optimize_cfg():
             return self
         return None
 
     def optimize_gvn(self):
+        if self._inner is None:
+            self._optimizers.append("optimize_gvn")
+            return self
         if self._inner.optimize_gvn():
             return self
         return None
 
     def optimize_sroa(self):
+        if self._inner is None:
+            self._optimizers.append("optimize_sroa")
+            return self
         if self._inner.optimize_sroa():
             return self
         return None
 
     def optimize_dce(self):
+        if self._inner is None:
+            self._optimizers.append("optimize_dce")
+            return self
         if self._inner.optimize_dce():
             return self
         return None
 
     def text(self):
+        if self._inner is None:
+            return None
         return self._inner.text()
 
     def set_text(self, text):
+        if self._inner is None:
+            self._body = ("text", text)
+            self._blocks.clear()
+            return self
         if self._inner.set_text(text):
             return self
         return None
 
     def set_bitcode(self, bitcode):
+        if self._inner is None:
+            self._body = ("bitcode", bitcode)
+            self._blocks.clear()
+            return self
         if self._inner.set_bitcode(bitcode):
             return self
         return None
 
     def print(self):
-        return self._inner.print()
+        return self._require_inner().print()
 
     def bitcode(self):
-        data = self._inner.bitcode()
+        data = self._require_inner().bitcode()
         return None if data is None else bytes(data)
 
     def object(self):
-        data = self._inner.object()
+        data = self._require_inner().object()
         return None if data is None else bytes(data)
 
     def jit(self, return_type=None, parameter_types=None, links=None):
         resolved_links = _resolve_jit_links(links or {})
-        handle = self._inner.jit(resolved_links)
+        handle = self._require_inner().jit(resolved_links)
         if handle is None:
             return None
         return NativeFunction(

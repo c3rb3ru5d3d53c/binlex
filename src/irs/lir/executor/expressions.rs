@@ -35,9 +35,12 @@ impl LirExecutor {
                 deps: BTreeSet::new(),
             }),
             LirExpression::DataAddress { name, bits } => {
-                let address = state.semantic_data_address(name).ok_or(
-                    LirExecutorError::UnsupportedExpression("unknown semantic data_address symbol"),
-                )?;
+                let address =
+                    state
+                        .lir_data_address(name)
+                        .ok_or(LirExecutorError::UnsupportedExpression(
+                            "unknown lir data_address symbol",
+                        ))?;
                 Ok(EvaluatedValue {
                     value: state.backend().const_bv(address as u128, *bits)?,
                     deps: BTreeSet::new(),

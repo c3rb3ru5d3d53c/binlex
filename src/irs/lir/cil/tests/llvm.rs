@@ -1,7 +1,7 @@
 use super::common::lift_instruction_to_llvm;
 
 #[test]
-fn cil_semantics_lower_to_llvm() {
+fn cil_lir_lower_to_llvm() {
     let cases = [
         ("ldlen", vec![0x8e]),
         ("newarr", vec![0x8d, 0x01, 0x00, 0x00, 0x01]),

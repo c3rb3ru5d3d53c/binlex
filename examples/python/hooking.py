@@ -73,14 +73,14 @@ disassembler.disassemble({code_address}, graph)
 instructions = graph.instructions()
 instructions.sort(key=lambda instruction: instruction.address())
 assert instructions
-raw_semantics = [instruction.lir() for instruction in instructions]
-semantics = LirModule(name="hooking")
-semantic_function = LirFunction(name="entry")
-semantic_block = LirBlock(name="entry")
-for semantic in cast(list[Lir], raw_semantics):
-    semantic_block.append_instruction(semantic)
-semantic_function.append_block(semantic_block)
-semantics.append_function(semantic_function)
+raw_lir = [instruction.lir() for instruction in instructions]
+lir_module = LirModule(name="hooking")
+lir_function = LirFunction(name="entry")
+lir_block = LirBlock(name="entry")
+for instruction_lir in cast(list[Lir], raw_lir):
+    lir_block.append_instruction(instruction_lir)
+lir_function.append_block(lir_block)
+lir_module.append_function(lir_function)
 
 host_print_address = instructions[-1].address()
 
@@ -97,7 +97,7 @@ state.set_register("eip", 32, code_address)
 state.write_memory(initial_esp - 4, message_address.to_bytes(4, "little"))
 
 executor.add_hook(host_print_address, hook_code)
-states = executor.run(semantics, state)
+states = executor.run(lir_module, state)
 assert len(states) == 1
 
 final_state = states[0]

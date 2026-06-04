@@ -23,11 +23,11 @@ serial_data_address = 0x900000
 stack_top = 0x7FFFFFFF
 
 
-def module_from_semantic(semantic):
+def module_from_lir(lir):
     module = LirModule(name="instruction")
     function = LirFunction(name="instruction")
     block = LirBlock(name="entry")
-    block.append_instruction(semantic)
+    block.append_instruction(lir)
     function.append_block(block)
     module.append_function(function)
     return module
@@ -99,13 +99,13 @@ def main():
     done = False
     for block in function.blocks():
         for instruction in block.instructions():
-            semantic = instruction.lir()
+            lir = instruction.lir()
 
             pc = instruction.address()
 
             state.set_register("rip", 64, pc)
 
-            states = executor.step(module_from_semantic(semantic), state)
+            states = executor.step(module_from_lir(lir), state)
 
             if len(states) == 1:
                 state = states[0]

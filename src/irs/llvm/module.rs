@@ -8,7 +8,7 @@ use crate::irs::lir::{
     LirTerminator,
 };
 use crate::irs::llvm::optimizers::Optimizers;
-use crate::irs::llvm::prepare::prepare_instruction_semantics;
+use crate::irs::llvm::prepare::prepare_instruction_lir;
 use crate::irs::llvm::verify::verify_module;
 use inkwell::OptimizationLevel;
 use inkwell::attributes::AttributeLoc;
@@ -104,7 +104,7 @@ struct LoweringContext<'ctx, 'm> {
     cached_flags_register: RefCell<Option<IntValue<'ctx>>>,
     emit_terminator_helpers: bool,
     abi: Option<LirAbi>,
-    current_semantics_abi: Option<LirAbi>,
+    current_lir_abi: Option<LirAbi>,
     function_arguments: Vec<LirLocation>,
     known_function_abis: HashMap<String, LirAbi>,
     stack_layouts: HashMap<String, u32>,
@@ -137,9 +137,7 @@ impl LlvmModule {
             Some(LirCpuKind::Arm64) => Architecture::ARM64,
             Some(LirCpuKind::Cil) => Architecture::CIL,
             None => {
-                return Err(Error::other(
-                    "llvm module requires a built-in semantic CPU kind",
-                ));
+                return Err(Error::other("llvm module requires a built-in lir CPU kind"));
             }
         };
         let context: &'static Context = Box::leak(Box::new(Context::create()));
@@ -211,10 +209,8 @@ impl LlvmModule {
         }
         let function = self.add_void_function(&name);
         let mut lowering = self.lowering_context(function, None, Vec::new(), HashMap::new())?;
-        lowering.lower_prepared_instruction_record(
-            instruction.address,
-            instruction.prepared_semantics()?,
-        )?;
+        lowering
+            .lower_prepared_instruction_record(instruction.address, instruction.prepared_lir()?)?;
         lowering.finish()?;
         Ok(())
     }
@@ -242,10 +238,8 @@ impl LlvmModule {
             let lowered = block
                 .cfg
                 .with_instruction_record(instruction_address, |record| {
-                    lowering.lower_prepared_instruction_record(
-                        record.address,
-                        record.prepared_semantics()?,
-                    )
+                    lowering
+                        .lower_prepared_instruction_record(record.address, record.prepared_lir()?)
                 })
                 .ok_or_else(|| Error::other("prepared block instruction should exist"))?;
             lowered?;
@@ -297,28 +291,24 @@ impl LlvmModule {
 
     pub fn populate_block_lir(
         &mut self,
-        semantics: &LirModule,
+        lir: &LirModule,
         abi: Option<&LirAbi>,
     ) -> Result<(), Error> {
         self.bind_architecture()?;
-        self.declare_semantics_data(&semantics.data)?;
-        let instructions = semantics
-            .instructions()
-            .into_iter()
-            .cloned()
-            .collect::<Vec<_>>();
+        self.declare_lir_data(&lir.data)?;
+        let instructions = lir.instructions().into_iter().cloned().collect::<Vec<_>>();
         let abi = self
             .resolve_override_abi(abi)?
-            .or_else(|| self.resolve_semantics_abi(&instructions));
-        let name = self.next_emitted_name("semantic_block");
+            .or_else(|| self.resolve_lir_abi(&instructions));
+        let name = self.next_emitted_name("lir_block");
         let function_arguments =
-            self.active_function_arguments_for_semantics(&instructions, abi.as_ref());
+            self.active_function_arguments_for_lir(&instructions, abi.as_ref());
         let function = self.add_function_for_lift(&name, abi.clone(), &function_arguments);
-        let stack_layouts = self.collect_stack_layouts_for_semantics(&instructions, abi.as_ref());
+        let stack_layouts = self.collect_stack_layouts_for_lir(&instructions, abi.as_ref());
         let mut lowering =
             self.lowering_context(function, abi, function_arguments, stack_layouts)?;
-        for semantics in &instructions {
-            lowering.lower_instruction_semantics(semantics)?;
+        for lir in &instructions {
+            lowering.lower_instruction_lir(lir)?;
         }
         lowering.finish()?;
         Ok(())
@@ -326,40 +316,36 @@ impl LlvmModule {
 
     pub fn populate_function_lir(
         &mut self,
-        semantics: &LirModule,
+        lir: &LirModule,
         abi: Option<&LirAbi>,
     ) -> Result<(), Error> {
-        let name = self.next_emitted_name("semantic_function");
-        self.populate_function_lir_named(semantics, abi, &name)
+        let name = self.next_emitted_name("lir_function");
+        self.populate_function_lir_named(lir, abi, &name)
     }
 
     pub fn populate_function_lir_named(
         &mut self,
-        semantics: &LirModule,
+        lir: &LirModule,
         abi: Option<&LirAbi>,
         name: &str,
     ) -> Result<(), Error> {
         self.bind_architecture()?;
-        self.declare_semantics_data(&semantics.data)?;
-        let instructions = semantics
-            .instructions()
-            .into_iter()
-            .cloned()
-            .collect::<Vec<_>>();
+        self.declare_lir_data(&lir.data)?;
+        let instructions = lir.instructions().into_iter().cloned().collect::<Vec<_>>();
         let abi = self
             .resolve_override_abi(abi)?
-            .or_else(|| self.resolve_semantics_abi(&instructions));
+            .or_else(|| self.resolve_lir_abi(&instructions));
         if !self.emitted.insert(name.to_string()) {
             return Ok(());
         }
         let function_arguments =
-            self.active_function_arguments_for_semantics(&instructions, abi.as_ref());
+            self.active_function_arguments_for_lir(&instructions, abi.as_ref());
         let function = self.add_function_for_lift(name, abi.clone(), &function_arguments);
-        let stack_layouts = self.collect_stack_layouts_for_semantics(&instructions, abi.as_ref());
+        let stack_layouts = self.collect_stack_layouts_for_lir(&instructions, abi.as_ref());
         let mut lowering =
             self.lowering_context(function, abi, function_arguments, stack_layouts)?;
-        for semantics in &instructions {
-            lowering.lower_instruction_semantics(semantics)?;
+        for lir in &instructions {
+            lowering.lower_instruction_lir(lir)?;
         }
         lowering.finish()?;
         Ok(())
@@ -597,16 +583,15 @@ impl LlvmModule {
             Ok(())
         } else {
             Err(Error::other(format!(
-                "semantics abi={} unsupported for architecture={}",
+                "lir abi={} unsupported for architecture={}",
                 abi, self.architecture
             )))
         }
     }
 
-    fn resolve_semantics_abi(&self, semantics: &[Lir]) -> Option<LirAbi> {
-        semantics.iter().find_map(|semantic| {
-            semantic
-                .abi
+    fn resolve_lir_abi(&self, lir: &[Lir]) -> Option<LirAbi> {
+        lir.iter().find_map(|lir| {
+            lir.abi
                 .as_ref()
                 .filter(|abi| abi.supports_architecture(self.architecture))
                 .cloned()
@@ -713,7 +698,7 @@ impl LlvmModule {
             cached_flags_register: RefCell::new(None),
             emit_terminator_helpers: true,
             abi,
-            current_semantics_abi: None,
+            current_lir_abi: None,
             function_arguments,
             known_function_abis: self.function_abis.clone(),
             stack_layouts,
@@ -795,15 +780,15 @@ impl LlvmModule {
             .into_owned()
     }
 
-    fn declare_semantics_data(&mut self, data: &[LirData]) -> Result<(), Error> {
+    fn declare_lir_data(&mut self, data: &[LirData]) -> Result<(), Error> {
         for item in data {
             if item.name.trim().is_empty() {
-                return Err(Error::other("semantic data item has empty name"));
+                return Err(Error::other("lir data item has empty name"));
             }
             if let Some(existing) = self.data_symbols.get(&item.name) {
                 if existing != &item.bytes {
                     return Err(Error::other(format!(
-                        "semantic data symbol {} already exists with different contents",
+                        "lir data symbol {} already exists with different contents",
                         item.name
                     )));
                 }
@@ -910,29 +895,29 @@ impl LlvmModule {
         }
     }
 
-    fn active_function_arguments_for_semantics(
+    fn active_function_arguments_for_lir(
         &self,
-        semantics: &[Lir],
+        lir: &[Lir],
         abi: Option<&LirAbi>,
     ) -> Vec<LirLocation> {
         let Some(abi) = abi else {
             return Vec::new();
         };
         let mut read_locations = std::collections::HashSet::new();
-        for semantic in semantics {
-            collect_semantic_read_locations(semantic, &mut read_locations);
+        for lir in lir {
+            collect_lir_read_locations(lir, &mut read_locations);
         }
         active_function_arguments(&read_locations, abi)
     }
 
-    fn collect_stack_layouts_for_semantics(
+    fn collect_stack_layouts_for_lir(
         &self,
-        semantics: &[Lir],
+        lir: &[Lir],
         abi: Option<&LirAbi>,
     ) -> HashMap<String, u32> {
         let mut layouts = HashMap::new();
-        for semantic in semantics {
-            collect_semantic_stack_layouts(semantic, &mut layouts);
+        for lir in lir {
+            collect_lir_stack_layouts(lir, &mut layouts);
         }
         if let Some(abi) = abi {
             collect_abi_stack_layouts(abi, &mut layouts);
@@ -953,13 +938,13 @@ impl LlvmModule {
             block
                 .cfg
                 .with_instruction_record(instruction_address, |record| {
-                    if let Some(semantics) = record.semantics.as_ref() {
-                        collect_semantic_read_locations(semantics, &mut read_locations);
+                    if let Some(lir) = record.lir.as_ref() {
+                        collect_lir_read_locations(lir, &mut read_locations);
                     }
                 });
         }
-        if let Some(semantics) = block.terminator.semantics.as_ref() {
-            collect_semantic_read_locations(semantics, &mut read_locations);
+        if let Some(lir) = block.terminator.lir.as_ref() {
+            collect_lir_read_locations(lir, &mut read_locations);
         }
         active_function_arguments(&read_locations, abi)
     }
@@ -974,13 +959,13 @@ impl LlvmModule {
             block
                 .cfg
                 .with_instruction_record(instruction_address, |record| {
-                    if let Some(semantics) = record.semantics.as_ref() {
-                        collect_semantic_stack_layouts(semantics, &mut layouts);
+                    if let Some(lir) = record.lir.as_ref() {
+                        collect_lir_stack_layouts(lir, &mut layouts);
                     }
                 });
         }
-        if let Some(semantics) = block.terminator.semantics.as_ref() {
-            collect_semantic_stack_layouts(semantics, &mut layouts);
+        if let Some(lir) = block.terminator.lir.as_ref() {
+            collect_lir_stack_layouts(lir, &mut layouts);
         }
         if let Some(abi) = abi {
             collect_abi_stack_layouts(abi, &mut layouts);
@@ -1014,13 +999,13 @@ impl LlvmModule {
                 block
                     .cfg
                     .with_instruction_record(*instruction_address, |record| {
-                        if let Some(semantics) = record.semantics.as_ref() {
-                            collect_semantic_read_locations(semantics, &mut read_locations);
+                        if let Some(lir) = record.lir.as_ref() {
+                            collect_lir_read_locations(lir, &mut read_locations);
                         }
                     });
             }
-            if let Some(semantics) = block.terminator.semantics.as_ref() {
-                collect_semantic_read_locations(semantics, &mut read_locations);
+            if let Some(lir) = block.terminator.lir.as_ref() {
+                collect_lir_read_locations(lir, &mut read_locations);
             }
         }
         active_function_arguments(&read_locations, abi)
@@ -1037,13 +1022,13 @@ impl LlvmModule {
                 block
                     .cfg
                     .with_instruction_record(*instruction_address, |record| {
-                        if let Some(semantics) = record.semantics.as_ref() {
-                            collect_semantic_stack_layouts(semantics, &mut layouts);
+                        if let Some(lir) = record.lir.as_ref() {
+                            collect_lir_stack_layouts(lir, &mut layouts);
                         }
                     });
             }
-            if let Some(semantics) = block.terminator.semantics.as_ref() {
-                collect_semantic_stack_layouts(semantics, &mut layouts);
+            if let Some(lir) = block.terminator.lir.as_ref() {
+                collect_lir_stack_layouts(lir, &mut layouts);
             }
         }
         if let Some(abi) = abi {
@@ -1256,7 +1241,7 @@ mod jit_tests {
         let abi = LirAbi::sysv(&cpu).expect("sysv abi");
         let mut lifter = LlvmModule::new(None, cpu, None).expect("llvm module");
 
-        let semantics = LirModule::from_instructions(vec![Lir {
+        let lir = LirModule::from_instructions(vec![Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -1286,7 +1271,7 @@ mod jit_tests {
         }]);
 
         lifter
-            .populate_function_lir_named(&semantics, Some(&abi), "add_two")
+            .populate_function_lir_named(&lir, Some(&abi), "add_two")
             .expect("function lift");
         lifter.optimize_mem2reg().expect("mem2reg");
         lifter.optimize_sroa().expect("sroa");
@@ -1388,24 +1373,21 @@ fn collect_abi_stack_layouts(abi: &LirAbi, layouts: &mut HashMap<String, u32>) {
     }
 }
 
-fn collect_semantic_read_locations(
-    semantics: &Lir,
-    reads: &mut std::collections::HashSet<LirLocation>,
-) {
-    for effect in &semantics.effects {
+fn collect_lir_read_locations(lir: &Lir, reads: &mut std::collections::HashSet<LirLocation>) {
+    for effect in &lir.effects {
         collect_effect_read_locations(effect, reads);
     }
-    collect_terminator_read_locations(&semantics.terminator, reads);
+    collect_terminator_read_locations(&lir.terminator, reads);
 }
 
-fn collect_semantic_stack_layouts(semantics: &Lir, layouts: &mut HashMap<String, u32>) {
-    for temporary in &semantics.temporaries {
+fn collect_lir_stack_layouts(lir: &Lir, layouts: &mut HashMap<String, u32>) {
+    for temporary in &lir.temporaries {
         let _ = temporary;
     }
-    for effect in &semantics.effects {
+    for effect in &lir.effects {
         collect_effect_stack_layouts(effect, layouts);
     }
-    collect_terminator_stack_layouts(&semantics.terminator, layouts);
+    collect_terminator_stack_layouts(&lir.terminator, layouts);
 }
 
 fn collect_effect_read_locations(
@@ -1767,8 +1749,8 @@ fn collect_stack_layout_for_location(location: &LirLocation, layouts: &mut HashM
     }
 }
 
-fn should_emit_instruction_encoding(semantics: &Lir) -> bool {
-    matches!(semantics.status, crate::irs::lir::LirStatus::Partial)
+fn should_emit_instruction_encoding(lir: &Lir) -> bool {
+    matches!(lir.status, crate::irs::lir::LirStatus::Partial)
 }
 
 impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
@@ -1811,7 +1793,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         Ok(())
     }
 
-    fn record_semantic_lowering(&mut self, kind: &str, detail: impl Into<String>) {
+    fn record_lir_lowering(&mut self, kind: &str, detail: impl Into<String>) {
         if !self.debug {
             return;
         }
@@ -1851,7 +1833,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 )
             };
             Stderr::print(format!(
-                "llvm semantic summary function={} kind={} count={} sample_addresses={} detail={}",
+                "llvm lir summary function={} kind={} count={} sample_addresses={} detail={}",
                 self.function_name, kind, entry.count, addresses, detail
             ));
         }
@@ -1907,7 +1889,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .with_instruction_record(*instruction_address, |record| {
                         self.lower_prepared_instruction_record(
                             record.address,
-                            record.prepared_semantics()?,
+                            record.prepared_lir()?,
                         )
                     })
                     .ok_or_else(|| Error::other("prepared function instruction should exist"))?;
@@ -1954,12 +1936,12 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         block_map: &HashMap<u64, BasicBlock<'ctx>>,
         exit_block: &mut Option<BasicBlock<'ctx>>,
     ) -> Result<(), Error> {
-        let semantics = block
+        let lir = block
             .terminator
-            .semantics
+            .lir
             .clone()
-            .or_else(|| block.terminator.build_semantics());
-        let Some(semantics) = semantics.as_ref() else {
+            .or_else(|| block.terminator.build_lir());
+        let Some(lir) = lir.as_ref() else {
             if block.terminator.is_return {
                 let target = self.ensure_exit_block(exit_block);
                 self.builder
@@ -1967,7 +1949,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .map_err(|err| Error::other(err.to_string()))?;
             } else if block.terminator.is_conditional {
                 return Err(Error::other(
-                    "conditional block terminator requires semantics for llvm lowering",
+                    "conditional block terminator requires lir for llvm lowering",
                 ));
             } else if block.terminator.is_jump {
                 let fallback_jump_target = block
@@ -1991,7 +1973,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             return Ok(());
         };
 
-        match &semantics.terminator {
+        match &lir.terminator {
             LirTerminator::FallThrough => {
                 let fallback_fallthrough_target = block
                     .fallthrough()
@@ -2085,30 +2067,27 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     fn lower_prepared_instruction_record(
         &mut self,
         instruction_address: u64,
-        semantics: Option<&Lir>,
+        lir: Option<&Lir>,
     ) -> Result<(), Error> {
         self.current_instruction_address = Some(instruction_address);
-        if let Some(semantics) = semantics {
+        if let Some(lir) = lir {
             if self.debug
-                && (matches!(semantics.status, crate::irs::lir::LirStatus::Partial)
-                    || !semantics.diagnostics.is_empty())
+                && (matches!(lir.status, crate::irs::lir::LirStatus::Partial)
+                    || !lir.diagnostics.is_empty())
             {
-                let diagnostics = semantics
+                let diagnostics = lir
                     .diagnostics
                     .iter()
                     .map(|diagnostic| format!("{:?}: {}", diagnostic.kind, diagnostic.message))
                     .collect::<Vec<_>>()
                     .join(" | ");
-                self.record_semantic_lowering(
-                    "semantics_status",
-                    format!(
-                        "status={:?} diagnostics=[{}]",
-                        semantics.status, diagnostics
-                    ),
+                self.record_lir_lowering(
+                    "lir_status",
+                    format!("status={:?} diagnostics=[{}]", lir.status, diagnostics),
                 );
             }
             *self.cached_flags_register.borrow_mut() = None;
-            let prepared = prepare_instruction_semantics(semantics)?;
+            let prepared = prepare_instruction_lir(lir)?;
             let emit_encoding = should_emit_instruction_encoding(&prepared);
             if emit_encoding {
                 let Some(encoding) = prepared.encoding.as_ref() else {
@@ -2118,13 +2097,13 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 };
                 self.emit_instruction_encoding(encoding)?;
             }
-            let previous_semantics_abi = self.current_semantics_abi.clone();
-            self.current_semantics_abi = prepared.abi.clone().or_else(|| self.abi.clone());
+            let previous_lir_abi = self.current_lir_abi.clone();
+            self.current_lir_abi = prepared.abi.clone().or_else(|| self.abi.clone());
             let result = (|| -> Result<(), Error> {
                 self.seed_instruction_inputs(&prepared)?;
-                self.lower_semantics(&prepared)
+                self.lower_lir(&prepared)
             })();
-            self.current_semantics_abi = previous_semantics_abi;
+            self.current_lir_abi = previous_lir_abi;
             result?;
             *self.cached_flags_register.borrow_mut() = None;
         }
@@ -2132,27 +2111,24 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         Ok(())
     }
 
-    fn lower_instruction_semantics(&mut self, semantics: &Lir) -> Result<(), Error> {
+    fn lower_instruction_lir(&mut self, lir: &Lir) -> Result<(), Error> {
         if self.debug
-            && (matches!(semantics.status, crate::irs::lir::LirStatus::Partial)
-                || !semantics.diagnostics.is_empty())
+            && (matches!(lir.status, crate::irs::lir::LirStatus::Partial)
+                || !lir.diagnostics.is_empty())
         {
-            let diagnostics = semantics
+            let diagnostics = lir
                 .diagnostics
                 .iter()
                 .map(|diagnostic| format!("{:?}: {}", diagnostic.kind, diagnostic.message))
                 .collect::<Vec<_>>()
                 .join(" | ");
-            self.record_semantic_lowering(
-                "semantics_status",
-                format!(
-                    "status={:?} diagnostics=[{}]",
-                    semantics.status, diagnostics
-                ),
+            self.record_lir_lowering(
+                "lir_status",
+                format!("status={:?} diagnostics=[{}]", lir.status, diagnostics),
             );
         }
         *self.cached_flags_register.borrow_mut() = None;
-        let prepared = prepare_instruction_semantics(semantics)?;
+        let prepared = prepare_instruction_lir(lir)?;
         let emit_encoding = should_emit_instruction_encoding(&prepared);
         if emit_encoding {
             let Some(encoding) = prepared.encoding.as_ref() else {
@@ -2162,27 +2138,27 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             };
             self.emit_instruction_encoding(encoding)?;
         }
-        let previous_semantics_abi = self.current_semantics_abi.clone();
-        self.current_semantics_abi = prepared.abi.clone().or_else(|| self.abi.clone());
+        let previous_lir_abi = self.current_lir_abi.clone();
+        self.current_lir_abi = prepared.abi.clone().or_else(|| self.abi.clone());
         let result = (|| -> Result<(), Error> {
             self.seed_instruction_inputs(&prepared)?;
-            self.lower_semantics(&prepared)
+            self.lower_lir(&prepared)
         })();
-        self.current_semantics_abi = previous_semantics_abi;
+        self.current_lir_abi = previous_lir_abi;
         result?;
         *self.cached_flags_register.borrow_mut() = None;
         Ok(())
     }
 
-    fn seed_instruction_inputs(&mut self, semantics: &Lir) -> Result<(), Error> {
+    fn seed_instruction_inputs(&mut self, lir: &Lir) -> Result<(), Error> {
         let mut registers = Vec::<LirLocation>::new();
         let mut program_counters = Vec::<LirLocation>::new();
         let mut flags = Vec::<LirLocation>::new();
-        for effect in &semantics.effects {
+        for effect in &lir.effects {
             self.collect_effect_reads(effect, &mut registers, &mut program_counters, &mut flags);
         }
         self.collect_terminator_reads(
-            &semantics.terminator,
+            &lir.terminator,
             &mut registers,
             &mut program_counters,
             &mut flags,

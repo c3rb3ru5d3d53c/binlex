@@ -167,7 +167,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                 ));
             }
         };
-        let semantic_view = InstructionDetailCil::new(
+        let lir_view = InstructionDetailCil::new(
             instruction.mnemonic.name(),
             instruction.address,
             instruction.operand_bytes(),
@@ -202,7 +202,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfginstruction.operands = instruction.normalized_operands(metadata_token_addresses);
         cfginstruction.to = instruction.branches();
         cfginstruction.functions = function_targets;
-        cfginstruction.set_instruction_detail(InstructionDetail::cil(semantic_view));
+        cfginstruction.set_instruction_detail(InstructionDetail::cil(lir_view));
 
         Stderr::print_debug(
             &cfg.config,
@@ -365,7 +365,7 @@ impl<'disassembler> Disassembler<'disassembler> {
                 ));
             }
         };
-        let semantic_view = InstructionDetailCil::new(
+        let lir_view = InstructionDetailCil::new(
             instruction.mnemonic.name(),
             instruction.address,
             instruction.operand_bytes(),
@@ -400,7 +400,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfginstruction.operands = instruction.normalized_operands(metadata_token_addresses);
         cfginstruction.to = instruction.branches();
         cfginstruction.functions = function_targets;
-        cfginstruction.set_instruction_detail(InstructionDetail::cil(semantic_view));
+        cfginstruction.set_instruction_detail(InstructionDetail::cil(lir_view));
 
         Stderr::print_debug(
             cfg.config(),

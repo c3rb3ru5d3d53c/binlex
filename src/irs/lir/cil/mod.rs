@@ -32,23 +32,23 @@ mod tests;
 pub use instruction::InstructionDetailCil;
 
 pub fn build(view: InstructionDetailCil) -> Lir {
-    if let Some(semantics) = builders::control::build(&view) {
-        return semantics;
+    if let Some(lir) = builders::control::build(&view) {
+        return lir;
     }
-    if let Some(semantics) = builders::stack::build(&view) {
-        return semantics;
+    if let Some(lir) = builders::stack::build(&view) {
+        return lir;
     }
-    if let Some(semantics) = builders::arithmetic::build(&view) {
-        return semantics;
+    if let Some(lir) = builders::arithmetic::build(&view) {
+        return lir;
     }
-    if let Some(semantics) = builders::memory::build(&view) {
-        return semantics;
+    if let Some(lir) = builders::memory::build(&view) {
+        return lir;
     }
-    if let Some(semantics) = builders::object::build(&view) {
-        return semantics;
+    if let Some(lir) = builders::object::build(&view) {
+        return lir;
     }
-    if let Some(semantics) = builders::runtime::build(&view) {
-        return semantics;
+    if let Some(lir) = builders::runtime::build(&view) {
+        return lir;
     }
 
     helpers::common::partial_intrinsic_fallthrough(

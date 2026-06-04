@@ -1,13 +1,13 @@
 pub mod cdecl;
 pub mod fastcall;
 pub mod linux_syscall;
-pub mod semantic_abi;
+pub mod lir_abi;
 pub mod stdcall;
 pub mod sysv;
 pub mod windows64;
 pub mod windows_syscall;
 
-pub use semantic_abi::{
+pub use lir_abi::{
     LirAbi, LirAbiCdecl, LirAbiFastcall, LirAbiKind, LirAbiLinuxSyscall, LirAbiStdcall, LirAbiSysv,
     LirAbiTrap, LirAbiWindows64, LirAbiWindowsSyscall,
 };
@@ -42,7 +42,7 @@ pub(crate) fn build_builtin(kind: LirAbiKind, cpu: &LirCpu) -> Result<LirAbi, Li
             cpu_kind.name()
         ))),
         (kind, None) => Err(LirExecutorError::UnsupportedCpu(format!(
-            "{} ABI requires a built-in semantic CPU kind",
+            "{} ABI requires a built-in lir CPU kind",
             kind.name()
         ))),
     }

@@ -35,8 +35,8 @@ pub fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> 
     if matches!(view.mnemonic.as_str(), "shrd") {
         return double_precision_shift(machine, view, false);
     }
-    if let Some(semantics) = bmi_shift(machine, view) {
-        return Some(semantics);
+    if let Some(lir) = bmi_shift(machine, view) {
+        return Some(lir);
     }
     if matches!(view.mnemonic.as_str(), "rcl") {
         return rotate_through_carry(machine, view, true);

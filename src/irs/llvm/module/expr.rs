@@ -17,9 +17,10 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         match expression {
             LirExpression::Const { value, bits } => Ok(const_int(self.int_type(*bits), *value)),
             LirExpression::Function { name, bits } => {
-                let function = self.module.get_function(name).ok_or_else(|| {
-                    Error::other(format!("unknown semantic function target {name}"))
-                })?;
+                let function = self
+                    .module
+                    .get_function(name)
+                    .ok_or_else(|| Error::other(format!("unknown lir function target {name}")))?;
                 self.builder
                     .build_ptr_to_int(
                         function.as_global_value().as_pointer_value(),
@@ -33,7 +34,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 let global = self
                     .module
                     .get_global(&global_name)
-                    .ok_or_else(|| Error::other(format!("unknown semantic data target {name}")))?;
+                    .ok_or_else(|| Error::other(format!("unknown lir data target {name}")))?;
                 self.builder
                     .build_ptr_to_int(global.as_pointer_value(), self.int_type(*bits), "datatmp")
                     .map_err(|err| Error::other(err.to_string()))
@@ -61,7 +62,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     &[self.context.i64_type().into()],
                     false,
                 );
-                self.record_semantic_lowering(
+                self.record_lir_lowering(
                     "load_helper",
                     format!(
                         "space={} bits={} helper={}",
@@ -169,7 +170,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 let helper_name = format!("binlex_ref_alloc_{}_{}", sanitize_symbol(kind), bits);
                 let helper =
                     self.declare_value_helper(&helper_name, self.int_type(*bits), &[], true);
-                self.record_semantic_lowering(
+                self.record_lir_lowering(
                     "reference_helper",
                     format!(
                         "Allocate kind={} bits={} helper={}",
@@ -219,7 +220,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 let helper_name = format!("binlex_expr_{}", sanitize_symbol(name));
                 let helper =
                     self.declare_value_helper(&helper_name, self.int_type(*bits), &[], true);
-                self.record_semantic_lowering(
+                self.record_lir_lowering(
                     "expression_intrinsic",
                     format!(
                         "name={} bits={} args={} helper={}",
@@ -363,7 +364,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     &[self.context.i64_type().into()],
                     false,
                 );
-                self.record_semantic_lowering(
+                self.record_lir_lowering(
                     "load_helper",
                     format!(
                         "space={} bits={} helper={}",
@@ -495,7 +496,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     &[arg.get_type().into()],
                     false,
                 );
-                self.record_semantic_lowering(
+                self.record_lir_lowering(
                     "unary_helper",
                     format!(
                         "{:?} bits={} helper={}",
@@ -524,7 +525,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 &[left.get_type().into(), right.get_type().into()],
                 false,
             );
-            this.record_semantic_lowering(
+            this.record_lir_lowering(
                 "binary_helper",
                 format!(
                     "{:?} bits={} helper={}",
@@ -673,7 +674,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 )
                 .map_err(|err| Error::other(err.to_string())),
             LirOperationBinary::RotateLeft => {
-                self.record_semantic_lowering(
+                self.record_lir_lowering(
                     "binary_intrinsic",
                     format!("RotateLeft bits={} via llvm.fshl.i{}", bits, bits),
                 );
@@ -706,7 +707,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 )
             }
             LirOperationBinary::RotateRight => {
-                self.record_semantic_lowering(
+                self.record_lir_lowering(
                     "binary_intrinsic",
                     format!("RotateRight bits={} via llvm.fshr.i{}", bits, bits),
                 );
@@ -754,7 +755,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             let helper_name = format!("binlex_cast_{:?}", op).to_lowercase();
             let helper =
                 this.declare_value_helper(&helper_name, target, &[arg.get_type().into()], false);
-            this.record_semantic_lowering(
+            this.record_lir_lowering(
                 "cast_helper",
                 format!(
                     "{:?} {}->{} helper={}",
@@ -963,7 +964,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                 &[left.get_type().into(), right.get_type().into()],
                 false,
             );
-            this.record_semantic_lowering(
+            this.record_lir_lowering(
                 "compare_helper",
                 format!(
                     "{:?} lhs_bits={} rhs_bits={} helper={}",

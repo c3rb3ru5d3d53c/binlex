@@ -33,8 +33,8 @@ impl fmt::Display for LirExecutorError {
             Self::UnsupportedArchitecture(name) => {
                 write!(f, "unsupported symbolic architecture: {name}")
             }
-            Self::UnsupportedCpu(name) => write!(f, "unsupported semantic CPU: {name}"),
-            Self::InvalidCpu(message) => write!(f, "invalid semantic CPU: {message}"),
+            Self::UnsupportedCpu(name) => write!(f, "unsupported lir CPU: {name}"),
+            Self::InvalidCpu(message) => write!(f, "invalid lir CPU: {message}"),
             Self::UnsupportedExpression(kind) => {
                 write!(f, "unsupported symbolic expression: {kind}")
             }

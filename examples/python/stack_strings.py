@@ -65,16 +65,16 @@ state = LirExecutorState(cpu)
 state.set_register("esp", 32, stack_base)
 state.map_memory(stack_base - stack_size, stack_size)
 
-semantics = LirModule(name="stack_strings")
-semantic_function = LirFunction(name="entry")
-semantic_block = LirBlock(name="entry")
+lir = LirModule(name="stack_strings")
+lir_function = LirFunction(name="entry")
+lir_block = LirBlock(name="entry")
 for block in function.blocks():
     for instruction in block.instructions():
-        semantic_block.append_instruction(instruction.lir())
-semantic_function.append_block(semantic_block)
-semantics.append_function(semantic_function)
+        lir_block.append_instruction(instruction.lir())
+lir_function.append_block(lir_block)
+lir.append_function(lir_function)
 
-states = executor.run(semantics, state)
+states = executor.run(lir, state)
 
 live = [candidate for candidate in states if candidate.satisfiable()]
 

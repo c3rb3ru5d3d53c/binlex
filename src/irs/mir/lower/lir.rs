@@ -157,8 +157,8 @@ pub fn lower_lir_to_mir(
     let block_names = build_block_names(&lir.blocks);
     let mut address_to_block = HashMap::new();
     for (lir_block, block_name) in lir.blocks.iter().zip(block_names.iter()) {
-        for semantic in &lir_block.instructions {
-            if let Some(encoding) = semantic.encoding.as_ref() {
+        for lir in &lir_block.instructions {
+            if let Some(encoding) = lir.encoding.as_ref() {
                 address_to_block
                     .entry(encoding.address)
                     .or_insert_with(|| block_name.clone());
@@ -208,9 +208,8 @@ pub fn lower_lir_block_to_mir(
     let block_name = name
         .or_else(|| lir.name.clone())
         .or_else(|| {
-            lir.instructions.first().and_then(|semantic| {
-                semantic
-                    .encoding
+            lir.instructions.first().and_then(|lir| {
+                lir.encoding
                     .as_ref()
                     .map(|encoding| format!("block_{:x}", encoding.address))
             })
@@ -218,8 +217,8 @@ pub fn lower_lir_block_to_mir(
         .unwrap_or_else(|| "block_0".to_string());
 
     let mut address_to_block = HashMap::new();
-    for semantic in &lir.instructions {
-        if let Some(encoding) = semantic.encoding.as_ref() {
+    for lir in &lir.instructions {
+        if let Some(encoding) = lir.encoding.as_ref() {
             address_to_block
                 .entry(encoding.address)
                 .or_insert_with(|| block_name.clone());
@@ -256,27 +255,20 @@ fn lower_lir_block_with_context(
 
     let mut block = MirBlock::new(block_name);
 
-    for (semantic_index, semantic) in lir_block.instructions.iter().enumerate() {
-        for effect in &semantic.effects {
+    for (lir_index, lir) in lir_block.instructions.iter().enumerate() {
+        for effect in &lir.effects {
             lower_effect(effect, &mut block, context);
         }
 
-        let is_last_instruction = semantic_index + 1 == lir_block.instructions.len();
+        let is_last_instruction = lir_index + 1 == lir_block.instructions.len();
         if !is_last_instruction
             && let LirTerminator::Call {
                 target,
                 does_return,
                 ..
-            } = &semantic.terminator
+            } = &lir.terminator
         {
-            lower_call_operations(
-                semantic,
-                target,
-                *does_return,
-                function_abi,
-                &mut block,
-                context,
-            );
+            lower_call_operations(lir, target, *does_return, function_abi, &mut block, context);
             if matches!(does_return, Some(false)) {
                 block.set_terminator(MirTerminator::Unreachable);
                 return Ok(block);
@@ -284,10 +276,10 @@ fn lower_lir_block_with_context(
         }
     }
 
-    let semantic = lir_block.instructions.last().expect("non-empty block");
+    let lir = lir_block.instructions.last().expect("non-empty block");
     let terminator = lower_terminator(
-        semantic,
-        &semantic.terminator,
+        lir,
+        &lir.terminator,
         function_abi,
         index,
         block_names,
@@ -300,7 +292,7 @@ fn lower_lir_block_with_context(
 }
 
 fn lower_call_operations(
-    semantic: &Lir,
+    lir: &Lir,
     target: &LirExpression,
     does_return: Option<bool>,
     function_abi: Option<&LirAbi>,
@@ -310,15 +302,15 @@ fn lower_call_operations(
     let (call_result, result_types, return_location) = if matches!(does_return, Some(false)) {
         (None, Vec::new(), None)
     } else {
-        call_result_binding(semantic, context)
+        call_result_binding(lir, context)
     };
 
-    let call_abi = semantic
+    let call_abi = lir
         .abi
         .clone()
-        .or_else(|| infer_call_abi(semantic, function_abi, block))
+        .or_else(|| infer_call_abi(lir, function_abi, block))
         .or_else(|| function_abi.cloned());
-    let arguments = call_argument_values(semantic, call_abi.as_ref(), block, context);
+    let arguments = call_argument_values(lir, call_abi.as_ref(), block, context);
     let target = resolve_call_target(target, block, context);
     block.append_operation(MirOperation::new(
         call_result.clone(),
@@ -352,9 +344,8 @@ fn build_block_names(blocks: &[LirBasicBlock]) -> Vec<String> {
             .name
             .clone()
             .or_else(|| {
-                block.instructions.first().and_then(|semantic| {
-                    semantic
-                        .encoding
+                block.instructions.first().and_then(|lir| {
+                    lir.encoding
                         .as_ref()
                         .map(|encoding| format!("block_{:x}", encoding.address))
                 })
@@ -570,7 +561,7 @@ fn lower_effect(effect: &LirEffect, block: &mut MirBlock, context: &mut Lowering
 }
 
 fn lower_terminator(
-    semantic: &Lir,
+    lir: &Lir,
     terminator: &LirTerminator,
     function_abi: Option<&LirAbi>,
     index: usize,
@@ -610,7 +601,7 @@ fn lower_terminator(
             return_target,
             does_return,
         } => {
-            lower_call_operations(semantic, target, *does_return, function_abi, block, context);
+            lower_call_operations(lir, target, *does_return, function_abi, block, context);
 
             if matches!(does_return, Some(false)) {
                 MirTerminator::Unreachable
@@ -1304,10 +1295,10 @@ fn lower_address_space(space: &LirAddressSpace) -> MirAddressSpace {
 }
 
 fn call_result_binding(
-    semantic: &Lir,
+    lir: &Lir,
     context: &mut LoweringContext,
 ) -> (Option<String>, Vec<MirType>, Option<(LirLocation, MirType)>) {
-    let Some(location) = call_return_location(semantic) else {
+    let Some(location) = call_return_location(lir) else {
         return (None, Vec::new(), None);
     };
     let ty = mir_type_for_bits(location.bits());
@@ -1315,8 +1306,8 @@ fn call_result_binding(
     (Some(result.clone()), vec![ty.clone()], Some((location, ty)))
 }
 
-fn call_return_location(semantic: &Lir) -> Option<LirLocation> {
-    if let Some(abi) = semantic.abi.as_ref() {
+fn call_return_location(lir: &Lir) -> Option<LirLocation> {
+    if let Some(abi) = lir.abi.as_ref() {
         if let Some(location) = abi
             .return_locations
             .iter()
@@ -1326,7 +1317,7 @@ fn call_return_location(semantic: &Lir) -> Option<LirLocation> {
         }
     }
 
-    match semantic
+    match lir
         .encoding
         .as_ref()
         .map(|encoding| encoding.architecture.as_str())
@@ -1348,16 +1339,16 @@ fn call_return_location(semantic: &Lir) -> Option<LirLocation> {
 }
 
 fn call_argument_values(
-    semantic: &Lir,
+    lir: &Lir,
     function_abi: Option<&LirAbi>,
     block: &mut MirBlock,
     context: &mut LoweringContext,
 ) -> Vec<MirValue> {
     let owned_abi;
-    let abi = if let Some(abi) = semantic.abi.as_ref() {
+    let abi = if let Some(abi) = lir.abi.as_ref() {
         abi
     } else {
-        owned_abi = infer_call_abi(semantic, function_abi, block);
+        owned_abi = infer_call_abi(lir, function_abi, block);
         let abi = owned_abi.as_ref().or(function_abi);
         let Some(abi) = abi else {
             return Vec::new();
@@ -1444,12 +1435,8 @@ fn stack_argument_location(name: &str, offset: u32, bits: u16) -> (MirAddressSpa
     }
 }
 
-fn infer_call_abi(
-    semantic: &Lir,
-    function_abi: Option<&LirAbi>,
-    block: &MirBlock,
-) -> Option<LirAbi> {
-    let architecture = semantic
+fn infer_call_abi(lir: &Lir, function_abi: Option<&LirAbi>, block: &MirBlock) -> Option<LirAbi> {
+    let architecture = lir
         .encoding
         .as_ref()
         .map(|encoding| encoding.architecture.as_str())?;
@@ -2060,10 +2047,10 @@ fn register_storage(raw_name: &str, abi: Option<&LirAbi>) -> Option<IrStorage> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::irs::lir::{LirBlock, LirEncoding, LirInstruction, LirStatus};
+    use crate::irs::lir::{Lir, LirBlock, LirEncoding, LirStatus};
 
-    fn amd64_instruction_with_terminator(terminator: LirTerminator) -> LirInstruction {
-        LirInstruction {
+    fn amd64_instruction_with_terminator(terminator: LirTerminator) -> Lir {
+        Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: Default::default(),
@@ -2129,7 +2116,7 @@ mod tests {
             abi: Some(LirAbi::windows64(&cpu).expect("windows64 abi")),
             blocks: vec![LirBlock {
                 name: Some("entry".to_string()),
-                instructions: vec![LirInstruction {
+                instructions: vec![Lir {
                     metadata: Default::default(),
                     effects: vec![LirEffect::Set {
                         dst: LirLocation::Register {

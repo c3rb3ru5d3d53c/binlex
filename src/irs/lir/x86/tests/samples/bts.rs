@@ -8,7 +8,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[X86Sample {
     architecture: Architecture::I386,
     bytes: &[0x0f, 0xba, 0xe8, 0x01],
     expected_status: None,
-    semantics_fixture: Some(X86FixtureSpec {
+    lir_fixture: Some(X86FixtureSpec {
         registers: &[(I386Register::Eax, 0)],
         eflags: 1 << 1,
         memory: &[],
@@ -17,7 +17,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[X86Sample {
 }];
 
 #[test]
-fn bts_semantics_match_unicorn_transitions() {
+fn bts_lir_match_unicorn_transitions() {
     assert_conformance_cases(SAMPLES);
 }
 

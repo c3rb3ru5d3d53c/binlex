@@ -187,7 +187,7 @@ mod tests {
     #[test]
     fn lowers_instruction_encoding_payload_into_llvm_ir() {
         let mut lifter = LlvmModule::from_architecture(Architecture::ARM64);
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Partial,
             metadata: LirMetadata::default(),
@@ -209,8 +209,8 @@ mod tests {
         };
 
         lifter
-            .populate_function_lir(&LirModule::from_instructions(vec![semantics]), None)
-            .expect("lift semantics");
+            .populate_function_lir(&LirModule::from_instructions(vec![lir]), None)
+            .expect("lift lir");
         let text = lifter.text();
 
         assert!(text.contains("declare void @binlex_encoding_ld4(ptr)"));
@@ -222,9 +222,9 @@ mod tests {
     }
 
     #[test]
-    fn omits_instruction_encoding_for_complete_semantics() {
+    fn omits_instruction_encoding_for_complete_lir() {
         let mut lifter = LlvmModule::from_architecture(Architecture::AMD64);
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -243,20 +243,20 @@ mod tests {
         };
 
         lifter
-            .populate_function_lir(&LirModule::from_instructions(vec![semantics]), None)
-            .expect("lift semantics");
+            .populate_function_lir(&LirModule::from_instructions(vec![lir]), None)
+            .expect("lift lir");
         let text = lifter.text();
 
         assert!(!text.contains("@binlex_encoding_xor("));
         assert!(!text.contains("@binlex_encoding_xor_4010"));
-        assert!(text.contains("define void @semantic_function_0()"));
+        assert!(text.contains("define void @lir_function_0()"));
     }
 
     #[test]
     fn builtin_fastcall_function_arguments_become_llvm_parameters() {
         let cpu = LirCpu::from_kind(LirCpuKind::I386).expect("cpu");
         let abi = LirAbi::from_kind(LirAbiKind::Fastcall, &cpu).expect("abi");
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -284,11 +284,11 @@ mod tests {
 
         let mut lifter = LlvmModule::new(None, cpu, None).expect("llvm module");
         lifter
-            .populate_function_lir(&LirModule::from_instructions(vec![semantics]), Some(&abi))
-            .expect("lift semantics");
+            .populate_function_lir(&LirModule::from_instructions(vec![lir]), Some(&abi))
+            .expect("lift lir");
         let text = lifter.text();
 
-        assert!(text.contains("define i32 @semantic_function_0(i32 %0)"));
+        assert!(text.contains("define i32 @lir_function_0(i32 %0)"));
         assert!(!text.contains("movl %ecx, $0"));
         assert!(text.contains("ret i32 %abi_ret"));
     }
@@ -329,7 +329,7 @@ mod tests {
     #[test]
     fn arm64_sysv_abi_lifted_function_returns_i64() {
         let config = Configuration::default();
-        let mut semantics = Lir {
+        let mut lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -340,24 +340,24 @@ mod tests {
             terminator: LirTerminator::Return { expression: None },
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(
+        lir.set_abi(Some(
             LirAbi::from_kind(
                 LirAbiKind::SysV,
                 &LirCpu::from_kind(LirCpuKind::Arm64).expect("cpu"),
             )
             .expect("abi"),
         ));
-        let abi = semantics.abi.clone().expect("abi");
+        let abi = lir.abi.clone().expect("abi");
 
         let mut lifter = LlvmModule::from_architecture_with_config(Architecture::ARM64, config);
         lifter
-            .populate_function_lir(&LirModule::from_instructions(vec![semantics]), Some(&abi))
-            .expect("lift semantics");
+            .populate_function_lir(&LirModule::from_instructions(vec![lir]), Some(&abi))
+            .expect("lift lir");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
         assert!(text.contains("define i64"));
-        assert!(text.contains("@semantic_function_0("));
+        assert!(text.contains("@lir_function_0("));
         assert!(text.contains("ret i64"));
         assert!(!text.contains("ret void"));
     }
@@ -365,7 +365,7 @@ mod tests {
     #[test]
     fn amd64_windows64_abi_lifted_function_returns_i64() {
         let config = Configuration::default();
-        let mut semantics = Lir {
+        let mut lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -376,24 +376,24 @@ mod tests {
             terminator: LirTerminator::Return { expression: None },
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(
+        lir.set_abi(Some(
             LirAbi::from_kind(
                 LirAbiKind::Windows64,
                 &LirCpu::from_kind(LirCpuKind::Amd64).expect("cpu"),
             )
             .expect("abi"),
         ));
-        let abi = semantics.abi.clone().expect("abi");
+        let abi = lir.abi.clone().expect("abi");
 
         let mut lifter = LlvmModule::from_architecture_with_config(Architecture::AMD64, config);
         lifter
-            .populate_function_lir(&LirModule::from_instructions(vec![semantics]), Some(&abi))
-            .expect("lift semantics");
+            .populate_function_lir(&LirModule::from_instructions(vec![lir]), Some(&abi))
+            .expect("lift lir");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
         assert!(text.contains("define i64"));
-        assert!(text.contains("@semantic_function_0("));
+        assert!(text.contains("@lir_function_0("));
         assert!(text.contains("ret i64"));
         assert!(!text.contains("ret void"));
     }
@@ -401,7 +401,7 @@ mod tests {
     #[test]
     fn i386_stdcall_abi_lifted_function_returns_i32() {
         let config = Configuration::default();
-        let mut semantics = Lir {
+        let mut lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -412,24 +412,24 @@ mod tests {
             terminator: LirTerminator::Return { expression: None },
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(
+        lir.set_abi(Some(
             LirAbi::from_kind(
                 LirAbiKind::Stdcall,
                 &LirCpu::from_kind(LirCpuKind::I386).expect("cpu"),
             )
             .expect("abi"),
         ));
-        let abi = semantics.abi.clone().expect("abi");
+        let abi = lir.abi.clone().expect("abi");
 
         let mut lifter = LlvmModule::from_architecture_with_config(Architecture::I386, config);
         lifter
-            .populate_function_lir(&LirModule::from_instructions(vec![semantics]), Some(&abi))
-            .expect("lift semantics");
+            .populate_function_lir(&LirModule::from_instructions(vec![lir]), Some(&abi))
+            .expect("lift lir");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
         assert!(text.contains("define i32"));
-        assert!(text.contains("@semantic_function_0("));
+        assert!(text.contains("@lir_function_0("));
         assert!(text.contains("ret i32"));
         assert!(!text.contains("ret void"));
     }
@@ -437,7 +437,7 @@ mod tests {
     #[test]
     fn i386_stdcall_return_reads_eax_value() {
         let config = Configuration::default();
-        let mut semantics = Lir {
+        let mut lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -454,19 +454,19 @@ mod tests {
             terminator: LirTerminator::Return { expression: None },
             diagnostics: Vec::new(),
         };
-        semantics.set_abi(Some(
+        lir.set_abi(Some(
             LirAbi::from_kind(
                 LirAbiKind::Stdcall,
                 &LirCpu::from_kind(LirCpuKind::I386).expect("cpu"),
             )
             .expect("abi"),
         ));
-        let abi = semantics.abi.clone().expect("abi");
+        let abi = lir.abi.clone().expect("abi");
 
         let mut lifter = LlvmModule::from_architecture_with_config(Architecture::I386, config);
         lifter
-            .populate_function_lir(&LirModule::from_instructions(vec![semantics]), Some(&abi))
-            .expect("lift semantics");
+            .populate_function_lir(&LirModule::from_instructions(vec![lir]), Some(&abi))
+            .expect("lift lir");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
@@ -477,9 +477,9 @@ mod tests {
     }
 
     #[test]
-    fn explicit_function_semantics_abi_controls_return_shape() {
+    fn explicit_function_lir_abi_controls_return_shape() {
         let config = Configuration::default();
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -501,12 +501,12 @@ mod tests {
 
         let mut lifter = LlvmModule::from_architecture_with_config(Architecture::I386, config);
         lifter
-            .populate_function_lir(&LirModule::from_instructions(vec![semantics]), Some(&abi))
-            .expect("lift semantics");
+            .populate_function_lir(&LirModule::from_instructions(vec![lir]), Some(&abi))
+            .expect("lift lir");
         lifter.verify().expect("verify");
         let text = lifter.text();
 
-        assert!(text.contains("define i32 @semantic_function_0("));
+        assert!(text.contains("define i32 @lir_function_0("));
         assert!(text.contains("ret i32"));
         assert!(!text.contains("ret void"));
     }

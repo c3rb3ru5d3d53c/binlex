@@ -98,9 +98,9 @@ fn normalize_compare(left: LirExpression, right: LirExpression) -> (LirExpressio
     }
 }
 
-pub fn prepare_instruction_semantics(semantics: &Lir) -> Result<Lir, Error> {
-    validate_instruction_lir(semantics)?;
-    let normalized = normalize_instruction_lir(semantics);
+pub fn prepare_instruction_lir(lir: &Lir) -> Result<Lir, Error> {
+    validate_instruction_lir(lir)?;
+    let normalized = normalize_instruction_lir(lir);
     let (temporaries, snapshot_effects, effects, snapshots, load_snapshots) =
         snapshot_written_locations(&normalized);
     Ok(Lir {
@@ -125,7 +125,7 @@ pub fn prepare_instruction_semantics(semantics: &Lir) -> Result<Lir, Error> {
 }
 
 fn snapshot_written_locations(
-    semantics: &Lir,
+    lir: &Lir,
 ) -> (
     Vec<LirTemporary>,
     Vec<LirEffect>,
@@ -133,16 +133,16 @@ fn snapshot_written_locations(
     HashMap<LirLocation, LirLocation>,
     HashMap<LirExpression, LirLocation>,
 ) {
-    let mut temporaries = semantics.temporaries.clone();
+    let mut temporaries = lir.temporaries.clone();
     let mut snapshots = HashMap::<LirLocation, LirLocation>::new();
     let mut load_snapshots = HashMap::<LirExpression, LirLocation>::new();
-    let read_locations = collect_read_locations(semantics);
-    let read_loads = collect_read_loads(semantics);
-    let written_loads = collect_written_loads(semantics);
+    let read_locations = collect_read_locations(lir);
+    let read_loads = collect_read_loads(lir);
+    let written_loads = collect_written_loads(lir);
     let mut next_temp_id = temporaries.iter().map(|temp| temp.id).max().unwrap_or(0);
     let mut snapshot_effects = Vec::<LirEffect>::new();
 
-    for effect in &semantics.effects {
+    for effect in &lir.effects {
         if let LirEffect::Set { dst, .. } = effect {
             let should_snapshot = matches!(
                 dst,
@@ -203,33 +203,33 @@ fn snapshot_written_locations(
     (
         temporaries,
         snapshot_effects,
-        semantics.effects.clone(),
+        lir.effects.clone(),
         snapshots,
         load_snapshots,
     )
 }
 
-fn collect_read_locations(semantics: &Lir) -> HashSet<LirLocation> {
+fn collect_read_locations(lir: &Lir) -> HashSet<LirLocation> {
     let mut reads = HashSet::new();
-    for effect in &semantics.effects {
+    for effect in &lir.effects {
         collect_effect_reads(effect, &mut reads);
     }
-    collect_terminator_reads(&semantics.terminator, &mut reads);
+    collect_terminator_reads(&lir.terminator, &mut reads);
     reads
 }
 
-fn collect_read_loads(semantics: &Lir) -> HashSet<LirExpression> {
+fn collect_read_loads(lir: &Lir) -> HashSet<LirExpression> {
     let mut reads = HashSet::new();
-    for effect in &semantics.effects {
+    for effect in &lir.effects {
         collect_effect_loads(effect, &mut reads);
     }
-    collect_terminator_loads(&semantics.terminator, &mut reads);
+    collect_terminator_loads(&lir.terminator, &mut reads);
     reads
 }
 
-fn collect_written_loads(semantics: &Lir) -> HashSet<LirExpression> {
+fn collect_written_loads(lir: &Lir) -> HashSet<LirExpression> {
     let mut writes = HashSet::new();
-    for effect in &semantics.effects {
+    for effect in &lir.effects {
         match effect {
             LirEffect::Set { dst, .. } => {
                 if let LirLocation::Memory { space, addr, bits } = dst {
@@ -951,7 +951,7 @@ fn prepare_expression(
 
 #[cfg(test)]
 mod tests {
-    use super::prepare_instruction_semantics;
+    use super::prepare_instruction_lir;
     use crate::irs::lir::{
         Lir, LirAddressSpace, LirEffect, LirExpression, LirLocation, LirOperationBinary, LirStatus,
         LirTerminator,
@@ -959,7 +959,7 @@ mod tests {
 
     #[test]
     fn coerces_store_expression_to_destination_width() {
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: Default::default(),
@@ -979,7 +979,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let prepared = prepare_instruction_semantics(&semantics).expect("prepare");
+        let prepared = prepare_instruction_lir(&lir).expect("prepare");
         match &prepared.effects[0] {
             LirEffect::Store { expression, .. } => match expression {
                 LirExpression::Cast { bits, .. } => assert_eq!(*bits, 64),
@@ -991,7 +991,7 @@ mod tests {
 
     #[test]
     fn widens_shift_amount_to_operation_width() {
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: Default::default(),
@@ -1014,7 +1014,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let prepared = prepare_instruction_semantics(&semantics).expect("prepare");
+        let prepared = prepare_instruction_lir(&lir).expect("prepare");
         match &prepared.effects[0] {
             LirEffect::Set { expression, .. } => match expression {
                 LirExpression::Binary { right, .. } => match right.as_ref() {
@@ -1029,7 +1029,7 @@ mod tests {
 
     #[test]
     fn truncates_mismatched_binary_operand_to_expression_width() {
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: Default::default(),
@@ -1052,7 +1052,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let prepared = prepare_instruction_semantics(&semantics).expect("prepare");
+        let prepared = prepare_instruction_lir(&lir).expect("prepare");
         match &prepared.effects[0] {
             LirEffect::Set { expression, .. } => match expression {
                 LirExpression::Binary { right, .. } => match right.as_ref() {
@@ -1067,7 +1067,7 @@ mod tests {
 
     #[test]
     fn truncates_mismatched_compare_constant_to_operand_width() {
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: Default::default(),
@@ -1096,7 +1096,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let prepared = prepare_instruction_semantics(&semantics).expect("prepare");
+        let prepared = prepare_instruction_lir(&lir).expect("prepare");
         match &prepared.effects[0] {
             LirEffect::Set { expression, .. } => match expression {
                 LirExpression::Compare { right, .. } => match right.as_ref() {

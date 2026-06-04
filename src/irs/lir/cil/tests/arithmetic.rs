@@ -1,7 +1,7 @@
-use super::common::assert_complete_semantics;
+use super::common::assert_complete_lir;
 
 #[test]
-fn arithmetic_semantics_regressions_stay_complete() {
+fn arithmetic_lir_regressions_stay_complete() {
     let cases = [
         ("add", vec![0x58]),
         ("add.ovf", vec![0xd6]),
@@ -30,6 +30,6 @@ fn arithmetic_semantics_regressions_stay_complete() {
     ];
 
     for (name, bytes) in cases {
-        assert_complete_semantics(name, &bytes);
+        assert_complete_lir(name, &bytes);
     }
 }

@@ -1,7 +1,7 @@
-use super::common::assert_complete_semantics;
+use super::common::assert_complete_lir;
 
 #[test]
-fn memory_semantics_regressions_stay_complete() {
+fn memory_lir_regressions_stay_complete() {
     let cases = [
         ("ldfld", vec![0x7b, 0x01, 0x00, 0x00, 0x04]),
         ("ldflda", vec![0x7c, 0x01, 0x00, 0x00, 0x04]),
@@ -36,6 +36,6 @@ fn memory_semantics_regressions_stay_complete() {
     ];
 
     for (name, bytes) in cases {
-        assert_complete_semantics(name, &bytes);
+        assert_complete_lir(name, &bytes);
     }
 }

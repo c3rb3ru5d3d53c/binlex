@@ -339,9 +339,9 @@ impl LirCpu {
         self.memory.values().cloned().collect()
     }
 
-    pub fn semantic_register_name(&self, register_name: &str) -> Option<String> {
+    pub fn lir_register_name(&self, register_name: &str) -> Option<String> {
         match self.kind {
-            Some(kind) => semantic_register_name(kind, register_name),
+            Some(kind) => lir_register_name(kind, register_name),
             None => self
                 .resolve_register(register_name)
                 .map(|_| register_name.trim().to_ascii_lowercase()),
@@ -478,21 +478,21 @@ impl LirCpuCil {
     }
 }
 
-pub fn semantic_register_name(kind: LirCpuKind, register_name: &str) -> Option<String> {
+pub fn lir_register_name(kind: LirCpuKind, register_name: &str) -> Option<String> {
     match kind {
-        LirCpuKind::Arm64 => arm64_semantic_register_name(register_name),
+        LirCpuKind::Arm64 => arm64_lir_register_name(register_name),
         _ => Some(register_name.trim().to_ascii_lowercase()),
     }
 }
 
-fn arm64_semantic_register_name(register_name: &str) -> Option<String> {
+fn arm64_lir_register_name(register_name: &str) -> Option<String> {
     Some(format!(
         "reg_{}",
-        arm64_semantic_register_id_from_text(register_name)?
+        arm64_lir_register_id_from_text(register_name)?
     ))
 }
 
-fn arm64_semantic_register_id_from_text(token: &str) -> Option<u16> {
+fn arm64_lir_register_id_from_text(token: &str) -> Option<u16> {
     let normalized = token.trim().to_ascii_lowercase();
     let reg_id = match normalized.as_str() {
         "sp" => Arm64Reg::ARM64_REG_SP as u16,
@@ -518,7 +518,7 @@ fn arm64_semantic_register_id_from_text(token: &str) -> Option<u16> {
             }) as u16
         }
     };
-    Some(arm64_canonical_semantic_register_id(reg_id))
+    Some(arm64_canonical_lir_register_id(reg_id))
 }
 
 fn arm64_parse_indexed_register(token: &str) -> Option<(char, u16)> {
@@ -529,7 +529,7 @@ fn arm64_parse_indexed_register(token: &str) -> Option<(char, u16)> {
     Some((prefix, number))
 }
 
-fn arm64_canonical_semantic_register_id(reg_id: u16) -> u16 {
+fn arm64_canonical_lir_register_id(reg_id: u16) -> u16 {
     match RegId(reg_id).0 as u32 {
         id if id == Arm64Reg::ARM64_REG_FP => Arm64Reg::ARM64_REG_X29 as u16,
         id if id == Arm64Reg::ARM64_REG_LR => Arm64Reg::ARM64_REG_X30 as u16,

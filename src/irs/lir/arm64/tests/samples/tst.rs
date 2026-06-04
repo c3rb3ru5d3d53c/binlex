@@ -39,11 +39,11 @@ pub(crate) const SAMPLES: &[Arm64Sample] = &[
 ];
 
 #[test]
-fn tst_semantics_regressions_stay_complete() {
+fn tst_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }
 
 #[test]
-fn tst_semantics_match_unicorn_transitions() {
+fn tst_lir_match_unicorn_transitions() {
     assert_conformance_cases(SAMPLES);
 }

@@ -34,29 +34,29 @@ pub use instruction::InstructionDetailArm64;
 pub use operand::{Arm64MemoryOperandView, Arm64OperandKind, Arm64OperandView};
 
 pub fn build(view: InstructionDetailArm64) -> Option<Lir> {
-    if let Some(semantics) = builders::control::build(&view) {
-        return Some(semantics);
+    if let Some(lir) = builders::control::build(&view) {
+        return Some(lir);
     }
-    if let Some(semantics) = builders::integer::build(&view) {
-        return Some(semantics);
+    if let Some(lir) = builders::integer::build(&view) {
+        return Some(lir);
     }
-    if let Some(semantics) = builders::multiply::build(&view) {
-        return Some(semantics);
+    if let Some(lir) = builders::multiply::build(&view) {
+        return Some(lir);
     }
-    if let Some(semantics) = builders::fp::build(&view) {
-        return Some(semantics);
+    if let Some(lir) = builders::fp::build(&view) {
+        return Some(lir);
     }
-    if let Some(semantics) = builders::atomic::build(&view) {
-        return Some(semantics);
+    if let Some(lir) = builders::atomic::build(&view) {
+        return Some(lir);
     }
-    if let Some(semantics) = builders::memory::build(&view) {
-        return Some(semantics);
+    if let Some(lir) = builders::memory::build(&view) {
+        return Some(lir);
     }
-    if let Some(semantics) = builders::system::build(&view) {
-        return Some(semantics);
+    if let Some(lir) = builders::system::build(&view) {
+        return Some(lir);
     }
-    if let Some(semantics) = builders::vector::build(&view) {
-        return Some(semantics);
+    if let Some(lir) = builders::vector::build(&view) {
+        return Some(lir);
     }
     None
 }

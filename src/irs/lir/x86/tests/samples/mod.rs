@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use super::support::{
     I386Fixture, I386Register, assert_amd64_instruction_roundtrip_match_unicorn,
-    assert_amd64_semantics_match_unicorn, assert_i386_instruction_roundtrip_match_unicorn,
-    assert_i386_semantics_match_unicorn, assert_semantics_status,
+    assert_amd64_lir_match_unicorn, assert_i386_instruction_roundtrip_match_unicorn,
+    assert_i386_lir_match_unicorn, assert_lir_status,
 };
 use crate::Architecture;
 use crate::irs::lir::LirStatus;
@@ -36,7 +36,7 @@ pub(crate) struct X86Sample {
     pub architecture: Architecture,
     pub bytes: &'static [u8],
     pub expected_status: Option<LirStatus>,
-    pub semantics_fixture: Option<X86FixtureSpec>,
+    pub lir_fixture: Option<X86FixtureSpec>,
     pub roundtrip_fixture: Option<X86FixtureSpec>,
 }
 
@@ -47,7 +47,7 @@ pub(crate) fn assert_sample_statuses(samples: &[X86Sample]) {
                 "{} {}: {}",
                 sample.architecture, sample.mnemonic, sample.instruction
             );
-            assert_semantics_status(
+            assert_lir_status(
                 &sample_name,
                 sample.architecture,
                 sample.bytes,
@@ -59,17 +59,17 @@ pub(crate) fn assert_sample_statuses(samples: &[X86Sample]) {
 
 pub(crate) fn assert_conformance_cases(samples: &[X86Sample]) {
     for sample in samples {
-        if let Some(fixture) = sample.semantics_fixture {
+        if let Some(fixture) = sample.lir_fixture {
             let sample_name = format!(
                 "{} {}: {}",
                 sample.architecture, sample.mnemonic, sample.instruction
             );
             match sample.architecture {
                 Architecture::I386 => {
-                    assert_i386_semantics_match_unicorn(&sample_name, sample.bytes, fixture.into())
+                    assert_i386_lir_match_unicorn(&sample_name, sample.bytes, fixture.into())
                 }
                 Architecture::AMD64 => {
-                    assert_amd64_semantics_match_unicorn(&sample_name, sample.bytes, fixture.into())
+                    assert_amd64_lir_match_unicorn(&sample_name, sample.bytes, fixture.into())
                 }
                 architecture => panic!("unsupported x86 sample architecture: {architecture}"),
             }

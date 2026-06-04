@@ -53,7 +53,7 @@ pub enum MetadataToken {
     PropertyMap = 21,
     PropertyPtr = 22,
     Property = 23,
-    MethodSemantics = 24,
+    MethodLir = 24,
     MethodImpl = 25,
     ModuleRef = 26,
     TypeSpec = 27,

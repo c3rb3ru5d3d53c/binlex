@@ -51,28 +51,27 @@ impl LirExecutor {
 
     pub fn step(
         &self,
-        semantics: &LirModule,
+        lir: &LirModule,
         state: &LirExecutorState,
     ) -> Result<Vec<LirExecutorState>, LirExecutorError> {
-        if semantics.instructions().is_empty() {
+        if lir.instructions().is_empty() {
             return Ok(vec![state.clone()]);
         }
-        let (semantics, working, _, start_index) =
-            self.prepare_state_and_semantics(semantics.clone(), state)?;
-        let instructions = semantics.instructions();
+        let (lir, working, _, start_index) = self.prepare_state_and_lir(lir.clone(), state)?;
+        let instructions = lir.instructions();
         self.step_instruction(instructions[start_index], &working)
     }
 
     pub fn run(
         &self,
-        semantics: &LirModule,
+        lir: &LirModule,
         state: &LirExecutorState,
         steps: Option<usize>,
     ) -> Result<Vec<LirExecutorState>, LirExecutorError> {
-        let (semantics, initial_state, address_to_index, start_index) =
-            self.prepare_state_and_semantics(semantics.clone(), state)?;
-        let semantics = semantics.instructions();
-        if semantics.is_empty() {
+        let (lir, initial_state, address_to_index, start_index) =
+            self.prepare_state_and_lir(lir.clone(), state)?;
+        let lir = lir.instructions();
+        if lir.is_empty() {
             return Ok(vec![state.clone()]);
         }
         let mut active_states = vec![(start_index, initial_state, steps)];
@@ -81,7 +80,7 @@ impl LirExecutor {
         while !active_states.is_empty() {
             let mut next_states = Vec::new();
             for (index, live, remaining_steps) in active_states {
-                let instruction = semantics[index];
+                let instruction = lir[index];
                 if let Some(address) = instruction
                     .encoding
                     .as_ref()
@@ -118,7 +117,7 @@ impl LirExecutor {
 
                 let successor = stepped.pop().expect("single satisfiable successor");
                 let next_index = self.resolve_successor_index(
-                    &semantics,
+                    &lir,
                     &address_to_index,
                     index,
                     previous_pc,
@@ -138,15 +137,15 @@ impl LirExecutor {
 
     fn resolve_successor_index(
         &self,
-        semantics: &[&Lir],
+        lir: &[&Lir],
         address_to_index: &HashMap<u64, usize>,
         current_index: usize,
         previous_pc: Option<u64>,
         successor: &LirExecutorState,
     ) -> Result<Option<usize>, LirExecutorError> {
-        let current = semantics[current_index];
+        let current = lir[current_index];
         let current_pc = successor.eval_program_counter_u64()?;
-        let sequential_next = (current_index + 1 < semantics.len()).then_some(current_index + 1);
+        let sequential_next = (current_index + 1 < lir.len()).then_some(current_index + 1);
 
         let follow_concrete_target = |address: u64| address_to_index.get(&address).copied();
 
@@ -172,15 +171,15 @@ impl LirExecutor {
         }
     }
 
-    fn prepare_state_and_semantics(
+    fn prepare_state_and_lir(
         &self,
-        semantics: LirModule,
+        lir: LirModule,
         state: &LirExecutorState,
     ) -> Result<(LirModule, LirExecutorState, HashMap<u64, usize>, usize), LirExecutorError> {
         let mut working_state = state.clone();
-        working_state.load_semantic_data(&semantics.data)?;
+        working_state.load_lir_data(&lir.data)?;
         let mut address_to_index = HashMap::new();
-        for (index, instruction) in semantics.instructions().into_iter().enumerate() {
+        for (index, instruction) in lir.instructions().into_iter().enumerate() {
             if let Some(encoding) = instruction.encoding.as_ref() {
                 address_to_index.entry(encoding.address).or_insert(index);
             }
@@ -189,24 +188,24 @@ impl LirExecutor {
             .eval_program_counter_u64()?
             .and_then(|address| address_to_index.get(&address).copied())
             .unwrap_or(0);
-        Ok((semantics, working_state, address_to_index, start_index))
+        Ok((lir, working_state, address_to_index, start_index))
     }
 
     fn step_instruction(
         &self,
-        semantics: &Lir,
+        lir: &Lir,
         state: &LirExecutorState,
     ) -> Result<Vec<LirExecutorState>, LirExecutorError> {
-        if !matches!(semantics.status, LirStatus::Complete) {
+        if !matches!(lir.status, LirStatus::Complete) {
             return Err(LirExecutorError::UnsupportedExpression(
                 "partial LIR bindings are not executable",
             ));
         }
         let mut working = state.clone();
-        for effect in &semantics.effects {
-            self.apply_effect(&mut working, semantics.encoding.as_ref(), effect)?;
+        for effect in &lir.effects {
+            self.apply_effect(&mut working, lir.encoding.as_ref(), effect)?;
         }
-        self.apply_terminator(working, semantics.encoding.as_ref(), &semantics.terminator)
+        self.apply_terminator(working, lir.encoding.as_ref(), &lir.terminator)
     }
 }
 
@@ -228,7 +227,7 @@ mod tests {
     use std::collections::{BTreeMap, BTreeSet};
     use std::io::Cursor;
 
-    fn assembled_semantics(architecture: Architecture, assembly: &str) -> Vec<Lir> {
+    fn assembled_lir(architecture: Architecture, assembly: &str) -> Vec<Lir> {
         let config = Configuration::default();
         let assembler = Assembler::new(architecture, config.clone(), AssemblerBackend::Default)
             .expect("assembler");
@@ -247,16 +246,16 @@ mod tests {
         instructions.sort_by_key(|instruction| instruction.address);
         instructions
             .into_iter()
-            .map(|instruction| instruction.build_semantics().expect("LIR bindings"))
+            .map(|instruction| instruction.build_lir().expect("LIR bindings"))
             .collect()
     }
 
-    fn semantics_of(semantic: Lir) -> LirModule {
-        LirModule::from_instructions(vec![semantic])
+    fn lir_of(lir: Lir) -> LirModule {
+        LirModule::from_instructions(vec![lir])
     }
 
-    fn semantics_many(semantics: Vec<Lir>) -> LirModule {
-        LirModule::from_instructions(semantics)
+    fn lir_many(lir: Vec<Lir>) -> LirModule {
+        LirModule::from_instructions(lir)
     }
 
     #[test]
@@ -268,7 +267,7 @@ mod tests {
             .symbolize_register("x0", 64, Some("input_x0"))
             .expect("symbolize register");
 
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -298,9 +297,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor
-            .step(&semantics_of(semantics), &state)
-            .expect("step");
+        let states = executor.step(&lir_of(lir), &state).expect("step");
         assert_eq!(states.len(), 2);
         assert!(
             states
@@ -321,7 +318,7 @@ mod tests {
     }
 
     #[test]
-    fn symbolic_semantics_data_supports_step_and_run() {
+    fn symbolic_lir_data_supports_step_and_run() {
         let executor = LirExecutor::new();
         let mut state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
@@ -363,7 +360,7 @@ mod tests {
             terminator: LirTerminator::Return { expression: None },
             diagnostics: Vec::new(),
         };
-        let semantics = LirModule::from_instructions_with_data(
+        let lir = LirModule::from_instructions_with_data(
             vec![body],
             vec![LirData {
                 name: "digits".to_string(),
@@ -371,7 +368,7 @@ mod tests {
             }],
         );
 
-        let step_states = executor.step(&semantics, &state).expect("step");
+        let step_states = executor.step(&lir, &state).expect("step");
         let step_state = step_states.first().expect("step state");
         assert_eq!(
             step_state
@@ -380,7 +377,7 @@ mod tests {
             Some(u64::from(b'2'))
         );
 
-        let run_states = executor.run(&semantics, &state, None).expect("run");
+        let run_states = executor.run(&lir, &state, None).expect("run");
         let run_state = run_states.first().expect("run state");
         assert_eq!(
             run_state
@@ -414,7 +411,7 @@ mod tests {
 
         state.map_image(&image);
 
-        let semantics = LirModule::from_instructions(vec![Lir {
+        let lir = LirModule::from_instructions(vec![Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -439,7 +436,7 @@ mod tests {
             diagnostics: Vec::new(),
         }]);
 
-        let states = executor.run(&semantics, &state, None).expect("run");
+        let states = executor.run(&lir, &state, None).expect("run");
         let state = states.first().expect("state");
         assert_eq!(
             state.evaluate_register("rax", 32).expect("rax"),
@@ -453,7 +450,7 @@ mod tests {
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
 
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -492,9 +489,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor
-            .step(&semantics_of(semantics), &state)
-            .expect("step");
+        let states = executor.step(&lir_of(lir), &state).expect("step");
         let value = states[0]
             .evaluate_register("rax", 8)
             .expect("evaluate register")
@@ -513,7 +508,7 @@ mod tests {
             index: Box::new(LirExpression::Const { value: 2, bits: 32 }),
             bits: 32,
         };
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -540,9 +535,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor
-            .step(&semantics_of(semantics), &state)
-            .expect("step");
+        let states = executor.step(&lir_of(lir), &state).expect("step");
         let value = states[0]
             .evaluate_register("eax", 32)
             .expect("evaluate register")
@@ -561,7 +554,7 @@ mod tests {
             offset: 0,
             bits: 32,
         };
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -588,9 +581,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor
-            .step(&semantics_of(semantics), &state)
-            .expect("step");
+        let states = executor.step(&lir_of(lir), &state).expect("step");
         let value = states[0]
             .evaluate_register("eax", 32)
             .expect("evaluate register")
@@ -604,7 +595,7 @@ mod tests {
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
 
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -639,9 +630,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor
-            .step(&semantics_of(semantics), &state)
-            .expect("step");
+        let states = executor.step(&lir_of(lir), &state).expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("eax", 32)
@@ -668,7 +657,7 @@ mod tests {
             kind: "object".to_string(),
             bits: 64,
         };
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -707,9 +696,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor
-            .step(&semantics_of(semantics), &state)
-            .expect("step");
+        let states = executor.step(&lir_of(lir), &state).expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("pc", 32)
@@ -725,7 +712,7 @@ mod tests {
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::CIL).expect("cpu"));
 
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -770,9 +757,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor
-            .step(&semantics_of(semantics), &state)
-            .expect("step");
+        let states = executor.step(&lir_of(lir), &state).expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("pc", 8)
@@ -803,7 +788,7 @@ mod tests {
         let executor = LirExecutor::new();
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -827,9 +812,7 @@ mod tests {
             terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let states = executor
-            .step(&semantics_of(semantics), &state)
-            .expect("step");
+        let states = executor.step(&lir_of(lir), &state).expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("x0", 64)
@@ -844,7 +827,7 @@ mod tests {
         let executor = LirExecutor::new();
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -869,9 +852,7 @@ mod tests {
             terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        let states = executor
-            .step(&semantics_of(semantics), &state)
-            .expect("step");
+        let states = executor.step(&lir_of(lir), &state).expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("x0", 64)
@@ -882,11 +863,11 @@ mod tests {
     }
 
     #[test]
-    fn partial_semantics_are_rejected() {
+    fn partial_lir_are_rejected() {
         let executor = LirExecutor::new();
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Partial,
             metadata: LirMetadata::default(),
@@ -897,7 +878,7 @@ mod tests {
             terminator: LirTerminator::FallThrough,
             diagnostics: Vec::new(),
         };
-        assert!(executor.step(&semantics_of(semantics), &state).is_err());
+        assert!(executor.step(&lir_of(lir), &state).is_err());
     }
 
     #[test]
@@ -953,7 +934,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
         let states = executor
-            .run(&semantics_many(vec![first, second]), &state, None)
+            .run(&lir_many(vec![first, second]), &state, None)
             .expect("run");
         assert_eq!(states.len(), 1);
         assert_eq!(
@@ -1077,7 +1058,7 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![setup, loop_body, exit]), &state, None)
+            .run(&lir_many(vec![setup, loop_body, exit]), &state, None)
             .expect("run");
         assert_eq!(states.len(), 1);
         assert_eq!(
@@ -1188,11 +1169,7 @@ mod tests {
         };
 
         let states = executor
-            .run(
-                &semantics_many(vec![branch, taken, not_taken]),
-                &state,
-                None,
-            )
+            .run(&lir_many(vec![branch, taken, not_taken]), &state, None)
             .expect("run");
         assert_eq!(states.len(), 2);
         let targets = states
@@ -1267,7 +1244,7 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![first, second]), &state, Some(1))
+            .run(&lir_many(vec![first, second]), &state, Some(1))
             .expect("run");
         assert_eq!(states.len(), 1);
         assert_eq!(
@@ -1339,7 +1316,7 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![first, second]), &state, None)
+            .run(&lir_many(vec![first, second]), &state, None)
             .expect("run");
         assert_eq!(states.len(), 1);
         assert_eq!(executor.breakpoints(), vec![0x401001]);
@@ -1418,7 +1395,7 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![first, second]), &state, None)
+            .run(&lir_many(vec![first, second]), &state, None)
             .expect("run");
         assert_eq!(states.len(), 1);
         assert_eq!(executor.hooks(), vec![0x401001]);
@@ -1445,7 +1422,7 @@ mod tests {
 
     #[test]
     fn symbolic_run_follows_i386_call_and_return() {
-        let semantics = assembled_semantics(
+        let lir = assembled_lir(
             Architecture::I386,
             "
             call callee
@@ -1465,7 +1442,7 @@ mod tests {
             .write_memory(0x3000, &0x9000u32.to_le_bytes())
             .expect("write memory");
         let states = executor
-            .run(&LirModule::from_instructions(semantics), &state, None)
+            .run(&LirModule::from_instructions(lir), &state, None)
             .expect("run");
         assert_eq!(states.len(), 1);
         assert_eq!(
@@ -1486,7 +1463,7 @@ mod tests {
 
     #[test]
     fn symbolic_run_follows_amd64_call_and_return() {
-        let semantics = assembled_semantics(
+        let lir = assembled_lir(
             Architecture::AMD64,
             "
             call callee
@@ -1506,7 +1483,7 @@ mod tests {
             .write_memory(0x3000, &0x9000u64.to_le_bytes())
             .expect("write memory");
         let states = executor
-            .run(&LirModule::from_instructions(semantics), &state, None)
+            .run(&LirModule::from_instructions(lir), &state, None)
             .expect("run");
         assert_eq!(states.len(), 1);
         assert_eq!(
@@ -1527,7 +1504,7 @@ mod tests {
 
     #[test]
     fn symbolic_run_follows_arm64_call_and_return() {
-        let semantics = assembled_semantics(
+        let lir = assembled_lir(
             Architecture::ARM64,
             "
             bl callee
@@ -1543,7 +1520,7 @@ mod tests {
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         let states = executor
-            .run(&LirModule::from_instructions(semantics), &state, None)
+            .run(&LirModule::from_instructions(lir), &state, None)
             .expect("run");
         assert_eq!(states.len(), 1);
         assert_eq!(
@@ -1582,7 +1559,7 @@ mod tests {
         let executor = LirExecutor::new();
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -1600,9 +1577,7 @@ mod tests {
             },
             diagnostics: Vec::new(),
         };
-        let states = executor
-            .step(&semantics_of(semantics), &state)
-            .expect("step");
+        let states = executor.step(&lir_of(lir), &state).expect("step");
         assert_eq!(
             states[0]
                 .eval_program_counter_u64()
@@ -1711,7 +1686,7 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![first, second, third]), &state, None)
+            .run(&lir_many(vec![first, second, third]), &state, None)
             .expect("run");
         let slice = states[0]
             .slice_from_register("ecx", 32)
@@ -1733,7 +1708,7 @@ mod tests {
             .symbolize_register("al", 8, Some("input_al"))
             .expect("symbolize register");
 
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -1762,9 +1737,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor
-            .step(&semantics_of(semantics), &state)
-            .expect("step");
+        let states = executor.step(&lir_of(lir), &state).expect("step");
         let slice = states[0]
             .slice_from_memory(0x3000, 1)
             .expect("slice memory");
@@ -1872,7 +1845,7 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![first, second, third]), &state, None)
+            .run(&lir_many(vec![first, second, third]), &state, None)
             .expect("run");
         let slice = states[0]
             .slice_from_register("ecx", 32)
@@ -1901,7 +1874,7 @@ mod tests {
             .set_register("s1", 32, 2.25f32.to_bits() as u64)
             .expect("set register");
 
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -1930,9 +1903,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor
-            .step(&semantics_of(semantics), &state)
-            .expect("step");
+        let states = executor.step(&lir_of(lir), &state).expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("s2", 32)
@@ -1999,7 +1970,7 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![to_float, from_float]), &state, None)
+            .run(&lir_many(vec![to_float, from_float]), &state, None)
             .expect("run");
         assert_eq!(
             states[0]
@@ -2029,7 +2000,7 @@ mod tests {
             .set_register("d1", 64, 1.0f64.to_bits())
             .expect("set register");
 
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -2058,9 +2029,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor
-            .step(&semantics_of(semantics), &state)
-            .expect("step");
+        let states = executor.step(&lir_of(lir), &state).expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("x2", 1)
@@ -2079,7 +2048,7 @@ mod tests {
             .set_register("d0", 64, 3.5f64.to_bits())
             .expect("set register");
 
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -2104,9 +2073,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor
-            .step(&semantics_of(semantics), &state)
-            .expect("step");
+        let states = executor.step(&lir_of(lir), &state).expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("d1", 64)
@@ -2122,7 +2089,7 @@ mod tests {
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
 
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -2147,9 +2114,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor
-            .step(&semantics_of(semantics), &state)
-            .expect("step");
+        let states = executor.step(&lir_of(lir), &state).expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("d1", 64)
@@ -2168,7 +2133,7 @@ mod tests {
             .write_memory(0x8000, &3.5f64.to_bits().to_le_bytes())
             .expect("write memory");
 
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -2197,9 +2162,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor
-            .step(&semantics_of(semantics), &state)
-            .expect("step");
+        let states = executor.step(&lir_of(lir), &state).expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("d1", 64)
@@ -2216,7 +2179,7 @@ mod tests {
             LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         state.set_register("x0", 64, 7).expect("set register");
 
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -2241,9 +2204,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let states = executor
-            .step(&semantics_of(semantics), &state)
-            .expect("step");
+        let states = executor.step(&lir_of(lir), &state).expect("step");
         assert_eq!(
             states[0]
                 .evaluate_register("x1", 64)
@@ -2342,7 +2303,7 @@ mod tests {
 
         let states = executor
             .run(
-                &semantics_many(vec![to_fp80_left, to_fp80_right, compare]),
+                &lir_many(vec![to_fp80_left, to_fp80_right, compare]),
                 &state,
                 None,
             )
@@ -2414,7 +2375,7 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![to_fp80, truncate]), &state, None)
+            .run(&lir_many(vec![to_fp80, truncate]), &state, None)
             .expect("run");
         assert_eq!(
             states[0]
@@ -2540,7 +2501,7 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![lhs, rhs, add, store]), &state, None)
+            .run(&lir_many(vec![lhs, rhs, add, store]), &state, None)
             .expect("run");
         assert_eq!(
             states[0]
@@ -2615,7 +2576,7 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![load, store]), &state, None)
+            .run(&lir_many(vec![load, store]), &state, None)
             .expect("run");
         assert_eq!(
             states[0]
@@ -2686,7 +2647,7 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![load, store]), &state, None)
+            .run(&lir_many(vec![load, store]), &state, None)
             .expect("run");
         assert_eq!(
             states[0]
@@ -2809,7 +2770,7 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![to_fp80, divide, store]), &state, None)
+            .run(&lir_many(vec![to_fp80, divide, store]), &state, None)
             .expect("run");
         assert_eq!(
             states[0]
@@ -2854,7 +2815,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -2891,7 +2852,7 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![load, semantics]), &state, None)
+            .run(&lir_many(vec![load, lir]), &state, None)
             .expect("run");
         assert_eq!(
             states[0]
@@ -2957,7 +2918,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let semantics = Lir {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -2994,7 +2955,7 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![load, semantics]), &state, None)
+            .run(&lir_many(vec![load, lir]), &state, None)
             .expect("run");
         assert_eq!(
             states[0]
@@ -3111,7 +3072,7 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![load, sin, store]), &state, None)
+            .run(&lir_many(vec![load, sin, store]), &state, None)
             .expect("run");
         let value = states[0]
             .evaluate_register("xmm1", 64)
@@ -3205,7 +3166,7 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![load, cos, store]), &state, None)
+            .run(&lir_many(vec![load, cos, store]), &state, None)
             .expect("run");
         assert_eq!(
             states[0]
@@ -3321,7 +3282,7 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![lhs, atan2, store]), &state, None)
+            .run(&lir_many(vec![lhs, atan2, store]), &state, None)
             .expect("run");
         assert_eq!(
             states[0]
@@ -3438,7 +3399,7 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![load, scale, store]), &state, None)
+            .run(&lir_many(vec![load, scale, store]), &state, None)
             .expect("run");
         assert_eq!(
             states[0]
@@ -3532,7 +3493,7 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![load, op, store]), &state, None)
+            .run(&lir_many(vec![load, op, store]), &state, None)
             .expect("run");
         assert_eq!(
             states[0]
@@ -3600,7 +3561,7 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![load, store]), &state, None)
+            .run(&lir_many(vec![load, store]), &state, None)
             .expect("run");
         assert_eq!(
             states[0]
@@ -3671,7 +3632,7 @@ mod tests {
         };
 
         let states = executor
-            .run(&semantics_many(vec![load, store]), &state, None)
+            .run(&lir_many(vec![load, store]), &state, None)
             .expect("run");
         assert_eq!(
             states[0]

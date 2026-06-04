@@ -1,7 +1,7 @@
 use super::{
     FeatureFamilies, canonical_instruction_bitcode, configured_model,
     control_flow_features_for_block_module, embed_families_with_runtime_config,
-    parse_module_from_bitcode, primary_defined_function, semantic_features_from_module,
+    lir_features_from_module, parse_module_from_bitcode, primary_defined_function,
     sequence_features_from_tokens,
 };
 use crate::Configuration;
@@ -15,14 +15,14 @@ pub fn embed(instruction: &Instruction, config: &Configuration) -> Result<Vec<f3
     let module = parse_module_from_bitcode(&context, &bitcode)?;
     let llvm_function = primary_defined_function(&module)
         .ok_or_else(|| Error::other("missing lifted instruction"))?;
-    let (semantic, opcodes, helpers) = semantic_features_from_module(llvm_function);
+    let (lir, opcodes, helpers) = lir_features_from_module(llvm_function);
     let control_flow = control_flow_features_for_block_module(llvm_function);
     let sequence = sequence_features_from_tokens(&opcodes, &helpers);
     let families = FeatureFamilies {
-        semantic,
+        lir,
         control_flow,
         sequence,
-        semantic_weight: 0.65,
+        lir_weight: 0.65,
         control_flow_weight: 0.10,
         sequence_weight: 0.25,
     };

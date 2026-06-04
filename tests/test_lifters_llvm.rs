@@ -3,9 +3,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use binlex::assemblers::{Assembler, AssemblerBackend};
 use binlex::controlflow::{Block, Function, Graph, Instruction};
 use binlex::irs::lir::{
-    LirAbi, LirAbiKind, LirBlock, LirCpu, LirCpuKind, LirDiagnosticKind, LirEffect, LirExpression,
-    LirFunction, LirInstruction, LirLocation, LirMetadata, LirModule, LirOperationBinary,
-    LirStatus, LirTerminator,
+    Lir, LirAbi, LirAbiKind, LirBlock, LirCpu, LirCpuKind, LirDiagnosticKind, LirEffect,
+    LirExpression, LirFunction, LirLocation, LirMetadata, LirModule, LirOperationBinary, LirStatus,
+    LirTerminator,
 };
 use binlex::irs::llvm::LlvmModule;
 use binlex::{Architecture, Configuration};
@@ -57,7 +57,7 @@ fn build_noncontiguous_function_graph() -> Graph {
     graph
 }
 
-fn build_fastcall_semantic_function_graph() -> Graph {
+fn build_fastcall_lir_function_graph() -> Graph {
     let config = Configuration::default();
     let mut graph = Graph::new(Architecture::I386, config.clone());
 
@@ -65,7 +65,7 @@ fn build_fastcall_semantic_function_graph() -> Graph {
     instruction.bytes = vec![0x8d, 0x41, 0x01, 0xc3];
     instruction.pattern = "8d4101c3".to_string();
     instruction.is_return = true;
-    instruction.semantics = Some(LirInstruction {
+    instruction.lir = Some(Lir {
         version: 1,
         status: LirStatus::Complete,
         metadata: LirMetadata::default(),
@@ -162,7 +162,7 @@ fn verify_instruction_and_block_lifts(graph: &Graph) {
     }
 }
 
-fn assert_all_instruction_semantics_status(graph: &Graph, status: LirStatus) {
+fn assert_all_instruction_lir_status(graph: &Graph, status: LirStatus) {
     let instructions = graph.instructions();
     assert!(
         !instructions.is_empty(),
@@ -170,14 +170,14 @@ fn assert_all_instruction_semantics_status(graph: &Graph, status: LirStatus) {
     );
 
     for instruction in instructions {
-        let semantics = instruction
-            .semantics
+        let lir = instruction
+            .lir
             .clone()
-            .or_else(|| instruction.build_semantics())
-            .expect("instruction should have semantics");
+            .or_else(|| instruction.build_lir())
+            .expect("instruction should have lir");
         assert_eq!(
-            semantics.status, status,
-            "unexpected semantics status for instruction at 0x{:x}",
+            lir.status, status,
+            "unexpected lir status for instruction at 0x{:x}",
             instruction.address
         );
     }
@@ -276,7 +276,7 @@ fn llvm_lifter_handles_noncontiguous_functions() {
 }
 
 #[test]
-fn llvm_lift_function_explicit_abi_controls_return_shape_without_embedded_semantics() {
+fn llvm_lift_function_explicit_abi_controls_return_shape_without_embedded_lir() {
     let graph = build_noncontiguous_function_graph();
     let function = Function::new(0x1000, &graph).expect("function");
     let cpu = binlex::irs::lir::LirCpu::from_kind(binlex::irs::lir::LirCpuKind::I386).expect("cpu");
@@ -297,7 +297,7 @@ fn llvm_lift_function_explicit_abi_controls_return_shape_without_embedded_semant
 
 #[test]
 fn llvm_lift_function_uses_builtin_abi_arguments_for_signature() {
-    let graph = build_fastcall_semantic_function_graph();
+    let graph = build_fastcall_lir_function_graph();
     let function = Function::new(0x1000, &graph).expect("function");
     let cpu = LirCpu::from_kind(LirCpuKind::I386).expect("cpu");
     let abi = LirAbi::from_kind(LirAbiKind::Fastcall, &cpu).expect("abi");
@@ -316,7 +316,7 @@ fn llvm_lift_function_uses_builtin_abi_arguments_for_signature() {
 
 #[test]
 fn llvm_lift_function_does_not_infer_callable_abi_without_override() {
-    let graph = build_fastcall_semantic_function_graph();
+    let graph = build_fastcall_lir_function_graph();
     let function = Function::new(0x1000, &graph).expect("function");
 
     let mut lifter = LlvmModule::from_architecture(function.architecture());
@@ -334,17 +334,17 @@ fn llvm_lift_function_does_not_infer_callable_abi_without_override() {
 }
 
 #[test]
-fn llvm_lift_function_semantics_uses_explicit_abi_without_native_sync_epilogue() {
+fn llvm_lift_function_lir_uses_explicit_abi_without_native_sync_epilogue() {
     let cpu = LirCpu::from_kind(LirCpuKind::I386).expect("cpu");
     let abi = LirAbi::from_kind(LirAbiKind::Fastcall, &cpu).expect("abi");
-    let semantics = LirModule {
+    let lir = LirModule {
         name: Some("add_one".to_string()),
         functions: vec![LirFunction {
             name: Some("add_one".to_string()),
             abi: None,
             blocks: vec![LirBlock {
                 name: Some("entry".to_string()),
-                instructions: vec![LirInstruction {
+                instructions: vec![Lir {
                     version: 1,
                     status: LirStatus::Complete,
                     metadata: LirMetadata::default(),
@@ -376,8 +376,8 @@ fn llvm_lift_function_semantics_uses_explicit_abi_without_native_sync_epilogue()
 
     let mut lifter = LlvmModule::from_architecture(Architecture::I386);
     lifter
-        .populate_function_lir_named(&semantics, Some(&abi), "add_one")
-        .expect("semantics should lift");
+        .populate_function_lir_named(&lir, Some(&abi), "add_one")
+        .expect("lir should lift");
     lifter.verify().expect("function module should verify");
 
     let ir = lifter.text();
@@ -847,7 +847,7 @@ fn llvm_lifter_handles_loop_family_instructions() {
     );
 
     verify_all_entity_lifts(&graph);
-    assert_all_instruction_semantics_status(&graph, LirStatus::Complete);
+    assert_all_instruction_lir_status(&graph, LirStatus::Complete);
 }
 
 #[test]
@@ -863,7 +863,7 @@ fn llvm_lifter_handles_extended_counter_control_flow_completely() {
     );
 
     verify_all_entity_lifts(&graph);
-    assert_all_instruction_semantics_status(&graph, LirStatus::Complete);
+    assert_all_instruction_lir_status(&graph, LirStatus::Complete);
 }
 
 #[test]
@@ -1407,15 +1407,14 @@ fn llvm_lifter_preserves_unsupported_instruction_fallback() {
     );
 
     let instruction = graph.instruction(0).expect("instruction");
-    let semantics = instruction
-        .semantics
+    let lir = instruction
+        .lir
         .clone()
-        .or_else(|| instruction.build_semantics())
-        .expect("unsupported instruction should still have fallback semantics");
-    assert_eq!(semantics.status, binlex::irs::lir::LirStatus::Partial);
+        .or_else(|| instruction.build_lir())
+        .expect("unsupported instruction should still have fallback lir");
+    assert_eq!(lir.status, binlex::irs::lir::LirStatus::Partial);
     assert!(
-        semantics
-            .diagnostics
+        lir.diagnostics
             .iter()
             .any(|diagnostic| diagnostic.kind == LirDiagnosticKind::UnsupportedInstruction)
     );
@@ -1430,7 +1429,7 @@ fn llvm_lifter_preserves_unsupported_instruction_fallback() {
 }
 
 #[test]
-fn llvm_supported_semantics_cases_are_complete() {
+fn llvm_supported_lir_cases_are_complete() {
     let complete_cases: &[(&str, Architecture, &[u8])] = &[
         (
             "shift_rotate_i386",
@@ -1577,18 +1576,18 @@ fn llvm_supported_semantics_cases_are_complete() {
         let graph = disassemble_graph(*architecture, bytes);
         verify_instruction_and_block_lifts(&graph);
         for instruction in graph.instructions() {
-            let semantics = instruction
-                .semantics
+            let lir = instruction
+                .lir
                 .clone()
-                .or_else(|| instruction.build_semantics())
+                .or_else(|| instruction.build_lir())
                 .unwrap_or_else(|| {
                     panic!(
-                        "{name}: instruction 0x{:x} missing semantics",
+                        "{name}: instruction 0x{:x} missing lir",
                         instruction.address
                     )
                 });
             assert_eq!(
-                semantics.status,
+                lir.status,
                 LirStatus::Complete,
                 "{name}: instruction 0x{:x} is not complete",
                 instruction.address
@@ -1598,7 +1597,7 @@ fn llvm_supported_semantics_cases_are_complete() {
 }
 
 #[test]
-fn llvm_accuracy_gated_semantics_cases_remain_partial() {
+fn llvm_accuracy_gated_lir_cases_remain_partial() {
     let partial_cases: &[(&str, Architecture, &[u8], &[u64])] = &[];
 
     for (name, architecture, bytes, partial_addresses) in partial_cases {
@@ -1606,31 +1605,31 @@ fn llvm_accuracy_gated_semantics_cases_remain_partial() {
         verify_instruction_and_block_lifts(&graph);
         let expected = partial_addresses.iter().copied().collect::<BTreeSet<_>>();
         for instruction in graph.instructions() {
-            let semantics = instruction
-                .semantics
+            let lir = instruction
+                .lir
                 .clone()
-                .or_else(|| instruction.build_semantics())
+                .or_else(|| instruction.build_lir())
                 .unwrap_or_else(|| {
                     panic!(
-                        "{name}: instruction 0x{:x} missing semantics",
+                        "{name}: instruction 0x{:x} missing lir",
                         instruction.address
                     )
                 });
             if expected.contains(&instruction.address) {
                 assert_eq!(
-                    semantics.status,
+                    lir.status,
                     LirStatus::Partial,
                     "{name}: instruction 0x{:x} should remain partial",
                     instruction.address
                 );
                 assert!(
-                    !semantics.diagnostics.is_empty(),
+                    !lir.diagnostics.is_empty(),
                     "{name}: instruction 0x{:x} should carry diagnostics",
                     instruction.address
                 );
             } else {
                 assert_eq!(
-                    semantics.status,
+                    lir.status,
                     LirStatus::Complete,
                     "{name}: instruction 0x{:x} should stay complete",
                     instruction.address

@@ -1,7 +1,7 @@
 use super::{I386Fixture, I386Register, X86Sample, assert_sample_statuses};
 use crate::{Architecture, irs::lir::LirStatus};
 
-use super::super::support::{WideI386Fixture, interpret_amd64_wide_semantics};
+use super::super::support::{WideI386Fixture, interpret_amd64_wide_lir};
 
 pub(crate) const SAMPLES: &[X86Sample] = &[X86Sample {
     mnemonic: "vperm2i128",
@@ -9,17 +9,17 @@ pub(crate) const SAMPLES: &[X86Sample] = &[X86Sample {
     architecture: Architecture::AMD64,
     bytes: &[0xc4, 0xe3, 0x6d, 0x46, 0xc1, 0x31],
     expected_status: Some(LirStatus::Complete),
-    semantics_fixture: None,
+    lir_fixture: None,
     roundtrip_fixture: None,
 }];
 
 #[test]
-fn vperm2i128_semantics_regressions_stay_complete() {
+fn vperm2i128_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }
 
 #[test]
-fn vperm2i128_semantics_wide_regression_stays_stable() {
+fn vperm2i128_lir_wide_regression_stays_stable() {
     let ymm1 = vec![
         0x01, 0xff, 0x02, 0xfe, 0x03, 0xfd, 0x04, 0xfc, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00, 0x99,
         0x88, 0xf0, 0x0f, 0xe1, 0x1e, 0xd2, 0x2d, 0xc3, 0x3c, 0xb4, 0x4b, 0xa5, 0x5a, 0x96, 0x69,
@@ -31,7 +31,7 @@ fn vperm2i128_semantics_wide_regression_stays_stable() {
         0xcd, 0xef,
     ];
 
-    let (registers, _) = interpret_amd64_wide_semantics(
+    let (registers, _) = interpret_amd64_wide_lir(
         "vperm2i128 ymm0, ymm2, ymm1, 0x31",
         SAMPLES[0].bytes,
         WideI386Fixture {

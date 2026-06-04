@@ -1,7 +1,7 @@
-use super::common::assert_complete_semantics;
+use super::common::assert_complete_lir;
 
 #[test]
-fn object_semantics_regressions_stay_complete() {
+fn object_lir_regressions_stay_complete() {
     let cases = [
         ("ldtoken", vec![0xd0, 0x01, 0x00, 0x00, 0x01]),
         ("ldftn", vec![0xfe, 0x06, 0x01, 0x00, 0x00, 0x06]),
@@ -20,6 +20,6 @@ fn object_semantics_regressions_stay_complete() {
     ];
 
     for (name, bytes) in cases {
-        assert_complete_semantics(name, &bytes);
+        assert_complete_lir(name, &bytes);
     }
 }

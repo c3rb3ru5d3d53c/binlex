@@ -7,11 +7,11 @@ pub(crate) const SAMPLES: &[X86Sample] = &[X86Sample {
     architecture: Architecture::AMD64,
     bytes: &[0x66, 0x0f, 0x3a, 0x63, 0xc1, 0x00],
     expected_status: Some(LirStatus::Complete),
-    semantics_fixture: None,
+    lir_fixture: None,
     roundtrip_fixture: None,
 }];
 
 #[test]
-fn pcmpistri_semantics_regressions_stay_complete() {
+fn pcmpistri_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }

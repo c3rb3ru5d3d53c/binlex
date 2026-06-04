@@ -152,11 +152,11 @@ pub(crate) const SAMPLES: &[Arm64Sample] = &[
 ];
 
 #[test]
-fn csneg_semantics_regressions_stay_complete() {
+fn csneg_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }
 
 #[test]
-fn csneg_semantics_match_unicorn_transitions() {
+fn csneg_lir_match_unicorn_transitions() {
     assert_conformance_cases(SAMPLES);
 }

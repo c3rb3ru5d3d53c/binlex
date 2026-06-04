@@ -98,7 +98,7 @@ fn instruction_mentions_fpcr(view: &InstructionDetailArm64) -> bool {
 }
 
 fn build_mrs(view: &InstructionDetailArm64) -> Option<Lir> {
-    let semantic_name = if instruction_mentions_tpidr_el0(view) {
+    let lir_name = if instruction_mentions_tpidr_el0(view) {
         TPIDR_EL0_SEMANTIC_NAME
     } else if instruction_mentions_fpcr(view) {
         FPCR_SEMANTIC_NAME
@@ -111,7 +111,7 @@ fn build_mrs(view: &InstructionDetailArm64) -> Option<Lir> {
         vec![LirEffect::Set {
             dst,
             expression: crate::irs::lir::LirExpression::Read(Box::new(LirLocation::Register {
-                name: semantic_name.to_string(),
+                name: lir_name.to_string(),
                 bits: 64,
             })),
         }],
@@ -119,7 +119,7 @@ fn build_mrs(view: &InstructionDetailArm64) -> Option<Lir> {
 }
 
 fn build_msr(view: &InstructionDetailArm64) -> Option<Lir> {
-    let semantic_name = if instruction_mentions_tpidr_el0(view) {
+    let lir_name = if instruction_mentions_tpidr_el0(view) {
         TPIDR_EL0_SEMANTIC_NAME
     } else if instruction_mentions_fpcr(view) {
         FPCR_SEMANTIC_NAME
@@ -131,7 +131,7 @@ fn build_msr(view: &InstructionDetailArm64) -> Option<Lir> {
         LirTerminator::FallThrough,
         vec![LirEffect::Set {
             dst: LirLocation::Register {
-                name: semantic_name.to_string(),
+                name: lir_name.to_string(),
                 bits: 64,
             },
             expression: src,

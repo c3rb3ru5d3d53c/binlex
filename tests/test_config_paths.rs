@@ -13,8 +13,8 @@ fn test_config_serializes_flat_hash_paths() {
     assert!(toml.contains("[binlex.blocks.sha256]"));
     assert!(toml.contains("[binlex.blocks.tlsh]"));
     assert!(toml.contains("[binlex.blocks.minhash]"));
-    assert!(!toml.contains("[binlex.instructions.semantics]"));
-    assert!(!toml.contains("[binlex.semantics]"));
+    assert!(!toml.contains("[binlex.instructions.lir]"));
+    assert!(!toml.contains("[binlex.lir]"));
     assert!(toml.contains("[binlex.functions.sha256]"));
     assert!(toml.contains("[binlex.functions.tlsh]"));
     assert!(toml.contains("[binlex.functions.minhash]"));

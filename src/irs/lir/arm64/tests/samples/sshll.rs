@@ -73,11 +73,11 @@ pub(crate) const SAMPLES: &[Arm64Sample] = &[
 ];
 
 #[test]
-fn sshll_semantics_regressions_stay_complete() {
+fn sshll_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }
 
 #[test]
-fn sshll_semantics_match_unicorn_transitions() {
+fn sshll_lir_match_unicorn_transitions() {
     assert_conformance_cases(SAMPLES);
 }

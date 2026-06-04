@@ -25,6 +25,6 @@ pub(crate) const SAMPLES: &[Arm64Sample] = &[
 ];
 
 #[test]
-fn bl_semantics_regressions_stay_complete() {
+fn bl_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }

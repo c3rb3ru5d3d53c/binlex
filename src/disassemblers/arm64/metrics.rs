@@ -63,7 +63,7 @@ pub struct DisassemblyMetrics {
     pub block_time_us: AtomicU64,
     pub instruction_time_us: AtomicU64,
     pub indirect_target_time_us: AtomicU64,
-    pub semantics_time_us: AtomicU64,
+    pub lir_time_us: AtomicU64,
     pub merge_time_us: AtomicU64,
 }
 
@@ -153,7 +153,7 @@ pub fn log_disassembly_metrics(
                 "blocks[p={},v={},i={},dedup={},avg_per_fn={:.2}], ",
                 "instructions[p={},v={},i={},shared_tail_splits={},avg_per_block={:.2}], ",
                 "decode_cache[hits={},misses={}], indirect[calls={},targets={}], ",
-                "time_ms[fn={:.3},block={:.3},insn={:.3},indirect={:.3},semantics={:.3},merge={:.3}]"
+                "time_ms[fn={:.3},block={:.3},insn={:.3},indirect={:.3},lir={:.3},merge={:.3}]"
             ),
             metrics.sweep_time_us.load(Ordering::Relaxed) as f64 / 1000.0,
             sweep_ranges,
@@ -188,7 +188,7 @@ pub fn log_disassembly_metrics(
             metrics.block_time_us.load(Ordering::Relaxed) as f64 / 1000.0,
             metrics.instruction_time_us.load(Ordering::Relaxed) as f64 / 1000.0,
             metrics.indirect_target_time_us.load(Ordering::Relaxed) as f64 / 1000.0,
-            metrics.semantics_time_us.load(Ordering::Relaxed) as f64 / 1000.0,
+            metrics.lir_time_us.load(Ordering::Relaxed) as f64 / 1000.0,
             metrics.merge_time_us.load(Ordering::Relaxed) as f64 / 1000.0,
         ),
     );

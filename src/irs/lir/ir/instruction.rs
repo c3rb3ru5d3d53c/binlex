@@ -26,7 +26,7 @@ use serde_json::Value as SerdeValue;
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 
-mod semantic_const_value_serde {
+mod lir_const_value_serde {
     use serde::{Deserialize, Deserializer, Serializer};
 
     pub fn serialize<S>(value: &u128, serializer: S) -> Result<S::Ok, S::Error>
@@ -97,7 +97,7 @@ impl LirMetadata {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct LirInstruction {
+pub struct Lir {
     pub version: u32,
     pub status: LirStatus,
     #[serde(default, skip_serializing_if = "LirMetadata::is_empty")]
@@ -127,7 +127,7 @@ pub struct LirBlock {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub instructions: Vec<LirInstruction>,
+    pub instructions: Vec<Lir>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -158,15 +158,15 @@ impl LirBlock {
         }
     }
 
-    pub fn instructions(&self) -> &[LirInstruction] {
+    pub fn instructions(&self) -> &[Lir] {
         &self.instructions
     }
 
-    pub fn instructions_mut(&mut self) -> &mut Vec<LirInstruction> {
+    pub fn instructions_mut(&mut self) -> &mut Vec<Lir> {
         &mut self.instructions
     }
 
-    pub fn append_instruction(&mut self, instruction: LirInstruction) {
+    pub fn append_instruction(&mut self, instruction: Lir) {
         self.instructions.push(instruction);
     }
 
@@ -230,7 +230,7 @@ impl LirFunction {
         }
     }
 
-    pub fn from_instructions(name: Option<String>, instructions: Vec<LirInstruction>) -> Self {
+    pub fn from_instructions(name: Option<String>, instructions: Vec<Lir>) -> Self {
         let abi = instructions
             .iter()
             .find_map(|instruction| instruction.abi.clone());
@@ -251,7 +251,7 @@ impl LirFunction {
         &mut self.blocks
     }
 
-    pub fn instructions(&self) -> Vec<&LirInstruction> {
+    pub fn instructions(&self) -> Vec<&Lir> {
         self.blocks
             .iter()
             .flat_map(|block| block.instructions.iter())
@@ -322,14 +322,11 @@ impl LirModule {
         }
     }
 
-    pub fn from_instructions(instructions: Vec<LirInstruction>) -> Self {
+    pub fn from_instructions(instructions: Vec<Lir>) -> Self {
         Self::from_instructions_with_data(instructions, Vec::new())
     }
 
-    pub fn from_instructions_with_data(
-        instructions: Vec<LirInstruction>,
-        data: Vec<LirData>,
-    ) -> Self {
+    pub fn from_instructions_with_data(instructions: Vec<Lir>, data: Vec<LirData>) -> Self {
         Self {
             name: None,
             functions: vec![LirFunction {
@@ -356,7 +353,7 @@ impl LirModule {
         self.functions.push(function);
     }
 
-    pub fn instructions(&self) -> Vec<&LirInstruction> {
+    pub fn instructions(&self) -> Vec<&Lir> {
         self.functions
             .iter()
             .flat_map(|function| function.instructions())
@@ -1371,7 +1368,7 @@ pub enum LirTerminatorKind {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum LirExpression {
     Const {
-        #[serde(with = "semantic_const_value_serde")]
+        #[serde(with = "lir_const_value_serde")]
         value: u128,
         bits: u16,
     },
@@ -1462,7 +1459,7 @@ pub enum LirExpression {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct LirExpressionConst {
-    #[serde(with = "semantic_const_value_serde")]
+    #[serde(with = "lir_const_value_serde")]
     pub value: u128,
     pub bits: u16,
 }
@@ -2080,7 +2077,7 @@ pub enum LirDiagnosticKind {
     Named { name: String },
 }
 
-impl LirInstruction {
+impl Lir {
     pub fn set_version(&mut self, version: u32) {
         self.version = version;
     }
@@ -3082,14 +3079,12 @@ fn default_terminator_for_kind(kind: LirTerminatorKind) -> LirTerminator {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        LirEncoding, LirExpression, LirInstruction, LirMetadata, LirStatus, LirTerminator,
-    };
+    use super::{Lir, LirEncoding, LirExpression, LirMetadata, LirStatus, LirTerminator};
     use crate::irs::lir::{LirAbi, LirAbiKind, LirCpu, LirCpuKind};
 
     #[test]
-    fn semantic_const_serde_serializes_u128_as_string() {
-        let semantics = LirInstruction {
+    fn lir_const_serde_serializes_u128_as_string() {
+        let lir = Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),
@@ -3118,7 +3113,7 @@ mod tests {
             diagnostics: Vec::new(),
         };
 
-        let value = serde_json::to_value(semantics).expect("serialize semantics");
+        let value = serde_json::to_value(lir).expect("serialize lir");
         let serialized = value
             .get("terminator")
             .and_then(|value| value.get("Return"))
@@ -3132,7 +3127,7 @@ mod tests {
     }
 
     #[test]
-    fn semantic_const_serde_deserializes_string_back_to_u128() {
+    fn lir_const_serde_deserializes_string_back_to_u128() {
         let value = u128::MAX.to_string();
         let payload = serde_json::json!({
             "version": 1,
@@ -3159,10 +3154,9 @@ mod tests {
             "diagnostics": []
         });
 
-        let semantics: LirInstruction =
-            serde_json::from_value(payload).expect("deserialize semantics");
+        let lir: Lir = serde_json::from_value(payload).expect("deserialize lir");
 
-        match semantics.terminator {
+        match lir.terminator {
             LirTerminator::Return {
                 expression: Some(LirExpression::Const { value, bits }),
             } => {
@@ -3172,7 +3166,7 @@ mod tests {
             other => panic!("unexpected terminator: {:?}", other),
         }
         assert_eq!(
-            semantics.encoding,
+            lir.encoding,
             Some(LirEncoding {
                 architecture: "arm64".to_string(),
                 mnemonic: "ld4".to_string(),

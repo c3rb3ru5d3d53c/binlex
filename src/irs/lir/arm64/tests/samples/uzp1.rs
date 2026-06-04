@@ -45,11 +45,11 @@ pub(crate) const SAMPLES: &[Arm64Sample] = &[
 ];
 
 #[test]
-fn uzp1_semantics_regressions_stay_complete() {
+fn uzp1_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }
 
 #[test]
-fn uzp1_semantics_match_unicorn_transitions() {
+fn uzp1_lir_match_unicorn_transitions() {
     assert_conformance_cases(SAMPLES);
 }

@@ -22,35 +22,33 @@ pub(super) fn disassemble_cil_single(name: &str, bytes: &[u8]) -> InstructionRec
         .expect("instruction should exist")
 }
 
-pub(super) fn semantics(name: &str, bytes: &[u8]) -> Lir {
+pub(super) fn lir(name: &str, bytes: &[u8]) -> Lir {
     disassemble_cil_single(name, bytes)
-        .build_semantics()
-        .expect("instruction should build semantics")
+        .build_lir()
+        .expect("instruction should build lir")
 }
 
-pub(super) fn assert_complete_semantics(name: &str, bytes: &[u8]) -> Lir {
-    let semantics = semantics(name, bytes);
+pub(super) fn assert_complete_lir(name: &str, bytes: &[u8]) -> Lir {
+    let lir = lir(name, bytes);
     assert_eq!(
-        semantics.status,
+        lir.status,
         LirStatus::Complete,
-        "{name}: expected complete semantics, got {:?} with diagnostics {:?}",
-        semantics.status,
-        semantics
-            .diagnostics
+        "{name}: expected complete lir, got {:?} with diagnostics {:?}",
+        lir.status,
+        lir.diagnostics
             .iter()
             .map(|diagnostic| diagnostic.message.clone())
             .collect::<Vec<_>>()
     );
     assert!(
-        semantics.diagnostics.is_empty(),
+        lir.diagnostics.is_empty(),
         "{name}: expected no diagnostics, got {:?}",
-        semantics
-            .diagnostics
+        lir.diagnostics
             .iter()
             .map(|diagnostic| diagnostic.message.clone())
             .collect::<Vec<_>>()
     );
-    semantics
+    lir
 }
 
 pub(super) fn lift_instruction_to_llvm(name: &str, bytes: &[u8]) -> String {

@@ -9,6 +9,6 @@ pub(crate) const SAMPLES: &[Arm64Sample] = &[Arm64Sample {
 }];
 
 #[test]
-fn cpyen_semantics_regressions_stay_complete() {
+fn cpyen_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }

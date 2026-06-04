@@ -8,7 +8,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::AMD64,
         bytes: &[0xc4, 0xe2, 0x71, 0x2c, 0x00],
         expected_status: Some(LirStatus::Complete),
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: None,
     },
     X86Sample {
@@ -17,12 +17,12 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::AMD64,
         bytes: &[0xc4, 0xe2, 0x71, 0x2e, 0x10],
         expected_status: Some(LirStatus::Complete),
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: None,
     },
 ];
 
 #[test]
-fn vmaskmov_semantics_regressions_stay_complete() {
+fn vmaskmov_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }

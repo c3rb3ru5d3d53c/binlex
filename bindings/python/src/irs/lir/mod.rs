@@ -4,25 +4,25 @@ mod executor;
 use crate::irs::lir::abis::{extract_abi, register_abi_classes, LirAbi as PyLirAbi};
 use crate::irs::lir::executor::register_executor_classes;
 use binlex::irs::lir::{
-    LirAddressSpace as InnerAddressSpace, LirBlock as InnerLirBlock, LirCpu as InnerLirCpu,
-    LirCpuAlias as InnerLirCpuAlias, LirCpuAliasWritePolicy as InnerLirCpuAliasWritePolicy,
-    LirCpuEndian as InnerLirCpuEndian, LirCpuKind as InnerLirCpuKind,
-    LirCpuProgramCounter as InnerLirCpuProgramCounter, LirCpuRegister as InnerLirCpuRegister,
-    LirData as InnerLirData, LirDiagnostic as InnerLirDiagnostic,
-    LirDiagnosticKind as InnerLirDiagnosticKind, LirEffect as InnerLirEffect,
-    LirEffectKind as InnerLirEffectKind, LirEncoding as InnerLirEncoding,
-    LirExpression as InnerLirExpr, LirExpressionKind as InnerLirExprKind,
-    LirFenceKind as InnerFenceKind, LirFunction as InnerLirFunction, LirInstruction as InnerLir,
-    LirLocation as InnerLirLocation, LirLocationKind as InnerLirLocationKind,
-    LirMemory as InnerLirMemory, LirMemoryAddressed as InnerLirMemoryAddressed,
-    LirMemoryIndexed as InnerLirMemoryIndexed, LirMemoryStack as InnerLirMemoryStack,
-    LirMetadata as InnerLirMetadata, LirMlirModule as InnerLirMlirModule,
-    LirModule as InnerLirModule, LirOperation as InnerLirOperation,
-    LirOperationBinary as InnerLirBinaryOp, LirOperationCast as InnerLirCastOp,
-    LirOperationCompare as InnerLirCompareOp, LirOperationUnary as InnerLirUnaryOp,
-    LirStatus as InnerLirStatus, LirTemporary as InnerLirTemporary,
-    LirTerminator as InnerLirTerminator, LirTerminatorKind as InnerLirTerminatorKind,
-    LirTrapKind as InnerTrapKind,
+    Lir as InnerLir, LirAddressSpace as InnerAddressSpace, LirBlock as InnerLirBlock,
+    LirCpu as InnerLirCpu, LirCpuAlias as InnerLirCpuAlias,
+    LirCpuAliasWritePolicy as InnerLirCpuAliasWritePolicy, LirCpuEndian as InnerLirCpuEndian,
+    LirCpuKind as InnerLirCpuKind, LirCpuProgramCounter as InnerLirCpuProgramCounter,
+    LirCpuRegister as InnerLirCpuRegister, LirData as InnerLirData,
+    LirDiagnostic as InnerLirDiagnostic, LirDiagnosticKind as InnerLirDiagnosticKind,
+    LirEffect as InnerLirEffect, LirEffectKind as InnerLirEffectKind,
+    LirEncoding as InnerLirEncoding, LirExpression as InnerLirExpr,
+    LirExpressionKind as InnerLirExprKind, LirFenceKind as InnerFenceKind,
+    LirFunction as InnerLirFunction, LirLocation as InnerLirLocation,
+    LirLocationKind as InnerLirLocationKind, LirMemory as InnerLirMemory,
+    LirMemoryAddressed as InnerLirMemoryAddressed, LirMemoryIndexed as InnerLirMemoryIndexed,
+    LirMemoryStack as InnerLirMemoryStack, LirMetadata as InnerLirMetadata,
+    LirMlirModule as InnerLirMlirModule, LirModule as InnerLirModule,
+    LirOperation as InnerLirOperation, LirOperationBinary as InnerLirBinaryOp,
+    LirOperationCast as InnerLirCastOp, LirOperationCompare as InnerLirCompareOp,
+    LirOperationUnary as InnerLirUnaryOp, LirStatus as InnerLirStatus,
+    LirTemporary as InnerLirTemporary, LirTerminator as InnerLirTerminator,
+    LirTerminatorKind as InnerLirTerminatorKind, LirTrapKind as InnerTrapKind,
 };
 use pyo3::class::basic::CompareOp;
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
@@ -731,7 +731,7 @@ impl LirCpuAlias {
             "zero_extend" => InnerLirCpuAlias::zero_extend(name, parent, offset, bits),
             value => {
                 return Err(PyValueError::new_err(format!(
-                    "invalid semantic CPU alias write policy: {value}"
+                    "invalid lir CPU alias write policy: {value}"
                 )));
             }
         };
@@ -1658,7 +1658,7 @@ impl LirExpression {
             InnerLirOperation::Compare(op.borrow(py).inner)
         } else {
             return Err(PyValueError::new_err(
-                "operation must be a semantic binary, unary, cast, or compare operation",
+                "operation must be a lir binary, unary, cast, or compare operation",
             ));
         };
         self.inner

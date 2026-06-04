@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use super::support::{
-    Arm64Fixture, Arm64FixtureSpec, assert_arm64_semantics_match_unicorn, assert_semantics_status,
+    Arm64Fixture, Arm64FixtureSpec, assert_arm64_lir_match_unicorn, assert_lir_status,
 };
 use crate::irs::lir::LirStatus;
 
@@ -18,7 +18,7 @@ pub(crate) fn assert_sample_statuses(samples: &[Arm64Sample]) {
     for sample in samples {
         if let Some(expected_status) = sample.expected_status {
             let sample_name = format!("{}: {}", sample.mnemonic, sample.instruction);
-            assert_semantics_status(&sample_name, sample.bytes, expected_status);
+            assert_lir_status(&sample_name, sample.bytes, expected_status);
         }
     }
 }
@@ -27,11 +27,7 @@ pub(crate) fn assert_conformance_cases(samples: &[Arm64Sample]) {
     for sample in samples {
         if let Some(fixture) = sample.fixture {
             let sample_name = format!("{}: {}", sample.mnemonic, sample.instruction);
-            assert_arm64_semantics_match_unicorn(
-                &sample_name,
-                sample.bytes,
-                Arm64Fixture::from(fixture),
-            );
+            assert_arm64_lir_match_unicorn(&sample_name, sample.bytes, Arm64Fixture::from(fixture));
         }
     }
 }

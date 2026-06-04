@@ -15,7 +15,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::AMD64,
         bytes: &[0x66, 0x0f, 0x72, 0xe0, 0x01],
         expected_status: Some(LirStatus::Complete),
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: None,
     },
     X86Sample {
@@ -24,7 +24,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::AMD64,
         bytes: &[0x66, 0x0f, 0x72, 0xe0, 0x01],
         expected_status: None,
-        semantics_fixture: Some(X86FixtureSpec {
+        lir_fixture: Some(X86FixtureSpec {
             registers: &[(I386Register::Xmm0, XMM0)],
             eflags: 1 << 1,
             memory: &[],
@@ -37,7 +37,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::I386,
         bytes: &[0x66, 0x0f, 0x72, 0xe0, 0x04],
         expected_status: None,
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: Some(X86FixtureSpec {
             registers: &[
                 (I386Register::Eax, 0x1122_3344),
@@ -60,12 +60,12 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
 ];
 
 #[test]
-fn psrad_semantics_regressions_stay_complete() {
+fn psrad_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }
 
 #[test]
-fn psrad_semantics_match_unicorn_transitions() {
+fn psrad_lir_match_unicorn_transitions() {
     assert_conformance_cases(SAMPLES);
 }
 

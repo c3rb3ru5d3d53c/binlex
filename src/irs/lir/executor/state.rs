@@ -37,8 +37,8 @@ pub struct LirExecutorState {
     stack_memory: HashMap<String, HashMap<u32, LirExecutorCell>>,
     reference_properties: HashMap<String, HashMap<String, LirExecutorCell>>,
     reference_elements: HashMap<String, HashMap<String, LirExecutorCell>>,
-    semantic_data_addresses: HashMap<String, u64>,
-    next_semantic_data_address: u64,
+    lir_data_addresses: HashMap<String, u64>,
+    next_lir_data_address: u64,
     constraints: Vec<Bool>,
     tracked: HashMap<String, TrackedAst>,
     definitions: HashMap<u64, DefinitionNode>,
@@ -124,8 +124,8 @@ impl LirExecutorState {
             stack_memory: HashMap::new(),
             reference_properties: HashMap::new(),
             reference_elements: HashMap::new(),
-            semantic_data_addresses: HashMap::new(),
-            next_semantic_data_address: 0x100000,
+            lir_data_addresses: HashMap::new(),
+            next_lir_data_address: 0x100000,
             constraints: Vec::new(),
             tracked: HashMap::new(),
             definitions: HashMap::new(),
@@ -291,27 +291,26 @@ impl LirExecutorState {
         self.backend.is_sat(&self.constraints)
     }
 
-    pub fn load_semantic_data(&mut self, data: &[LirData]) -> Result<(), LirExecutorError> {
+    pub fn load_lir_data(&mut self, data: &[LirData]) -> Result<(), LirExecutorError> {
         for item in data {
             if item.name.trim().is_empty() {
                 return Err(LirExecutorError::UnsupportedExpression(
-                    "semantic data item has empty name",
+                    "lir data item has empty name",
                 ));
             }
-            if self.semantic_data_addresses.contains_key(&item.name) {
+            if self.lir_data_addresses.contains_key(&item.name) {
                 continue;
             }
             let size = item.bytes.len().max(1) as u64;
             let aligned_size = ((size + 0xfff) / 0x1000) * 0x1000;
-            let address = self.next_semantic_data_address;
+            let address = self.next_lir_data_address;
             self.map_memory(address, aligned_size);
             self.write_memory(address, &item.bytes)?;
-            self.semantic_data_addresses
-                .insert(item.name.clone(), address);
-            self.next_semantic_data_address = self
-                .next_semantic_data_address
+            self.lir_data_addresses.insert(item.name.clone(), address);
+            self.next_lir_data_address = self
+                .next_lir_data_address
                 .checked_add(aligned_size)
-                .ok_or_else(|| LirExecutorError::solver("semantic data address space overflow"))?;
+                .ok_or_else(|| LirExecutorError::solver("lir data address space overflow"))?;
         }
         Ok(())
     }
@@ -351,8 +350,8 @@ impl LirExecutorState {
         &mut self.memory
     }
 
-    pub(crate) fn semantic_data_address(&self, name: &str) -> Option<u64> {
-        self.semantic_data_addresses.get(name).copied()
+    pub(crate) fn lir_data_address(&self, name: &str) -> Option<u64> {
+        self.lir_data_addresses.get(name).copied()
     }
 
     pub(crate) fn set_program_counter(&mut self, value: BV, def_id: Option<u64>) {

@@ -38,10 +38,10 @@ pub(crate) enum EmbeddingDevice {
 }
 
 pub(crate) struct FeatureFamilies {
-    pub(crate) semantic: Vec<f32>,
+    pub(crate) lir: Vec<f32>,
     pub(crate) control_flow: Vec<f32>,
     pub(crate) sequence: Vec<f32>,
-    pub(crate) semantic_weight: f32,
+    pub(crate) lir_weight: f32,
     pub(crate) control_flow_weight: f32,
     pub(crate) sequence_weight: f32,
 }
@@ -227,7 +227,7 @@ fn count_block_successors<'ctx>(function: FunctionValue<'ctx>) -> HashMap<String
     successors
 }
 
-pub(crate) fn semantic_features_from_module<'ctx>(
+pub(crate) fn lir_features_from_module<'ctx>(
     function: FunctionValue<'ctx>,
 ) -> (Vec<f32>, Vec<String>, Vec<String>) {
     let mut opcodes = Vec::new();
@@ -610,13 +610,13 @@ pub(crate) fn embed_families_with_runtime_config(
             Stderr::print_debug(config, message);
         }
     }
-    let semantic = project_features(&families.semantic, dimensions, 0x5E9A_0000);
+    let lir = project_features(&families.lir, dimensions, 0x5E9A_0000);
     let control_flow = project_features(&families.control_flow, dimensions, 0x5E9A_0001);
     let sequence = project_features(&families.sequence, dimensions, 0x5E9A_0002);
 
     let mut vector = vec![0.0f32; dimensions];
     for index in 0..dimensions {
-        vector[index] = semantic[index] * families.semantic_weight
+        vector[index] = lir[index] * families.lir_weight
             + control_flow[index] * families.control_flow_weight
             + sequence[index] * families.sequence_weight;
     }

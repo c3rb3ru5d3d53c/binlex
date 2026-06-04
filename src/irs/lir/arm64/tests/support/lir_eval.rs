@@ -5,25 +5,18 @@ use crate::irs::lir::{
     LirOperationCompare, LirOperationUnary, LirTerminator,
 };
 
-use super::common::semantics;
+use super::common::lir;
 use super::fixtures::{Arm64CpuState, Arm64Execution, Arm64Fixture, Arm64Transition};
-use super::unicorn::{
-    ARM64_CODE_ADDRESS, semantic_name_for_arch_register, unicorn_arm64_execution,
-};
+use super::unicorn::{ARM64_CODE_ADDRESS, lir_name_for_arch_register, unicorn_arm64_execution};
 
-pub(crate) fn assert_arm64_semantics_match_unicorn(
-    name: &str,
-    bytes: &[u8],
-    fixture: Arm64Fixture,
-) {
-    let semantics = semantics(name, bytes);
-    let tracked_registers = tracked_registers(&semantics, &fixture);
-    let vector_register_writes = written_locations(&semantics)
+pub(crate) fn assert_arm64_lir_match_unicorn(name: &str, bytes: &[u8], fixture: Arm64Fixture) {
+    let lir = lir(name, bytes);
+    let tracked_registers = tracked_registers(&lir, &fixture);
+    let vector_register_writes = written_locations(&lir)
         .into_iter()
-        .filter(|name| is_vector_semantic_register(name))
+        .filter(|name| is_vector_lir_register(name))
         .collect::<Vec<_>>();
-    let interpreted =
-        interpret_arm64_semantics(name, bytes, &semantics, &fixture, &tracked_registers);
+    let interpreted = interpret_arm64_lir(name, bytes, &lir, &fixture, &tracked_registers);
     let unicorn = unicorn_arm64_execution(
         name,
         bytes,
@@ -35,19 +28,19 @@ pub(crate) fn assert_arm64_semantics_match_unicorn(
 
     assert_eq!(
         unicorn.transition.pre, interpreted.transition.pre,
-        "{name}: semantics pre-state diverged from unicorn pre-state"
+        "{name}: lir pre-state diverged from unicorn pre-state"
     );
     assert_eq!(
         unicorn.transition.post.pc, interpreted.transition.post.pc,
-        "{name}: pc mismatch\nunicorn: {:#x}\nsemantics: {:#x}",
+        "{name}: pc mismatch\nunicorn: {:#x}\nlir: {:#x}",
         unicorn.transition.post.pc, interpreted.transition.post.pc
     );
 
-    for register in written_locations(&semantics) {
+    for register in written_locations(&lir) {
         if (name == "bl" || name == "blr") && register == "x30" {
             continue;
         }
-        if is_vector_semantic_register(&register) {
+        if is_vector_lir_register(&register) {
             let expected = interpreted
                 .transition
                 .post
@@ -70,7 +63,7 @@ pub(crate) fn assert_arm64_semantics_match_unicorn(
                     .unwrap_or_default();
                 assert_eq!(
                     unicorn_value, expected_byte,
-                    "{name}: vector byte mismatch for {register} at 0x{byte_address:x}\nunicorn: {:#04x}\nsemantics: {:#04x}",
+                    "{name}: vector byte mismatch for {register} at 0x{byte_address:x}\nunicorn: {:#04x}\nlir: {:#04x}",
                     unicorn_value, expected_byte
                 );
             }
@@ -92,7 +85,7 @@ pub(crate) fn assert_arm64_semantics_match_unicorn(
             .unwrap_or_default();
         assert_eq!(
             unicorn_value, interpreted_value,
-            "{name}: location {register} mismatch\nunicorn: {:#x}\nsemantics: {:#x}",
+            "{name}: location {register} mismatch\nunicorn: {:#x}\nlir: {:#x}",
             unicorn_value, interpreted_value
         );
     }
@@ -115,17 +108,17 @@ pub(crate) fn assert_arm64_semantics_match_unicorn(
                 .unwrap_or_default();
             assert_eq!(
                 unicorn_value, interpreted_value,
-                "{name}: memory byte mismatch at 0x{byte_address:x}\nunicorn: {:#04x}\nsemantics: {:#04x}",
+                "{name}: memory byte mismatch at 0x{byte_address:x}\nunicorn: {:#04x}\nlir: {:#04x}",
                 unicorn_value, interpreted_value
             );
         }
     }
 }
 
-fn interpret_arm64_semantics(
+fn interpret_arm64_lir(
     instruction_name: &str,
     bytes: &[u8],
-    semantics: &Lir,
+    lir: &Lir,
     fixture: &Arm64Fixture,
     tracked_registers: &[String],
 ) -> Arm64Execution {
@@ -134,7 +127,7 @@ fn interpret_arm64_semantics(
         .map(|name| (name.clone(), 0u128))
         .collect::<BTreeMap<_, _>>();
     for (register, value) in &fixture.registers {
-        registers.insert(semantic_name_for_arch_register(register), *value);
+        registers.insert(lir_name_for_arch_register(register), *value);
     }
     let pre_registers = tracked_registers
         .iter()
@@ -156,7 +149,7 @@ fn interpret_arm64_semantics(
     let mut register_writes = Vec::<(String, u128)>::new();
     let mut memory_writes = Vec::<(u64, Vec<u8>)>::new();
 
-    for effect in &semantics.effects {
+    for effect in &lir.effects {
         match effect {
             LirEffect::Nop => {}
             LirEffect::Set { dst, expression } => match dst {
@@ -277,7 +270,7 @@ fn interpret_arm64_semantics(
         if let Some(value) = registers.get_mut("x30") {
             *value = relocate_code_target(*value as u64) as u128;
         }
-        let canonical_link = semantic_name_for_arch_register("x30");
+        let canonical_link = lir_name_for_arch_register("x30");
         if let Some(value) = registers.get_mut(&canonical_link) {
             *value = relocate_code_target(*value as u64) as u128;
         }
@@ -296,7 +289,7 @@ fn interpret_arm64_semantics(
 
     let post = Arm64CpuState {
         registers,
-        pc: match semantics.terminator {
+        pc: match lir.terminator {
             LirTerminator::FallThrough => ARM64_CODE_ADDRESS + bytes.len() as u64,
             LirTerminator::Branch {
                 ref condition,
@@ -338,7 +331,7 @@ fn interpret_arm64_semantics(
                 })
                 .unwrap_or_else(|| {
                     pre.registers
-                        .get(&semantic_name_for_arch_register("x30"))
+                        .get(&lir_name_for_arch_register("x30"))
                         .copied()
                         .unwrap_or_default() as u64
                 }),
@@ -369,7 +362,7 @@ fn relocate_code_like_result(
         .next()
         .unwrap_or_default();
     if matches!(opcode, "bl" | "blr")
-        && (destination_name == "x30" || destination_name == semantic_name_for_arch_register("x30"))
+        && (destination_name == "x30" || destination_name == lir_name_for_arch_register("x30"))
     {
         return relocate_code_target(value as u64) as u128;
     }
@@ -385,10 +378,10 @@ fn eval_expression(
     match expression {
         LirExpression::Const { value, bits } => mask_to_bits(*value, *bits),
         LirExpression::Function { .. } => {
-            panic!("unsupported semantic function expression in arm64 conformance")
+            panic!("unsupported lir function expression in arm64 conformance")
         }
         LirExpression::DataAddress { .. } => {
-            panic!("unsupported semantic data_address expression in arm64 conformance")
+            panic!("unsupported lir data_address expression in arm64 conformance")
         }
         LirExpression::AddressOf { .. } => {
             panic!("unsupported address_of expression in arm64 conformance")
@@ -567,7 +560,7 @@ fn read_arm64_register_value(registers: &BTreeMap<String, u128>, name: &str) -> 
             return 0;
         }
         registers
-            .get(&semantic_name_for_arch_register(name))
+            .get(&lir_name_for_arch_register(name))
             .copied()
             .unwrap_or_default()
     })
@@ -689,15 +682,15 @@ fn ext_vec_16b(left: u128, right: u128, immediate: usize) -> u128 {
     u128::from_le_bytes(result)
 }
 
-fn tracked_registers(semantics: &Lir, fixture: &Arm64Fixture) -> Vec<String> {
+fn tracked_registers(lir: &Lir, fixture: &Arm64Fixture) -> Vec<String> {
     let mut tracked = fixture
         .registers
         .iter()
         .filter(|(name, _)| !is_vector_fixture_register(name))
-        .map(|(name, _)| semantic_name_for_arch_register(name))
+        .map(|(name, _)| lir_name_for_arch_register(name))
         .collect::<Vec<_>>();
-    for register in written_locations(semantics) {
-        if !is_vector_semantic_register(&register) && !tracked.contains(&register) {
+    for register in written_locations(lir) {
+        if !is_vector_lir_register(&register) && !tracked.contains(&register) {
             tracked.push(register);
         }
     }
@@ -705,9 +698,9 @@ fn tracked_registers(semantics: &Lir, fixture: &Arm64Fixture) -> Vec<String> {
     tracked
 }
 
-fn written_locations(semantics: &Lir) -> Vec<String> {
+fn written_locations(lir: &Lir) -> Vec<String> {
     let mut registers = Vec::new();
-    for effect in &semantics.effects {
+    for effect in &lir.effects {
         match effect {
             LirEffect::Set {
                 dst: LirLocation::Register { name, .. } | LirLocation::Flag { name, .. },
@@ -920,21 +913,21 @@ fn is_vector_fixture_register(name: &str) -> bool {
     matches!(name, "v0" | "v1" | "v2" | "v3" | "q0" | "q1" | "q2" | "q3")
 }
 
-fn is_vector_semantic_register(name: &str) -> bool {
-    name == semantic_name_for_arch_register("v0")
-        || name == semantic_name_for_arch_register("v1")
-        || name == semantic_name_for_arch_register("v2")
-        || name == semantic_name_for_arch_register("v3")
+fn is_vector_lir_register(name: &str) -> bool {
+    name == lir_name_for_arch_register("v0")
+        || name == lir_name_for_arch_register("v1")
+        || name == lir_name_for_arch_register("v2")
+        || name == lir_name_for_arch_register("v3")
 }
 
 fn vector_spill_address(name: &str) -> Option<u64> {
-    if name == semantic_name_for_arch_register("v0") {
+    if name == lir_name_for_arch_register("v0") {
         Some(0x4000)
-    } else if name == semantic_name_for_arch_register("v1") {
+    } else if name == lir_name_for_arch_register("v1") {
         Some(0x4010)
-    } else if name == semantic_name_for_arch_register("v2") {
+    } else if name == lir_name_for_arch_register("v2") {
         Some(0x4020)
-    } else if name == semantic_name_for_arch_register("v3") {
+    } else if name == lir_name_for_arch_register("v3") {
         Some(0x4030)
     } else {
         None

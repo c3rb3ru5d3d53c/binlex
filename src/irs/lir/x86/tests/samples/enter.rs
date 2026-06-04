@@ -10,7 +10,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::I386,
         bytes: &[0xc8, 0x10, 0x00, 0x00],
         expected_status: Some(LirStatus::Complete),
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: None,
     },
     X86Sample {
@@ -19,7 +19,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::I386,
         bytes: &[0xc8, 0x10, 0x00, 0x01],
         expected_status: Some(LirStatus::Complete),
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: None,
     },
     X86Sample {
@@ -28,7 +28,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::I386,
         bytes: &[0xc8, 0x10, 0x00, 0x00],
         expected_status: None,
-        semantics_fixture: Some(X86FixtureSpec {
+        lir_fixture: Some(X86FixtureSpec {
             registers: &[(I386Register::Esp, 0x2900), (I386Register::Ebp, 0x2800)],
             eflags: 1 << 1,
             memory: &[],
@@ -41,7 +41,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::I386,
         bytes: &[0xc8, 0x10, 0x00, 0x01],
         expected_status: None,
-        semantics_fixture: Some(X86FixtureSpec {
+        lir_fixture: Some(X86FixtureSpec {
             registers: &[(I386Register::Esp, 0x2900), (I386Register::Ebp, 0x2800)],
             eflags: 1 << 1,
             memory: &[],
@@ -51,11 +51,11 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
 ];
 
 #[test]
-fn enter_semantics_regressions_stay_complete() {
+fn enter_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }
 
 #[test]
-fn enter_semantics_match_unicorn_transitions() {
+fn enter_lir_match_unicorn_transitions() {
     assert_conformance_cases(SAMPLES);
 }

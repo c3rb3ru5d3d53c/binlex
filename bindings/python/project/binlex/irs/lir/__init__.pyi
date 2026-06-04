@@ -892,16 +892,16 @@ class Lir:
 
 class LirExecutor:
     def __init__(self) -> None: ...
-    def step(self, semantics: Any, state: Any) -> list[LirExecutorState]: ...
+    def step(self, lir: Any, state: Any) -> list[LirExecutorState]: ...
     def run(
         self,
-        semantics: Any,
+        lir: Any,
         state: Any,
         steps: int | None = None,
     ) -> list[LirExecutorState]: ...
     def run_with_hooks(
         self,
-        semantics: Any,
+        lir: Any,
         state: Any,
         steps: int | None = None,
     ) -> list[LirExecutorState]: ...

@@ -77,11 +77,11 @@ fn normalize_status_operation(operation: &Operation, context: &mlir::Context) {
 
 #[cfg(test)]
 mod tests {
-    use crate::irs::lir::{LirInstruction, LirMetadata, LirModule, LirStatus, LirTerminator};
+    use crate::irs::lir::{Lir, LirMetadata, LirModule, LirStatus, LirTerminator};
 
     #[test]
     fn normalize_status_rewrites_lir_instruction_status_attrs() {
-        let module = LirModule::from_instructions(vec![LirInstruction {
+        let module = LirModule::from_instructions(vec![Lir {
             version: 1,
             status: LirStatus::Complete,
             metadata: LirMetadata::default(),

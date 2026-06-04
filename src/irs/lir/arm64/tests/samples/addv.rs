@@ -29,11 +29,11 @@ pub(crate) const SAMPLES: &[Arm64Sample] = &[
 ];
 
 #[test]
-fn addv_semantics_regressions_stay_complete() {
+fn addv_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }
 
 #[test]
-fn addv_semantics_match_unicorn_transitions() {
+fn addv_lir_match_unicorn_transitions() {
     assert_conformance_cases(SAMPLES);
 }

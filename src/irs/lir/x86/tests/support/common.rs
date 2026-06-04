@@ -137,39 +137,38 @@ pub(crate) fn disassemble_x86_single(
         .expect("instruction should exist")
 }
 
-pub(crate) fn semantics(name: &str, architecture: Architecture, bytes: &[u8]) -> Lir {
+pub(crate) fn lir(name: &str, architecture: Architecture, bytes: &[u8]) -> Lir {
     disassemble_x86_single(name, architecture, bytes)
-        .build_semantics()
-        .expect("instruction should build semantics")
+        .build_lir()
+        .expect("instruction should build lir")
 }
 
-pub(crate) fn assert_semantics_status(
+pub(crate) fn assert_lir_status(
     name: &str,
     architecture: Architecture,
     bytes: &[u8],
     expected_status: LirStatus,
 ) {
-    let semantics = semantics(name, architecture, bytes);
+    let lir = lir(name, architecture, bytes);
     assert_eq!(
-        semantics.status,
+        lir.status,
         expected_status,
-        "{name}: expected {:?} semantics, got {:?} with diagnostics {:?}",
+        "{name}: expected {:?} lir, got {:?} with diagnostics {:?}",
         expected_status,
-        semantics.status,
-        semantics
-            .diagnostics
+        lir.status,
+        lir.diagnostics
             .iter()
             .map(|diagnostic| diagnostic.message.clone())
             .collect::<Vec<_>>()
     );
 }
 
-pub(crate) fn assert_i386_semantics_match_unicorn(name: &str, bytes: &[u8], fixture: I386Fixture) {
-    assert_x86_semantics_match_unicorn(name, Architecture::I386, bytes, fixture);
+pub(crate) fn assert_i386_lir_match_unicorn(name: &str, bytes: &[u8], fixture: I386Fixture) {
+    assert_x86_lir_match_unicorn(name, Architecture::I386, bytes, fixture);
 }
 
-pub(crate) fn assert_amd64_semantics_match_unicorn(name: &str, bytes: &[u8], fixture: I386Fixture) {
-    assert_x86_semantics_match_unicorn(name, Architecture::AMD64, bytes, fixture);
+pub(crate) fn assert_amd64_lir_match_unicorn(name: &str, bytes: &[u8], fixture: I386Fixture) {
+    assert_x86_lir_match_unicorn(name, Architecture::AMD64, bytes, fixture);
 }
 
 pub(crate) fn assert_i386_instruction_roundtrip_match_unicorn(
@@ -194,28 +193,27 @@ fn assert_x86_instruction_roundtrip_match_unicorn(
     bytes: &[u8],
     fixture: I386Fixture,
 ) {
-    assert_x86_semantics_match_unicorn(name, architecture, bytes, fixture);
+    assert_x86_lir_match_unicorn(name, architecture, bytes, fixture);
 }
 
 #[allow(dead_code)]
-pub(crate) fn assert_amd64_wide_semantics_match_unicorn(
+pub(crate) fn assert_amd64_wide_lir_match_unicorn(
     name: &str,
     bytes: &[u8],
     fixture: WideI386Fixture,
 ) {
-    assert_amd64_semantics_match_unicorn_wide_impl(name, bytes, fixture);
+    assert_amd64_lir_match_unicorn_wide_impl(name, bytes, fixture);
 }
 
-pub(crate) fn interpret_amd64_wide_semantics(
+pub(crate) fn interpret_amd64_wide_lir(
     name: &str,
     bytes: &[u8],
     fixture: WideI386Fixture,
 ) -> (BTreeMap<String, Vec<u8>>, X86Flags) {
-    let semantics = semantics(name, Architecture::AMD64, bytes);
-    let (written_registers, _) = written_state(&semantics);
+    let lir = lir(name, Architecture::AMD64, bytes);
+    let (written_registers, _) = written_state(&lir);
     let tracked_registers = tracked_registers_for_wide_fixture(&fixture, &written_registers);
-    let interpreted =
-        interpret_amd64_semantics_wide(bytes, &semantics, &fixture, &tracked_registers);
+    let interpreted = interpret_amd64_lir_wide(bytes, &lir, &fixture, &tracked_registers);
     let registers = interpreted
         .transition
         .post
@@ -230,24 +228,24 @@ pub(crate) fn interpret_amd64_wide_semantics(
     (registers, interpreted.transition.post.flags)
 }
 
-pub(crate) fn interpret_amd64_semantics(
+pub(crate) fn interpret_amd64_lir(
     name: &str,
     bytes: &[u8],
     fixture: I386Fixture,
 ) -> I386Transition {
-    let semantics = semantics(name, Architecture::AMD64, bytes);
-    interpret_i386_semantics(Architecture::AMD64, bytes, &semantics, fixture).transition
+    let lir = lir(name, Architecture::AMD64, bytes);
+    interpret_i386_lir(Architecture::AMD64, bytes, &lir, fixture).transition
 }
 
-fn assert_x86_semantics_match_unicorn(
+fn assert_x86_lir_match_unicorn(
     name: &str,
     architecture: Architecture,
     bytes: &[u8],
     fixture: I386Fixture,
 ) {
-    let semantics = semantics(name, architecture, bytes);
-    let interpreted = interpret_i386_semantics(architecture, bytes, &semantics, fixture.clone());
-    let instruction_count = if semantics.effects.iter().any(|effect| {
+    let lir = lir(name, architecture, bytes);
+    let interpreted = interpret_i386_lir(architecture, bytes, &lir, fixture.clone());
+    let instruction_count = if lir.effects.iter().any(|effect| {
         matches!(
             effect,
             LirEffect::MemorySet { .. } | LirEffect::MemoryCopy { .. }
@@ -269,15 +267,15 @@ fn assert_x86_semantics_match_unicorn(
 
     assert_eq!(
         unicorn.transition.pre, interpreted.transition.pre,
-        "{name}: semantics pre-state diverged from unicorn pre-state"
+        "{name}: lir pre-state diverged from unicorn pre-state"
     );
     assert_eq!(
         unicorn.transition.post.eip, interpreted.transition.post.eip,
-        "{name}: eip mismatch\nunicorn: {:#010x}\nsemantics: {:#010x}",
+        "{name}: eip mismatch\nunicorn: {:#010x}\nlir: {:#010x}",
         unicorn.transition.post.eip, interpreted.transition.post.eip
     );
 
-    let (written_registers, written_flags) = written_state(&semantics);
+    let (written_registers, written_flags) = written_state(&lir);
     for register in written_registers {
         let unicorn_value = unicorn
             .transition
@@ -295,7 +293,7 @@ fn assert_x86_semantics_match_unicorn(
             .unwrap_or_default();
         assert_eq!(
             unicorn_value, interpreted_value,
-            "{name}: register {register} mismatch\nunicorn: {:#x}\nsemantics: {:#x}",
+            "{name}: register {register} mismatch\nunicorn: {:#x}\nlir: {:#x}",
             unicorn_value, interpreted_value
         );
     }
@@ -304,7 +302,7 @@ fn assert_x86_semantics_match_unicorn(
         let interpreted_value = flag_value(&interpreted.transition.post.flags, &flag);
         assert_eq!(
             unicorn_value, interpreted_value,
-            "{name}: flag {flag} mismatch\nunicorn: {}\nsemantics: {}",
+            "{name}: flag {flag} mismatch\nunicorn: {}\nlir: {}",
             unicorn_value, interpreted_value
         );
     }
@@ -327,7 +325,7 @@ fn assert_x86_semantics_match_unicorn(
                 .unwrap_or_default();
             assert_eq!(
                 unicorn_value, interpreted_value,
-                "{name}: memory byte mismatch at 0x{byte_address:x}\nunicorn: {:#04x}\nsemantics: {:#04x}",
+                "{name}: memory byte mismatch at 0x{byte_address:x}\nunicorn: {:#04x}\nlir: {:#04x}",
                 unicorn_value, interpreted_value
             );
         }
@@ -335,25 +333,20 @@ fn assert_x86_semantics_match_unicorn(
 }
 
 #[allow(dead_code)]
-fn assert_amd64_semantics_match_unicorn_wide_impl(
-    name: &str,
-    bytes: &[u8],
-    fixture: WideI386Fixture,
-) {
-    let semantics = semantics(name, Architecture::AMD64, bytes);
-    let (written_registers, written_flags) = written_state(&semantics);
+fn assert_amd64_lir_match_unicorn_wide_impl(name: &str, bytes: &[u8], fixture: WideI386Fixture) {
+    let lir = lir(name, Architecture::AMD64, bytes);
+    let (written_registers, written_flags) = written_state(&lir);
     let tracked_registers = tracked_registers_for_wide_fixture(&fixture, &written_registers);
-    let interpreted =
-        interpret_amd64_semantics_wide(bytes, &semantics, &fixture, &tracked_registers);
+    let interpreted = interpret_amd64_lir_wide(bytes, &lir, &fixture, &tracked_registers);
     let unicorn = unicorn_amd64_single_instruction_wide(bytes, &fixture, &tracked_registers);
 
     assert_eq!(
         unicorn.transition.pre, interpreted.transition.pre,
-        "{name}: semantics pre-state diverged from unicorn pre-state"
+        "{name}: lir pre-state diverged from unicorn pre-state"
     );
     assert_eq!(
         unicorn.transition.post.eip, interpreted.transition.post.eip,
-        "{name}: eip mismatch\nunicorn: {:#010x}\nsemantics: {:#010x}",
+        "{name}: eip mismatch\nunicorn: {:#010x}\nlir: {:#010x}",
         unicorn.transition.post.eip, interpreted.transition.post.eip
     );
 
@@ -375,7 +368,7 @@ fn assert_amd64_semantics_match_unicorn_wide_impl(
         assert_eq!(
             unicorn_value,
             interpreted_value,
-            "{name}: register {register} mismatch\nunicorn: 0x{}\nsemantics: 0x{}",
+            "{name}: register {register} mismatch\nunicorn: 0x{}\nlir: 0x{}",
             unicorn_value.to_str_radix(16),
             interpreted_value.to_str_radix(16)
         );
@@ -385,7 +378,7 @@ fn assert_amd64_semantics_match_unicorn_wide_impl(
         let interpreted_value = flag_value(&interpreted.transition.post.flags, &flag);
         assert_eq!(
             unicorn_value, interpreted_value,
-            "{name}: flag {flag} mismatch\nunicorn: {}\nsemantics: {}",
+            "{name}: flag {flag} mismatch\nunicorn: {}\nlir: {}",
             unicorn_value, interpreted_value
         );
     }
@@ -416,10 +409,10 @@ fn tracked_registers_for_wide_fixture(
     tracked
 }
 
-fn interpret_i386_semantics(
+fn interpret_i386_lir(
     architecture: Architecture,
     bytes: &[u8],
-    semantics: &Lir,
+    lir: &Lir,
     fixture: I386Fixture,
 ) -> I386Execution {
     let mut registers = I386Register::all_for_arch(architecture)
@@ -456,7 +449,7 @@ fn interpret_i386_semantics(
     let mut flag_writes = Vec::<(String, u128)>::new();
     let mut memory_writes = Vec::<(u64, Vec<u8>)>::new();
     let mut temporaries = BTreeMap::<u32, u128>::new();
-    for effect in &semantics.effects {
+    for effect in &lir.effects {
         match effect {
             LirEffect::Set { dst, expression } => match dst {
                 LirLocation::Temporary { id, bits } => {
@@ -600,7 +593,7 @@ fn interpret_i386_semantics(
         Architecture::AMD64 => stable_register_name(I386Register::Rsp),
         _ => stable_register_name(I386Register::Esp),
     };
-    let post_eip = match &semantics.terminator {
+    let post_eip = match &lir.terminator {
         LirTerminator::FallThrough => I386_CODE_ADDRESS as u32 + bytes.len() as u32,
         LirTerminator::Return { expression } => match expression {
             Some(expr) if return_expression_encodes_target(expr) => {
@@ -643,14 +636,14 @@ fn interpret_i386_semantics(
     }
 }
 
-fn interpret_amd64_semantics_wide(
+fn interpret_amd64_lir_wide(
     bytes: &[u8],
-    semantics: &Lir,
+    lir: &Lir,
     fixture: &WideI386Fixture,
     tracked_registers: &[I386Register],
 ) -> I386ExecutionWide {
     assert_eq!(
-        semantics.terminator,
+        lir.terminator,
         LirTerminator::FallThrough,
         "wide conformance helper only supports fallthrough instructions"
     );
@@ -696,7 +689,7 @@ fn interpret_amd64_semantics_wide(
     let mut register_writes = Vec::<(String, BigUint)>::new();
     let mut flag_writes = Vec::<(String, BigUint)>::new();
     let mut temporaries = BTreeMap::<u32, BigUint>::new();
-    for effect in &semantics.effects {
+    for effect in &lir.effects {
         match effect {
             LirEffect::Set { dst, expression } => match dst {
                 LirLocation::Temporary { id, bits } => {
@@ -785,10 +778,10 @@ fn eval_expression_wide(
     match expression {
         LirExpression::Const { value, bits } => mask_to_bits_wide(BigUint::from(*value), *bits),
         LirExpression::Function { .. } => {
-            panic!("unsupported wide semantic function expression in x86 conformance")
+            panic!("unsupported wide lir function expression in x86 conformance")
         }
         LirExpression::DataAddress { .. } => {
-            panic!("unsupported wide semantic data_address expression in x86 conformance")
+            panic!("unsupported wide lir data_address expression in x86 conformance")
         }
         LirExpression::AddressOf { .. } => {
             panic!("unsupported wide address_of expression in x86 conformance")
@@ -967,10 +960,10 @@ fn eval_expression(
     match expression {
         LirExpression::Const { value, bits } => mask_to_bits(*value, *bits),
         LirExpression::Function { .. } => {
-            panic!("unsupported semantic function expression in x86 conformance")
+            panic!("unsupported lir function expression in x86 conformance")
         }
         LirExpression::DataAddress { .. } => {
-            panic!("unsupported semantic data_address expression in x86 conformance")
+            panic!("unsupported lir data_address expression in x86 conformance")
         }
         LirExpression::AddressOf { .. } => {
             panic!("unsupported address_of expression in x86 conformance")
@@ -1371,10 +1364,10 @@ fn byte_swap(value: u128, bits: u16) -> u128 {
     swapped
 }
 
-fn written_state(semantics: &Lir) -> (Vec<String>, Vec<String>) {
+fn written_state(lir: &Lir) -> (Vec<String>, Vec<String>) {
     let mut registers = Vec::new();
     let mut flags = Vec::new();
-    for effect in &semantics.effects {
+    for effect in &lir.effects {
         if let LirEffect::Set { dst, .. } = effect {
             match dst {
                 LirLocation::Register { name, .. } => {

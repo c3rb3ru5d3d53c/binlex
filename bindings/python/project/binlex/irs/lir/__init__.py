@@ -691,22 +691,22 @@ class LirExecutor:
         instance._inner = inner
         return instance
 
-    def step(self, semantics, state):
+    def step(self, lir, state):
         return [
             LirExecutorState._from_inner(item)
-            for item in self._inner.step(_unwrap(semantics), _unwrap(state))
+            for item in self._inner.step(_unwrap(lir), _unwrap(state))
         ]
 
-    def run(self, semantics, state, steps=None):
+    def run(self, lir, state, steps=None):
         return [
             LirExecutorState._from_inner(item)
-            for item in self._inner.run(_unwrap(semantics), _unwrap(state), steps)
+            for item in self._inner.run(_unwrap(lir), _unwrap(state), steps)
         ]
 
-    def run_with_hooks(self, semantics, state, steps=None):
+    def run_with_hooks(self, lir, state, steps=None):
         return [
             LirExecutorState._from_inner(item)
-            for item in self._inner.run_with_hooks(_unwrap(semantics), _unwrap(state), steps)
+            for item in self._inner.run_with_hooks(_unwrap(lir), _unwrap(state), steps)
         ]
 
     def __getattr__(self, name):

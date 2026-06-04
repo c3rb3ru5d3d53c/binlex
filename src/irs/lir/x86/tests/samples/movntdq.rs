@@ -14,7 +14,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::AMD64,
         bytes: &[0x66, 0x0f, 0xe7, 0x00],
         expected_status: Some(LirStatus::Complete),
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: None,
     },
     X86Sample {
@@ -23,7 +23,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::AMD64,
         bytes: &[0xc5, 0xf9, 0xe7, 0x00],
         expected_status: Some(LirStatus::Complete),
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: None,
     },
     X86Sample {
@@ -32,7 +32,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::AMD64,
         bytes: &[0x66, 0x0f, 0xe7, 0x00],
         expected_status: None,
-        semantics_fixture: Some(X86FixtureSpec {
+        lir_fixture: Some(X86FixtureSpec {
             registers: &[(I386Register::Rax, 0x3000), (I386Register::Xmm0, XMM0)],
             eflags: 1 << 1,
             memory: &[(0x3000, &[0; 16])],
@@ -42,11 +42,11 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
 ];
 
 #[test]
-fn movntdq_semantics_regressions_stay_complete() {
+fn movntdq_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }
 
 #[test]
-fn movntdq_semantics_match_unicorn_transitions() {
+fn movntdq_lir_match_unicorn_transitions() {
     assert_conformance_cases(SAMPLES);
 }

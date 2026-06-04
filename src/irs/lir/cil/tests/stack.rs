@@ -1,7 +1,7 @@
-use super::common::assert_complete_semantics;
+use super::common::assert_complete_lir;
 
 #[test]
-fn stack_semantics_regressions_stay_complete() {
+fn stack_lir_regressions_stay_complete() {
     let cases = [
         ("ldc.i4.0", vec![0x16]),
         ("ldc.i4.s", vec![0x1f, 0x7f]),
@@ -31,6 +31,6 @@ fn stack_semantics_regressions_stay_complete() {
     ];
 
     for (name, bytes) in cases {
-        assert_complete_semantics(name, &bytes);
+        assert_complete_lir(name, &bytes);
     }
 }

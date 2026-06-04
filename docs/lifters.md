@@ -1,6 +1,6 @@
 # Lifters
 
-Binlex lifters turn controlflow objects and semantics into other IR representations.
+Binlex lifters turn controlflow objects and lir into other IR representations.
 
 Today there are two built-in lifters:
 
@@ -269,4 +269,4 @@ enabled = true
 If you are using lifters, the next useful docs are:
 
 - [controlflow.md](./controlflow.md)
-- [semantics.md](./semantics.md)
+- [lir.md](./lir.md)

@@ -7,11 +7,11 @@ pub(crate) const SAMPLES: &[X86Sample] = &[X86Sample {
     architecture: Architecture::AMD64,
     bytes: &[0xc4, 0xe3, 0xf1, 0x6b, 0xc3, 0x20],
     expected_status: Some(LirStatus::Complete),
-    semantics_fixture: None,
+    lir_fixture: None,
     roundtrip_fixture: None,
 }];
 
 #[test]
-fn vfmaddsd_semantics_regressions_stay_complete() {
+fn vfmaddsd_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }

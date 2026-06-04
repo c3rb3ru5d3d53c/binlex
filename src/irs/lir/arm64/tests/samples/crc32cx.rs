@@ -9,6 +9,6 @@ pub(crate) const SAMPLES: &[Arm64Sample] = &[Arm64Sample {
 }];
 
 #[test]
-fn crc32cx_semantics_regressions_stay_complete() {
+fn crc32cx_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }

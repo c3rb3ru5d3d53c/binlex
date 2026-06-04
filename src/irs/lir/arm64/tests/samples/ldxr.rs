@@ -13,11 +13,11 @@ pub(crate) const SAMPLES: &[Arm64Sample] = &[Arm64Sample {
 }];
 
 #[test]
-fn ldxr_semantics_regressions_stay_complete() {
+fn ldxr_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }
 
 #[test]
-fn ldxr_semantics_match_unicorn_transitions() {
+fn ldxr_lir_match_unicorn_transitions() {
     assert_conformance_cases(SAMPLES);
 }

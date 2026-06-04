@@ -1,7 +1,7 @@
-use super::common::assert_complete_semantics;
+use super::common::assert_complete_lir;
 
 #[test]
-fn control_semantics_regressions_stay_complete() {
+fn control_lir_regressions_stay_complete() {
     let cases = [
         ("call", vec![0x28, 0x01, 0x00, 0x00, 0x0a]),
         ("calli", vec![0x29, 0x01, 0x00, 0x00, 0x11]),
@@ -22,6 +22,6 @@ fn control_semantics_regressions_stay_complete() {
     ];
 
     for (name, bytes) in cases {
-        assert_complete_semantics(name, &bytes);
+        assert_complete_lir(name, &bytes);
     }
 }

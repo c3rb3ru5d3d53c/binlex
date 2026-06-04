@@ -1,7 +1,7 @@
 use super::support::lift_instruction_to_llvm;
 
 #[test]
-fn arm64_semantics_lower_to_llvm() {
+fn arm64_lir_lower_to_llvm() {
     let cases = [
         ("adrp x0, #0", vec![0x00, 0x00, 0x00, 0x90]),
         ("ldrb w0, [x1]", vec![0x20, 0x00, 0x40, 0x39]),

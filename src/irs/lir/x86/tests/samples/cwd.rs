@@ -7,11 +7,11 @@ pub(crate) const SAMPLES: &[X86Sample] = &[X86Sample {
     architecture: Architecture::I386,
     bytes: &[0x66, 0x99],
     expected_status: Some(LirStatus::Complete),
-    semantics_fixture: None,
+    lir_fixture: None,
     roundtrip_fixture: None,
 }];
 
 #[test]
-fn cwd_semantics_regressions_stay_complete() {
+fn cwd_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }

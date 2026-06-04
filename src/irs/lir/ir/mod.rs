@@ -25,7 +25,7 @@ pub mod normalize;
 pub mod validate;
 
 pub use instruction::{
-    LirAddressSpace, LirBlock, LirData, LirDiagnostic, LirDiagnosticKind, LirEffect,
+    Lir, LirAddressSpace, LirBlock, LirData, LirDiagnostic, LirDiagnosticKind, LirEffect,
     LirEffectAtomicCmpXchg, LirEffectFence, LirEffectIntrinsic, LirEffectKind, LirEffectMemoryCopy,
     LirEffectMemorySet, LirEffectNop, LirEffectPop, LirEffectPush, LirEffectSet, LirEffectStore,
     LirEffectTrap, LirEffectWriteElement, LirEffectWriteProperty, LirEncoding, LirExpression,
@@ -34,14 +34,13 @@ pub use instruction::{
     LirExpressionExtract, LirExpressionFunction, LirExpressionIntrinsic, LirExpressionKind,
     LirExpressionLoad, LirExpressionNull, LirExpressionPoison, LirExpressionRead,
     LirExpressionReadElement, LirExpressionReadProperty, LirExpressionSelect, LirExpressionUnary,
-    LirExpressionUndefined, LirFenceKind, LirFunction, LirInstruction, LirLocation,
-    LirLocationFlag, LirLocationIndexedMemory, LirLocationKind, LirLocationMemory,
-    LirLocationProgramCounter, LirLocationRegister, LirLocationStackMemory, LirLocationTemporary,
-    LirMetadata, LirModule, LirOperation, LirOperationBinary, LirOperationCast,
-    LirOperationCompare, LirOperationUnary, LirStatus, LirTemporary, LirTerminator,
-    LirTerminatorBranch, LirTerminatorCall, LirTerminatorFallThrough, LirTerminatorJump,
-    LirTerminatorKind, LirTerminatorReturn, LirTerminatorTrap, LirTerminatorUnreachable,
-    LirTrapKind,
+    LirExpressionUndefined, LirFenceKind, LirFunction, LirLocation, LirLocationFlag,
+    LirLocationIndexedMemory, LirLocationKind, LirLocationMemory, LirLocationProgramCounter,
+    LirLocationRegister, LirLocationStackMemory, LirLocationTemporary, LirMetadata, LirModule,
+    LirOperation, LirOperationBinary, LirOperationCast, LirOperationCompare, LirOperationUnary,
+    LirStatus, LirTemporary, LirTerminator, LirTerminatorBranch, LirTerminatorCall,
+    LirTerminatorFallThrough, LirTerminatorJump, LirTerminatorKind, LirTerminatorReturn,
+    LirTerminatorTrap, LirTerminatorUnreachable, LirTrapKind,
 };
 pub use normalize::normalize_instruction_lir;
 pub use validate::validate_instruction_lir;

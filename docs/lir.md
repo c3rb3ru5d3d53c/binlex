@@ -1,9 +1,9 @@
 # LirModule
 
-Binlex semantics are the canonical instruction-meaning layer used between disassembly and lifting.
+Binlex lir are the canonical instruction-meaning layer used between disassembly and lifting.
 
 They are intended to be useful outside Binlex’s built-in disassemblers too. You can construct
-semantics directly in Rust or Python and use them for your own:
+lir directly in Rust or Python and use them for your own:
 
 - analysis pipelines
 - normalization/canonicalization
@@ -96,11 +96,11 @@ Use `Partial` when you can describe some of the instruction but not all of it. A
 unsupported or architecture-specific cases without inventing false precision.
 
 Use `Partial` for intrinsic-backed placeholders when the intrinsic is carrying architectural detail
-that is not yet modeled directly in the semantics IR.
+that is not yet modeled directly in the lir IR.
 
 ## Rust Usage
 
-Import the semantics types from `binlex::ir::lir`:
+Import the lir types from `binlex::ir::lir`:
 
 ```rust
 use binlex::ir::lir::{
@@ -127,7 +127,7 @@ use binlex::ir::lir::{
     LirTerminator,
 };
 
-let semantics = Lir {
+let lir = Lir {
     version: 1,
     status: LirStatus::Complete,
     temporaries: Vec::new(),
@@ -171,7 +171,7 @@ use binlex::ir::lir::{
     LirTerminator,
 };
 
-let semantics = Lir {
+let lir = Lir {
     version: 1,
     status: LirStatus::Complete,
     temporaries: Vec::new(),
@@ -194,7 +194,7 @@ let semantics = Lir {
 };
 ```
 
-### Example: partial semantics
+### Example: partial lir
 
 ```rust
 use binlex::ir::lir::{
@@ -205,7 +205,7 @@ use binlex::ir::lir::{
     LirTerminator,
 };
 
-let semantics = Lir {
+let lir = Lir {
     version: 1,
     status: LirStatus::Partial,
     temporaries: Vec::new(),
@@ -220,12 +220,12 @@ let semantics = Lir {
 };
 ```
 
-### Serializing semantics
+### Serializing lir
 
 LirModule serialize cleanly with Serde:
 
 ```rust
-let json = serde_json::to_string_pretty(&semantics.process())?;
+let json = serde_json::to_string_pretty(&lir.process())?;
 println!("{}", json);
 ```
 
@@ -272,7 +272,7 @@ expr = LirExpression.binary(
     32,
 )
 
-semantics = Lir(
+lir = Lir(
     1,
     LirStatus.Complete,
     effects=[
@@ -282,7 +282,7 @@ semantics = Lir(
 )
 ```
 
-### Example: partial semantics with diagnostics
+### Example: partial lir with diagnostics
 
 ```python
 from binlex.irs.lir import (
@@ -293,7 +293,7 @@ from binlex.irs.lir import (
     LirTerminator,
 )
 
-semantics = Lir(
+lir = Lir(
     1,
     LirStatus.Partial,
     diagnostics=[
@@ -309,8 +309,8 @@ semantics = Lir(
 ### Example: inspect
 
 ```python
-print(semantics.text())
-bytecode = semantics.bytecode()
+print(lir.text())
+bytecode = lir.bytecode()
 round_tripped = Lir.from_bytecode(bytecode)
 ```
 
@@ -351,7 +351,7 @@ The Python bindings also expose constructors for the lower-level pieces:
 
 ## Using LirModule From Disassembly
 
-Binlex semantics are enabled by default during disassembly.
+Binlex lir are enabled by default during disassembly.
 
 Rust:
 
@@ -377,13 +377,13 @@ disassembler.disassemble(pe.entrypoint_virtual_addresses(), &mut graph)?;
 for function in graph.functions() {
     for block in function.blocks.values() {
         for instruction in block.instructions() {
-            if let Some(semantics) = instruction.semantics.as_ref() {
+            if let Some(lir) = instruction.lir.as_ref() {
                 println!(
                     "0x{:x}: status={:?} effects={} terminator={:?}",
                     instruction.address(),
-                    semantics.status,
-                    semantics.effects.len(),
-                    semantics.terminator.kind(),
+                    lir.status,
+                    lir.effects.len(),
+                    lir.terminator.kind(),
                 );
             }
         }
@@ -418,30 +418,30 @@ disassembler.disassemble(pe.entrypoint_virtual_addresses(), graph)
 for function in graph.functions():
     for block in function.blocks():
         for instruction in block.instructions():
-            semantics = instruction.semantic()
-            if semantics is None:
+            lir = instruction.lir()
+            if lir is None:
                 continue
             print(
                 hex(instruction.address()),
-                semantics.status(),
-                len(semantics.effects()),
-                semantics.terminator().kind(),
+                lir.status(),
+                len(lir.effects()),
+                lir.terminator().kind(),
             )
 ```
 
-Disassembly does not eagerly collect LIR. Semantics are built on demand from the
+Disassembly does not eagerly collect LIR. Lir are built on demand from the
 decoded instruction detail when an accessor, lifter, symbolic executor, or decompiler
 asks for them.
 
 ## Recommended Usage
 
-If you are building on top of Binlex semantics:
+If you are building on top of Binlex lir:
 
 - treat `Lir` as your canonical source IR
 - use `Partial` plus diagnostics when you cannot model everything
 - keep architecture-specific details in intrinsics or diagnostics instead of forcing them into
   inaccurate generic forms
 - serialize with JSON when you need transport or persistence
-- lower from semantics into your own IR rather than re-decoding raw bytes again
+- lower from lir into your own IR rather than re-decoding raw bytes again
 
 That is the intended extension point.

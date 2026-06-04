@@ -1,1 +1,1 @@
-pub(crate) use super::common::assert_semantics_status;
+pub(crate) use super::common::assert_lir_status;

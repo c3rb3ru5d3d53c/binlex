@@ -1,16 +1,16 @@
 use crate::irs::lir::{Lir, LirEffect, LirExpression, LirLocation, LirTerminator};
 
-pub fn normalize_instruction_lir(semantics: &Lir) -> Lir {
+pub fn normalize_instruction_lir(lir: &Lir) -> Lir {
     Lir {
-        version: semantics.version,
-        status: semantics.status,
+        version: lir.version,
+        status: lir.status,
         metadata: Default::default(),
-        abi: semantics.abi.clone(),
-        encoding: semantics.encoding.clone(),
-        temporaries: semantics.temporaries.clone(),
-        effects: semantics.effects.iter().map(normalize_effect).collect(),
-        terminator: normalize_terminator(&semantics.terminator),
-        diagnostics: semantics.diagnostics.clone(),
+        abi: lir.abi.clone(),
+        encoding: lir.encoding.clone(),
+        temporaries: lir.temporaries.clone(),
+        effects: lir.effects.iter().map(normalize_effect).collect(),
+        terminator: normalize_terminator(&lir.terminator),
+        diagnostics: lir.diagnostics.clone(),
     }
 }
 

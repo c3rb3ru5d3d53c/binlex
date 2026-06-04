@@ -1,9 +1,9 @@
 use crate::irs::lir::{
-    LirAddressSpace, LirBlock, LirData, LirDiagnostic, LirEffect, LirEncoding, LirExpression,
-    LirFenceKind, LirFunction, LirInstruction, LirModule, LirTerminator, LirTrapKind,
+    Lir, LirAddressSpace, LirBlock, LirData, LirDiagnostic, LirEffect, LirEncoding, LirExpression,
+    LirFenceKind, LirFunction, LirModule, LirTerminator, LirTrapKind,
 };
 
-pub fn format_lir_instruction(lir: &LirInstruction) -> String {
+pub fn format_lir_instruction(lir: &Lir) -> String {
     let context = crate::irs::mlir::context();
     lir_instruction_operation(&context, lir)
         .and_then(|op| op.to_string())
@@ -32,10 +32,7 @@ pub fn format_lir_module(module: &LirModule) -> String {
         .unwrap_or_else(|error| format!("// mlir print failed: {error}"))
 }
 
-fn lir_instruction_operation(
-    context: &mlir::Context,
-    lir: &LirInstruction,
-) -> mlir::Result<mlir::Operation> {
+fn lir_instruction_operation(context: &mlir::Context, lir: &Lir) -> mlir::Result<mlir::Operation> {
     let mut attrs = Vec::new();
     attrs.push(crate::irs::mlir::integer_attr(
         context,

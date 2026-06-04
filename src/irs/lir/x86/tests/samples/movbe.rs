@@ -8,7 +8,7 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::I386,
         bytes: &[0x0f, 0x38, 0xf0, 0x00],
         expected_status: Some(LirStatus::Complete),
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: None,
     },
     X86Sample {
@@ -17,12 +17,12 @@ pub(crate) const SAMPLES: &[X86Sample] = &[
         architecture: Architecture::I386,
         bytes: &[0x0f, 0x38, 0xf1, 0x18],
         expected_status: Some(LirStatus::Complete),
-        semantics_fixture: None,
+        lir_fixture: None,
         roundtrip_fixture: None,
     },
 ];
 
 #[test]
-fn movbe_semantics_regressions_stay_complete() {
+fn movbe_lir_regressions_stay_complete() {
     assert_sample_statuses(SAMPLES);
 }
