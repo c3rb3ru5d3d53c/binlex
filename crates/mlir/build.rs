@@ -19,15 +19,10 @@ fn main() {
 
     if target_env_is("gnu") && !target_os_is("macos") {
         println!("cargo:rustc-link-arg=-Wl,--exclude-libs,ALL");
-        println!("cargo:rustc-link-arg=-Wl,--start-group");
     }
 
     let install = ensure_mlir_install();
     emit_linking(&install);
-
-    if target_env_is("gnu") && !target_os_is("macos") {
-        println!("cargo:rustc-link-arg=-Wl,--end-group");
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -73,63 +68,33 @@ fn load_llvm_install(llvm_config_path: PathBuf) -> LlvmInstall {
 fn emit_linking(install: &LlvmInstall) {
     let libdir = install.libdir.trim();
     println!("cargo:rustc-link-search=native={libdir}");
-    emit_mlir_static_libs(Path::new(libdir));
-    emit_llvm_static_libs(install);
+    emit_runtime_search_path(libdir);
+    emit_mlir_dynamic_libs(Path::new(libdir));
+    emit_llvm_dynamic_libs(install);
     emit_system_libs(install);
     if let Some(cpp_stdlib) = cpp_stdlib() {
         println!("cargo:rustc-link-lib=dylib={cpp_stdlib}");
     }
 }
 
-fn emit_mlir_static_libs(libdir: &Path) {
-    let mut capi_libs = Vec::new();
-    let mut core_libs = Vec::new();
-
-    let entries = std::fs::read_dir(libdir).unwrap_or_else(|error| {
-        panic!("failed to read MLIR libdir {}: {}", libdir.display(), error)
-    });
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let Some(name) = path.file_name().and_then(|item| item.to_str()) else {
-            continue;
-        };
-        if !is_static_mlir_library_name(name) {
-            continue;
-        }
-        let normalized = normalize_library_name(name);
-        if normalized.starts_with("MLIRCAPI") {
-            capi_libs.push(normalized);
-        } else {
-            core_libs.push(normalized);
-        }
-    }
-
-    capi_libs.sort();
-    capi_libs.dedup();
-    core_libs.sort();
-    core_libs.dedup();
-
-    if capi_libs.is_empty() {
+fn emit_mlir_dynamic_libs(libdir: &Path) {
+    if !libdir.join(dynamic_library_filename("MLIR-C")).exists() {
         panic!(
-            "no static MLIR C API archives were found in {}",
+            "no dynamic MLIR C API library was found in {}",
             libdir.display()
         );
     }
-
-    for lib in capi_libs.into_iter().chain(core_libs) {
-        println!("cargo:rustc-link-lib=static={lib}");
-    }
+    println!("cargo:rustc-link-lib=dylib=MLIR-C");
 }
 
-fn emit_llvm_static_libs(install: &LlvmInstall) {
+fn emit_llvm_dynamic_libs(install: &LlvmInstall) {
     for lib in shell_words(&llvm_config(
         &install.llvm_config,
-        &["--libnames", "--link-static", "all"],
+        &["--libnames", "--link-shared", "all"],
     )) {
-        if is_static_library_name(&lib) {
+        if is_library_name(&lib) {
             println!(
-                "cargo:rustc-link-lib=static={}",
+                "cargo:rustc-link-lib=dylib={}",
                 normalize_library_name(&lib)
             );
         }
@@ -139,7 +104,7 @@ fn emit_llvm_static_libs(install: &LlvmInstall) {
 fn emit_system_libs(install: &LlvmInstall) {
     for lib in shell_words(&llvm_config(
         &install.llvm_config,
-        &["--system-libs", "--link-static"],
+        &["--system-libs", "--link-shared"],
     )) {
         emit_system_lib(install, &lib);
     }
@@ -219,8 +184,9 @@ fn bootstrap_static_mlir(install_prefix: &Path) {
                 install_prefix.display()
             ))
             .arg("-DBUILD_SHARED_LIBS=OFF")
-            .arg("-DLLVM_BUILD_LLVM_DYLIB=OFF")
-            .arg("-DLLVM_LINK_LLVM_DYLIB=OFF")
+            .arg("-DLLVM_BUILD_LLVM_DYLIB=ON")
+            .arg("-DLLVM_LINK_LLVM_DYLIB=ON")
+            .arg("-DLLVM_DYLIB_COMPONENTS=all")
             .arg("-DLLVM_TARGETS_TO_BUILD=X86;AArch64")
             .arg("-DLLVM_INCLUDE_TESTS=OFF")
             .arg("-DLLVM_INCLUDE_BENCHMARKS=OFF")
@@ -233,7 +199,7 @@ fn bootstrap_static_mlir(install_prefix: &Path) {
             .arg("-DLLVM_ENABLE_ZSTD=OFF")
             .arg("-DLLVM_ENABLE_ZLIB=OFF")
             .arg("-DLLVM_ENABLE_PROJECTS=mlir")
-            .arg("-DMLIR_BUILD_MLIR_C_DYLIB=OFF")
+            .arg("-DMLIR_BUILD_MLIR_C_DYLIB=ON")
             .arg("-DMLIR_INCLUDE_TESTS=OFF")
             .arg("-DMLIR_INCLUDE_INTEGRATION_TESTS=OFF")
             .arg("-DMLIR_INCLUDE_DOCS=OFF")
@@ -293,19 +259,17 @@ fn mlir_install_ready(install_prefix: &Path) -> bool {
             .exists()
         && install_prefix
             .join("lib")
-            .join(static_library_filename("MLIRCAPIIR"))
-            .exists()
-        && install_prefix
-            .join("lib")
-            .join(static_library_filename("MLIRCAPIRegisterEverything"))
+            .join(dynamic_library_filename("MLIR-C"))
             .exists()
 }
 
-fn static_library_filename(name: &str) -> String {
+fn dynamic_library_filename(name: &str) -> String {
     if target_env_is("msvc") {
-        format!("{name}.lib")
+        format!("{name}.dll")
+    } else if target_os_is("macos") {
+        format!("lib{name}.dylib")
     } else {
-        format!("lib{name}.a")
+        format!("lib{name}.so")
     }
 }
 
@@ -350,6 +314,8 @@ fn normalize_library_name(path_or_flag: &str) -> String {
         .unwrap_or(path_or_flag);
     let name = name.strip_prefix("lib").unwrap_or(name);
     let name = name.strip_suffix(".a").unwrap_or(name);
+    let name = name.strip_suffix(".dylib").unwrap_or(name);
+    let name = name.split(".so").next().unwrap_or(name);
     let name = name.strip_suffix(".lib").unwrap_or(name);
     name.to_string()
 }
@@ -403,16 +369,23 @@ fn emit_external_system_search_paths(install: &LlvmInstall, name: &str) {
     }
 }
 
-fn is_static_mlir_library_name(value: &str) -> bool {
-    if target_env_is("msvc") {
-        value.starts_with("MLIR") && value.ends_with(".lib")
-    } else {
-        value.starts_with("libMLIR") && value.ends_with(".a")
-    }
-}
-
 fn is_static_library_name(value: &str) -> bool {
     value.ends_with(".a") || (target_env_is("msvc") && value.ends_with(".lib"))
+}
+
+fn is_library_name(value: &str) -> bool {
+    value.ends_with(".a")
+        || value.ends_with(".dylib")
+        || value.contains(".so")
+        || (target_env_is("msvc") && value.ends_with(".lib"))
+}
+
+fn emit_runtime_search_path(path: &str) {
+    if target_os_is("macos") {
+        println!("cargo:rustc-link-arg=-Wl,-rpath,{path}");
+    } else if !target_env_is("msvc") {
+        println!("cargo:rustc-link-arg=-Wl,-rpath,{path}");
+    }
 }
 
 fn cpp_stdlib() -> Option<&'static str> {
