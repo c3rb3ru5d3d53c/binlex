@@ -14,6 +14,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=BINLEX_LLVM_PARALLEL_JOBS");
     println!("cargo:rerun-if-env-changed=BINLEX_LLVM_PARALLEL_COMPILE_JOBS");
     println!("cargo:rerun-if-env-changed=BINLEX_LLVM_PARALLEL_LINK_JOBS");
+    println!("cargo:rerun-if-env-changed=BINLEX_LLVM_PARALLEL_TABLEGEN_JOBS");
     println!("cargo:rerun-if-env-changed=CMAKE_BUILD_PARALLEL_LEVEL");
     println!("cargo:rerun-if-env-changed=NUM_JOBS");
 
@@ -169,6 +170,7 @@ fn bootstrap_static_mlir(install_prefix: &Path) {
 
         let compile_jobs = llvm_parallel_compile_jobs();
         let link_jobs = llvm_parallel_link_jobs();
+        let tablegen_jobs = llvm_parallel_tablegen_jobs();
 
         let mut configure = Command::new("cmake");
         configure
@@ -207,6 +209,7 @@ fn bootstrap_static_mlir(install_prefix: &Path) {
             .arg("-DMLIR_ENABLE_BINDINGS_PYTHON=OFF")
             .arg(format!("-DLLVM_PARALLEL_COMPILE_JOBS={compile_jobs}"))
             .arg(format!("-DLLVM_PARALLEL_LINK_JOBS={link_jobs}"))
+            .arg(format!("-DLLVM_PARALLEL_TABLEGEN_JOBS={tablegen_jobs}"))
             .arg("-DCMAKE_SKIP_INSTALL_RPATH=ON")
             .arg("-DCMAKE_SKIP_RPATH=ON");
         configure_bootstrap_compilers(&mut configure);
@@ -466,6 +469,10 @@ fn llvm_parallel_compile_jobs() -> usize {
 
 fn llvm_parallel_link_jobs() -> usize {
     env_usize("BINLEX_LLVM_PARALLEL_LINK_JOBS").unwrap_or(1)
+}
+
+fn llvm_parallel_tablegen_jobs() -> usize {
+    env_usize("BINLEX_LLVM_PARALLEL_TABLEGEN_JOBS").unwrap_or(1)
 }
 
 fn default_llvm_parallel_jobs() -> usize {
