@@ -377,7 +377,7 @@ fn default_llvm_parallel_jobs() -> usize {
     std::thread::available_parallelism()
         .map(usize::from)
         .unwrap_or(1)
-        .min(2)
+        .min(4)
 }
 
 fn env_usize(name: &str) -> Option<usize> {
