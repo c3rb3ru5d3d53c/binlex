@@ -25,11 +25,6 @@ const STATIC_COMPONENTS: &[&str] = &[
 fn main() {
     println!("cargo:rerun-if-changed=native/assembler.cpp");
     println!("cargo:rerun-if-changed=native/assembler.hpp");
-    println!("cargo:rerun-if-env-changed=BINLEX_LLVM_PARALLEL_JOBS");
-    println!("cargo:rerun-if-env-changed=BINLEX_LLVM_PARALLEL_COMPILE_JOBS");
-    println!("cargo:rerun-if-env-changed=BINLEX_LLVM_PARALLEL_LINK_JOBS");
-    println!("cargo:rerun-if-env-changed=CMAKE_BUILD_PARALLEL_LEVEL");
-    println!("cargo:rerun-if-env-changed=NUM_JOBS");
     if target_env_is("gnu") && !target_os_is("macos") {
         println!("cargo:rustc-link-arg=-Wl,--exclude-libs,ALL");
     }
@@ -134,9 +129,6 @@ fn bootstrap_shared_llvm(install_prefix: &Path) {
         std::fs::create_dir_all(&build_dir).expect("create llvm build dir");
         std::fs::create_dir_all(install_prefix).expect("create llvm install dir");
 
-        let compile_jobs = llvm_parallel_compile_jobs();
-        let link_jobs = llvm_parallel_link_jobs();
-
         let mut configure = Command::new("cmake");
         configure
             .arg("-S")
@@ -165,8 +157,6 @@ fn bootstrap_shared_llvm(install_prefix: &Path) {
             .arg("-DLLVM_ENABLE_LIBEDIT=OFF")
             .arg("-DLLVM_ENABLE_ZSTD=OFF")
             .arg("-DLLVM_ENABLE_ZLIB=OFF")
-            .arg(format!("-DLLVM_PARALLEL_COMPILE_JOBS={compile_jobs}"))
-            .arg(format!("-DLLVM_PARALLEL_LINK_JOBS={link_jobs}"))
             .arg("-DCMAKE_SKIP_INSTALL_RPATH=ON")
             .arg("-DCMAKE_SKIP_RPATH=ON");
         configure_bootstrap_compilers(&mut configure);
@@ -358,33 +348,9 @@ fn env_llvm_config_path() -> Option<PathBuf> {
 }
 
 fn parallel_jobs() -> usize {
-    env_usize("CMAKE_BUILD_PARALLEL_LEVEL")
-        .or_else(|| env_usize("NUM_JOBS"))
-        .unwrap_or_else(default_llvm_parallel_jobs)
-}
-
-fn llvm_parallel_compile_jobs() -> usize {
-    env_usize("BINLEX_LLVM_PARALLEL_COMPILE_JOBS")
-        .or_else(|| env_usize("BINLEX_LLVM_PARALLEL_JOBS"))
-        .unwrap_or_else(default_llvm_parallel_jobs)
-}
-
-fn llvm_parallel_link_jobs() -> usize {
-    env_usize("BINLEX_LLVM_PARALLEL_LINK_JOBS").unwrap_or(1)
-}
-
-fn default_llvm_parallel_jobs() -> usize {
     std::thread::available_parallelism()
         .map(usize::from)
         .unwrap_or(1)
-        .min(4)
-}
-
-fn env_usize(name: &str) -> Option<usize> {
-    std::env::var(name)
-        .ok()
-        .and_then(|value| value.parse::<usize>().ok())
-        .filter(|value| *value > 0)
 }
 
 fn shell_words(value: &str) -> Vec<String> {
