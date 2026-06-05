@@ -55,9 +55,9 @@ struct LlvmInstall {
     cxxflags: String,
 }
 
-fn ensure_llvm() -> LlvmInstall {
+fn ensure_static_llvm() -> LlvmInstall {
     if let Some(llvm_config_path) = env_llvm_config_path() {
-        if supports_dynamic(&llvm_config_path) {
+        if supports_static(&llvm_config_path) {
             return load_llvm_install(llvm_config_path);
         }
     }
@@ -67,9 +67,9 @@ fn ensure_llvm() -> LlvmInstall {
     if !llvm_install_ready(&install_prefix) {
         bootstrap_shared_llvm(&install_prefix);
     }
-    if !supports_dynamic(&llvm_config_path) {
+    if !supports_static(&llvm_config_path) {
         panic!(
-            "llvm build completed but {} does not provide the required dylib",
+            "static llvm build completed but {} does not provide the required archives",
             llvm_config_path.display()
         );
     }
@@ -78,7 +78,7 @@ fn ensure_llvm() -> LlvmInstall {
 }
 
 fn load_shared_llvm() -> LlvmInstall {
-    ensure_llvm()
+    ensure_static_llvm()
 }
 
 fn bootstrap_shared_llvm(install_prefix: &Path) {
@@ -151,9 +151,8 @@ fn bootstrap_shared_llvm(install_prefix: &Path) {
                 install_prefix.display()
             ))
             .arg("-DBUILD_SHARED_LIBS=OFF")
-            .arg("-DLLVM_BUILD_LLVM_DYLIB=ON")
-            .arg("-DLLVM_LINK_LLVM_DYLIB=ON")
-            .arg("-DLLVM_DYLIB_COMPONENTS=all")
+            .arg("-DLLVM_BUILD_LLVM_DYLIB=OFF")
+            .arg("-DLLVM_LINK_LLVM_DYLIB=OFF")
             .arg("-DLLVM_TARGETS_TO_BUILD=X86;AArch64")
             .arg("-DLLVM_INCLUDE_TESTS=OFF")
             .arg("-DLLVM_INCLUDE_BENCHMARKS=OFF")
@@ -264,22 +263,25 @@ fn llvm_include_dirs(llvm: &LlvmInstall) -> Vec<PathBuf> {
 }
 
 fn link_static_llvm(llvm: &LlvmInstall) {
-    let mut args = vec!["--libnames", "--link-shared"];
+    let mut args = vec!["--libnames", "--link-static"];
     args.extend(STATIC_COMPONENTS);
-    let libnames = llvm_config_checked(&llvm.llvm_config, &args, "llvm dylib missing for llvm-asm");
+    let libnames = llvm_config_checked(
+        &llvm.llvm_config,
+        &args,
+        "static llvm archives missing for llvm-asm",
+    );
     println!("cargo:rustc-link-search=native={}", llvm.libdir.trim());
-    emit_runtime_search_path(llvm.libdir.trim());
     for lib in shell_words(&libnames) {
-        if is_library_name(&lib) {
+        if is_static_library_name(&lib) {
             println!(
-                "cargo:rustc-link-lib=dylib={}",
+                "cargo:rustc-link-lib=static={}",
                 normalize_library_name(&lib)
             );
         }
     }
     for lib in shell_words(&llvm_config(
         &llvm.llvm_config,
-        &["--system-libs", "--link-shared"],
+        &["--system-libs", "--link-static"],
     )) {
         emit_system_lib(llvm, &lib);
     }
@@ -294,8 +296,8 @@ fn load_llvm_install(llvm_config_path: PathBuf) -> LlvmInstall {
     }
 }
 
-fn supports_dynamic(llvm_config_path: &Path) -> bool {
-    let mut args = vec!["--libnames", "--link-shared"];
+fn supports_static(llvm_config_path: &Path) -> bool {
+    let mut args = vec!["--libnames", "--link-static"];
     args.extend(STATIC_COMPONENTS);
     llvm_config_try(llvm_config_path, &args).is_ok()
 }
@@ -348,20 +350,6 @@ fn llvm_install_ready(install_prefix: &Path) -> bool {
             .join("llvm-c")
             .join("Target.h")
             .exists()
-        && install_prefix
-            .join("lib")
-            .join(dynamic_library_filename("LLVM"))
-            .exists()
-}
-
-fn dynamic_library_filename(name: &str) -> String {
-    if target_env_is("msvc") {
-        format!("{name}.dll")
-    } else if target_os_is("macos") {
-        format!("lib{name}.dylib")
-    } else {
-        format!("lib{name}.so")
-    }
 }
 
 fn env_llvm_config_path() -> Option<PathBuf> {
@@ -415,8 +403,6 @@ fn normalize_library_name(path_or_flag: &str) -> String {
         .unwrap_or(path_or_flag);
     let name = name.strip_prefix("lib").unwrap_or(name);
     let name = name.strip_suffix(".a").unwrap_or(name);
-    let name = name.strip_suffix(".dylib").unwrap_or(name);
-    let name = name.split(".so").next().unwrap_or(name);
     let name = name.strip_suffix(".lib").unwrap_or(name);
     name.to_string()
 }
@@ -470,24 +456,9 @@ fn emit_external_system_search_paths(llvm: &LlvmInstall, name: &str) {
     }
 }
 
-fn is_library_name(value: &str) -> bool {
-    value.ends_with(".a")
-        || value.ends_with(".dylib")
-        || value.contains(".so")
-        || (target_env_is("msvc") && value.ends_with(".lib") && value.starts_with("LLVM"))
-}
-
 fn is_static_library_name(value: &str) -> bool {
     value.ends_with(".a")
         || (target_env_is("msvc") && value.ends_with(".lib") && value.starts_with("LLVM"))
-}
-
-fn emit_runtime_search_path(path: &str) {
-    if target_os_is("macos") {
-        println!("cargo:rustc-link-arg=-Wl,-rpath,{path}");
-    } else if !target_env_is("msvc") {
-        println!("cargo:rustc-link-arg=-Wl,-rpath,{path}");
-    }
 }
 
 fn cpp_stdlib() -> Option<&'static str> {
