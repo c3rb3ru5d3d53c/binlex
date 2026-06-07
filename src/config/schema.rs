@@ -32,91 +32,28 @@ pub struct ConfigFileRoot {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigInstructions {
-    pub enabled: bool,
-    #[serde(default)]
-    pub lifters: ConfigEntityLifters,
-    #[serde(default)]
-    pub embeddings: ConfigEntityEmbeddings,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigBlocks {
-    pub enabled: bool,
-    pub sha256: ConfigHashEnabled,
-    pub ssdeep: ConfigHashEnabled,
     pub tlsh: ConfigTLSH,
     pub minhash: ConfigMinhash,
-    pub entropy: ConfigHeuristicEntropy,
-    #[serde(default)]
-    pub lifters: ConfigEntityLifters,
-    #[serde(default)]
-    pub embeddings: ConfigEntityEmbeddings,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigChromosomes {
-    pub mask: ConfigHashEnabled,
-    pub masked: ConfigHashEnabled,
-    pub sha256: ConfigHashEnabled,
-    pub ssdeep: ConfigHashEnabled,
     pub tlsh: ConfigTLSH,
     pub minhash: ConfigMinhash,
-    pub vector: ConfigHeuristicFeatures,
-    pub entropy: ConfigHeuristicEntropy,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigFunctions {
-    pub enabled: bool,
-    pub sha256: ConfigHashEnabled,
-    pub ssdeep: ConfigHashEnabled,
     pub tlsh: ConfigTLSH,
     pub minhash: ConfigMinhash,
-    pub entropy: ConfigHeuristicEntropy,
     #[serde(default)]
     pub markov: ConfigMarkov,
-    #[serde(default)]
-    pub lifters: ConfigEntityLifters,
-    #[serde(default)]
-    pub embeddings: ConfigEntityEmbeddings,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigEntityEmbeddings {
-    #[serde(default)]
-    pub llvm: ConfigEntityEmbeddingsLLVM,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigEntityEmbeddingsLLVM {
-    pub enabled: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigEntityLifters {
-    #[serde(default)]
-    pub llvm: ConfigEntityLifterLLVM,
-    #[serde(default)]
-    pub vex: ConfigEntityLifterVex,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigEntityLifterLLVM {
-    pub enabled: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigEntityLifterVex {
-    pub enabled: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigFile {
-    pub sha256: ConfigHashEnabled,
-    pub ssdeep: ConfigHashEnabled,
     pub tlsh: ConfigTLSH,
-    pub entropy: ConfigHeuristicEntropy,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -145,14 +82,6 @@ pub struct ConfigImagingMinhash {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigLifters {
-    #[serde(default)]
-    pub llvm: ConfigLiftersLLVM,
-    #[serde(default)]
-    pub vex: ConfigLiftersVex,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigEmbeddings {
     #[serde(default)]
     pub llvm: ConfigEmbeddingsLLVM,
@@ -165,7 +94,13 @@ pub struct ConfigEmbeddingsLLVM {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigLiftersLLVM {
+pub struct ConfigIrs {
+    #[serde(default)]
+    pub llvm: ConfigIrsLLVM,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ConfigIrsLLVM {
     pub module_name: String,
     pub verify: bool,
     #[serde(default)]
@@ -173,29 +108,18 @@ pub struct ConfigLiftersLLVM {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigLiftersVex {
-    pub enabled: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigData {
     pub threads: usize,
-    pub minimal: bool,
     pub debug: bool,
-    #[serde(default)]
-    pub index: ConfigIndex,
     pub formats: ConfigFormats,
     pub imaging: ConfigImaging,
-    pub instructions: ConfigInstructions,
     pub blocks: ConfigBlocks,
     pub functions: ConfigFunctions,
     pub chromosomes: ConfigChromosomes,
     pub mmap: ConfigMmap,
     pub disassembler: ConfigDisassembler,
     #[serde(default)]
-    pub decompiler: ConfigDecompiler,
-    #[serde(default)]
-    pub lifters: ConfigLifters,
+    pub irs: ConfigIrs,
     #[serde(default)]
     pub embeddings: ConfigEmbeddings,
 }
@@ -209,60 +133,12 @@ pub struct ConfigDisassembler {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigDecompiler {
-    #[serde(default)]
-    pub lir: ConfigDecompilerLir,
-    #[serde(default)]
-    pub mir: ConfigDecompilerMir,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigDecompilerLir {
-    #[serde(default)]
-    pub optimize: ConfigDecompilerOptimize,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigDecompilerMir {
-    #[serde(default)]
-    pub optimize: ConfigDecompilerOptimize,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigDecompilerOptimize {
-    pub enabled: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigIndex {
-    #[serde(default)]
-    pub local: ConfigIndexLocal,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigIndexLocal {
-    pub directory: String,
-    pub dimensions: Option<usize>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigDisassemblerSweep {
     pub enabled: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigHeuristicFeatures {
-    pub enabled: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigHeuristicEntropy {
-    pub enabled: bool,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigMarkov {
-    pub enabled: bool,
     pub damping: f64,
     pub tolerance: f64,
     pub max_iterations: usize,
@@ -271,7 +147,6 @@ pub struct ConfigMarkov {
 impl Default for ConfigMarkov {
     fn default() -> Self {
         Self {
-            enabled: false,
             damping: 0.85,
             tolerance: 1e-9,
             max_iterations: 100,
@@ -279,59 +154,7 @@ impl Default for ConfigMarkov {
     }
 }
 
-impl Default for ConfigDecompilerOptimize {
-    fn default() -> Self {
-        Self { enabled: true }
-    }
-}
-
-impl Default for ConfigDecompilerLir {
-    fn default() -> Self {
-        Self {
-            optimize: ConfigDecompilerOptimize::default(),
-        }
-    }
-}
-
-impl Default for ConfigDecompilerMir {
-    fn default() -> Self {
-        Self {
-            optimize: ConfigDecompilerOptimize::default(),
-        }
-    }
-}
-
-impl Default for ConfigDecompiler {
-    fn default() -> Self {
-        Self {
-            lir: ConfigDecompilerLir::default(),
-            mir: ConfigDecompilerMir::default(),
-        }
-    }
-}
-
-impl Default for ConfigEntityLifterLLVM {
-    fn default() -> Self {
-        Self { enabled: false }
-    }
-}
-
-impl Default for ConfigEntityLifters {
-    fn default() -> Self {
-        Self {
-            llvm: ConfigEntityLifterLLVM::default(),
-            vex: ConfigEntityLifterVex::default(),
-        }
-    }
-}
-
-impl Default for ConfigEntityLifterVex {
-    fn default() -> Self {
-        Self { enabled: false }
-    }
-}
-
-impl Default for ConfigLiftersLLVM {
+impl Default for ConfigIrsLLVM {
     fn default() -> Self {
         Self {
             module_name: "binlex".to_string(),
@@ -341,22 +164,10 @@ impl Default for ConfigLiftersLLVM {
     }
 }
 
-impl Default for ConfigLiftersVex {
-    fn default() -> Self {
-        Self { enabled: true }
-    }
-}
-
-impl Default for ConfigEntityEmbeddingsLLVM {
-    fn default() -> Self {
-        Self { enabled: false }
-    }
-}
-
-impl Default for ConfigEntityEmbeddings {
+impl Default for ConfigIrs {
     fn default() -> Self {
         Self {
-            llvm: ConfigEntityEmbeddingsLLVM::default(),
+            llvm: ConfigIrsLLVM::default(),
         }
     }
 }
@@ -391,7 +202,6 @@ pub struct ConfigMmapCache {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigMinhash {
-    pub enabled: bool,
     pub number_of_hashes: usize,
     pub shingle_size: usize,
     pub maximum_byte_size_enabled: bool,
@@ -401,13 +211,7 @@ pub struct ConfigMinhash {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigTLSH {
-    pub enabled: bool,
     pub minimum_byte_size: usize,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigHashEnabled {
-    pub enabled: bool,
 }
 
 impl Serialize for Configuration {

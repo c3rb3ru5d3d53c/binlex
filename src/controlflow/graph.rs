@@ -1173,7 +1173,6 @@ mod tests {
     #[test]
     fn snapshot_roundtrip_preserves_wildcard_patterns_when_mask_output_disabled() {
         let config = Configuration::default();
-        assert!(!config.chromosomes.mask.enabled);
         let mut graph = Graph::new(Architecture::AMD64, config.clone());
 
         let mut first = Instruction::create(0x1000, Architecture::AMD64, config.clone());

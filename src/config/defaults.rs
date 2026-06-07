@@ -21,12 +21,10 @@
 // SOFTWARE.
 
 use super::{
-    ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDecompiler, ConfigDisassembler,
-    ConfigDisassemblerSweep, ConfigEmbeddings, ConfigEntityEmbeddings, ConfigEntityLifters,
-    ConfigFile, ConfigFormats, ConfigFunctions, ConfigHashEnabled, ConfigHeuristicEntropy,
-    ConfigHeuristicFeatures, ConfigImaging, ConfigImagingMinhash, ConfigImagingTLSH, ConfigIndex,
-    ConfigIndexLocal, ConfigInstructions, ConfigLifters, ConfigLiftersLLVM, ConfigLiftersVex,
-    ConfigMarkov, ConfigMinhash, ConfigMmap, ConfigMmapCache, ConfigTLSH, Configuration,
+    ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDisassembler, ConfigDisassemblerSweep,
+    ConfigEmbeddings, ConfigFile, ConfigFormats, ConfigFunctions, ConfigImaging,
+    ConfigImagingMinhash, ConfigImagingTLSH, ConfigIrs, ConfigMarkov, ConfigMinhash, ConfigMmap,
+    ConfigMmapCache, ConfigTLSH, Configuration,
 };
 use std::env;
 
@@ -54,18 +52,12 @@ impl Configuration {
     pub fn new() -> Self {
         Self::from_data(ConfigData {
             threads: 0,
-            minimal: false,
             debug: false,
-            index: ConfigIndex::default(),
             formats: ConfigFormats {
                 file: ConfigFile {
-                    sha256: ConfigHashEnabled { enabled: true },
-                    ssdeep: ConfigHashEnabled { enabled: false },
                     tlsh: ConfigTLSH {
-                        enabled: true,
                         minimum_byte_size: 50,
                     },
-                    entropy: ConfigHeuristicEntropy { enabled: true },
                 },
             },
             imaging: ConfigImaging {
@@ -80,76 +72,46 @@ impl Configuration {
                     seed: 0,
                 },
             },
-            instructions: ConfigInstructions {
-                enabled: false,
-                lifters: ConfigEntityLifters::default(),
-                embeddings: ConfigEntityEmbeddings::default(),
-            },
             blocks: ConfigBlocks {
-                enabled: true,
-                sha256: ConfigHashEnabled { enabled: true },
-                ssdeep: ConfigHashEnabled { enabled: false },
                 tlsh: ConfigTLSH {
-                    enabled: false,
                     minimum_byte_size: 50,
                 },
                 minhash: ConfigMinhash {
-                    enabled: true,
                     number_of_hashes: 64,
                     shingle_size: 4,
                     maximum_byte_size_enabled: false,
                     maximum_byte_size: 50,
                     seed: 0,
                 },
-                entropy: ConfigHeuristicEntropy { enabled: true },
-                lifters: ConfigEntityLifters::default(),
-                embeddings: ConfigEntityEmbeddings::default(),
             },
             functions: ConfigFunctions {
-                enabled: true,
-                sha256: ConfigHashEnabled { enabled: true },
-                ssdeep: ConfigHashEnabled { enabled: false },
                 tlsh: ConfigTLSH {
-                    enabled: false,
                     minimum_byte_size: 50,
                 },
                 minhash: ConfigMinhash {
-                    enabled: true,
                     number_of_hashes: 64,
                     shingle_size: 4,
                     maximum_byte_size_enabled: false,
                     maximum_byte_size: 50,
                     seed: 0,
                 },
-                entropy: ConfigHeuristicEntropy { enabled: true },
                 markov: ConfigMarkov {
-                    enabled: false,
                     damping: 0.85,
                     tolerance: 1e-9,
                     max_iterations: 100,
                 },
-                lifters: ConfigEntityLifters::default(),
-                embeddings: ConfigEntityEmbeddings::default(),
             },
             chromosomes: ConfigChromosomes {
-                mask: ConfigHashEnabled { enabled: false },
-                masked: ConfigHashEnabled { enabled: false },
-                sha256: ConfigHashEnabled { enabled: true },
-                ssdeep: ConfigHashEnabled { enabled: false },
                 tlsh: ConfigTLSH {
-                    enabled: false,
                     minimum_byte_size: 50,
                 },
                 minhash: ConfigMinhash {
-                    enabled: true,
                     number_of_hashes: 64,
                     shingle_size: 4,
                     maximum_byte_size_enabled: false,
                     maximum_byte_size: 50,
                     seed: 0,
                 },
-                vector: ConfigHeuristicFeatures { enabled: false },
-                entropy: ConfigHeuristicEntropy { enabled: true },
             },
             mmap: ConfigMmap {
                 directory: Configuration::default_file_mapping_directory(),
@@ -158,75 +120,9 @@ impl Configuration {
             disassembler: ConfigDisassembler {
                 sweep: ConfigDisassemblerSweep { enabled: true },
             },
-            decompiler: ConfigDecompiler::default(),
-            lifters: ConfigLifters::default(),
+            irs: ConfigIrs::default(),
             embeddings: ConfigEmbeddings::default(),
         })
-    }
-
-    pub fn enable_minimal(&mut self) {
-        self.minimal = true;
-        self.disable_hashing();
-        self.disable_heuristics();
-        self.instructions.enabled = false;
-    }
-
-    pub fn disable_hashing(&mut self) {
-        self.disable_block_hashing();
-        self.disable_function_hashing();
-        self.disable_chromosome_hashing();
-        self.disable_file_hashing();
-    }
-
-    pub fn disable_chromosome_heuristics(&mut self) {
-        self.chromosomes.entropy.enabled = false;
-        self.chromosomes.vector.enabled = false;
-    }
-
-    pub fn disable_block_hashing(&mut self) {
-        self.blocks.sha256.enabled = false;
-        self.blocks.ssdeep.enabled = false;
-        self.blocks.tlsh.enabled = false;
-        self.blocks.minhash.enabled = false;
-    }
-
-    pub fn disable_file_hashing(&mut self) {
-        self.formats.file.sha256.enabled = false;
-        self.formats.file.ssdeep.enabled = false;
-        self.formats.file.tlsh.enabled = false;
-    }
-
-    pub fn disable_file_heuristics(&mut self) {
-        self.formats.file.entropy.enabled = false;
-    }
-
-    pub fn disable_heuristics(&mut self) {
-        self.disable_block_heuristics();
-        self.disable_function_heuristics();
-        self.disable_chromosome_heuristics();
-        self.disable_file_heuristics();
-    }
-
-    pub fn disable_chromosome_hashing(&mut self) {
-        self.chromosomes.sha256.enabled = false;
-        self.chromosomes.ssdeep.enabled = false;
-        self.chromosomes.tlsh.enabled = false;
-        self.chromosomes.minhash.enabled = false;
-    }
-
-    pub fn disable_function_hashing(&mut self) {
-        self.functions.sha256.enabled = false;
-        self.functions.ssdeep.enabled = false;
-        self.functions.tlsh.enabled = false;
-        self.functions.minhash.enabled = false;
-    }
-
-    pub fn disable_block_heuristics(&mut self) {
-        self.blocks.entropy.enabled = false;
-    }
-
-    pub fn disable_function_heuristics(&mut self) {
-        self.functions.entropy.enabled = false;
     }
 
     #[allow(dead_code)]
@@ -237,47 +133,10 @@ impl Configuration {
             .expect("failed to convert file mapping directory to string")
             .to_owned()
     }
-
-    pub fn default_local_index_directory() -> String {
-        dirs::data_local_dir()
-            .or_else(dirs::data_dir)
-            .unwrap_or_else(|| env::temp_dir())
-            .join(DIRECTORY)
-            .join("indexing")
-            .to_str()
-            .expect("failed to convert local index directory to string")
-            .to_owned()
-    }
 }
 
 impl Default for Configuration {
     fn default() -> Self {
         Configuration::new()
-    }
-}
-
-impl Default for ConfigIndex {
-    fn default() -> Self {
-        Self {
-            local: ConfigIndexLocal::default(),
-        }
-    }
-}
-
-impl Default for ConfigIndexLocal {
-    fn default() -> Self {
-        Self {
-            directory: Configuration::default_local_index_directory(),
-            dimensions: Some(64),
-        }
-    }
-}
-
-impl Default for ConfigLifters {
-    fn default() -> Self {
-        Self {
-            llvm: ConfigLiftersLLVM::default(),
-            vex: ConfigLiftersVex::default(),
-        }
     }
 }

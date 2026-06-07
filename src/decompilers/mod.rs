@@ -94,25 +94,11 @@ impl<'a> Decompiler<'a> {
         self.graph.function(address)
     }
 
-    fn optimize_lir(&self, lir: &mut LirFunction) {
-        if self.configuration.decompiler.lir.optimize.enabled {
-            lir.optimize();
-        }
-    }
-
-    fn optimize_mir(&self, mir: &mut MirFunction) {
-        if self.configuration.decompiler.mir.optimize.enabled {
-            mir.optimize();
-        }
-    }
-
     fn decompile_inner(&self, function: &Function<'a>) -> Result<DecompiledFunction, Error> {
         match self.backend {
             DecompilerBackend::Default => {
-                let mut lir = function.lir()?;
-                self.optimize_lir(&mut lir);
+                let lir = function.lir()?;
                 let mut mir = function.mir()?;
-                self.optimize_mir(&mut mir);
                 function.trim_mir_call_arguments(&mut mir, &self.graph.symbols())?;
                 let hir = HirFunction::from_mir(None, &mir)
                     .map_err(|error| Error::other(error.to_string()))?;

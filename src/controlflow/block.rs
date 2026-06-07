@@ -162,9 +162,6 @@ impl<'block> Block<'block> {
     }
 
     pub fn llvm(&self) -> Result<LlvmModule, Error> {
-        if !self.cfg.config.blocks.lifters.llvm.enabled {
-            return Err(Error::other("block llvm module is disabled"));
-        }
         let mut lifter =
             LlvmModule::from_architecture_with_config(self.architecture(), self.cfg.config.clone());
         lifter.populate_block(self, None)?;

@@ -263,16 +263,12 @@ class Instruction:
         """Return LLVM IR for this instruction."""
         from binlex.irs.llvm import LlvmModule
 
-        if self._config is None:
-            return None
         return LlvmModule._with_inner(None, None, self._config, self._inner.llvm())
 
     def vex(self):
         """Return VEX IR for this instruction."""
         from binlex.irs.vex import VexModule
 
-        if self._config is None:
-            return None
         return VexModule._from_inner(self._inner.vex(), self._config)
 
     def lir(self):
@@ -402,16 +398,12 @@ class Block:
         """Return LLVM IR for this block."""
         from binlex.irs.llvm import LlvmModule
 
-        if self._config is None:
-            return None
         return LlvmModule._with_inner(None, None, self._config, self._inner.llvm())
 
     def vex(self):
         """Return VEX IR for this block."""
         from binlex.irs.vex import VexModule
 
-        if self._config is None:
-            return None
         return VexModule._from_inner(self._inner.vex(), self._config)
 
     def lir(self):
@@ -594,16 +586,12 @@ class Function:
         """Return LLVM IR for this function."""
         from binlex.irs.llvm import LlvmModule
 
-        if self._config is None:
-            return None
         return LlvmModule._with_inner(None, None, self._config, self._inner.llvm())
 
     def vex(self):
         """Return VEX IR for this function."""
         from binlex.irs.vex import VexModule
 
-        if self._config is None:
-            return None
         return VexModule._from_inner(self._inner.vex(), self._config)
 
     def lir(self):

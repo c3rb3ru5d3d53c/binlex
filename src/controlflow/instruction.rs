@@ -601,9 +601,6 @@ impl<'instruction> Instruction<'instruction> {
     }
 
     pub fn llvm(&self) -> Result<LlvmModule, Error> {
-        if !self.config.instructions.lifters.llvm.enabled {
-            return Err(Error::other("instruction llvm module is disabled"));
-        }
         let mut lifter =
             LlvmModule::from_architecture_with_config(self.architecture, self.config.clone());
         lifter.populate_instruction(self)?;

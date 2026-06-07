@@ -412,40 +412,8 @@ fn llvm_lifter_optimizers_chain_and_preserve_outputs() {
 }
 
 #[test]
-fn llvm_lifter_accessors_respect_entity_config_flags() {
-    let mut config = Configuration::default();
-    let graph = {
-        let mut ranges = BTreeMap::new();
-        let bytes = [0x31, 0xc0, 0x40, 0xc3];
-        ranges.insert(0, bytes.len() as u64);
-        let disassembler = binlex::disassemblers::capstone::Disassembler::from_bytes(
-            Architecture::I386,
-            &bytes,
-            ranges,
-            config.clone(),
-        )
-        .expect("disassembler");
-        let mut graph = Graph::new(Architecture::I386, config.clone());
-        let mut entrypoints = BTreeSet::new();
-        entrypoints.insert(0);
-        disassembler
-            .disassemble(entrypoints, &mut graph)
-            .expect("graph should disassemble");
-        graph
-    };
-
-    let instruction = graph.instruction(0).expect("instruction");
-    let block = Block::new(0, &graph).expect("block");
-    let function = Function::new(0, &graph).expect("function");
-
-    assert!(instruction.llvm().is_err());
-    assert!(block.llvm().is_err());
-    assert!(function.llvm().is_err());
-
-    config.instructions.lifters.llvm.enabled = true;
-    config.blocks.lifters.llvm.enabled = true;
-    config.functions.lifters.llvm.enabled = true;
-
+fn llvm_lifter_accessors_render_entity_text() {
+    let config = Configuration::default();
     let graph = {
         let mut ranges = BTreeMap::new();
         let bytes = [0x31, 0xc0, 0x40, 0xc3];

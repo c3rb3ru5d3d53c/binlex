@@ -209,9 +209,6 @@ impl<'function> Function<'function> {
     }
 
     pub fn llvm(&self) -> Result<LlvmModule, Error> {
-        if !self.cfg.config.functions.lifters.llvm.enabled {
-            return Err(Error::other("function llvm module is disabled"));
-        }
         let mut lifter =
             LlvmModule::from_architecture_with_config(self.architecture(), self.cfg.config.clone());
         lifter.populate_function(self, None)?;

@@ -13,29 +13,6 @@ fn test_config() -> Configuration {
     Configuration::default()
 }
 
-#[test]
-fn vex_config_defaults_match_expected_shape() {
-    let config = Configuration::default();
-    assert!(config.lifters.vex.enabled);
-    assert!(!config.instructions.lifters.vex.enabled);
-    assert!(!config.blocks.lifters.vex.enabled);
-    assert!(!config.functions.lifters.vex.enabled);
-}
-
-#[test]
-fn vex_global_disable_blocks_lifting() {
-    let mut config = Configuration::default();
-    config.lifters.vex.enabled = false;
-    let mut lifter = VexModule::with_config(None, config);
-    let mut graph = Graph::new(Architecture::AMD64, Configuration::default());
-    graph.insert_instruction(instruction(0x1800, &[0xC3]));
-    let instruction = graph.instruction(0x1800).expect("instruction should exist");
-    let error = lifter
-        .populate_instruction(&instruction)
-        .expect_err("disabled vex lifter should fail");
-    assert!(error.to_string().contains("disabled"));
-}
-
 fn instruction(address: u64, bytes: &[u8]) -> InstructionRecord {
     let mut instruction =
         InstructionRecord::create(address, Architecture::AMD64, Configuration::default());
@@ -200,8 +177,7 @@ fn cil_function_renders_vex_text() {
 
 #[test]
 fn vex_lifter_accessors_render_entity_text() {
-    let mut instruction_config = Configuration::default();
-    instruction_config.instructions.lifters.vex.enabled = true;
+    let instruction_config = Configuration::default();
     let mut instruction_graph = Graph::new(Architecture::AMD64, instruction_config.clone());
     let mut lifted_instruction = instruction(0x8000, &[0xC3]);
     lifted_instruction.config = instruction_config.clone();
@@ -214,8 +190,7 @@ fn vex_lifter_accessors_render_entity_text() {
         .text();
     assert!(instruction_text.contains("instruction_8000"));
 
-    let mut block_config = Configuration::default();
-    block_config.blocks.lifters.vex.enabled = true;
+    let block_config = Configuration::default();
     let mut block_graph = Graph::new(Architecture::AMD64, block_config);
     block_graph.insert_instruction(instruction(0x8100, &[0xC3]));
     let block_terminator = block_graph
@@ -229,8 +204,7 @@ fn vex_lifter_accessors_render_entity_text() {
     let block_text = block.vex().expect("block should lift").text();
     assert!(block_text.contains("block_8100"));
 
-    let mut function_config = Configuration::default();
-    function_config.functions.lifters.vex.enabled = true;
+    let function_config = Configuration::default();
     let mut function_graph = Graph::new(Architecture::AMD64, function_config);
     function_graph.insert_instruction(instruction(0x8200, &[0xC3]));
     let function_terminator = function_graph

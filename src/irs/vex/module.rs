@@ -113,7 +113,6 @@ impl VexModule {
     }
 
     pub fn populate_instruction(&mut self, instruction: &Instruction) -> Result<(), Error> {
-        self.ensure_enabled()?;
         self.ensure_supported_architecture(instruction.architecture)?;
         let name = format!("instruction_{:x}", instruction.address);
         let request = self.instruction_request(instruction)?;
@@ -130,7 +129,6 @@ impl VexModule {
     }
 
     pub fn populate_block(&mut self, block: &Block<'_>) -> Result<(), Error> {
-        self.ensure_enabled()?;
         let architecture = block.architecture();
         self.ensure_supported_architecture(architecture)?;
         let name = format!("block_{:x}", block.address());
@@ -148,7 +146,6 @@ impl VexModule {
     }
 
     pub fn populate_function(&mut self, function: &Function<'_>) -> Result<(), Error> {
-        self.ensure_enabled()?;
         let architecture = function.architecture();
         self.ensure_supported_architecture(architecture)?;
         let name = format!("function_{:x}", function.address());
@@ -203,16 +200,6 @@ impl VexModule {
                 format!("unsupported VEX architecture: {}", architecture),
             )),
         }
-    }
-
-    fn ensure_enabled(&self) -> Result<(), Error> {
-        if self._config.lifters.vex.enabled {
-            return Ok(());
-        }
-        Err(Error::new(
-            ErrorKind::PermissionDenied,
-            "vex module is disabled in config",
-        ))
     }
 
     fn execute(&self, request: Request) -> Result<Vec<(String, Vec<String>)>, Error> {

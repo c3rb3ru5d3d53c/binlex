@@ -143,7 +143,7 @@ impl LlvmModule {
         let context: &'static Context = Box::leak(Box::new(Context::create()));
         let module_name = name
             .filter(|name| !name.trim().is_empty())
-            .unwrap_or_else(|| config.lifters.llvm.module_name.clone());
+            .unwrap_or_else(|| config.irs.llvm.module_name.clone());
         let module = context.create_module(&module_name);
         let triple = triple
             .unwrap_or_else(|| Self::default_triple_for_architecture(architecture).to_string());
@@ -708,7 +708,7 @@ impl LlvmModule {
     }
 
     fn verify_if_enabled(&self) -> Result<(), Error> {
-        if self.config.lifters.llvm.verify {
+        if self.config.irs.llvm.verify {
             self.verify()
         } else {
             Ok(())
@@ -1054,7 +1054,7 @@ impl LlvmModule {
                 continue;
             }
             let options = PassBuilderOptions::create();
-            options.set_verify_each(optimized.config.lifters.llvm.verify);
+            options.set_verify_each(optimized.config.irs.llvm.verify);
             if let Err(error) = function.run_passes(pass_pipeline, &machine, options) {
                 let function_name = function.get_name().to_string_lossy().into_owned();
                 let diagnostic = diagnostics
@@ -1120,7 +1120,7 @@ impl LlvmModule {
             .ok_or_else(|| Error::other(format!("llvm function {function_name} does not exist")))?;
         if function.get_first_basic_block().is_some() {
             let options = PassBuilderOptions::create();
-            options.set_verify_each(optimized.config.lifters.llvm.verify);
+            options.set_verify_each(optimized.config.irs.llvm.verify);
             if let Err(error) = function.run_passes(pass_pipeline, &machine, options) {
                 let diagnostic = diagnostics
                     .messages

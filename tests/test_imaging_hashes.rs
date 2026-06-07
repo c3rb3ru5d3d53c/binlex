@@ -111,8 +111,7 @@ fn imaging_hashes_return_none_for_empty_images() {
 
 #[test]
 fn imaging_hashes_ignore_config_for_direct_accessors() {
-    let mut config = Configuration::default();
-    config.disable_hashing();
+    let config = Configuration::default();
 
     let png = PNG::new(&[0x00, 0x7f, 0xff], Palette::Grayscale, config.clone());
     let svg = SVG::new(&[0x00, 0x7f, 0xff], Palette::Grayscale, config.clone());
