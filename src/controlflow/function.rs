@@ -546,19 +546,31 @@ impl<'function> Function<'function> {
     }
 
     pub fn lir(&self) -> Result<LirFunction, Error> {
+        if let Some(artifact) = self.cfg.cached_decompilation(self.address())? {
+            return Ok(artifact.lir);
+        }
         self.build_lir(&self.cfg.symbols())
     }
 
     pub fn mir(&self) -> Result<MirFunction, Error> {
+        if let Some(artifact) = self.cfg.cached_decompilation(self.address())? {
+            return Ok(artifact.mir);
+        }
         MirFunction::from_function(self)
     }
 
     pub fn hir(&self) -> Result<HirFunction, Error> {
+        if let Some(artifact) = self.cfg.cached_decompilation(self.address())? {
+            return Ok(artifact.hir);
+        }
         let mir = self.mir()?;
         HirFunction::from_mir(None, &mir).map_err(|error| Error::other(error.to_string()))
     }
 
     pub fn ast(&self) -> Result<AstFunction, Error> {
+        if let Some(artifact) = self.cfg.cached_decompilation(self.address())? {
+            return Ok(artifact.ast.with_image(self.cfg.image()));
+        }
         Ok(AstFunction::from_hir(&self.hir()?))
     }
 

@@ -23,6 +23,7 @@
 pub mod block;
 pub mod function;
 pub mod graph;
+pub mod graph_state;
 pub mod instruction;
 pub mod reference;
 use serde::{Deserialize, Serialize};
@@ -39,6 +40,7 @@ pub use block::Block;
 pub use function::{Function, FunctionCallee, FunctionCaller};
 pub use graph::Graph;
 pub use graph::GraphQueue;
+pub use graph_state::{GraphInstructionState, GraphQueueState, GraphState};
 pub use instruction::FloatOperand;
 pub use instruction::ImmediateOperand;
 pub use instruction::Instruction;

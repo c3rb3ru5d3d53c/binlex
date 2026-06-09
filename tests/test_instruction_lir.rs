@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 
 use binlex::controlflow::{Graph, InstructionRecord};
+use binlex::decompilers::{Decompiler, DecompilerBackend};
+use binlex::formats::{Image, ImagePermissions, ImageSegment};
 use binlex::irs::lir::{
     Lir, LirDiagnostic, LirDiagnosticKind, LirMetadata, LirStatus, LirTerminator,
 };
@@ -103,6 +105,74 @@ fn accuracy_gated_lir_regressions_stay_partial() {
     for (name, architecture, bytes) in cases {
         assert_partial_lir(name, architecture, &bytes);
     }
+}
+
+#[test]
+fn graph_state_roundtrip_preserves_context_and_instruction_lir() {
+    let instruction = disassemble_single("adc eax, ebx", Architecture::I386, &[0x11, 0xd8]);
+    let original_mnemonic = instruction.mnemonic();
+    let original_disassembly = instruction.disassembly();
+    let original_operands = instruction.operands();
+    let original = instruction
+        .lir
+        .clone()
+        .expect("instruction should carry lir");
+
+    let mut config = Configuration::default();
+    config.threads = 1;
+    let mut image = Image::new();
+    image.add_segment(ImageSegment::bytes(
+        Some("shellcode".to_string()),
+        0,
+        vec![0x11, 0xd8],
+        ImagePermissions::executable(),
+    ));
+
+    let mut graph = Graph::new_with_image(Architecture::I386, image, config);
+    graph.insert_instruction(instruction);
+    assert!(graph.set_block(0));
+    assert!(graph.set_function(0));
+    let artifact = Decompiler::new(&graph, DecompilerBackend::Default)
+        .decompile_function(0)
+        .expect("decompilation should run")
+        .expect("function should decompile");
+
+    let state = serde_json::to_value(graph.state()).expect("state should serialize");
+    let state = serde_json::from_value(state).expect("state should deserialize");
+    let restored = Graph::from_state(state).expect("state roundtrip should restore");
+    assert!(restored.state().decompilation.contains_key(&0));
+    assert_eq!(restored.config.threads, 1);
+    assert_eq!(
+        restored
+            .image()
+            .read_virtual_address(0, 2)
+            .expect("image read should succeed"),
+        Some(vec![0x11, 0xd8])
+    );
+
+    let restored_instruction = restored
+        .instruction(0)
+        .expect("restored instruction should exist");
+    let restored_lir = restored_instruction
+        .lir
+        .as_ref()
+        .expect("restored instruction should keep lir");
+
+    assert_eq!(restored_lir.status, original.status);
+    assert_eq!(restored_lir.terminator.kind(), original.terminator.kind());
+    assert_eq!(restored_lir.effects.len(), original.effects.len());
+    assert_eq!(restored_lir.diagnostics.len(), original.diagnostics.len());
+    assert_eq!(restored_instruction.mnemonic(), original_mnemonic);
+    assert_eq!(restored_instruction.disassembly(), original_disassembly);
+    assert_eq!(restored_instruction.operands(), original_operands);
+
+    let restored_function = restored
+        .function(0)
+        .expect("restored function should exist");
+    assert_eq!(restored_function.lir().unwrap(), artifact.lir);
+    assert_eq!(restored_function.mir().unwrap(), artifact.mir);
+    assert_eq!(restored_function.hir().unwrap(), artifact.hir);
+    assert_eq!(restored_function.ast().unwrap().blocks, artifact.ast.blocks);
 }
 
 #[test]

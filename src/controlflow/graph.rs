@@ -27,6 +27,8 @@ use crate::controlflow::Function;
 use crate::controlflow::Instruction;
 use crate::controlflow::InstructionRecord;
 use crate::controlflow::Reference;
+use crate::controlflow::graph_state::GraphState;
+use crate::decompilers::{DecompiledFunction, DecompiledFunctionState};
 use crate::formats::{Image, Symbol, SymbolKind};
 use crate::irs::lir::Lir;
 use crossbeam::queue::SegQueue;
@@ -423,6 +425,7 @@ pub struct Graph {
     /// Virtual image used as decode context.
     pub image: Image,
     metadata: Mutex<BTreeMap<String, Value>>,
+    pub(crate) decompilation: Mutex<BTreeMap<u64, DecompiledFunctionState>>,
     revision: AtomicU64,
     callgraph_state: Mutex<GraphCallgraphState>,
     block_layout_state: Mutex<GraphBlockLayoutState>,
@@ -467,6 +470,7 @@ impl Graph {
             config,
             image,
             metadata: Mutex::new(metadata),
+            decompilation: Mutex::new(BTreeMap::new()),
             revision: AtomicU64::new(0),
             callgraph_state: Mutex::new(GraphCallgraphState::default()),
             block_layout_state: Mutex::new(GraphBlockLayoutState::default()),
@@ -534,6 +538,53 @@ impl Graph {
 
     pub fn executable_virtual_address_ranges(&self) -> BTreeMap<u64, u64> {
         self.image.executable_virtual_address_ranges()
+    }
+
+    pub fn state(&self) -> GraphState {
+        GraphState::from_graph(self)
+    }
+
+    pub fn from_state(state: GraphState) -> Result<Self, Error> {
+        state.into_graph()
+    }
+
+    pub(crate) fn cached_decompilation(
+        &self,
+        address: u64,
+    ) -> Result<Option<DecompiledFunction>, Error> {
+        let Some(state) = self.decompilation.lock().unwrap().get(&address).cloned() else {
+            return Ok(None);
+        };
+        let encoded = lz4::block::decompress(&state, None).map_err(|error| {
+            Error::other(format!(
+                "failed to decompress cached decompilation for {address:#x}: {error}"
+            ))
+        })?;
+        serde_json::from_slice(&encoded).map(Some).map_err(|error| {
+            Error::other(format!(
+                "failed to decode cached decompilation for {address:#x}: {error}"
+            ))
+        })
+    }
+
+    pub(crate) fn cache_decompilation(&self, artifact: &DecompiledFunction) -> Result<(), Error> {
+        let encoded = serde_json::to_vec(artifact).map_err(|error| {
+            Error::other(format!(
+                "failed to encode cached decompilation for {:#x}: {error}",
+                artifact.address
+            ))
+        })?;
+        let state = lz4::block::compress(&encoded, None, true).map_err(|error| {
+            Error::other(format!(
+                "failed to compress cached decompilation for {:#x}: {error}",
+                artifact.address
+            ))
+        })?;
+        self.decompilation
+            .lock()
+            .unwrap()
+            .insert(artifact.address, state);
+        Ok(())
     }
 
     pub fn replace_metadata(&mut self, metadata: BTreeMap<String, Value>) {
@@ -1181,6 +1232,7 @@ impl Graph {
 
     fn invalidate_processor_state(&self) {
         self.revision.fetch_add(1, Ordering::SeqCst);
+        self.decompilation.lock().unwrap().clear();
         let mut callgraph_state = self.callgraph_state.lock().unwrap();
         callgraph_state.revision = None;
         callgraph_state.callee_references.clear();

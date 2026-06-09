@@ -28,9 +28,10 @@ use crate::Architecture;
 use crate::Configuration;
 use binlex::controlflow::Graph as InnerGraph;
 use binlex::controlflow::GraphQueue as InnerGraphQueue;
+use binlex::controlflow::GraphState as InnerGraphState;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::PyAny;
+use pyo3::types::{PyAny, PyBytes, PyType};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -67,6 +68,57 @@ fn py_to_metadata(py: Python<'_>, value: Option<Py<PyAny>>) -> PyResult<BTreeMap
 pub struct GraphQueue {
     inner_graph: Arc<Mutex<InnerGraph>>,
     kind: QueueKind,
+}
+
+#[pyclass(module = "binlex_bindings.binlex.controlflow", skip_from_py_object)]
+#[derive(Clone)]
+pub struct GraphState {
+    pub inner: InnerGraphState,
+}
+
+impl GraphState {
+    pub fn from_inner(inner: InnerGraphState) -> Self {
+        Self { inner }
+    }
+
+    fn to_bytes(&self) -> PyResult<Vec<u8>> {
+        let encoded = serde_json::to_vec(&self.inner)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        lz4::block::compress(&encoded, None, true)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    fn from_bytes(bytes: &[u8]) -> PyResult<Self> {
+        let encoded = lz4::block::decompress(bytes, None)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        let inner = serde_json::from_slice(&encoded)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        Ok(Self { inner })
+    }
+}
+
+#[pymethods]
+impl GraphState {
+    #[new]
+    pub fn new(py: Python<'_>, state: Py<PyAny>) -> PyResult<Self> {
+        let bytes = state.extract::<Vec<u8>>(py)?;
+        Self::from_bytes(&bytes)
+    }
+
+    pub fn __getstate__(&self, py: Python<'_>) -> PyResult<Py<PyBytes>> {
+        let bytes = self.to_bytes()?;
+        Ok(PyBytes::new(py, &bytes).unbind())
+    }
+
+    pub fn __reduce__(&self, py: Python<'_>) -> PyResult<(Py<PyType>, (Py<PyBytes>,))> {
+        Ok((py.get_type::<Self>().unbind(), (self.__getstate__(py)?,)))
+    }
+
+    pub fn __setstate__(&mut self, py: Python<'_>, state: Py<PyAny>) -> PyResult<()> {
+        let bytes = state.extract::<Vec<u8>>(py)?;
+        self.inner = Self::from_bytes(&bytes)?.inner;
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -264,12 +316,50 @@ impl Graph {
     }
 
     #[pyo3(text_signature = "($self)")]
+    /// Return the graph configuration.
+    pub fn configuration(&self) -> Configuration {
+        Configuration {
+            inner: Arc::new(Mutex::new(self.inner.lock().unwrap().config.clone())),
+        }
+    }
+
+    #[pyo3(text_signature = "($self)")]
     /// Return executable virtual address ranges derived from the graph image.
     pub fn executable_virtual_address_ranges(&self) -> BTreeMap<u64, u64> {
         self.inner
             .lock()
             .unwrap()
             .executable_virtual_address_ranges()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return a complete serializable graph state.
+    pub fn state(&self) -> GraphState {
+        GraphState::from_inner(self.inner.lock().unwrap().state())
+    }
+
+    #[staticmethod]
+    #[pyo3(text_signature = "(state)")]
+    /// Restore a graph from a complete serializable graph state.
+    pub fn from_state(py: Python<'_>, state: PyRef<'_, GraphState>) -> PyResult<Self> {
+        let inner = InnerGraph::from_state(state.inner.clone())
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        let image = Py::new(py, Image::from_inner(inner.image.clone()))?;
+        Ok(Self {
+            inner: Arc::new(Mutex::new(inner)),
+            image: Arc::new(Mutex::new(Some(image))),
+        })
+    }
+
+    pub fn __getstate__(&self) -> GraphState {
+        self.state()
+    }
+
+    pub fn __setstate__(&mut self, py: Python<'_>, state: PyRef<'_, GraphState>) -> PyResult<()> {
+        let restored = Self::from_state(py, state)?;
+        self.inner = restored.inner;
+        self.image = restored.image;
+        Ok(())
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -551,6 +641,7 @@ impl Graph {
 #[pyo3(name = "graph")]
 pub fn graph_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<GraphQueue>()?;
+    m.add_class::<GraphState>()?;
     m.add_class::<Graph>()?;
     py.import("sys")?
         .getattr("modules")?

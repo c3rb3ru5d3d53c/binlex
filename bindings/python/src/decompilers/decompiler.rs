@@ -131,7 +131,14 @@ impl Decompiler {
 
     #[pyo3(text_signature = "($self, address)")]
     pub fn decompile_function(&self, py: Python<'_>, address: u64) -> PyResult<Option<Function>> {
-        if self.decompile_function_artifacts(py, address)?.is_none() {
+        let graph_inner = self.graph_inner.clone();
+        let backend = self.backend;
+        let graph = graph_inner.lock().unwrap();
+        if InnerDecompiler::new(&graph, backend)
+            .decompile_function(address)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?
+            .is_none()
+        {
             return Ok(None);
         }
         Ok(Some(Function::new(address, self.graph.clone_ref(py))?))
@@ -154,7 +161,7 @@ impl Decompiler {
         let backend = self.backend;
         let graph = graph_inner.lock().unwrap();
         let artifacts = InnerDecompiler::new(&graph, backend)
-            .decompile()
+            .decompile_artifacts()
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
 
         artifacts
@@ -165,7 +172,12 @@ impl Decompiler {
 
     #[pyo3(text_signature = "($self)")]
     pub fn decompile(&self, py: Python<'_>) -> PyResult<Py<Self>> {
-        let _ = self.decompile_artifacts(py)?;
+        let graph_inner = self.graph_inner.clone();
+        let backend = self.backend;
+        let graph = graph_inner.lock().unwrap();
+        InnerDecompiler::new(&graph, backend)
+            .decompile()
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
         Ok(Py::new(
             py,
             Self {

@@ -27,6 +27,7 @@ from binlex_bindings.binlex.controlflow import EntityKind as _EntityKindBinding
 from binlex_bindings.binlex.controlflow import Function as _FunctionBinding
 from binlex_bindings.binlex.controlflow import Graph as _GraphBinding
 from binlex_bindings.binlex.controlflow import GraphQueue as _GraphQueueBinding
+from binlex_bindings.binlex.controlflow import GraphState as GraphState
 from binlex_bindings.binlex.controlflow import Instruction as _InstructionBinding
 from binlex_bindings.binlex.controlflow import Reference as _ReferenceBinding
 from binlex_bindings.binlex.controlflow.instruction import Operand as Operand
@@ -632,52 +633,24 @@ class Function:
 
     def lir(self):
         """Return raw LIR for this function."""
-        cache = getattr(self._graph, "_decompilation_cache", None)
-        if cache is not None:
-            cached = cache["lir"].get(self.address())
-            if cached is not None:
-                return cached
         result = LirFunction._from_inner(self._inner.lir())
-        if cache is not None:
-            cache["lir"][self.address()] = result
         return result
 
     def mir(self):
         """Return raw MIR for this function."""
-        cache = getattr(self._graph, "_decompilation_cache", None)
-        if cache is not None:
-            cached = cache["mir"].get(self.address())
-            if cached is not None:
-                return cached
         result = MirFunction._from_inner(self._inner.mir())
-        if cache is not None:
-            cache["mir"][self.address()] = result
         return result
 
     def hir(self):
         """Return raw HIR for this function."""
-        cache = getattr(self._graph, "_decompilation_cache", None)
-        if cache is not None:
-            cached = cache["hir"].get(self.address())
-            if cached is not None:
-                return cached
         result = HirFunction._from_inner(self._inner.hir())
-        if cache is not None:
-            cache["hir"][self.address()] = result
         return result
 
     def ast(self):
         """Return AST for this function."""
         from binlex.irs.ast import AstFunction
 
-        cache = getattr(self._graph, "_decompilation_cache", None)
-        if cache is not None:
-            cached = cache["ast"].get(self.address())
-            if cached is not None:
-                return cached
         result = AstFunction._from_inner(self._inner.ast())
-        if cache is not None:
-            cache["ast"][self.address()] = result
         return result
 
     def tlsh(self):
@@ -889,7 +862,6 @@ class Graph:
         self._image = image
         self._architecture = architecture
         self._decompiler = None
-        self._decompilation_cache = {"lir": {}, "mir": {}, "hir": {}, "ast": {}}
 
     @classmethod
     def _from_binding(cls, binding, config=None):
@@ -901,8 +873,25 @@ class Graph:
         result._image = Image._from_binding(inner_image) if inner_image is not None else None
         result._architecture = binding.architecture()
         result._decompiler = None
-        result._decompilation_cache = {"lir": {}, "mir": {}, "hir": {}, "ast": {}}
         return result
+
+    @classmethod
+    def from_state(cls, state):
+        """Restore a graph from a complete serializable graph state."""
+        result = cls._from_binding(_GraphBinding.from_state(state))
+        result._config = result._inner.configuration()
+        return result
+
+    def state(self):
+        """Return a complete serializable graph state."""
+        return self._inner.state()
+
+    def __getstate__(self):
+        return self.state()
+
+    def __setstate__(self, state):
+        restored = Graph.from_state(state)
+        self.__dict__.update(restored.__dict__)
 
     def architecture(self):
         """Return the graph architecture."""
@@ -1037,5 +1026,6 @@ __all__ = [
     "FunctionCaller",
     "Graph",
     "GraphQueue",
+    "GraphState",
     "Instruction",
 ]

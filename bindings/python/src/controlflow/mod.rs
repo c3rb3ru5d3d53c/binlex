@@ -30,6 +30,7 @@ pub use crate::controlflow::block::Block;
 pub use crate::controlflow::function::{Function, FunctionCallee, FunctionCaller};
 pub use crate::controlflow::graph::Graph;
 pub use crate::controlflow::graph::GraphQueue;
+pub use crate::controlflow::graph::GraphState;
 pub use crate::controlflow::instruction::Instruction;
 pub use crate::controlflow::reference::Reference;
 
@@ -118,6 +119,7 @@ pub fn controlflow_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pymodule!(function_init))?;
     m.add_class::<Graph>()?;
     m.add_class::<GraphQueue>()?;
+    m.add_class::<GraphState>()?;
     m.add_class::<EntityKind>()?;
     m.add_class::<Instruction>()?;
     m.add_class::<PyReference>()?;

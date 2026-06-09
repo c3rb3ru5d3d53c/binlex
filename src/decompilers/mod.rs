@@ -50,6 +50,8 @@ pub struct DecompiledFunction {
     pub ast: AstFunction,
 }
 
+pub type DecompiledFunctionState = Vec<u8>;
+
 pub struct Decompiler<'a> {
     graph: &'a Graph,
     backend: DecompilerBackend,
@@ -103,21 +105,28 @@ impl<'a> Decompiler<'a> {
         let Some(function) = self.function(address) else {
             return Ok(None);
         };
-        self.decompile_inner(&function).map(Some)
+        let artifact = self.decompile_inner(&function)?;
+        self.graph.cache_decompilation(&artifact)?;
+        Ok(Some(artifact))
     }
 
-    pub fn decompile(&self) -> Result<Vec<DecompiledFunction>, Error> {
-        let addresses = self
-            .graph
+    fn function_addresses(&self) -> Vec<u64> {
+        self.graph
             .functions()
             .into_iter()
             .map(|function| function.address())
-            .collect::<Vec<_>>();
+            .collect::<Vec<_>>()
+    }
 
+    fn decompile_artifacts_inner(
+        &self,
+        addresses: &[u64],
+    ) -> Result<Vec<DecompiledFunction>, Error> {
         let threads = self.configuration().resolved_threads();
         let mut functions = if threads <= 1 || addresses.len() <= 1 {
             addresses
-                .into_iter()
+                .iter()
+                .copied()
                 .map(|address| {
                     let function = Function::new(address, self.graph)?;
                     self.decompile_inner(&function)
@@ -132,7 +141,8 @@ impl<'a> Decompiler<'a> {
 
             pool.install(|| {
                 addresses
-                    .into_par_iter()
+                    .par_iter()
+                    .copied()
                     .map(|address| {
                         let function = Function::new(address, self.graph)?;
                         self.decompile_inner(&function)
@@ -143,6 +153,47 @@ impl<'a> Decompiler<'a> {
 
         reconcile_local_function_signatures(&mut functions)?;
         Ok(functions)
+    }
+
+    fn decompile_to_graph_cache(&self, addresses: &[u64]) -> Result<(), Error> {
+        let threads = self.configuration().resolved_threads();
+        if threads <= 1 || addresses.len() <= 1 {
+            for address in addresses {
+                let function = Function::new(*address, self.graph)?;
+                let artifact = self.decompile_inner(&function)?;
+                self.graph.cache_decompilation(&artifact)?;
+            }
+        } else {
+            let pool = ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .stack_size(RAYON_WORKER_STACK_SIZE)
+                .build()
+                .map_err(|error| Error::other(error.to_string()))?;
+
+            pool.install(|| {
+                addresses.par_iter().copied().try_for_each(|address| {
+                    let function = Function::new(address, self.graph)?;
+                    let artifact = self.decompile_inner(&function)?;
+                    self.graph.cache_decompilation(&artifact)
+                })
+            })?
+        }
+
+        reconcile_local_function_signatures_cached(self.graph, addresses)
+    }
+
+    pub fn decompile_artifacts(&self) -> Result<Vec<DecompiledFunction>, Error> {
+        let addresses = self.function_addresses();
+        let functions = self.decompile_artifacts_inner(&addresses)?;
+        for function in &functions {
+            self.graph.cache_decompilation(function)?;
+        }
+        Ok(functions)
+    }
+
+    pub fn decompile(&self) -> Result<(), Error> {
+        let addresses = self.function_addresses();
+        self.decompile_to_graph_cache(&addresses)
     }
 }
 
@@ -205,6 +256,41 @@ fn reconcile_local_function_signatures(functions: &mut [DecompiledFunction]) -> 
     Ok(())
 }
 
+fn reconcile_local_function_signatures_cached(
+    graph: &Graph,
+    addresses: &[u64],
+) -> Result<(), Error> {
+    let targets = local_target_addresses(graph, addresses)?;
+    let observed = observed_local_signatures_cached(graph, addresses, &targets)?;
+    if observed.is_empty() {
+        return Ok(());
+    }
+
+    for address in addresses {
+        let Some(mut function) = graph.cached_decompilation(*address)? else {
+            continue;
+        };
+
+        for target in local_target_names(&function) {
+            let Some(signature) = observed.get(&target) else {
+                continue;
+            };
+            let Some(arity) = signature.reconciled_arity() else {
+                continue;
+            };
+            rewrite_entry_signature(&mut function.mir, arity, &signature.types);
+        }
+
+        trim_local_calls_to_reconciled_signature(&mut function, &observed);
+        function.hir = HirFunction::from_mir(None, &function.mir)
+            .map_err(|error| Error::other(error.to_string()))?;
+        function.ast = AstFunction::from_hir(&function.hir).with_image(graph.image());
+        graph.cache_decompilation(&function)?;
+    }
+
+    Ok(())
+}
+
 fn local_target_indices(functions: &[DecompiledFunction]) -> BTreeMap<String, usize> {
     let mut targets = BTreeMap::new();
     for (index, function) in functions.iter().enumerate() {
@@ -215,6 +301,33 @@ fn local_target_indices(functions: &[DecompiledFunction]) -> BTreeMap<String, us
         if let Some(name) = &function.lir.name {
             targets.insert(name.clone(), index);
         }
+    }
+    targets
+}
+
+fn local_target_addresses(
+    graph: &Graph,
+    addresses: &[u64],
+) -> Result<BTreeMap<String, u64>, Error> {
+    let mut targets = BTreeMap::new();
+    for address in addresses {
+        let Some(function) = graph.cached_decompilation(*address)? else {
+            continue;
+        };
+        for target in local_target_names(&function) {
+            targets.insert(target, *address);
+        }
+    }
+    Ok(targets)
+}
+
+fn local_target_names(function: &DecompiledFunction) -> Vec<String> {
+    let mut targets = vec![format!("function_{:x}", function.address)];
+    if let Some(name) = &function.mir.name {
+        targets.push(name.clone());
+    }
+    if let Some(name) = &function.lir.name {
+        targets.push(name.clone());
     }
     targets
 }
@@ -246,6 +359,47 @@ fn observed_local_signatures(
         }
     }
     observed
+}
+
+fn observed_local_signatures_cached(
+    graph: &Graph,
+    addresses: &[u64],
+    targets: &BTreeMap<String, u64>,
+) -> Result<BTreeMap<String, ObservedSignature>, Error> {
+    let mut observed = BTreeMap::<String, ObservedSignature>::new();
+    for address in addresses {
+        let Some(function) = graph.cached_decompilation(*address)? else {
+            continue;
+        };
+        observe_local_signatures_from_mir(&function.mir, targets, &mut observed);
+    }
+    Ok(observed)
+}
+
+fn observe_local_signatures_from_mir(
+    mir: &MirFunction,
+    targets: &BTreeMap<String, u64>,
+    observed: &mut BTreeMap<String, ObservedSignature>,
+) {
+    for block in mir.blocks() {
+        for operation in &block.operations {
+            let MirOperationKind::Call {
+                target: MirControlTarget::Direct(target),
+                arguments,
+                ..
+            } = &operation.kind
+            else {
+                continue;
+            };
+            if !targets.contains_key(target) {
+                continue;
+            }
+            observed
+                .entry(target.clone())
+                .or_insert_with(ObservedSignature::new)
+                .observe(arguments);
+        }
+    }
 }
 
 fn rewrite_entry_signature(
@@ -311,6 +465,35 @@ fn trim_local_calls_to_reconciled_signatures(
                 if arguments.len() > arity {
                     arguments.truncate(arity);
                 }
+            }
+        }
+    }
+}
+
+fn trim_local_calls_to_reconciled_signature(
+    function: &mut DecompiledFunction,
+    observed: &BTreeMap<String, ObservedSignature>,
+) {
+    let arities = observed
+        .iter()
+        .filter_map(|(target, signature)| signature.reconciled_arity().map(|arity| (target, arity)))
+        .collect::<BTreeMap<_, _>>();
+
+    for block in function.mir.blocks_mut() {
+        for operation in &mut block.operations {
+            let MirOperationKind::Call {
+                target: MirControlTarget::Direct(target),
+                arguments,
+                ..
+            } = &mut operation.kind
+            else {
+                continue;
+            };
+            let Some(arity) = arities.get(target).copied() else {
+                continue;
+            };
+            if arguments.len() > arity {
+                arguments.truncate(arity);
             }
         }
     }
