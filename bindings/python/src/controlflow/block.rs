@@ -126,10 +126,10 @@ impl Block {
             let inner_chromosome = block.chromosome();
             Ok(Chromosome {
                 inner: Arc::new(Mutex::new(inner_chromosome)),
-                minhash_num_hashes: inner_config.chromosomes.minhash.number_of_hashes,
-                minhash_shingle_size: inner_config.chromosomes.minhash.shingle_size,
-                minhash_seed: inner_config.chromosomes.minhash.seed,
-                tlsh_minimum_byte_size: inner_config.chromosomes.tlsh.minimum_byte_size,
+                minhash_num_hashes: inner_config.hashing.minhash.number_of_hashes,
+                minhash_shingle_size: inner_config.hashing.minhash.shingle_size,
+                minhash_seed: inner_config.hashing.minhash.seed,
+                tlsh_minimum_byte_size: inner_config.hashing.tlsh.minimum_byte_size,
             })
         })
     }
@@ -352,9 +352,9 @@ impl Block {
         self.with_inner_block(py, |block| {
             Ok(block.minhash().map(|hash| MinHash32 {
                 bytes: hash.bytes.into_owned(),
-                num_hashes: block.cfg.config.blocks.minhash.number_of_hashes,
-                shingle_size: block.cfg.config.blocks.minhash.shingle_size,
-                seed: block.cfg.config.blocks.minhash.seed,
+                num_hashes: block.cfg.config.hashing.minhash.number_of_hashes,
+                shingle_size: block.cfg.config.hashing.minhash.shingle_size,
+                seed: block.cfg.config.hashing.minhash.seed,
             }))
         })
     }

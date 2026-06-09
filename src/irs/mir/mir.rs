@@ -31,11 +31,14 @@ use super::optimizers::{
 };
 use super::print::{format_mir_function, format_mir_module};
 use crate::irs::lir::{LirAbi, LirFunction, LirModule};
-use crate::irs::mir::lower::{MirLowerError, lower_lir_to_mir, materialize_entry_parameters};
+use crate::irs::mir::lower::{
+    MirLowerError, lower_function_to_mir, lower_lir_to_mir, materialize_entry_parameters,
+};
 use crate::irs::mir::mlir::MirMlirModule;
 use crate::irs::storage::IrStorage;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::io::Error;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub struct MirFunction {
@@ -56,6 +59,10 @@ impl MirFunction {
         let mut lir = lir.clone();
         lir.optimize();
         lower_lir_to_mir(name.or_else(|| lir.name.clone()), &lir)
+    }
+
+    pub fn from_function(function: &crate::controlflow::Function<'_>) -> Result<Self, Error> {
+        lower_function_to_mir(function)
     }
 
     pub fn new(name: Option<String>) -> Self {

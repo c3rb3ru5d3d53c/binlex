@@ -21,10 +21,9 @@
 // SOFTWARE.
 
 use super::{
-    ConfigBlocks, ConfigChromosomes, ConfigData, ConfigDisassembler, ConfigDisassemblerSweep,
-    ConfigEmbeddings, ConfigFile, ConfigFormats, ConfigFunctions, ConfigImaging,
-    ConfigImagingMinhash, ConfigImagingTLSH, ConfigIrs, ConfigMarkov, ConfigMinhash, ConfigMmap,
-    ConfigMmapCache, ConfigTLSH, Configuration,
+    ConfigData, ConfigDisassembler, ConfigDisassemblerSweep, ConfigEmbeddings, ConfigFunctions,
+    ConfigHashing, ConfigIrs, ConfigMarkov, ConfigMinhash, ConfigMmap, ConfigMmapCache, ConfigTLSH,
+    Configuration,
 };
 use std::env;
 
@@ -53,26 +52,7 @@ impl Configuration {
         Self::from_data(ConfigData {
             threads: 0,
             debug: false,
-            formats: ConfigFormats {
-                file: ConfigFile {
-                    tlsh: ConfigTLSH {
-                        minimum_byte_size: 50,
-                    },
-                },
-            },
-            imaging: ConfigImaging {
-                tlsh: ConfigImagingTLSH {
-                    minimum_byte_size: 50,
-                },
-                minhash: ConfigImagingMinhash {
-                    number_of_hashes: 64,
-                    shingle_size: 4,
-                    maximum_byte_size_enabled: false,
-                    maximum_byte_size: 50,
-                    seed: 0,
-                },
-            },
-            blocks: ConfigBlocks {
+            hashing: ConfigHashing {
                 tlsh: ConfigTLSH {
                     minimum_byte_size: 50,
                 },
@@ -85,32 +65,10 @@ impl Configuration {
                 },
             },
             functions: ConfigFunctions {
-                tlsh: ConfigTLSH {
-                    minimum_byte_size: 50,
-                },
-                minhash: ConfigMinhash {
-                    number_of_hashes: 64,
-                    shingle_size: 4,
-                    maximum_byte_size_enabled: false,
-                    maximum_byte_size: 50,
-                    seed: 0,
-                },
                 markov: ConfigMarkov {
                     damping: 0.85,
                     tolerance: 1e-9,
                     max_iterations: 100,
-                },
-            },
-            chromosomes: ConfigChromosomes {
-                tlsh: ConfigTLSH {
-                    minimum_byte_size: 50,
-                },
-                minhash: ConfigMinhash {
-                    number_of_hashes: 64,
-                    shingle_size: 4,
-                    maximum_byte_size_enabled: false,
-                    maximum_byte_size: 50,
-                    seed: 0,
                 },
             },
             mmap: ConfigMmap {

@@ -14,9 +14,8 @@ pub(crate) fn disassemble_arm64_single(name: &str, bytes: &[u8]) -> InstructionR
     let mut graph = Graph::new(Architecture::ARM64, config.clone());
     let disassembler =
         Disassembler::from_bytes(Architecture::ARM64, bytes, ranges, config).expect("disassembler");
-    let metadata_token_addresses = BTreeMap::new();
     disassembler
-        .disassemble_instruction(0, &metadata_token_addresses, &mut graph)
+        .disassemble_instruction(0, &mut graph)
         .unwrap_or_else(|error| panic!("{name}: instruction should disassemble: {error}"));
     graph
         .get_instruction_record(0)

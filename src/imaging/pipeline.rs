@@ -169,15 +169,15 @@ impl ImagingPalette {
     }
 
     pub fn png(&self) -> PNG {
-        PNG::from_render(self.render(), self.state.config.imaging.clone())
+        PNG::from_render(self.render(), self.state.config.hashing.clone())
     }
 
     pub fn svg(&self) -> SVG {
-        SVG::from_render(self.render(), self.state.config.imaging.clone())
+        SVG::from_render(self.render(), self.state.config.hashing.clone())
     }
 
     pub fn terminal(&self) -> Terminal {
-        Terminal::from_render(self.render(), self.state.config.imaging.clone())
+        Terminal::from_render(self.render(), self.state.config.hashing.clone())
     }
 }
 
@@ -187,14 +187,14 @@ impl ImagingNormalized {
     }
 
     pub fn png(&self) -> PNG {
-        PNG::from_render(self.render.clone(), self.config.imaging.clone())
+        PNG::from_render(self.render.clone(), self.config.hashing.clone())
     }
 
     pub fn svg(&self) -> SVG {
-        SVG::from_render(self.render.clone(), self.config.imaging.clone())
+        SVG::from_render(self.render.clone(), self.config.hashing.clone())
     }
 
     pub fn terminal(&self) -> Terminal {
-        Terminal::from_render(self.render.clone(), self.config.imaging.clone())
+        Terminal::from_render(self.render.clone(), self.config.hashing.clone())
     }
 }

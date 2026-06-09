@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::config::{ConfigImaging, Configuration};
+use crate::config::{ConfigHashing, Configuration};
 use crate::imaging::Palette;
 use crate::imaging::artifact::ImagingArtifact;
 use crate::imaging::formats::terminal::write_render;
@@ -48,11 +48,11 @@ impl SVG {
     ) -> Self {
         Self::from_render(
             Renderer::linear(Some(cell_size), Some(fixed_width)).render(data, palette),
-            config.imaging.clone(),
+            config.hashing.clone(),
         )
     }
 
-    pub(crate) fn from_render(render: Render, hashing: ConfigImaging) -> Self {
+    pub(crate) fn from_render(render: Render, hashing: ConfigHashing) -> Self {
         Self {
             artifact: ImagingArtifact::new(render, hashing),
             metadata_entries: Vec::new(),

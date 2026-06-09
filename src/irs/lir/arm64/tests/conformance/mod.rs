@@ -1358,14 +1358,11 @@ fn arm64_capstone_supports(bytes: &[u8]) -> bool {
     let mut ranges = BTreeMap::new();
     ranges.insert(0, bytes.len() as u64);
     let mut graph = Graph::new(Architecture::ARM64, config.clone());
-    let metadata_token_addresses = BTreeMap::new();
     let Ok(disassembler) = Disassembler::from_bytes(Architecture::ARM64, bytes, ranges, config)
     else {
         return false;
     };
-    disassembler
-        .disassemble_instruction(0, &metadata_token_addresses, &mut graph)
-        .is_ok()
+    disassembler.disassemble_instruction(0, &mut graph).is_ok()
 }
 
 fn arm64_unicorn_supports(bytes: &[u8]) -> bool {

@@ -20,18 +20,18 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::config::ConfigImaging;
+use crate::config::ConfigHashing;
 use crate::imaging::hash as render_hash;
 use crate::imaging::render::Render;
 
 #[derive(Clone)]
 pub(crate) struct ImagingArtifact {
-    hashing: ConfigImaging,
+    hashing: ConfigHashing,
     render: Render,
 }
 
 impl ImagingArtifact {
-    pub(crate) fn new(render: Render, hashing: ConfigImaging) -> Self {
+    pub(crate) fn new(render: Render, hashing: ConfigHashing) -> Self {
         Self { hashing, render }
     }
 

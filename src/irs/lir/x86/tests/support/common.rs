@@ -128,9 +128,8 @@ pub(crate) fn disassemble_x86_single(
     let mut graph = Graph::new(architecture, config.clone());
     let disassembler =
         Disassembler::from_bytes(architecture, bytes, ranges, config).expect("disassembler");
-    let metadata_token_addresses = BTreeMap::new();
     disassembler
-        .disassemble_instruction(0, &metadata_token_addresses, &mut graph)
+        .disassemble_instruction(0, &mut graph)
         .unwrap_or_else(|error| panic!("{name}: instruction should disassemble: {error}"));
     graph
         .get_instruction_record(0)

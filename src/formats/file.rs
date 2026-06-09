@@ -115,7 +115,10 @@ impl File {
         if self.size() == 0 {
             return None;
         }
-        Some(TLSH::new(&self.data, 50))
+        Some(TLSH::new(
+            &self.data,
+            self.config.hashing.tlsh.minimum_byte_size,
+        ))
     }
 
     /// Computes the SHA-256 hash of the file's data.

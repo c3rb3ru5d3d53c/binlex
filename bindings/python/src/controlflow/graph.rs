@@ -28,12 +28,39 @@ use crate::Architecture;
 use crate::Configuration;
 use binlex::controlflow::Graph as InnerGraph;
 use binlex::controlflow::GraphQueue as InnerGraphQueue;
-use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
+use pyo3::types::PyAny;
+use serde_json::Value;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::Mutex;
+
+fn json_value_to_py(py: Python<'_>, value: &Value) -> PyResult<Py<PyAny>> {
+    let json_str =
+        serde_json::to_string(value).map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+    let json_module = py.import("json")?;
+    Ok(json_module.call_method1("loads", (json_str,))?.into())
+}
+
+fn py_to_json_value(py: Python<'_>, value: Py<PyAny>) -> PyResult<Value> {
+    let json_module = py.import("json")?;
+    let json_str = json_module
+        .call_method1("dumps", (value,))?
+        .extract::<String>()?;
+    serde_json::from_str(&json_str).map_err(|error| PyValueError::new_err(error.to_string()))
+}
+
+fn py_to_metadata(py: Python<'_>, value: Option<Py<PyAny>>) -> PyResult<BTreeMap<String, Value>> {
+    let Some(value) = value else {
+        return Ok(BTreeMap::new());
+    };
+    match py_to_json_value(py, value)? {
+        Value::Object(object) => Ok(object.into_iter().collect()),
+        _ => Err(PyValueError::new_err("graph metadata must be a dict")),
+    }
+}
 
 /// Manage the discovery state for instructions, blocks, or functions in a graph.
 #[pyclass]
@@ -199,24 +226,24 @@ impl Graph {
 #[pymethods]
 impl Graph {
     #[new]
-    #[pyo3(text_signature = "(architecture, config, symbols=None)")]
+    #[pyo3(text_signature = "(architecture, config, metadata=None)")]
     /// Create a new graph for the supplied architecture and configuration.
     pub fn new(
         py: Python,
         architecture: Py<Architecture>,
         config: Py<Configuration>,
-        symbols: Option<BTreeMap<u64, String>>,
-    ) -> Self {
+        metadata: Option<Py<PyAny>>,
+    ) -> PyResult<Self> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
-        let inner = InnerGraph::new_with_symbols(
+        let inner = InnerGraph::new_with_metadata(
             architecture.borrow(py).inner,
             inner_config,
-            symbols.unwrap_or_default(),
+            py_to_metadata(py, metadata)?,
         );
-        Self {
+        Ok(Self {
             inner: Arc::new(Mutex::new(inner)),
             image: Arc::new(Mutex::new(None)),
-        }
+        })
     }
 
     #[pyo3(text_signature = "($self)")]
@@ -319,7 +346,47 @@ impl Graph {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the graph-owned symbol map keyed by address.
+    /// Return the graph-owned metadata.
+    pub fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(
+            py,
+            &serde_json::to_value(self.inner.lock().unwrap().metadata()).unwrap(),
+        )
+    }
+
+    #[pyo3(text_signature = "($self, metadata)")]
+    /// Replace the graph-owned metadata.
+    pub fn replace_metadata(&self, py: Python<'_>, metadata: Py<PyAny>) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .replace_metadata(py_to_metadata(py, Some(metadata))?);
+        Ok(())
+    }
+
+    #[pyo3(text_signature = "($self, metadata)")]
+    /// Merge metadata into the graph-owned metadata.
+    pub fn extend_metadata(&self, py: Python<'_>, metadata: Py<PyAny>) -> PyResult<()> {
+        self.inner
+            .lock()
+            .unwrap()
+            .extend_metadata(py_to_metadata(py, Some(metadata))?);
+        Ok(())
+    }
+
+    #[pyo3(text_signature = "($self, key)")]
+    /// Return one graph metadata value by key, if present.
+    pub fn metadata_value(&self, py: Python<'_>, key: String) -> PyResult<Option<Py<PyAny>>> {
+        self.inner
+            .lock()
+            .unwrap()
+            .metadata_value(&key)
+            .map(|value| json_value_to_py(py, &value))
+            .transpose()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the symbol-name view derived from graph metadata.
     pub fn symbols(&self) -> BTreeMap<u64, String> {
         self.inner.lock().unwrap().symbols()
     }
@@ -337,13 +404,13 @@ impl Graph {
     }
 
     #[pyo3(text_signature = "($self, symbols)")]
-    /// Replace all graph-owned symbols with the provided map.
+    /// Replace metadata symbols with the provided map.
     pub fn replace_symbols(&self, symbols: BTreeMap<u64, String>) {
         self.inner.lock().unwrap().replace_symbols(symbols);
     }
 
     #[pyo3(text_signature = "($self, symbols)")]
-    /// Merge symbols into the graph-owned symbol map.
+    /// Merge symbols into graph metadata.
     pub fn extend_symbols(&self, symbols: BTreeMap<u64, String>) {
         self.inner.lock().unwrap().extend_symbols(symbols);
     }

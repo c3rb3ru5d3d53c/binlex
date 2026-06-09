@@ -387,7 +387,7 @@ impl<'block> Block<'block> {
     pub fn tlsh(&self) -> Option<TLSH<'static>> {
         Some(TLSH::from_bytes(
             self.bytes(),
-            self.cfg.config.blocks.tlsh.minimum_byte_size,
+            self.cfg.config.hashing.tlsh.minimum_byte_size,
         ))
     }
 
@@ -398,16 +398,16 @@ impl<'block> Block<'block> {
     /// Returns `Some(MinHash32)` containing the MinHash object, or `None` if the block's size exceeds the configured maximum.
     pub fn minhash(&self) -> Option<MinHash32<'static>> {
         let bytes = self.bytes();
-        if bytes.len() > self.cfg.config.blocks.minhash.maximum_byte_size
-            && self.cfg.config.blocks.minhash.maximum_byte_size_enabled
+        if bytes.len() > self.cfg.config.hashing.minhash.maximum_byte_size
+            && self.cfg.config.hashing.minhash.maximum_byte_size_enabled
         {
             return None;
         }
         Some(MinHash32::from_bytes(
             bytes,
-            self.cfg.config.blocks.minhash.number_of_hashes,
-            self.cfg.config.blocks.minhash.shingle_size,
-            self.cfg.config.blocks.minhash.seed,
+            self.cfg.config.hashing.minhash.number_of_hashes,
+            self.cfg.config.hashing.minhash.shingle_size,
+            self.cfg.config.hashing.minhash.seed,
         ))
     }
 

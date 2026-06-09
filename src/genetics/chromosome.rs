@@ -181,7 +181,7 @@ impl Chromosome {
     pub fn tlsh(&self) -> Option<TLSH<'static>> {
         Some(TLSH::from_bytes(
             self.masked(),
-            self.config.chromosomes.tlsh.minimum_byte_size,
+            self.config.hashing.tlsh.minimum_byte_size,
         ))
     }
 
@@ -189,16 +189,16 @@ impl Chromosome {
     #[allow(dead_code)]
     pub fn minhash(&self) -> Option<MinHash32<'static>> {
         let masked = self.masked();
-        if masked.len() > self.config.chromosomes.minhash.maximum_byte_size
-            && self.config.chromosomes.minhash.maximum_byte_size_enabled
+        if masked.len() > self.config.hashing.minhash.maximum_byte_size
+            && self.config.hashing.minhash.maximum_byte_size_enabled
         {
             return None;
         }
         Some(MinHash32::from_bytes(
             masked,
-            self.config.chromosomes.minhash.number_of_hashes,
-            self.config.chromosomes.minhash.shingle_size,
-            self.config.chromosomes.minhash.seed,
+            self.config.hashing.minhash.number_of_hashes,
+            self.config.hashing.minhash.shingle_size,
+            self.config.hashing.minhash.seed,
         ))
     }
 

@@ -133,6 +133,23 @@ class Symbol:
         return self._inner.kind()
 
 
+def _symbol_metadata(symbol):
+    result = {
+        "name": symbol.name(),
+        "file_offset": symbol.file_offset(),
+        "virtual_address": symbol.virtual_address(),
+        "kind": str(symbol.kind()),
+    }
+    relative_virtual_address = symbol.relative_virtual_address()
+    if relative_virtual_address is not None:
+        result["relative_virtual_address"] = relative_virtual_address
+    return result
+
+
+def _symbols_metadata(symbols):
+    return [_symbol_metadata(symbol) for symbol in symbols if symbol.virtual_address() is not None]
+
+
 class ELF:
     """Executable and Linkable Format wrapper with address translation helpers."""
 
@@ -340,6 +357,19 @@ class PE:
     def symbols(self):
         """Return typed symbols extracted from the PE image."""
         return [Symbol(item) for item in self._inner.symbols()]
+
+    def metadata(self):
+        """Return graph metadata extracted from the PE image."""
+        return {
+            "format": "pe",
+            "symbols": _symbols_metadata(self.symbols()),
+            "cil": {
+                "metadata_token_virtual_addresses": {
+                    str(token): address
+                    for token, address in self._inner.dotnet_metadata_token_virtual_addresses().items()
+                }
+            },
+        }
 
     def bytes(self):
         """Return the original unmapped PE container bytes."""

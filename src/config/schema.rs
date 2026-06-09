@@ -32,53 +32,15 @@ pub struct ConfigFileRoot {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigBlocks {
-    pub tlsh: ConfigTLSH,
-    pub minhash: ConfigMinhash,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigChromosomes {
+pub struct ConfigHashing {
     pub tlsh: ConfigTLSH,
     pub minhash: ConfigMinhash,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ConfigFunctions {
-    pub tlsh: ConfigTLSH,
-    pub minhash: ConfigMinhash,
     #[serde(default)]
     pub markov: ConfigMarkov,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigFile {
-    pub tlsh: ConfigTLSH,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigFormats {
-    pub file: ConfigFile,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigImaging {
-    pub tlsh: ConfigImagingTLSH,
-    pub minhash: ConfigImagingMinhash,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigImagingTLSH {
-    pub minimum_byte_size: usize,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ConfigImagingMinhash {
-    pub number_of_hashes: usize,
-    pub shingle_size: usize,
-    pub maximum_byte_size_enabled: bool,
-    pub maximum_byte_size: usize,
-    pub seed: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -111,11 +73,8 @@ pub struct ConfigIrsLLVM {
 pub struct ConfigData {
     pub threads: usize,
     pub debug: bool,
-    pub formats: ConfigFormats,
-    pub imaging: ConfigImaging,
-    pub blocks: ConfigBlocks,
+    pub hashing: ConfigHashing,
     pub functions: ConfigFunctions,
-    pub chromosomes: ConfigChromosomes,
     pub mmap: ConfigMmap,
     pub disassembler: ConfigDisassembler,
     #[serde(default)]

@@ -260,9 +260,3 @@ llvm = LlvmModule(function.lir().abi().cpu(), config)
 llvm.lift_function(function)
 print(llvm.text())
 ```
-
-## Suggested Next Docs
-
-If you are starting from controlflow, the next useful docs are:
-
-- [lifters.md](./lifters.md)

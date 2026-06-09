@@ -98,8 +98,7 @@ impl<'a> Decompiler<'a> {
         match self.backend {
             DecompilerBackend::Default => {
                 let lir = function.lir()?;
-                let mut mir = function.mir()?;
-                function.trim_mir_call_arguments(&mut mir, &self.graph.symbols())?;
+                let mir = function.mir()?;
                 let hir = HirFunction::from_mir(None, &mir)
                     .map_err(|error| Error::other(error.to_string()))?;
                 let ast = AstFunction::from_hir(&hir).with_image(self.image);

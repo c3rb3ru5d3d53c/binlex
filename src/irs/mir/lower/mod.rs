@@ -20,8 +20,10 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+pub mod function;
 pub mod lir;
 
+pub use function::lower_function_to_mir;
 pub use lir::{
     MirLowerError, lower_lir_block_to_mir, lower_lir_to_mir, materialize_entry_parameters,
 };

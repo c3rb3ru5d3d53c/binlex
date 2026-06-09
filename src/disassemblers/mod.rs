@@ -25,6 +25,7 @@ use crate::Configuration;
 use crate::controlflow::Graph;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::formats::Image;
+use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Error, ErrorKind};
 
@@ -48,6 +49,30 @@ enum DisassemblerImpl<'a> {
 
 pub struct Disassembler<'a> {
     inner: DisassemblerImpl<'a>,
+}
+
+fn parse_metadata_address(value: &str) -> Option<u64> {
+    if let Some(hex) = value
+        .strip_prefix("0x")
+        .or_else(|| value.strip_prefix("0X"))
+    {
+        return u64::from_str_radix(hex, 16).ok();
+    }
+    value.parse::<u64>().ok()
+}
+
+fn cil_metadata_token_addresses(cfg: &Graph) -> BTreeMap<u64, u64> {
+    let metadata = cfg.metadata();
+    let Some(Value::Object(cil)) = metadata.get("cil") else {
+        return BTreeMap::new();
+    };
+    let Some(Value::Object(tokens)) = cil.get("metadata_token_virtual_addresses") else {
+        return BTreeMap::new();
+    };
+    tokens
+        .iter()
+        .filter_map(|(token, address)| Some((parse_metadata_address(token)?, address.as_u64()?)))
+        .collect()
 }
 
 impl<'a> Disassembler<'a> {
@@ -171,7 +196,6 @@ impl<'a> Disassembler<'a> {
     pub fn disassemble_instruction<'g>(
         &self,
         address: u64,
-        metadata_token_addresses: &BTreeMap<u64, u64>,
         cfg: &'g mut Graph,
     ) -> Result<Instruction<'g>, Error> {
         match &self.inner {
@@ -182,7 +206,8 @@ impl<'a> Disassembler<'a> {
                 disassembler.disassemble_instruction(address, cfg)
             }
             DisassemblerImpl::Cil(disassembler) => {
-                disassembler.disassemble_instruction(address, metadata_token_addresses, cfg)
+                let metadata_token_addresses = cil_metadata_token_addresses(cfg);
+                disassembler.disassemble_instruction(address, &metadata_token_addresses, cfg)
             }
         }
     }
@@ -190,14 +215,14 @@ impl<'a> Disassembler<'a> {
     pub fn disassemble_block<'g>(
         &self,
         address: u64,
-        metadata_token_addresses: &BTreeMap<u64, u64>,
         cfg: &'g mut Graph,
     ) -> Result<Block<'g>, Error> {
         match &self.inner {
             DisassemblerImpl::X86(disassembler) => disassembler.disassemble_block(address, cfg),
             DisassemblerImpl::Arm64(disassembler) => disassembler.disassemble_block(address, cfg),
             DisassemblerImpl::Cil(disassembler) => {
-                disassembler.disassemble_block(address, metadata_token_addresses, cfg)
+                let metadata_token_addresses = cil_metadata_token_addresses(cfg);
+                disassembler.disassemble_block(address, &metadata_token_addresses, cfg)
             }
         }
     }
@@ -205,7 +230,6 @@ impl<'a> Disassembler<'a> {
     pub fn disassemble_function<'g>(
         &self,
         address: u64,
-        metadata_token_addresses: &BTreeMap<u64, u64>,
         cfg: &'g mut Graph,
     ) -> Result<Function<'g>, Error> {
         match &self.inner {
@@ -214,21 +238,18 @@ impl<'a> Disassembler<'a> {
                 disassembler.disassemble_function(address, cfg)
             }
             DisassemblerImpl::Cil(disassembler) => {
-                disassembler.disassemble_function(address, metadata_token_addresses, cfg)
+                let metadata_token_addresses = cil_metadata_token_addresses(cfg);
+                disassembler.disassemble_function(address, &metadata_token_addresses, cfg)
             }
         }
     }
 
-    pub fn disassemble(
-        &self,
-        addresses: BTreeSet<u64>,
-        metadata_token_addresses: BTreeMap<u64, u64>,
-        cfg: &mut Graph,
-    ) -> Result<(), Error> {
+    pub fn disassemble(&self, addresses: BTreeSet<u64>, cfg: &mut Graph) -> Result<(), Error> {
         match &self.inner {
             DisassemblerImpl::X86(disassembler) => disassembler.disassemble(addresses, cfg),
             DisassemblerImpl::Arm64(disassembler) => disassembler.disassemble(addresses, cfg),
             DisassemblerImpl::Cil(disassembler) => {
+                let metadata_token_addresses = cil_metadata_token_addresses(cfg);
                 disassembler.disassemble(addresses, metadata_token_addresses, cfg)
             }
         }

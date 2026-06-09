@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::config::ConfigImaging;
+use crate::config::ConfigHashing;
 use crate::hashing::{AHash, DHash, MinHash32, PHash, SHA256, TLSH};
 use crate::imaging::render::Render;
 use image::ColorType;
@@ -63,17 +63,17 @@ pub(crate) fn encode_png(render: &Render) -> io::Result<Vec<u8>> {
     Ok(encoded)
 }
 
-pub(crate) fn sha256(render: &Render, _config: &ConfigImaging) -> Option<SHA256<'static>> {
+pub(crate) fn sha256(render: &Render, _config: &ConfigHashing) -> Option<SHA256<'static>> {
     let bytes = encode_png(render).ok()?;
     Some(SHA256::from_bytes(bytes))
 }
 
-pub(crate) fn tlsh(render: &Render, config: &ConfigImaging) -> Option<TLSH<'static>> {
+pub(crate) fn tlsh(render: &Render, config: &ConfigHashing) -> Option<TLSH<'static>> {
     let bytes = encode_png(render).ok()?;
     Some(TLSH::from_bytes(bytes, config.tlsh.minimum_byte_size))
 }
 
-pub(crate) fn minhash(render: &Render, config: &ConfigImaging) -> Option<MinHash32<'static>> {
+pub(crate) fn minhash(render: &Render, config: &ConfigHashing) -> Option<MinHash32<'static>> {
     let bytes = encode_png(render).ok()?;
     if config.minhash.maximum_byte_size_enabled && bytes.len() > config.minhash.maximum_byte_size {
         return None;
@@ -86,17 +86,17 @@ pub(crate) fn minhash(render: &Render, config: &ConfigImaging) -> Option<MinHash
     ))
 }
 
-pub(crate) fn ahash(render: &Render, _config: &ConfigImaging) -> Option<AHash<'static>> {
+pub(crate) fn ahash(render: &Render, _config: &ConfigHashing) -> Option<AHash<'static>> {
     let bytes = encode_png(render).ok()?;
     Some(AHash::from_bytes(bytes))
 }
 
-pub(crate) fn dhash(render: &Render, _config: &ConfigImaging) -> Option<DHash<'static>> {
+pub(crate) fn dhash(render: &Render, _config: &ConfigHashing) -> Option<DHash<'static>> {
     let bytes = encode_png(render).ok()?;
     Some(DHash::from_bytes(bytes))
 }
 
-pub(crate) fn phash(render: &Render, _config: &ConfigImaging) -> Option<PHash<'static>> {
+pub(crate) fn phash(render: &Render, _config: &ConfigHashing) -> Option<PHash<'static>> {
     let bytes = encode_png(render).ok()?;
     Some(PHash::from_bytes(bytes))
 }

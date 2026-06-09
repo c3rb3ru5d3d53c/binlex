@@ -27,12 +27,14 @@ use crate::controlflow::Function;
 use crate::controlflow::Instruction;
 use crate::controlflow::InstructionRecord;
 use crate::controlflow::Reference;
+use crate::formats::{Symbol, SymbolKind};
 use crate::irs::lir::Lir;
 use crossbeam::queue::SegQueue;
 use crossbeam_skiplist::SkipMap;
 use crossbeam_skiplist::SkipSet;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Error;
 use std::sync::Mutex;
@@ -50,7 +52,7 @@ pub struct GraphSnapshot {
     pub architecture: String,
     pub instructions: Vec<GraphInstructionSnapshot>,
     #[serde(default)]
-    pub symbols: BTreeMap<u64, String>,
+    pub metadata: BTreeMap<String, Value>,
     pub instruction_queue: GraphQueueSnapshot,
     pub block_queue: GraphQueueSnapshot,
     pub function_queue: GraphQueueSnapshot,
@@ -408,6 +410,47 @@ struct GraphFunctionLayoutState {
     blocks: BTreeMap<u64, Vec<u64>>,
 }
 
+fn parse_metadata_address(value: &str) -> Option<u64> {
+    if let Some(hex) = value
+        .strip_prefix("0x")
+        .or_else(|| value.strip_prefix("0X"))
+    {
+        return u64::from_str_radix(hex, 16).ok();
+    }
+    value.parse::<u64>().ok()
+}
+
+fn symbol_kind_from_str(value: &str) -> SymbolKind {
+    match value {
+        "function" | "Function" => SymbolKind::Function,
+        "import" | "Import" => SymbolKind::Import,
+        "export" | "Export" => SymbolKind::Export,
+        _ => SymbolKind::Unknown,
+    }
+}
+
+fn parse_symbol_value(value: &Value) -> Option<Symbol> {
+    let object = value.as_object()?;
+    let name = object.get("name")?.as_str()?.to_string();
+    let kind = object
+        .get("kind")
+        .and_then(Value::as_str)
+        .map(symbol_kind_from_str)
+        .unwrap_or(SymbolKind::Unknown);
+    Some(Symbol {
+        name,
+        file_offset: object
+            .get("file_offset")
+            .and_then(Value::as_u64)
+            .unwrap_or_default(),
+        virtual_address: object.get("virtual_address").and_then(Value::as_u64),
+        relative_virtual_address: object
+            .get("relative_virtual_address")
+            .and_then(Value::as_u64),
+        kind,
+    })
+}
+
 pub struct Graph {
     /// The Instruction Architecture
     pub architecture: Architecture,
@@ -421,7 +464,7 @@ pub struct Graph {
     pub instructions: GraphQueue,
     /// Configuration
     pub config: Configuration,
-    symbols: Mutex<BTreeMap<u64, String>>,
+    metadata: Mutex<BTreeMap<String, Value>>,
     revision: AtomicU64,
     callgraph_state: Mutex<GraphCallgraphState>,
     block_layout_state: Mutex<GraphBlockLayoutState>,
@@ -436,13 +479,13 @@ impl Graph {
     /// Returns a `Graph` instance with empty instructions, blocks, and functions.
     #[allow(dead_code)]
     pub fn new(architecture: Architecture, config: Configuration) -> Self {
-        Self::new_with_symbols(architecture, config, BTreeMap::new())
+        Self::new_with_metadata(architecture, config, BTreeMap::new())
     }
 
-    pub fn new_with_symbols(
+    pub fn new_with_metadata(
         architecture: Architecture,
         config: Configuration,
-        symbols: BTreeMap<u64, String>,
+        metadata: BTreeMap<String, Value>,
     ) -> Self {
         Self {
             architecture,
@@ -451,7 +494,7 @@ impl Graph {
             functions: GraphQueue::new(),
             instructions: GraphQueue::new(),
             config,
-            symbols: Mutex::new(symbols),
+            metadata: Mutex::new(metadata),
             revision: AtomicU64::new(0),
             callgraph_state: Mutex::new(GraphCallgraphState::default()),
             block_layout_state: Mutex::new(GraphBlockLayoutState::default()),
@@ -493,7 +536,7 @@ impl Graph {
         GraphSnapshot {
             architecture: self.architecture.to_string(),
             instructions,
-            symbols: self.symbols(),
+            metadata: self.metadata(),
             instruction_queue: Self::snapshot_queue(&self.instructions),
             block_queue: Self::snapshot_queue(&self.blocks),
             function_queue: Self::snapshot_queue(&self.functions),
@@ -503,7 +546,7 @@ impl Graph {
     pub fn from_snapshot(snapshot: GraphSnapshot, config: Configuration) -> Result<Self, Error> {
         let architecture = Architecture::from_string(&snapshot.architecture)?;
         let mut graph = Self::new(architecture, config.clone());
-        graph.replace_symbols(snapshot.symbols);
+        graph.replace_metadata(snapshot.metadata);
 
         for snapshot_instruction in snapshot.instructions {
             let instruction_architecture =
@@ -596,24 +639,141 @@ impl Graph {
         &self.listing
     }
 
+    pub fn metadata(&self) -> BTreeMap<String, Value> {
+        self.metadata.lock().unwrap().clone()
+    }
+
+    pub fn replace_metadata(&mut self, metadata: BTreeMap<String, Value>) {
+        *self.metadata.lock().unwrap() = metadata;
+    }
+
+    pub fn extend_metadata(&mut self, metadata: BTreeMap<String, Value>) {
+        self.metadata.lock().unwrap().extend(metadata);
+    }
+
+    pub fn metadata_value(&self, key: &str) -> Option<Value> {
+        self.metadata.lock().unwrap().get(key).cloned()
+    }
+
     pub fn symbols(&self) -> BTreeMap<u64, String> {
-        self.symbols.lock().unwrap().clone()
+        self.symbol_records()
+            .into_iter()
+            .filter_map(|symbol| symbol.virtual_address.map(|address| (address, symbol.name)))
+            .collect()
+    }
+
+    pub fn symbol_records(&self) -> Vec<Symbol> {
+        let metadata = self.metadata.lock().unwrap();
+        let Some(value) = metadata.get("symbols") else {
+            return Vec::new();
+        };
+        Self::metadata_symbols(value)
     }
 
     pub fn symbol(&self, address: u64) -> Option<String> {
-        self.symbols.lock().unwrap().get(&address).cloned()
-    }
-
-    pub fn replace_symbols(&mut self, symbols: BTreeMap<u64, String>) {
-        *self.symbols.lock().unwrap() = symbols;
-    }
-
-    pub fn extend_symbols(&mut self, symbols: BTreeMap<u64, String>) {
-        self.symbols.lock().unwrap().extend(symbols);
+        self.symbols().get(&address).cloned()
     }
 
     pub fn insert_symbol(&mut self, address: u64, name: String) -> Option<String> {
-        self.symbols.lock().unwrap().insert(address, name)
+        let mut symbols = self.symbol_records();
+        let previous = symbols
+            .iter()
+            .find(|symbol| symbol.virtual_address == Some(address))
+            .map(|symbol| symbol.name.clone());
+        symbols.retain(|symbol| symbol.virtual_address != Some(address));
+        symbols.push(Symbol {
+            name,
+            file_offset: 0,
+            virtual_address: Some(address),
+            relative_virtual_address: None,
+            kind: SymbolKind::Function,
+        });
+        self.set_symbol_records(symbols);
+        previous
+    }
+
+    pub fn replace_symbols(&mut self, symbols: BTreeMap<u64, String>) {
+        self.set_symbol_records(Self::symbols_from_map(symbols));
+    }
+
+    pub fn extend_symbols(&mut self, symbols: BTreeMap<u64, String>) {
+        for (address, name) in symbols {
+            self.insert_symbol(address, name);
+        }
+    }
+
+    fn set_symbol_records(&mut self, symbols: Vec<Symbol>) {
+        let value = serde_json::to_value(symbols).unwrap_or_else(|_| Value::Array(Vec::new()));
+        self.metadata
+            .lock()
+            .unwrap()
+            .insert("symbols".to_string(), value);
+    }
+
+    fn symbols_from_map(symbols: BTreeMap<u64, String>) -> Vec<Symbol> {
+        symbols
+            .into_iter()
+            .map(|(address, name)| Symbol {
+                name,
+                file_offset: 0,
+                virtual_address: Some(address),
+                relative_virtual_address: None,
+                kind: SymbolKind::Function,
+            })
+            .collect()
+    }
+
+    fn metadata_symbols(value: &Value) -> Vec<Symbol> {
+        if let Ok(symbols) = serde_json::from_value::<Vec<Symbol>>(value.clone()) {
+            return symbols;
+        }
+
+        if let Some(array) = value.as_array() {
+            return array.iter().filter_map(parse_symbol_value).collect();
+        }
+
+        let Some(object) = value.as_object() else {
+            return Vec::new();
+        };
+
+        object
+            .iter()
+            .filter_map(|(address, value)| {
+                let address = parse_metadata_address(address)?;
+                if let Some(name) = value.as_str() {
+                    return Some(Symbol {
+                        name: name.to_string(),
+                        file_offset: 0,
+                        virtual_address: Some(address),
+                        relative_virtual_address: None,
+                        kind: SymbolKind::Function,
+                    });
+                }
+
+                let object = value.as_object()?;
+                let name = object.get("name")?.as_str()?.to_string();
+                let kind = object
+                    .get("kind")
+                    .and_then(Value::as_str)
+                    .map(symbol_kind_from_str)
+                    .unwrap_or(SymbolKind::Unknown);
+                Some(Symbol {
+                    name,
+                    file_offset: object
+                        .get("file_offset")
+                        .and_then(Value::as_u64)
+                        .unwrap_or_default(),
+                    virtual_address: object
+                        .get("virtual_address")
+                        .and_then(Value::as_u64)
+                        .or(Some(address)),
+                    relative_virtual_address: object
+                        .get("relative_virtual_address")
+                        .and_then(Value::as_u64),
+                    kind,
+                })
+            })
+            .collect()
     }
 
     pub fn mutations(&self) -> u64 {
@@ -791,8 +951,8 @@ impl Graph {
         self.instructions.merge_from(&mut graph.instructions);
         self.blocks.merge_from(&mut graph.blocks);
         self.functions.merge_from(&mut graph.functions);
-        let symbols = std::mem::take(&mut *graph.symbols.lock().unwrap());
-        self.extend_symbols(symbols);
+        let metadata = std::mem::take(&mut *graph.metadata.lock().unwrap());
+        self.extend_metadata(metadata);
     }
 
     pub fn process(&self) -> Result<(), Error> {

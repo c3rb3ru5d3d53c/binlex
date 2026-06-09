@@ -46,30 +46,65 @@ def _decompiler_symbol_map(graph):
     return graph.symbols()
 
 
-def _coerce_symbol_map(symbols):
-    if isinstance(symbols, dict):
-        symbol_map = {}
-        for virtual_address, name in symbols.items():
-            if virtual_address is None or not name:
-                continue
-            symbol_map[int(virtual_address)] = str(name)
-        return symbol_map
+def _symbol_metadata(symbol):
+    if isinstance(symbol, dict):
+        name = symbol.get("name")
+        virtual_address = symbol.get("virtual_address")
+        file_offset = symbol.get("file_offset", 0)
+        relative_virtual_address = symbol.get("relative_virtual_address")
+        kind = symbol.get("kind", "unknown")
+    else:
+        name = symbol.name()
+        virtual_address = symbol.virtual_address()
+        file_offset = symbol.file_offset()
+        relative_virtual_address = symbol.relative_virtual_address()
+        kind = str(symbol.kind())
 
-    symbol_map = {}
+    if virtual_address is None or not name:
+        return None
+
+    result = {
+        "name": str(name),
+        "file_offset": int(file_offset or 0),
+        "virtual_address": int(virtual_address),
+        "kind": str(kind),
+    }
+    if relative_virtual_address is not None:
+        result["relative_virtual_address"] = int(relative_virtual_address)
+    return result
+
+
+def _coerce_symbol_metadata(symbols):
+    if isinstance(symbols, dict):
+        result = []
+        for virtual_address, value in symbols.items():
+            if isinstance(value, dict):
+                symbol = dict(value)
+                symbol.setdefault("virtual_address", virtual_address)
+            else:
+                symbol = {"virtual_address": virtual_address, "name": value}
+            symbol = _symbol_metadata(symbol)
+            if symbol is not None:
+                result.append(symbol)
+        return result
+
+    result = []
     for symbol in symbols or []:
         try:
-            if isinstance(symbol, dict):
-                virtual_address = symbol.get("virtual_address")
-                name = symbol.get("name")
-            else:
-                virtual_address = symbol.virtual_address()
-                name = symbol.name()
+            symbol = _symbol_metadata(symbol)
         except Exception:
             continue
-        if virtual_address is None or not name:
-            continue
-        symbol_map[int(virtual_address)] = name
-    return symbol_map
+        if symbol is not None:
+            result.append(symbol)
+    return result
+
+
+def _coerce_metadata(metadata):
+    if metadata is None:
+        return {}
+    if isinstance(metadata, dict):
+        return dict(metadata)
+    return {"symbols": _coerce_symbol_metadata(metadata)}
 
 
 def _const_u64_value(expression):
@@ -839,12 +874,12 @@ class GraphQueue:
 class Graph:
     """Mutable control-flow graph wrapper backed by the Rust implementation."""
 
-    def __init__(self, architecture, config, symbols=None):
+    def __init__(self, architecture, config, metadata=None):
         """Create a graph for the given architecture and configuration."""
         self._inner = _GraphBinding(
             _coerce_architecture(architecture),
             config,
-            _coerce_symbol_map(symbols),
+            _coerce_metadata(metadata),
         )
         self._config = config
         self._decompiler = None
@@ -921,7 +956,7 @@ class Graph:
         return self._inner.extend_instruction_edges(address, addresses)
 
     def symbols(self):
-        """Return the graph-owned symbol map keyed by address."""
+        """Return the symbol-name view derived from graph metadata."""
         return dict(self._inner.symbols())
 
     def symbol(self, address):
@@ -929,16 +964,36 @@ class Graph:
         return self._inner.symbol(address)
 
     def insert_symbol(self, address, name):
-        """Insert or replace a single graph-owned symbol."""
+        """Insert or replace a symbol in graph metadata."""
         return self._inner.insert_symbol(address, name)
 
     def replace_symbols(self, symbols):
-        """Replace the graph-owned symbol map."""
-        return self._inner.replace_symbols(_coerce_symbol_map(symbols))
+        """Replace metadata symbols."""
+        metadata = self.metadata()
+        metadata["symbols"] = _coerce_symbol_metadata(symbols)
+        return self._inner.replace_metadata(metadata)
 
     def extend_symbols(self, symbols):
-        """Merge symbols into the graph-owned symbol map."""
-        return self._inner.extend_symbols(_coerce_symbol_map(symbols))
+        """Merge symbols into graph metadata."""
+        for symbol in _coerce_symbol_metadata(symbols):
+            self._inner.insert_symbol(symbol["virtual_address"], symbol["name"])
+        return None
+
+    def metadata(self):
+        """Return graph metadata."""
+        return self._inner.metadata()
+
+    def replace_metadata(self, metadata):
+        """Replace graph metadata."""
+        return self._inner.replace_metadata(_coerce_metadata(metadata))
+
+    def extend_metadata(self, metadata):
+        """Merge metadata into graph metadata."""
+        return self._inner.extend_metadata(_coerce_metadata(metadata))
+
+    def metadata_value(self, key):
+        """Return one graph metadata value by key, if present."""
+        return self._inner.metadata_value(key)
 
     def __getattr__(self, name):
         """Delegate unknown attributes to the underlying native graph object."""

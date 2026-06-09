@@ -26,111 +26,110 @@ use pyo3::prelude::*;
 use std::sync::{Arc, Mutex};
 
 #[pyclass]
-pub struct ConfigChromosomes {
+pub struct ConfigHashing {
     inner: Arc<Mutex<InnerConfig>>,
 }
 
 #[pymethods]
-impl ConfigChromosomes {
+impl ConfigHashing {
     #[getter]
-    pub fn get_tlsh(&self) -> ConfigChromosomesHashingTLSH {
-        ConfigChromosomesHashingTLSH {
+    pub fn get_tlsh(&self) -> ConfigTLSH {
+        ConfigTLSH {
             inner: Arc::clone(&self.inner),
         }
     }
 
     #[getter]
-    pub fn get_minhash(&self) -> ConfigChromosomesHashingMinhash {
-        ConfigChromosomesHashingMinhash {
+    pub fn get_minhash(&self) -> ConfigMinhash {
+        ConfigMinhash {
             inner: Arc::clone(&self.inner),
         }
     }
 }
 
 #[pyclass]
-pub struct ConfigChromosomesHashingTLSH {
-    pub inner: Arc<Mutex<InnerConfig>>,
+pub struct ConfigTLSH {
+    inner: Arc<Mutex<InnerConfig>>,
 }
 
 #[pymethods]
-impl ConfigChromosomesHashingTLSH {
+impl ConfigTLSH {
     #[getter]
     pub fn get_minimum_byte_size(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.chromosomes.tlsh.minimum_byte_size
+        self.inner.lock().unwrap().hashing.tlsh.minimum_byte_size
     }
 
     #[setter]
     pub fn set_minimum_byte_size(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.tlsh.minimum_byte_size = value;
+        self.inner.lock().unwrap().hashing.tlsh.minimum_byte_size = value;
     }
 }
 
 #[pyclass]
-pub struct ConfigChromosomesHashingMinhash {
-    pub inner: Arc<Mutex<InnerConfig>>,
+pub struct ConfigMinhash {
+    inner: Arc<Mutex<InnerConfig>>,
 }
 
 #[pymethods]
-impl ConfigChromosomesHashingMinhash {
+impl ConfigMinhash {
     #[getter]
     pub fn get_number_of_hashes(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.chromosomes.minhash.number_of_hashes
+        self.inner.lock().unwrap().hashing.minhash.number_of_hashes
     }
 
     #[setter]
     pub fn set_number_of_hashes(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.minhash.number_of_hashes = value;
+        self.inner.lock().unwrap().hashing.minhash.number_of_hashes = value;
     }
 
     #[getter]
     pub fn get_shingle_size(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.chromosomes.minhash.shingle_size
+        self.inner.lock().unwrap().hashing.minhash.shingle_size
     }
 
     #[setter]
     pub fn set_shingle_size(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.minhash.shingle_size = value;
+        self.inner.lock().unwrap().hashing.minhash.shingle_size = value;
     }
 
     #[getter]
     pub fn get_maximum_byte_size_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.chromosomes.minhash.maximum_byte_size_enabled
+        self.inner
+            .lock()
+            .unwrap()
+            .hashing
+            .minhash
+            .maximum_byte_size_enabled
     }
 
     #[setter]
     pub fn set_maximum_byte_size_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.minhash.maximum_byte_size_enabled = value;
+        self.inner
+            .lock()
+            .unwrap()
+            .hashing
+            .minhash
+            .maximum_byte_size_enabled = value;
     }
 
     #[getter]
     pub fn get_maximum_byte_size(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.chromosomes.minhash.maximum_byte_size
+        self.inner.lock().unwrap().hashing.minhash.maximum_byte_size
     }
 
     #[setter]
     pub fn set_maximum_byte_size(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.minhash.maximum_byte_size = value;
+        self.inner.lock().unwrap().hashing.minhash.maximum_byte_size = value;
     }
+
     #[getter]
     pub fn get_seed(&self) -> u64 {
-        let inner = self.inner.lock().unwrap();
-        inner.chromosomes.minhash.seed
+        self.inner.lock().unwrap().hashing.minhash.seed
     }
 
     #[setter]
     pub fn set_seed(&mut self, value: u64) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.chromosomes.minhash.seed = value;
+        self.inner.lock().unwrap().hashing.minhash.seed = value;
     }
 }
 
@@ -142,20 +141,6 @@ pub struct ConfigFunctions {
 #[pymethods]
 impl ConfigFunctions {
     #[getter]
-    pub fn get_tlsh(&self) -> ConfigFunctionsHashingTLSH {
-        ConfigFunctionsHashingTLSH {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-
-    #[getter]
-    pub fn get_minhash(&self) -> ConfigFunctionsHashingMinhash {
-        ConfigFunctionsHashingMinhash {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-
-    #[getter]
     pub fn get_markov(&self) -> ConfigFunctionsMarkov {
         ConfigFunctionsMarkov {
             inner: Arc::clone(&self.inner),
@@ -165,412 +150,45 @@ impl ConfigFunctions {
 
 #[pyclass]
 pub struct ConfigFunctionsMarkov {
-    pub inner: Arc<Mutex<InnerConfig>>,
+    inner: Arc<Mutex<InnerConfig>>,
 }
 
 #[pymethods]
 impl ConfigFunctionsMarkov {
     #[getter]
     pub fn get_damping(&self) -> f64 {
-        let inner = self.inner.lock().unwrap();
-        inner.functions.markov.damping
+        self.inner.lock().unwrap().functions.markov.damping
     }
 
     #[setter]
     pub fn set_damping(&mut self, value: f64) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.functions.markov.damping = value;
+        self.inner.lock().unwrap().functions.markov.damping = value;
     }
 
     #[getter]
     pub fn get_tolerance(&self) -> f64 {
-        let inner = self.inner.lock().unwrap();
-        inner.functions.markov.tolerance
+        self.inner.lock().unwrap().functions.markov.tolerance
     }
 
     #[setter]
     pub fn set_tolerance(&mut self, value: f64) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.functions.markov.tolerance = value;
+        self.inner.lock().unwrap().functions.markov.tolerance = value;
     }
 
     #[getter]
     pub fn get_max_iterations(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.functions.markov.max_iterations
+        self.inner.lock().unwrap().functions.markov.max_iterations
     }
 
     #[setter]
     pub fn set_max_iterations(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.functions.markov.max_iterations = value;
-    }
-}
-
-#[pyclass]
-pub struct ConfigFunctionsHashingTLSH {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigFunctionsHashingTLSH {
-    #[getter]
-    pub fn get_minimum_byte_size(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.functions.tlsh.minimum_byte_size
-    }
-
-    #[setter]
-    pub fn set_minimum_byte_size(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.functions.tlsh.minimum_byte_size = value;
-    }
-}
-
-#[pyclass]
-pub struct ConfigFunctionsHashingMinhash {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigFunctionsHashingMinhash {
-    #[getter]
-    pub fn get_number_of_hashes(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.functions.minhash.number_of_hashes
-    }
-
-    #[setter]
-    pub fn set_number_of_hashes(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.functions.minhash.number_of_hashes = value;
-    }
-
-    #[getter]
-    pub fn get_shingle_size(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.functions.minhash.shingle_size
-    }
-
-    #[setter]
-    pub fn set_shingle_size(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.functions.minhash.shingle_size = value;
-    }
-
-    #[getter]
-    pub fn get_maximum_byte_size_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.functions.minhash.maximum_byte_size_enabled
-    }
-
-    #[setter]
-    pub fn set_maximum_byte_size_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.functions.minhash.maximum_byte_size_enabled = value;
-    }
-
-    #[getter]
-    pub fn get_maximum_byte_size(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.functions.minhash.maximum_byte_size
-    }
-
-    #[setter]
-    pub fn set_maximum_byte_size(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.functions.minhash.maximum_byte_size = value;
-    }
-    #[getter]
-    pub fn get_seed(&self) -> u64 {
-        let inner = self.inner.lock().unwrap();
-        inner.functions.minhash.seed
-    }
-
-    #[setter]
-    pub fn set_seed(&mut self, value: u64) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.functions.minhash.seed = value;
-    }
-}
-
-// stop
-
-#[pyclass]
-pub struct ConfigBlocks {
-    inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigBlocks {
-    #[getter]
-    pub fn get_tlsh(&self) -> ConfigBlocksHashingTLSH {
-        ConfigBlocksHashingTLSH {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-
-    #[getter]
-    pub fn get_minhash(&self) -> ConfigBlocksHashingMinhash {
-        ConfigBlocksHashingMinhash {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-}
-
-#[pyclass]
-pub struct ConfigBlocksHashingTLSH {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigBlocksHashingTLSH {
-    #[getter]
-    pub fn get_minimum_byte_size(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.blocks.tlsh.minimum_byte_size
-    }
-
-    #[setter]
-    pub fn set_minimum_byte_size(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.blocks.tlsh.minimum_byte_size = value;
-    }
-}
-
-#[pyclass]
-pub struct ConfigBlocksHashingMinhash {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigBlocksHashingMinhash {
-    #[getter]
-    pub fn get_number_of_hashes(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.blocks.minhash.number_of_hashes
-    }
-
-    #[setter]
-    pub fn set_number_of_hashes(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.blocks.minhash.number_of_hashes = value;
-    }
-
-    #[getter]
-    pub fn get_shingle_size(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.blocks.minhash.shingle_size
-    }
-
-    #[setter]
-    pub fn set_shingle_size(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.blocks.minhash.shingle_size = value;
-    }
-
-    #[getter]
-    pub fn get_maximum_byte_size_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.blocks.minhash.maximum_byte_size_enabled
-    }
-
-    #[setter]
-    pub fn set_maximum_byte_size_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.blocks.minhash.maximum_byte_size_enabled = value;
-    }
-
-    #[getter]
-    pub fn get_maximum_byte_size(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.blocks.minhash.maximum_byte_size
-    }
-
-    #[setter]
-    pub fn set_maximum_byte_size(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.blocks.minhash.maximum_byte_size = value;
-    }
-
-    #[getter]
-    pub fn get_seed(&self) -> u64 {
-        let inner = self.inner.lock().unwrap();
-        inner.blocks.minhash.seed
-    }
-
-    #[setter]
-    pub fn set_seed(&mut self, value: u64) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.blocks.minhash.seed = value;
-    }
-}
-
-/// stop
-
-#[pyclass]
-pub struct ConfigFormats {
-    inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigFormats {
-    #[getter]
-    pub fn get_file(&self) -> ConfigFormatsFile {
-        ConfigFormatsFile {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-}
-
-#[pyclass]
-pub struct ConfigFormatsFile {
-    inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigFormatsFile {
-    #[getter]
-    pub fn get_tlsh(&self) -> ConfigFormatsFileHashingTLSH {
-        ConfigFormatsFileHashingTLSH {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-}
-
-#[pyclass]
-pub struct ConfigFormatsFileHashingTLSH {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigFormatsFileHashingTLSH {
-    #[getter]
-    pub fn get_minimum_byte_size(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.formats.file.tlsh.minimum_byte_size
-    }
-
-    #[setter]
-    pub fn set_minimum_byte_size(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.formats.file.tlsh.minimum_byte_size = value;
-    }
-}
-
-#[pyclass]
-pub struct ConfigImaging {
-    inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigImaging {
-    #[getter]
-    pub fn get_tlsh(&self) -> ConfigImagingTLSH {
-        ConfigImagingTLSH {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-
-    #[getter]
-    pub fn get_minhash(&self) -> ConfigImagingMinhash {
-        ConfigImagingMinhash {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-}
-
-#[pyclass]
-pub struct ConfigImagingTLSH {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigImagingTLSH {
-    #[getter]
-    pub fn get_minimum_byte_size(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.imaging.tlsh.minimum_byte_size
-    }
-
-    #[setter]
-    pub fn set_minimum_byte_size(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.imaging.tlsh.minimum_byte_size = value;
-    }
-}
-
-#[pyclass]
-pub struct ConfigImagingMinhash {
-    pub inner: Arc<Mutex<InnerConfig>>,
-}
-
-#[pymethods]
-impl ConfigImagingMinhash {
-    #[getter]
-    pub fn get_number_of_hashes(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.imaging.minhash.number_of_hashes
-    }
-
-    #[setter]
-    pub fn set_number_of_hashes(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.imaging.minhash.number_of_hashes = value;
-    }
-
-    #[getter]
-    pub fn get_shingle_size(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.imaging.minhash.shingle_size
-    }
-
-    #[setter]
-    pub fn set_shingle_size(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.imaging.minhash.shingle_size = value;
-    }
-
-    #[getter]
-    pub fn get_maximum_byte_size_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.imaging.minhash.maximum_byte_size_enabled
-    }
-
-    #[setter]
-    pub fn set_maximum_byte_size_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.imaging.minhash.maximum_byte_size_enabled = value;
-    }
-
-    #[getter]
-    pub fn get_maximum_byte_size(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.imaging.minhash.maximum_byte_size
-    }
-
-    #[setter]
-    pub fn set_maximum_byte_size(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.imaging.minhash.maximum_byte_size = value;
-    }
-
-    #[getter]
-    pub fn get_seed(&self) -> u64 {
-        let inner = self.inner.lock().unwrap();
-        inner.imaging.minhash.seed
-    }
-
-    #[setter]
-    pub fn set_seed(&mut self, value: u64) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.imaging.minhash.seed = value;
+        self.inner.lock().unwrap().functions.markov.max_iterations = value;
     }
 }
 
 #[pyclass]
 pub struct ConfigIrs {
-    pub inner: Arc<Mutex<InnerConfig>>,
+    inner: Arc<Mutex<InnerConfig>>,
 }
 
 #[pymethods]
@@ -585,39 +203,34 @@ impl ConfigIrs {
 
 #[pyclass]
 pub struct ConfigIrsLLVM {
-    pub inner: Arc<Mutex<InnerConfig>>,
+    inner: Arc<Mutex<InnerConfig>>,
 }
 
 #[pymethods]
 impl ConfigIrsLLVM {
     #[getter]
     pub fn get_module_name(&self) -> String {
-        let inner = self.inner.lock().unwrap();
-        inner.irs.llvm.module_name.clone()
+        self.inner.lock().unwrap().irs.llvm.module_name.clone()
     }
 
     #[setter]
     pub fn set_module_name(&mut self, value: String) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.irs.llvm.module_name = value;
+        self.inner.lock().unwrap().irs.llvm.module_name = value;
     }
 
     #[getter]
     pub fn get_verify(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.irs.llvm.verify
+        self.inner.lock().unwrap().irs.llvm.verify
     }
 
     #[setter]
     pub fn set_verify(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.irs.llvm.verify = value;
+        self.inner.lock().unwrap().irs.llvm.verify = value;
     }
 
     #[getter]
     pub fn get_mode(&self) -> String {
-        let inner = self.inner.lock().unwrap();
-        match inner.irs.llvm.mode {
+        match self.inner.lock().unwrap().irs.llvm.mode {
             binlex::irs::llvm::Mode::Reconstruct => "reconstruct",
             binlex::irs::llvm::Mode::Intrinsic => "intrinsic",
             binlex::irs::llvm::Mode::Lir => "lir",
@@ -627,15 +240,14 @@ impl ConfigIrsLLVM {
 
     #[setter]
     pub fn set_mode(&mut self, value: String) -> PyResult<()> {
-        let mut inner = self.inner.lock().unwrap();
-        inner.irs.llvm.mode = match value.as_str() {
+        self.inner.lock().unwrap().irs.llvm.mode = match value.as_str() {
             "reconstruct" => binlex::irs::llvm::Mode::Reconstruct,
             "intrinsic" => binlex::irs::llvm::Mode::Intrinsic,
             "lir" => binlex::irs::llvm::Mode::Lir,
             _ => {
                 return Err(PyRuntimeError::new_err(format!(
                     "invalid llvm mode: {value}"
-                )));
+                )))
             }
         };
         Ok(())
@@ -644,7 +256,7 @@ impl ConfigIrsLLVM {
 
 #[pyclass]
 pub struct ConfigEmbeddings {
-    pub inner: Arc<Mutex<InnerConfig>>,
+    inner: Arc<Mutex<InnerConfig>>,
 }
 
 #[pymethods]
@@ -659,33 +271,29 @@ impl ConfigEmbeddings {
 
 #[pyclass]
 pub struct ConfigEmbeddingsLLVM {
-    pub inner: Arc<Mutex<InnerConfig>>,
+    inner: Arc<Mutex<InnerConfig>>,
 }
 
 #[pymethods]
 impl ConfigEmbeddingsLLVM {
     #[getter]
     pub fn get_dimensions(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.embeddings.llvm.dimensions
+        self.inner.lock().unwrap().embeddings.llvm.dimensions
     }
 
     #[setter]
     pub fn set_dimensions(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.embeddings.llvm.dimensions = value.max(1);
+        self.inner.lock().unwrap().embeddings.llvm.dimensions = value.max(1);
     }
 
     #[getter]
     pub fn get_device(&self) -> String {
-        let inner = self.inner.lock().unwrap();
-        inner.embeddings.llvm.device.clone()
+        self.inner.lock().unwrap().embeddings.llvm.device.clone()
     }
 
     #[setter]
     pub fn set_device(&mut self, value: String) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.embeddings.llvm.device = value;
+        self.inner.lock().unwrap().embeddings.llvm.device = value;
     }
 }
 
@@ -715,57 +323,29 @@ impl Configuration {
     #[getter]
     /// Return the configured analysis thread count. A value of 0 means automatic.
     pub fn get_threads(&self) -> usize {
-        let inner = self.inner.lock().unwrap();
-        inner.threads
+        self.inner.lock().unwrap().threads
     }
 
     #[setter]
     pub fn set_threads(&mut self, value: usize) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.threads = value;
+        self.inner.lock().unwrap().threads = value;
     }
 
     #[getter]
     /// Return whether debug logging is enabled.
     pub fn get_debug(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.debug
+        self.inner.lock().unwrap().debug
     }
 
     #[setter]
     pub fn set_debug(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.debug = value;
+        self.inner.lock().unwrap().debug = value;
     }
 
     #[getter]
-    /// Return the embeddings configuration group.
-    pub fn get_embeddings(&self) -> PyResult<ConfigEmbeddings> {
-        Ok(ConfigEmbeddings {
-            inner: Arc::clone(&self.inner),
-        })
-    }
-
-    #[getter]
-    /// Return the format parsing configuration group.
-    pub fn get_formats(&self) -> PyResult<ConfigFormats> {
-        Ok(ConfigFormats {
-            inner: Arc::clone(&self.inner),
-        })
-    }
-
-    #[getter]
-    /// Return the imaging configuration group.
-    pub fn get_imaging(&self) -> PyResult<ConfigImaging> {
-        Ok(ConfigImaging {
-            inner: Arc::clone(&self.inner),
-        })
-    }
-
-    #[getter]
-    /// Return the block analysis configuration group.
-    pub fn get_blocks(&self) -> PyResult<ConfigBlocks> {
-        Ok(ConfigBlocks {
+    /// Return the hashing configuration group.
+    pub fn get_hashing(&self) -> PyResult<ConfigHashing> {
+        Ok(ConfigHashing {
             inner: Arc::clone(&self.inner),
         })
     }
@@ -774,14 +354,6 @@ impl Configuration {
     /// Return the function analysis configuration group.
     pub fn get_functions(&self) -> PyResult<ConfigFunctions> {
         Ok(ConfigFunctions {
-            inner: Arc::clone(&self.inner),
-        })
-    }
-
-    #[getter]
-    /// Return the chromosome analysis configuration group.
-    pub fn get_chromosomes(&self) -> PyResult<ConfigChromosomes> {
-        Ok(ConfigChromosomes {
             inner: Arc::clone(&self.inner),
         })
     }
@@ -806,6 +378,14 @@ impl Configuration {
     /// Return the IR configuration group.
     pub fn get_irs(&self) -> PyResult<ConfigIrs> {
         Ok(ConfigIrs {
+            inner: Arc::clone(&self.inner),
+        })
+    }
+
+    #[getter]
+    /// Return the embeddings configuration group.
+    pub fn get_embeddings(&self) -> PyResult<ConfigEmbeddings> {
+        Ok(ConfigEmbeddings {
             inner: Arc::clone(&self.inner),
         })
     }
@@ -863,7 +443,7 @@ impl Default for Configuration {
 
 #[pyclass]
 pub struct ConfigDisassembler {
-    pub inner: Arc<Mutex<InnerConfig>>,
+    inner: Arc<Mutex<InnerConfig>>,
 }
 
 #[pymethods]
@@ -878,40 +458,37 @@ impl ConfigDisassembler {
 
 #[pyclass]
 pub struct ConfigDisassemblerSweep {
-    pub inner: Arc<Mutex<InnerConfig>>,
+    inner: Arc<Mutex<InnerConfig>>,
 }
 
 #[pymethods]
 impl ConfigDisassemblerSweep {
     #[getter]
     pub fn get_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.disassembler.sweep.enabled
+        self.inner.lock().unwrap().disassembler.sweep.enabled
     }
+
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.disassembler.sweep.enabled = value;
+        self.inner.lock().unwrap().disassembler.sweep.enabled = value;
     }
 }
 
 #[pyclass]
 pub struct ConfigMmap {
-    pub inner: Arc<Mutex<InnerConfig>>,
+    inner: Arc<Mutex<InnerConfig>>,
 }
 
 #[pymethods]
 impl ConfigMmap {
     #[getter]
     pub fn get_directory(&self) -> String {
-        let inner = self.inner.lock().unwrap();
-        inner.mmap.directory.clone()
+        self.inner.lock().unwrap().mmap.directory.clone()
     }
 
     #[setter]
     pub fn set_directory(&mut self, value: String) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.mmap.directory = value;
+        self.inner.lock().unwrap().mmap.directory = value;
     }
 
     #[getter]
@@ -924,31 +501,37 @@ impl ConfigMmap {
 
 #[pyclass]
 pub struct ConfigMmapCache {
-    pub inner: Arc<Mutex<InnerConfig>>,
+    inner: Arc<Mutex<InnerConfig>>,
 }
 
 #[pymethods]
 impl ConfigMmapCache {
     #[getter]
     pub fn get_enabled(&self) -> bool {
-        let inner = self.inner.lock().unwrap();
-        inner.mmap.cache.enabled
+        self.inner.lock().unwrap().mmap.cache.enabled
     }
+
     #[setter]
     pub fn set_enabled(&mut self, value: bool) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.mmap.cache.enabled = value;
+        self.inner.lock().unwrap().mmap.cache.enabled = value;
     }
 }
 
 pub fn register_config(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Configuration>()?;
+    m.add_class::<ConfigHashing>()?;
+    m.add_class::<ConfigTLSH>()?;
+    m.add_class::<ConfigMinhash>()?;
+    m.add_class::<ConfigFunctions>()?;
+    m.add_class::<ConfigFunctionsMarkov>()?;
     m.add_class::<ConfigIrs>()?;
     m.add_class::<ConfigIrsLLVM>()?;
     m.add_class::<ConfigEmbeddings>()?;
     m.add_class::<ConfigEmbeddingsLLVM>()?;
-    m.add_class::<ConfigFunctions>()?;
-    m.add_class::<ConfigBlocks>()?;
+    m.add_class::<ConfigDisassembler>()?;
+    m.add_class::<ConfigDisassemblerSweep>()?;
+    m.add_class::<ConfigMmap>()?;
+    m.add_class::<ConfigMmapCache>()?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.config.config", m)?;

@@ -36,9 +36,34 @@ use pyo3::types::PyAny;
 use pyo3::types::PyBytes;
 use pyo3::types::PyMemoryView;
 use pyo3::Py;
+use serde_json::Value;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::io::Error;
+
+fn parse_metadata_address(value: &str) -> Option<u64> {
+    if let Some(hex) = value
+        .strip_prefix("0x")
+        .or_else(|| value.strip_prefix("0X"))
+    {
+        return u64::from_str_radix(hex, 16).ok();
+    }
+    value.parse::<u64>().ok()
+}
+
+fn metadata_token_addresses(graph: &binlex::controlflow::Graph) -> BTreeMap<u64, u64> {
+    let metadata = graph.metadata();
+    let Some(Value::Object(cil)) = metadata.get("cil") else {
+        return BTreeMap::new();
+    };
+    let Some(Value::Object(tokens)) = cil.get("metadata_token_virtual_addresses") else {
+        return BTreeMap::new();
+    };
+    tokens
+        .iter()
+        .filter_map(|(token, address)| Some((parse_metadata_address(token)?, address.as_u64()?)))
+        .collect()
+}
 
 #[pyclass(unsendable)]
 pub struct Disassembler {
@@ -190,7 +215,7 @@ impl Disassembler {
             .materialize_input(py)
             .map_err(|error| Error::other(error.to_string()))?;
         let graph_inner = graph.borrow(py).inner.clone();
-        let metadata_token_addresses = BTreeMap::new();
+        let metadata_token_addresses = metadata_token_addresses(&graph_inner.lock().unwrap());
         let result = py
             .detach(move || match input {
                 MaterializedInput::Bytes(image) => {
@@ -233,7 +258,7 @@ impl Disassembler {
             .materialize_input(py)
             .map_err(|error| Error::other(error.to_string()))?;
         let graph_inner = graph.borrow(py).inner.clone();
-        let metadata_token_addresses = BTreeMap::new();
+        let metadata_token_addresses = metadata_token_addresses(&graph_inner.lock().unwrap());
         let result = py
             .detach(move || match input {
                 MaterializedInput::Bytes(image) => {
@@ -275,7 +300,7 @@ impl Disassembler {
             .materialize_input(py)
             .map_err(|error| Error::other(error.to_string()))?;
         let graph_inner = graph.borrow(py).inner.clone();
-        let metadata_token_addresses = BTreeMap::new();
+        let metadata_token_addresses = metadata_token_addresses(&graph_inner.lock().unwrap());
         py.detach(move || match input {
             MaterializedInput::Bytes(image) => {
                 let disassembler =
@@ -316,7 +341,7 @@ impl Disassembler {
             .materialize_input(py)
             .map_err(|error| Error::other(error.to_string()))?;
         let graph_inner = graph.borrow(py).inner.clone();
-        let metadata_token_addresses = BTreeMap::new();
+        let metadata_token_addresses = metadata_token_addresses(&graph_inner.lock().unwrap());
         py.detach(move || match input {
             MaterializedInput::Bytes(image) => {
                 let disassembler =
