@@ -5,10 +5,7 @@ from __future__ import annotations
 from enum import Enum
 
 from binlex_bindings.binlex.decompilers import Decompiler as _DecompilerBinding
-from binlex_bindings.binlex.formats import Image as _ImageBinding
 
-from binlex.config import Configuration
-from binlex.formats import Image
 from binlex.irs.hir import HirFunction
 from binlex.irs.ast import AstFunction
 from binlex.irs.lir import LirFunction
@@ -22,25 +19,15 @@ class DecompilerBackend(str, Enum):
 class Decompiler:
     """Coordinate staged decompilation over a graph."""
 
-    def __init__(self, graph, image, configuration, backend=DecompilerBackend.DEFAULT):
+    def __init__(self, graph, backend=DecompilerBackend.DEFAULT):
         if not isinstance(backend, DecompilerBackend):
             raise TypeError("backend must be a DecompilerBackend")
-        if isinstance(image, _ImageBinding):
-            image = Image._from_binding(image)
-        if not isinstance(image, Image):
-            raise TypeError("image must be an Image")
-        if not isinstance(configuration, Configuration):
-            raise TypeError("configuration must be a Configuration")
         self._graph = graph
-        self._image = image
-        self._configuration = configuration
         self._backend = backend
         self._graph._decompiler = self
         self._graph._decompilation_cache = {"lir": {}, "mir": {}, "hir": {}, "ast": {}}
         self._inner = _DecompilerBinding(
             graph._inner,
-            image._inner,
-            configuration,
             backend.value,
         )
 
@@ -50,11 +37,11 @@ class Decompiler:
 
     @property
     def image(self):
-        return self._image
+        return self._graph.image()
 
     @property
     def configuration(self):
-        return self._configuration
+        return self._graph.configuration()
 
     @property
     def backend(self):

@@ -218,14 +218,13 @@ mod tests {
     use crate::assemblers::{Assembler, AssemblerBackend};
     use crate::controlflow::Graph;
     use crate::disassemblers::capstone::Disassembler;
-    use crate::formats::Image;
+    use crate::formats::{Image, ImagePermissions, ImageSegment};
     use crate::irs::lir::{
         Lir, LirAddressSpace, LirCpu, LirData, LirEffect, LirEncoding, LirExpression, LirLocation,
         LirMetadata, LirModule, LirOperationBinary, LirOperationCast, LirOperationCompare,
         LirOperationUnary, LirStatus, LirTerminator,
     };
     use std::collections::{BTreeMap, BTreeSet};
-    use std::io::Cursor;
 
     fn assembled_lir(architecture: Architecture, assembly: &str) -> Vec<Lir> {
         let config = Configuration::default();
@@ -393,21 +392,13 @@ mod tests {
         let state_cpu = LirCpu::from_architecture(Architecture::AMD64).expect("cpu");
         let mut state = LirExecutorState::new(state_cpu);
 
-        let temp_path = std::env::temp_dir().join(format!(
-            "binlex-symbolic-map-image-{}-{}.img",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("time")
-                .as_nanos()
+        let mut image = Image::new();
+        image.add_segment(ImageSegment::bytes(
+            Some("fixture".to_string()),
+            0x1234,
+            vec![0x41, 0x42, 0x43, 0x44],
+            ImagePermissions::readable(),
         ));
-        let mut image = Image::new(temp_path.clone(), false).expect("image");
-        image.set_base(0x1000);
-        image.write_padding(0x2000).expect("padding");
-        image.seek(0x234).expect("seek");
-        image
-            .write(Cursor::new([0x41u8, 0x42u8, 0x43u8, 0x44u8]))
-            .expect("write bytes");
 
         state.map_image(&image);
 

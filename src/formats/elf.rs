@@ -24,6 +24,8 @@ use crate::Architecture;
 use crate::Configuration;
 use crate::formats::File;
 use crate::formats::Image;
+use crate::formats::ImagePermissions;
+use crate::formats::ImageSegment;
 use crate::formats::{Symbol as BlSymbol, symbol::SymbolKind};
 use crate::hashing::SHA256;
 use crate::hashing::SSDeep;
@@ -36,7 +38,6 @@ use lief::generic::{Section, Symbol};
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::io::{Cursor, Error, ErrorKind};
-use std::path::PathBuf;
 
 pub const DEFAULT_IMAGEBASE: u64 = 0x100000;
 
@@ -283,39 +284,45 @@ impl ELF {
     }
 
     pub fn image(&self) -> Result<Image, Error> {
-        let pathbuf = PathBuf::from(self.config.mmap.directory.clone()).join(format!(
-            "{}.mapped-v2",
-            self.file.sha256_no_config().unwrap()
-        ));
-        let mut tempmap = Image::new(pathbuf, self.config.mmap.cache.enabled)?;
+        let mut image = Image::new();
         let image_base = self.imagebase();
-        tempmap.set_base(image_base);
-
-        if tempmap.is_cached() {
-            return Ok(tempmap);
+        let header_size = (self.elf.header().header_size() as usize).min(self.file.data.len());
+        if header_size > 0 {
+            image.add_segment(ImageSegment::bytes(
+                Some("headers".to_string()),
+                image_base,
+                self.file.data[0..header_size].to_vec(),
+                ImagePermissions::readable(),
+            ));
         }
 
-        tempmap.seek_to_end()?;
-        tempmap.write(&self.file.data[0..self.elf.header().header_size() as usize])?;
-
         for segment in self.elf.segments() {
-            let segment_virtual_address = segment.virtual_address().saturating_sub(image_base);
-
-            if segment_virtual_address > tempmap.size()? {
-                let padding_length = segment_virtual_address - tempmap.size()?;
-                tempmap.seek_to_end()?;
-                tempmap.write_padding(padding_length as usize)?;
-            }
-
             if segment.p_type() == SegmentType::LOAD {
                 let segment_file_offset = segment.file_offset() as usize;
                 let segment_size = segment.physical_size() as usize;
+                let segment_virtual_address = segment.virtual_address();
+                let permissions = if (segment.flags() & 0x1) != 0 {
+                    ImagePermissions::executable()
+                } else {
+                    ImagePermissions::readable()
+                };
 
                 if segment_file_offset + segment_size <= self.file.data.len() {
-                    tempmap.seek_to_end()?;
-                    tempmap.write(
-                        &self.file.data[segment_file_offset..segment_file_offset + segment_size],
-                    )?;
+                    image.add_segment(ImageSegment::bytes(
+                        None,
+                        segment_virtual_address,
+                        self.file.data[segment_file_offset..segment_file_offset + segment_size]
+                            .to_vec(),
+                        permissions,
+                    ));
+                    if segment.virtual_size() > segment_size as u64 {
+                        image.add_segment(ImageSegment::zeroes(
+                            None,
+                            segment_virtual_address + segment_size as u64,
+                            segment.virtual_size() - segment_size as u64,
+                            permissions,
+                        ));
+                    }
                 } else {
                     return Err(Error::new(
                         ErrorKind::InvalidData,
@@ -325,7 +332,7 @@ impl ELF {
             }
         }
 
-        Ok(tempmap)
+        Ok(image)
     }
 
     pub fn tlsh(&self) -> Option<TLSH<'_>> {

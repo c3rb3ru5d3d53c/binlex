@@ -1,45 +1,26 @@
+use crate::formats::Image;
 use crate::irs::lir::executor::LirExecutorError;
 use crate::irs::lir::executor::backend::z3::Z3Backend;
-use memmap2::Mmap;
 use std::collections::{BTreeSet, HashMap, HashSet};
-use std::fs::File;
-use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use z3::ast::{Array, BV};
 
 #[derive(Debug)]
 struct ImageBackingInner {
-    path: PathBuf,
-    base: u64,
-    file: Option<File>,
-    mmap: Option<Mmap>,
+    image: Image,
 }
 
 impl ImageBackingInner {
-    fn new(path: PathBuf, base: u64) -> Self {
-        Self {
-            path,
-            base,
-            file: None,
-            mmap: None,
-        }
+    fn new(image: Image) -> Self {
+        Self { image }
     }
 
-    fn read_byte(&mut self, address: u64) -> Result<Option<u8>, LirExecutorError> {
-        if self.mmap.is_none() {
-            let file = File::open(&self.path)
-                .map_err(|error| LirExecutorError::solver(error.to_string()))?;
-            let mmap = unsafe {
-                Mmap::map(&file).map_err(|error| LirExecutorError::solver(error.to_string()))?
-            };
-            self.file = Some(file);
-            self.mmap = Some(mmap);
-        }
-        let Some(mmap) = self.mmap.as_ref() else {
-            return Ok(None);
-        };
-        let offset = address.checked_sub(self.base).map(|value| value as usize);
-        Ok(offset.and_then(|offset| mmap.get(offset).copied()))
+    fn read_byte(&self, address: u64) -> Result<Option<u8>, LirExecutorError> {
+        Ok(self
+            .image
+            .read_virtual_address(address, 1)
+            .map_err(|error| LirExecutorError::solver(error.to_string()))?
+            .and_then(|bytes| bytes.first().copied()))
     }
 }
 
@@ -49,12 +30,9 @@ struct ImageBacking {
 }
 
 impl ImageBacking {
-    fn new(path: impl AsRef<Path>, base: u64) -> Self {
+    fn new(image: Image) -> Self {
         Self {
-            inner: Arc::new(Mutex::new(ImageBackingInner::new(
-                path.as_ref().to_path_buf(),
-                base,
-            ))),
+            inner: Arc::new(Mutex::new(ImageBackingInner::new(image))),
         }
     }
 
@@ -92,8 +70,8 @@ impl FlatMemory {
         self.mapped_ranges.push((address, size));
     }
 
-    pub(crate) fn map_image_path(&mut self, path: impl AsRef<Path>, base: u64) {
-        self.backing_image = Some(ImageBacking::new(path, base));
+    pub(crate) fn map_image(&mut self, image: &Image) {
+        self.backing_image = Some(ImageBacking::new(image.clone()));
     }
 
     pub(crate) fn store_bytes(

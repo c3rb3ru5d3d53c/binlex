@@ -23,11 +23,8 @@
 
 from enum import Enum
 
-from binlex.config import Configuration
 from binlex.controlflow import Block, Function, Graph, Instruction
 from binlex.core import Architecture
-from binlex.core.architecture import _coerce_architecture
-from binlex.formats import Image
 
 from .capstone import Disassembler as _CapstoneDisassembler
 from .cil import Disassembler as _CilDisassembler
@@ -42,14 +39,13 @@ class DisassemblerBackend(str, Enum):
 class Disassembler:
     def __init__(
         self,
-        architecture: Architecture,
-        image: Image | bytes | memoryview,
-        executable_address_ranges: dict[int, int],
-        configuration: Configuration,
+        graph: Graph,
         backend: DisassemblerBackend = DisassemblerBackend.Default,
     ) -> None:
-        binding_architecture = _coerce_architecture(architecture)
-        self.architecture = Architecture.from_binding(binding_architecture)
+        if not isinstance(graph, Graph):
+            raise TypeError("disassembler graph must be a binlex.controlflow.Graph")
+        self.graph = graph
+        self.architecture = graph.architecture()
         self.backend = (
             backend
             if isinstance(backend, DisassemblerBackend)
@@ -67,55 +63,41 @@ class Disassembler:
         if self.architecture == Architecture.CIL:
             if resolved_backend != DisassemblerBackend.Native:
                 raise ValueError("CIL only supports the Native backend")
-            self._inner = _CilDisassembler(
-                binding_architecture,
-                image,
-                executable_address_ranges,
-                configuration,
-            )
+            self._inner = _CilDisassembler(graph)
         else:
             if resolved_backend != DisassemblerBackend.Capstone:
                 raise ValueError(
                     f"{self.architecture} only supports the Capstone backend"
                 )
-            self._inner = _CapstoneDisassembler(
-                binding_architecture,
-                image,
-                executable_address_ranges,
-                configuration,
-            )
+            self._inner = _CapstoneDisassembler(graph)
 
-    def disassemble_instruction(self, address: int, graph: Graph) -> Instruction:
+    def disassemble_instruction(self, address: int) -> Instruction:
         if self.architecture == Architecture.CIL:
             return self._inner.disassemble_instruction(
                 address,
-                graph,
             )
-        return self._inner.disassemble_instruction(address, graph)
+        return self._inner.disassemble_instruction(address)
 
-    def disassemble_function(self, address: int, graph: Graph) -> Function:
+    def disassemble_function(self, address: int) -> Function:
         if self.architecture == Architecture.CIL:
             return self._inner.disassemble_function(
                 address,
-                graph,
             )
-        return self._inner.disassemble_function(address, graph)
+        return self._inner.disassemble_function(address)
 
-    def disassemble_block(self, address: int, graph: Graph) -> Block:
+    def disassemble_block(self, address: int) -> Block:
         if self.architecture == Architecture.CIL:
             return self._inner.disassemble_block(
                 address,
-                graph,
             )
-        return self._inner.disassemble_block(address, graph)
+        return self._inner.disassemble_block(address)
 
-    def disassemble(self, addresses: set[int], graph: Graph) -> None:
+    def disassemble(self, addresses: set[int]) -> None:
         if self.architecture == Architecture.CIL:
             return self._inner.disassemble(
                 addresses,
-                graph,
             )
-        return self._inner.disassemble(addresses, graph)
+        return self._inner.disassemble(addresses)
 
     def disassemble_sweep(self) -> set[int]:
         return self._inner.disassemble_sweep()

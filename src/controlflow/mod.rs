@@ -39,8 +39,6 @@ pub use block::Block;
 pub use function::{Function, FunctionCallee, FunctionCaller};
 pub use graph::Graph;
 pub use graph::GraphQueue;
-pub use graph::GraphQueueSnapshot;
-pub use graph::GraphSnapshot;
 pub use instruction::FloatOperand;
 pub use instruction::ImmediateOperand;
 pub use instruction::Instruction;

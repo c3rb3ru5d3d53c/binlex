@@ -24,6 +24,8 @@ use crate::Architecture;
 use crate::Configuration;
 use crate::formats::File;
 use crate::formats::Image;
+use crate::formats::ImagePermissions;
+use crate::formats::ImageSegment;
 use crate::formats::cli::Cor20Header;
 use crate::formats::cli::Entry;
 use crate::formats::cli::FatHeader;
@@ -53,7 +55,6 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::io::{Cursor, Error, ErrorKind};
-use std::path::PathBuf;
 
 /// Represents a PE (Portable Executable) file, encapsulating the `lief::pe::Binary` and associated metadata.
 pub struct PE {
@@ -1251,70 +1252,60 @@ impl PE {
         None
     }
 
-    /// Caches the PE file contents and returns an `Image` object.
-    ///
-    /// # Parameters
-    /// - `path`: The base path to store the memory mapped file.
-    /// - `cache`: Whether to cache the file or not.
-    ///
-    /// # Returns
-    /// A `Result` containing the `Image` object on success or an `Error` on failure.
+    /// Builds a virtual image from PE headers and sections.
     pub fn image(&self) -> Result<Image, Error> {
-        let pathbuf = PathBuf::from(self.config.mmap.directory.clone()).join(format!(
-            "{}.mapped-v2",
-            self.file.sha256_no_config().unwrap()
-        ));
-        let mut tempmap = Image::new(pathbuf, self.config.mmap.cache.enabled)?;
-        tempmap.set_base(self.imagebase());
-        if tempmap.is_cached() {
-            return Ok(tempmap);
+        let mut image = Image::new();
+        let image_base = self.imagebase();
+        let headers_size = (self.sizeofheaders() as usize).min(self.file.data.len());
+        if headers_size > 0 {
+            image.add_segment(ImageSegment::bytes(
+                Some("headers".to_string()),
+                image_base,
+                self.file.data[0..headers_size].to_vec(),
+                ImagePermissions::readable(),
+            ));
         }
-        tempmap.seek_to_end()?;
-        tempmap
-            .write(&self.file.data[0..self.sizeofheaders() as usize])
-            .map_err(|error| {
-                Error::other(format!(
-                    "failed to write headers to memory-mapped pe file: {}",
-                    error
-                ))
-            })?;
         for section in self.pe.sections() {
             if section.virtual_size() == 0 {
                 continue;
             }
-            if section.sizeof_raw_data() == 0 {
-                continue;
-            }
+            let permissions = if (section.characteristics().bits()
+                & u64::from(Characteristics::MEM_EXECUTE))
+                != 0
+            {
+                ImagePermissions::executable()
+            } else {
+                ImagePermissions::readable()
+            };
             let section_virtual_adddress = PE::align_section_virtual_address(
                 section.virtual_address(),
                 self.section_alignment(),
                 self.file_alignment(),
             );
-            if section_virtual_adddress > tempmap.size().unwrap() {
-                let padding_length = section_virtual_adddress - tempmap.size().unwrap();
-                tempmap.seek_to_end()?;
-                tempmap
-                    .write_padding(padding_length as usize)
-                    .map_err(|error| {
-                        Error::other(format!(
-                            "write padding to pe memory-mapped pe file: {}",
-                            error
-                        ))
-                    })?;
-            }
+            let section_virtual_address = image_base + section_virtual_adddress;
             let pointerto_raw_data = section.pointerto_raw_data() as usize;
             let sizeof_raw_data = section.sizeof_raw_data() as usize;
-            tempmap.seek_to_end()?;
-            tempmap
-                .write(&self.file.data[pointerto_raw_data..pointerto_raw_data + sizeof_raw_data])
-                .map_err(|error| {
-                    Error::other(format!(
-                        "failed to write section to memory-mapped pe file: {}",
-                        error
-                    ))
-                })?;
+            let raw_available = self.file.data.len().saturating_sub(pointerto_raw_data);
+            let raw_size = sizeof_raw_data.min(raw_available);
+            if raw_size > 0 {
+                image.add_segment(ImageSegment::bytes(
+                    Some(section.name().to_string()),
+                    section_virtual_address,
+                    self.file.data[pointerto_raw_data..pointerto_raw_data + raw_size].to_vec(),
+                    permissions,
+                ));
+            }
+            let virtual_size = u64::from(section.virtual_size());
+            if virtual_size > raw_size as u64 {
+                image.add_segment(ImageSegment::zeroes(
+                    Some(section.name().to_string()),
+                    section_virtual_address + raw_size as u64,
+                    virtual_size - raw_size as u64,
+                    permissions,
+                ));
+            }
         }
-        Ok(tempmap)
+        Ok(image)
     }
 
     /// Returns the size of the PE file.

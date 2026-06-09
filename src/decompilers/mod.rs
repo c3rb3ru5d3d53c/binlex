@@ -20,10 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::Configuration;
 use crate::config::RAYON_WORKER_STACK_SIZE;
 use crate::controlflow::{Function, Graph};
-use crate::formats::Image;
 use crate::irs::ast::AstFunction;
 use crate::irs::hir::HirFunction;
 use crate::irs::lir::LirFunction;
@@ -54,36 +52,24 @@ pub struct DecompiledFunction {
 
 pub struct Decompiler<'a> {
     graph: &'a Graph,
-    image: &'a Image,
-    configuration: Configuration,
     backend: DecompilerBackend,
 }
 
 impl<'a> Decompiler<'a> {
-    pub fn new(
-        graph: &'a Graph,
-        image: &'a Image,
-        configuration: Configuration,
-        backend: DecompilerBackend,
-    ) -> Self {
-        Self {
-            graph,
-            image,
-            configuration,
-            backend,
-        }
+    pub fn new(graph: &'a Graph, backend: DecompilerBackend) -> Self {
+        Self { graph, backend }
     }
 
     pub fn graph(&self) -> &'a Graph {
         self.graph
     }
 
-    pub fn image(&self) -> &'a Image {
-        self.image
+    pub fn image(&self) -> &'a crate::formats::Image {
+        self.graph.image()
     }
 
-    pub fn configuration(&self) -> &Configuration {
-        &self.configuration
+    pub fn configuration(&self) -> &crate::Configuration {
+        &self.graph.config
     }
 
     pub fn backend(&self) -> DecompilerBackend {
@@ -101,7 +87,7 @@ impl<'a> Decompiler<'a> {
                 let mir = function.mir()?;
                 let hir = HirFunction::from_mir(None, &mir)
                     .map_err(|error| Error::other(error.to_string()))?;
-                let ast = AstFunction::from_hir(&hir).with_image(self.image);
+                let ast = AstFunction::from_hir(&hir).with_image(self.image());
                 Ok(DecompiledFunction {
                     address: function.address(),
                     lir,
@@ -128,7 +114,7 @@ impl<'a> Decompiler<'a> {
             .map(|function| function.address())
             .collect::<Vec<_>>();
 
-        let threads = self.configuration.resolved_threads();
+        let threads = self.configuration().resolved_threads();
         let mut functions = if threads <= 1 || addresses.len() <= 1 {
             addresses
                 .into_iter()

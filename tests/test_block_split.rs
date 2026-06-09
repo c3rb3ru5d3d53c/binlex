@@ -23,7 +23,6 @@
 use binlex::controlflow::{Function, Graph};
 use binlex::decompilers::{Decompiler, DecompilerBackend};
 use binlex::disassemblers::capstone::Disassembler;
-use binlex::formats::Image;
 use binlex::hex;
 use binlex::irs::mir::MirFunction;
 use binlex::{Architecture, Configuration};
@@ -223,17 +222,10 @@ fn test_mir_lowering_preserves_mid_block_calls() {
     assert!(!optimized_mir.text().contains("%rax"));
     assert!(!optimized_mir.text().contains("%rcx"));
 
-    let tempdir = tempfile::tempdir().expect("tempdir");
-    let image = Image::new(tempdir.path().join("image.bin"), false).expect("image");
-    let decompiled = Decompiler::new(
-        &graph,
-        &image,
-        Configuration::new(),
-        DecompilerBackend::Default,
-    )
-    .decompile_function(0)
-    .expect("decompile")
-    .expect("decompiled function");
+    let decompiled = Decompiler::new(&graph, DecompilerBackend::Default)
+        .decompile_function(0)
+        .expect("decompile")
+        .expect("decompiled function");
     assert!(mir_text_contains_call_target(
         &decompiled.mir.text(),
         "@callee"

@@ -26,6 +26,8 @@ from binlex_bindings.binlex.formats import COFF as _COFFBinding
 from binlex_bindings.binlex.formats import ELF as _ELFBinding
 from binlex_bindings.binlex.formats import File as _FileBinding
 from binlex_bindings.binlex.formats import Image as _ImageBinding
+from binlex_bindings.binlex.formats import ImagePermissions as _ImagePermissionsBinding
+from binlex_bindings.binlex.formats import ImageSegment as _ImageSegmentBinding
 from binlex_bindings.binlex.formats import MACHO as _MACHOBinding
 from binlex_bindings.binlex.formats import PE as _PEBinding
 from binlex_bindings.binlex.formats import SymbolKind as _SymbolKindBinding
@@ -35,12 +37,102 @@ from binlex.hashing import SHA256, TLSH
 from binlex.core.magic import Magic
 
 
-class Image:
-    """Writable binary image helper backed by the native image implementation."""
+class ImagePermissions:
+    """Virtual image segment permissions."""
 
-    def __init__(self, path, cache):
-        """Open or create an image file at `path`."""
-        self._inner = _ImageBinding(path, cache)
+    def __init__(self, read=True, write=False, execute=False):
+        self._inner = _ImagePermissionsBinding(read, write, execute)
+
+    @classmethod
+    def _from_binding(cls, binding):
+        result = cls.__new__(cls)
+        result._inner = binding
+        return result
+
+    @classmethod
+    def readable(cls):
+        return cls._from_binding(_ImagePermissionsBinding.readable())
+
+    @classmethod
+    def executable(cls):
+        return cls._from_binding(_ImagePermissionsBinding.executable())
+
+    @property
+    def read(self):
+        return self._inner.read
+
+    @property
+    def write(self):
+        return self._inner.write
+
+    @property
+    def execute(self):
+        return self._inner.execute
+
+
+class ImageSegment:
+    """Virtual image segment."""
+
+    @classmethod
+    def _from_binding(cls, binding):
+        result = cls.__new__(cls)
+        result._inner = binding
+        return result
+
+    @classmethod
+    def bytes(cls, name, virtual_address, data, permissions):
+        if not isinstance(permissions, ImagePermissions):
+            raise TypeError("segment permissions must be an ImagePermissions")
+        return cls._from_binding(
+            _ImageSegmentBinding.bytes(
+                name,
+                virtual_address,
+                data,
+                permissions._inner,
+            )
+        )
+
+    @classmethod
+    def zeroes(cls, name, virtual_address, size, permissions):
+        if not isinstance(permissions, ImagePermissions):
+            raise TypeError("segment permissions must be an ImagePermissions")
+        return cls._from_binding(
+            _ImageSegmentBinding.zeroes(
+                name,
+                virtual_address,
+                size,
+                permissions._inner,
+            )
+        )
+
+    @property
+    def name(self):
+        return self._inner.name
+
+    @property
+    def virtual_address(self):
+        return self._inner.virtual_address
+
+    @property
+    def size(self):
+        return self._inner.size
+
+    @property
+    def permissions(self):
+        return ImagePermissions._from_binding(self._inner.permissions)
+
+    def end(self):
+        return self._inner.end()
+
+    def contains(self, address):
+        return self._inner.contains(address)
+
+
+class Image:
+    """Virtual binary image backed by mapped segments."""
+
+    def __init__(self):
+        self._inner = _ImageBinding()
 
     @classmethod
     def _from_binding(cls, binding):
@@ -49,59 +141,60 @@ class Image:
         result._inner = binding
         return result
 
-    def is_cached(self):
-        """Return whether the image is backed by a cache file."""
-        return self._inner.is_cached()
+    def add_segment(self, segment):
+        """Add a mapped virtual segment."""
+        if not isinstance(segment, ImageSegment):
+            raise TypeError("image segment must be an ImageSegment")
+        return self._inner.add_segment(segment._inner)
 
-    def path(self):
-        """Return the filesystem path backing the image."""
-        return self._inner.path()
+    def segments(self):
+        """Return mapped virtual segments."""
+        return [ImageSegment._from_binding(segment) for segment in self._inner.segments()]
 
-    def base(self):
-        """Return the virtual base address represented by offset zero in the image mapping."""
-        return self._inner.base()
+    def snapshot(self):
+        """Return a serializable image snapshot."""
+        return self._inner.snapshot()
 
-    def write(self, data):
-        """Write raw bytes at the current file position."""
-        return self._inner.write(data)
+    @classmethod
+    def from_snapshot(cls, snapshot):
+        """Restore an image from a serializable snapshot."""
+        return cls._from_binding(_ImageBinding.from_snapshot(snapshot))
 
-    def write_padding(self, length):
-        """Write `length` bytes of padding at the current file position."""
-        return self._inner.write_padding(length)
+    def __getstate__(self):
+        return self.snapshot()
 
-    def seek_to_end(self):
-        """Seek to the end of the image and return the resulting offset."""
-        return self._inner.seek_to_end()
+    def __setstate__(self, state):
+        self._inner = _ImageBinding.from_snapshot(state)
 
-    def seek(self, offset):
-        """Seek to an absolute offset in the image."""
-        return self._inner.seek(offset)
+    def read_virtual_address(self, address, size):
+        """Read bytes from a virtual address."""
+        return self._inner.read_virtual_address(address, size)
 
-    def size(self):
-        """Return the current size of the image in bytes."""
-        return self._inner.size()
+    def is_virtual_address(self, address):
+        """Return whether `address` is mapped in the virtual image."""
+        return self._inner.is_virtual_address(address)
 
-    def __len__(self):
-        """Return the current size of the image in bytes."""
-        return self.size()
+    def mapped_size(self):
+        """Return the total mapped virtual byte count."""
+        return self._inner.mapped_size()
+
+    def executable_virtual_address_ranges(self):
+        """Return executable virtual address ranges."""
+        return dict(self._inner.executable_virtual_address_ranges())
+
+    def virtual_min(self):
+        """Return the lowest mapped virtual address."""
+        return self._inner.virtual_min()
+
+    def virtual_max(self):
+        """Return the first virtual address after the highest mapped byte."""
+        return self._inner.virtual_max()
 
     def __getitem__(self, key):
-        """Access image bytes using standard Python indexing and slicing."""
-        view = self.mmap()
-        base = self.base()
-        if isinstance(key, slice):
-            start = None if key.start is None else key.start - base
-            stop = None if key.stop is None else key.stop - base
-            return bytes(view[slice(start, stop, key.step)])
-        return view[key - base]
+        return self._inner[key]
 
-    def mmap(self):
-        """Return a read-only memory view over the image bytes."""
-        return self._inner.mmap()
-
-    def mmap_mut(self):
-        """Return a writable memory view over the image bytes."""
-        return self._inner.mmap_mut()
+    def __contains__(self, address):
+        return address in self._inner
 
 
 class SymbolKind:
@@ -681,4 +774,15 @@ class MACHO:
         """Delegate unknown attributes to the underlying native Mach-O object."""
         return getattr(self._inner, name)
 
-__all__ = ["COFF", "ELF", "File", "Image", "MACHO", "PE", "Symbol", "SymbolKind"]
+__all__ = [
+    "COFF",
+    "ELF",
+    "File",
+    "Image",
+    "ImagePermissions",
+    "ImageSegment",
+    "MACHO",
+    "PE",
+    "Symbol",
+    "SymbolKind",
+]

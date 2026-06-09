@@ -41,6 +41,8 @@ pub use crate::formats::coff::COFF;
 pub use crate::formats::elf::ELF;
 pub use crate::formats::file::File;
 pub use crate::formats::image::Image;
+pub use crate::formats::image::ImagePermissions;
+pub use crate::formats::image::ImageSegment;
 pub use crate::formats::macho::PyMachoSection;
 pub use crate::formats::macho::PyMachoSlice;
 pub use crate::formats::macho::MACHO;
@@ -62,6 +64,8 @@ pub fn formats_init(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<COFF>()?;
     m.add_class::<PE>()?;
     m.add_class::<File>()?;
+    m.add_class::<ImagePermissions>()?;
+    m.add_class::<ImageSegment>()?;
     m.add_class::<Image>()?;
     m.add_class::<ELF>()?;
     m.add_class::<MACHO>()?;

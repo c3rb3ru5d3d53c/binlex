@@ -24,6 +24,8 @@ use crate::Architecture;
 use crate::Configuration;
 use crate::formats::File;
 use crate::formats::Image;
+use crate::formats::ImagePermissions;
+use crate::formats::ImageSegment;
 use crate::formats::{Symbol as BlSymbol, symbol::SymbolKind};
 use crate::hashing::SHA256;
 use crate::hashing::SSDeep;
@@ -35,7 +37,6 @@ use lief::macho::header::CpuType as MachoCpuType;
 use lief::macho::section::Flags as SectionFlags;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Error, ErrorKind};
-use std::path::PathBuf;
 
 pub const N_STAB: u8 = 0xE0;
 pub const N_TYPE: u8 = 0x0E;
@@ -505,23 +506,21 @@ impl MACHO {
     /// # Returns
     /// A `Result` containing the `Image` object on success or an `Error` on failure.
     pub fn image(&self, slice: usize) -> Result<Image, Error> {
-        let pathbuf = PathBuf::from(self.config.mmap.directory.clone()).join(format!(
-            "{}.slice-{}.mapped-v2",
-            self.file.sha256_no_config().unwrap(),
-            slice
-        ));
-
-        let mut tempmap = Image::new(pathbuf, self.config.mmap.cache.enabled)?;
+        let mut image = Image::new();
         let image_base = self.imagebase(slice).unwrap_or(0);
-        tempmap.set_base(image_base);
-
-        if tempmap.is_cached() {
-            return Ok(tempmap);
-        }
 
         let sizeofheaders = self.sizeofheaders(slice);
-        tempmap.seek_to_end()?;
-        tempmap.write(&self.file.data[0..sizeofheaders.unwrap() as usize])?;
+        if let Some(sizeofheaders) = sizeofheaders {
+            let header_size = (sizeofheaders as usize).min(self.file.data.len());
+            if header_size > 0 {
+                image.add_segment(ImageSegment::bytes(
+                    Some("headers".to_string()),
+                    image_base,
+                    self.file.data[0..header_size].to_vec(),
+                    ImagePermissions::readable(),
+                ));
+            }
+        }
 
         let binary = match self.macho.iter().nth(slice) {
             Some(binary) => binary,
@@ -531,12 +530,6 @@ impl MACHO {
         };
 
         for segment in binary.segments() {
-            let segment_virtual_address = segment.virtual_address().saturating_sub(image_base);
-            if segment_virtual_address > tempmap.size()? {
-                let padding_length = segment_virtual_address - tempmap.size()?;
-                tempmap.seek_to_end()?;
-                tempmap.write_padding(padding_length as usize)?;
-            }
             if !matches!(
                 segment.command_type(),
                 LoadCommandTypes::Segment | LoadCommandTypes::Segment64
@@ -545,11 +538,28 @@ impl MACHO {
             }
             let segment_file_offset = segment.file_offset() as usize;
             let segment_size = segment.file_size() as usize;
+            let segment_virtual_address = segment.virtual_address();
+            let permissions = if MACHO::is_segment_flags_executable(segment.init_protection()) {
+                ImagePermissions::executable()
+            } else {
+                ImagePermissions::readable()
+            };
             if segment_file_offset + segment_size <= self.file.data.len() {
-                tempmap.seek_to_end()?;
-                tempmap.write(
-                    &self.file.data[segment_file_offset..segment_file_offset + segment_size],
-                )?;
+                image.add_segment(ImageSegment::bytes(
+                    Some(segment.name()),
+                    segment_virtual_address,
+                    self.file.data[segment_file_offset..segment_file_offset + segment_size]
+                        .to_vec(),
+                    permissions,
+                ));
+                if segment.virtual_size() > segment_size as u64 {
+                    image.add_segment(ImageSegment::zeroes(
+                        Some(segment.name()),
+                        segment_virtual_address + segment_size as u64,
+                        segment.virtual_size() - segment_size as u64,
+                        permissions,
+                    ));
+                }
             } else {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
@@ -558,7 +568,7 @@ impl MACHO {
             }
         }
 
-        Ok(tempmap)
+        Ok(image)
     }
 
     /// Returns the size of the MACHO file.

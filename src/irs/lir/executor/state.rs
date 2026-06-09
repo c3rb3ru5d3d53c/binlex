@@ -203,7 +203,7 @@ impl LirExecutorState {
     }
 
     pub fn map_image(&mut self, image: &Image) {
-        self.memory.map_image_path(image.path(), image.base());
+        self.memory.map_image(image);
     }
 
     pub fn symbolize_memory(

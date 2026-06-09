@@ -21,9 +21,26 @@
 // SOFTWARE.
 
 use binlex::Configuration as InnerConfig;
-use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
+use pyo3::types::PyAny;
+use serde_json::Value;
 use std::sync::{Arc, Mutex};
+
+fn json_value_to_py(py: Python<'_>, value: &Value) -> PyResult<Py<PyAny>> {
+    let json_str =
+        serde_json::to_string(value).map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+    let json_module = py.import("json")?;
+    Ok(json_module.call_method1("loads", (json_str,))?.into())
+}
+
+fn py_to_json_value(py: Python<'_>, value: Py<PyAny>) -> PyResult<Value> {
+    let json_module = py.import("json")?;
+    let json_str = json_module
+        .call_method1("dumps", (value,))?
+        .extract::<String>()?;
+    serde_json::from_str(&json_str).map_err(|error| PyValueError::new_err(error.to_string()))
+}
 
 #[pyclass]
 pub struct ConfigHashing {
@@ -318,6 +335,35 @@ impl Configuration {
         Self {
             inner: Arc::new(Mutex::new(inner)),
         }
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn snapshot(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        json_value_to_py(
+            py,
+            &serde_json::to_value(self.inner.lock().unwrap().clone())
+                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?,
+        )
+    }
+
+    #[staticmethod]
+    #[pyo3(text_signature = "(snapshot)")]
+    pub fn from_snapshot(py: Python<'_>, snapshot: Py<PyAny>) -> PyResult<Self> {
+        let inner = serde_json::from_value(py_to_json_value(py, snapshot)?)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        Ok(Self {
+            inner: Arc::new(Mutex::new(inner)),
+        })
+    }
+
+    pub fn __getstate__(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        self.snapshot(py)
+    }
+
+    pub fn __setstate__(&mut self, py: Python<'_>, state: Py<PyAny>) -> PyResult<()> {
+        *self.inner.lock().unwrap() = serde_json::from_value(py_to_json_value(py, state)?)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        Ok(())
     }
 
     #[getter]

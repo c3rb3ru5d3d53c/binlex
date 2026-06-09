@@ -311,7 +311,7 @@ impl<'a> CPrintContext<'a> {
     fn resolve_string_literal(&self, address: u64) -> Option<String> {
         let image = self.image?;
         let bytes = image
-            .read_virtual_bytes(address, MAX_STRING_BYTES)
+            .read_virtual_address(address, MAX_STRING_BYTES)
             .ok()
             .flatten()?;
         decode_wide_string_literal(&bytes).or_else(|| decode_ascii_string_literal(&bytes))
@@ -372,7 +372,11 @@ impl<'a> CPrintContext<'a> {
         let lower_bound = address.saturating_sub(max_scan);
         while start >= lower_bound + 2 {
             let previous = start - 2;
-            let bytes = self.image?.read_virtual_bytes(previous, 2).ok().flatten()?;
+            let bytes = self
+                .image?
+                .read_virtual_address(previous, 2)
+                .ok()
+                .flatten()?;
             if bytes.len() != 2 || bytes == [0, 0] || is_utf16_path_separator(&bytes) {
                 break;
             }
@@ -388,7 +392,11 @@ impl<'a> CPrintContext<'a> {
 
     fn previous_wide_unit_is_interior(&self, address: u64) -> Option<bool> {
         let previous = address.checked_sub(2)?;
-        let bytes = self.image?.read_virtual_bytes(previous, 2).ok().flatten()?;
+        let bytes = self
+            .image?
+            .read_virtual_address(previous, 2)
+            .ok()
+            .flatten()?;
         Some(bytes.len() == 2 && bytes != [0, 0] && !is_utf16_path_separator(&bytes))
     }
 
@@ -404,7 +412,11 @@ impl<'a> CPrintContext<'a> {
         let lower_bound = address.saturating_sub(max_scan);
         while start > lower_bound {
             let previous = start - 1;
-            let bytes = self.image?.read_virtual_bytes(previous, 1).ok().flatten()?;
+            let bytes = self
+                .image?
+                .read_virtual_address(previous, 1)
+                .ok()
+                .flatten()?;
             if bytes
                 .first()
                 .is_none_or(|byte| *byte == 0 || *byte == b'\\' || *byte == b'/')
@@ -423,7 +435,11 @@ impl<'a> CPrintContext<'a> {
 
     fn previous_ascii_byte_is_interior(&self, address: u64) -> Option<bool> {
         let previous = address.checked_sub(1)?;
-        let bytes = self.image?.read_virtual_bytes(previous, 1).ok().flatten()?;
+        let bytes = self
+            .image?
+            .read_virtual_address(previous, 1)
+            .ok()
+            .flatten()?;
         Some(bytes.first().is_some_and(|byte| {
             *byte != 0 && *byte != b'\\' && *byte != b'/' && is_ascii_string_byte(*byte)
         }))

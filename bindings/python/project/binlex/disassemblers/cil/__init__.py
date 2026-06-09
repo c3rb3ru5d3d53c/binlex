@@ -24,10 +24,8 @@
 
 from binlex_bindings.binlex.disassemblers.cil import Disassembler as _DisassemblerBinding
 
-from binlex import Architecture, Configuration
 from binlex.controlflow import Block, Function, Graph, Instruction
 from binlex.core.architecture import _coerce_architecture
-from binlex.formats import Image
 
 
 class Disassembler:
@@ -35,54 +33,50 @@ class Disassembler:
 
     def __init__(
         self,
-        machine: Architecture,
-        image: Image | bytes | memoryview,
-        executable_address_ranges: dict[int, int],
-        configuration: Configuration,
+        graph: Graph,
     ) -> None:
-        """Create a disassembler for the given architecture and image source."""
-        if isinstance(image, Image):
-            image = image._inner
+        """Create a disassembler bound to a graph decode context."""
+        self.graph = graph
         self._inner = _DisassemblerBinding(
-            _coerce_architecture(machine),
-            image,
-            executable_address_ranges,
-            configuration,
+            _coerce_architecture(graph.architecture()),
+            graph.image()._inner,
+            graph.executable_virtual_address_ranges(),
+            graph.configuration(),
         )
 
-    def disassemble_instruction(self, address: int, graph: Graph) -> Instruction:
-        """Disassemble a single instruction into the provided graph."""
+    def disassemble_instruction(self, address: int) -> Instruction:
+        """Disassemble a single instruction into the graph."""
         return Instruction._from_binding(
             self._inner.disassemble_instruction(
                 address,
-                graph._inner,
+                self.graph._inner,
             ),
-            graph._config,
+            self.graph._config,
         )
 
-    def disassemble_function(self, address: int, graph: Graph) -> Function:
+    def disassemble_function(self, address: int) -> Function:
         """Disassemble the function that starts at `address` into the graph."""
         return Function._from_binding(
             self._inner.disassemble_function(
                 address,
-                graph._inner,
+                self.graph._inner,
             ),
-            graph._config,
+            self.graph._config,
         )
 
-    def disassemble_block(self, address: int, graph: Graph) -> Block:
+    def disassemble_block(self, address: int) -> Block:
         """Disassemble the basic block that starts at `address`."""
         return Block._from_binding(
             self._inner.disassemble_block(
                 address,
-                graph._inner,
+                self.graph._inner,
             ),
-            graph._config,
+            self.graph._config,
         )
 
-    def disassemble(self, addresses: set[int], graph: Graph) -> None:
+    def disassemble(self, addresses: set[int]) -> None:
         """Disassemble a set of entrypoint addresses into the graph."""
-        return self._inner.disassemble(addresses, graph._inner)
+        return self._inner.disassemble(addresses, self.graph._inner)
 
     def __getattr__(self, name):
         return getattr(self._inner, name)

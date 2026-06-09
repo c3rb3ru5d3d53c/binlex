@@ -91,19 +91,14 @@ pub struct Disassembler<'a> {
 impl<'a> Disassembler<'a> {
     pub fn from_image(
         machine: Architecture,
-        image: &'a mut Image,
+        _image: &'a Image,
         executable_address_ranges: BTreeMap<u64, u64>,
         config: Configuration,
     ) -> Result<Self, Error> {
-        let image_base = image.base();
-        let bytes = image.mmap()?;
-        Self::new_with_image_base(
-            machine,
-            bytes,
-            image_base,
-            executable_address_ranges,
-            config,
-        )
+        let _ = (machine, executable_address_ranges, config);
+        Err(Error::other(
+            "image-backed disassembler construction requires graph/image decoding support",
+        ))
     }
 
     pub fn from_bytes(

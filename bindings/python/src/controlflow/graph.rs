@@ -217,33 +217,59 @@ impl Graph {
             image: Arc::clone(&self.image),
         }
     }
-
-    pub(crate) fn set_image(&self, image: Py<Image>) {
-        *self.image.lock().unwrap() = Some(image);
-    }
 }
 
 #[pymethods]
 impl Graph {
     #[new]
-    #[pyo3(text_signature = "(architecture, config, metadata=None)")]
-    /// Create a new graph for the supplied architecture and configuration.
+    #[pyo3(text_signature = "(architecture, image, config, metadata=None)")]
+    /// Create a new graph for the supplied architecture, image, and configuration.
     pub fn new(
         py: Python,
         architecture: Py<Architecture>,
+        image: Py<Image>,
         config: Py<Configuration>,
         metadata: Option<Py<PyAny>>,
     ) -> PyResult<Self> {
         let inner_config = config.borrow(py).inner.lock().unwrap().clone();
-        let inner = InnerGraph::new_with_metadata(
+        let inner_image = image.borrow(py).inner.clone();
+        let inner = InnerGraph::new_with_image_metadata(
             architecture.borrow(py).inner,
+            inner_image,
             inner_config,
             py_to_metadata(py, metadata)?,
         );
         Ok(Self {
             inner: Arc::new(Mutex::new(inner)),
-            image: Arc::new(Mutex::new(None)),
+            image: Arc::new(Mutex::new(Some(image))),
         })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the graph architecture.
+    pub fn architecture(&self) -> crate::Architecture {
+        crate::Architecture {
+            inner: self.inner.lock().unwrap().architecture,
+        }
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return the graph-owned image.
+    pub fn image(&self, py: Python<'_>) -> Option<Py<Image>> {
+        self.image
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|image| image.clone_ref(py))
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return executable virtual address ranges derived from the graph image.
+    pub fn executable_virtual_address_ranges(&self) -> BTreeMap<u64, u64> {
+        self.inner
+            .lock()
+            .unwrap()
+            .executable_virtual_address_ranges()
     }
 
     #[pyo3(text_signature = "($self)")]

@@ -32,7 +32,9 @@ pub mod symbol;
 pub use coff::COFF;
 pub use elf::ELF;
 pub use file::File;
-pub use image::{Image, ImageContext, VirtualImage};
+pub use image::{
+    Image, ImageContext, ImagePermissions, ImageSegment, ImageSegmentData, VirtualImage,
+};
 pub use macho::MACHO;
 pub use macho::MachoSection;
 pub use macho::MachoSlice;

@@ -33,6 +33,7 @@ from binlex_bindings.binlex.controlflow.instruction import Operand as Operand
 from binlex_bindings.binlex.controlflow.instruction import OperandKind as OperandKind
 
 from binlex.core.architecture import _coerce_architecture
+from binlex.formats import Image
 from binlex.hashing import MinHash32, SHA256, SSDeep, TLSH
 from binlex.irs.hir import HirFunction
 from binlex.irs.lir import Lir, LirBlock, LirFunction
@@ -874,14 +875,19 @@ class GraphQueue:
 class Graph:
     """Mutable control-flow graph wrapper backed by the Rust implementation."""
 
-    def __init__(self, architecture, config, metadata=None):
-        """Create a graph for the given architecture and configuration."""
+    def __init__(self, architecture, image, config, metadata=None):
+        """Create a graph for the given architecture, image, and configuration."""
+        if not isinstance(image, Image):
+            raise TypeError("graph image must be a binlex.formats.Image")
         self._inner = _GraphBinding(
             _coerce_architecture(architecture),
+            image._inner,
             config,
             _coerce_metadata(metadata),
         )
         self._config = config
+        self._image = image
+        self._architecture = architecture
         self._decompiler = None
         self._decompilation_cache = {"lir": {}, "mir": {}, "hir": {}, "ast": {}}
 
@@ -891,9 +897,34 @@ class Graph:
         result = cls.__new__(cls)
         result._inner = binding
         result._config = config
+        inner_image = binding.image()
+        result._image = Image._from_binding(inner_image) if inner_image is not None else None
+        result._architecture = binding.architecture()
         result._decompiler = None
         result._decompilation_cache = {"lir": {}, "mir": {}, "hir": {}, "ast": {}}
         return result
+
+    def architecture(self):
+        """Return the graph architecture."""
+        return self._inner.architecture()
+
+    def image(self):
+        """Return the graph-owned image."""
+        if self._image is not None:
+            return self._image
+        inner_image = self._inner.image()
+        if inner_image is None:
+            return None
+        self._image = Image._from_binding(inner_image)
+        return self._image
+
+    def configuration(self):
+        """Return the graph configuration."""
+        return self._config
+
+    def executable_virtual_address_ranges(self):
+        """Return executable ranges derived from the graph image."""
+        return dict(self._inner.executable_virtual_address_ranges())
 
     def instructions(self):
         """Return all instructions currently tracked by the graph."""

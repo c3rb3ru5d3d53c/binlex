@@ -28,7 +28,6 @@ use crate::Configuration;
 use binlex::disassemblers::cil::Disassembler as InnerDisassembler;
 use binlex::Architecture as InnerArchitecture;
 use binlex::Configuration as InnerConfiguration;
-use memmap2::Mmap;
 use pyo3::buffer::PyBuffer;
 use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
@@ -77,7 +76,7 @@ pub struct Disassembler {
 
 enum MaterializedInput {
     Bytes(Vec<u8>),
-    MappedImage { mmap: Mmap, base: u64 },
+    Image { bytes: Vec<u8>, base: u64 },
 }
 
 impl Disassembler {
@@ -125,25 +124,17 @@ impl Disassembler {
         }
 
         if let Some(image) = &self.image {
-            let mut image = image.borrow_mut(py);
-            let image_base = image.inner.base();
-            let _ = image
+            let image = image.borrow(py);
+            let Some((base, bytes)) = image
                 .inner
-                .mmap()
-                .map_err(|error| PyTypeError::new_err(error.to_string()))?;
-            let handle = image
-                .inner
-                .handle
-                .as_ref()
-                .ok_or_else(|| PyTypeError::new_err("image file handle is closed"))?;
-            let mmap = unsafe { Mmap::map(handle) }
-                .map_err(|error| PyTypeError::new_err(error.to_string()))?;
+                .materialize()
+                .map_err(|error| PyTypeError::new_err(error.to_string()))?
+            else {
+                return Err(PyTypeError::new_err("image has no mapped segments"));
+            };
             return Ok((
                 machine,
-                MaterializedInput::MappedImage {
-                    mmap,
-                    base: image_base,
-                },
+                MaterializedInput::Image { bytes, base },
                 self.executable_address_ranges.clone(),
                 config,
             ));
@@ -227,10 +218,10 @@ impl Disassembler {
                         &mut graph_inner.lock().unwrap(),
                     )
                 }
-                MaterializedInput::MappedImage { mmap, base } => {
+                MaterializedInput::Image { bytes, base } => {
                     let disassembler = InnerDisassembler::new_with_image_base(
                         machine,
-                        &mmap[..],
+                        &bytes,
                         base,
                         executable_address_ranges,
                         config,
@@ -270,10 +261,10 @@ impl Disassembler {
                         &mut graph_inner.lock().unwrap(),
                     )
                 }
-                MaterializedInput::MappedImage { mmap, base } => {
+                MaterializedInput::Image { bytes, base } => {
                     let disassembler = InnerDisassembler::new_with_image_base(
                         machine,
-                        &mmap[..],
+                        &bytes,
                         base,
                         executable_address_ranges,
                         config,
@@ -311,10 +302,10 @@ impl Disassembler {
                     &mut graph_inner.lock().unwrap(),
                 )
             }
-            MaterializedInput::MappedImage { mmap, base } => {
+            MaterializedInput::Image { bytes, base } => {
                 let disassembler = InnerDisassembler::new_with_image_base(
                     machine,
-                    &mmap[..],
+                    &bytes,
                     base,
                     executable_address_ranges,
                     config,
@@ -352,10 +343,10 @@ impl Disassembler {
                     &mut graph_inner.lock().unwrap(),
                 )
             }
-            MaterializedInput::MappedImage { mmap, base } => {
+            MaterializedInput::Image { bytes, base } => {
                 let disassembler = InnerDisassembler::new_with_image_base(
                     machine,
-                    &mmap[..],
+                    &bytes,
                     base,
                     executable_address_ranges,
                     config,

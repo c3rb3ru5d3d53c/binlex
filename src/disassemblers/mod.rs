@@ -78,19 +78,14 @@ fn cil_metadata_token_addresses(cfg: &Graph) -> BTreeMap<u64, u64> {
 impl<'a> Disassembler<'a> {
     pub fn from_image(
         architecture: Architecture,
-        image: &'a mut Image,
+        _image: &'a Image,
         executable_address_ranges: BTreeMap<u64, u64>,
         config: Configuration,
     ) -> Result<Self, Error> {
-        let image_base = image.base();
-        let bytes = image.mmap()?;
-        Self::new_with_image_base(
-            architecture,
-            bytes,
-            image_base,
-            executable_address_ranges,
-            config,
-        )
+        let _ = (architecture, executable_address_ranges, config);
+        Err(Error::other(
+            "image-backed disassembler construction requires graph/image decoding support",
+        ))
     }
 
     pub fn from_bytes(

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from enum import Enum
 
-from binlex.config import Configuration
 from binlex.controlflow import Function, Graph
 from binlex.formats import Image
+from binlex.config import Configuration
 
 
 class DecompilerBackend(str, Enum):
@@ -14,8 +14,6 @@ class Decompiler:
     def __init__(
         self,
         graph: Graph,
-        image: Image,
-        configuration: Configuration,
         backend: DecompilerBackend = DecompilerBackend.DEFAULT,
     ) -> None: ...
     @property

@@ -27,61 +27,17 @@ use crate::controlflow::Function;
 use crate::controlflow::Instruction;
 use crate::controlflow::InstructionRecord;
 use crate::controlflow::Reference;
-use crate::formats::{Symbol, SymbolKind};
+use crate::formats::{Image, Symbol, SymbolKind};
 use crate::irs::lir::Lir;
 use crossbeam::queue::SegQueue;
 use crossbeam_skiplist::SkipMap;
 use crossbeam_skiplist::SkipSet;
 use rayon::prelude::*;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Error;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
-
-#[derive(Clone, Default, Serialize, Deserialize)]
-pub struct GraphQueueSnapshot {
-    pub valid: BTreeSet<u64>,
-    pub invalid: BTreeSet<u64>,
-    pub processed: BTreeSet<u64>,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct GraphSnapshot {
-    pub architecture: String,
-    pub instructions: Vec<GraphInstructionSnapshot>,
-    #[serde(default)]
-    pub metadata: BTreeMap<String, Value>,
-    pub instruction_queue: GraphQueueSnapshot,
-    pub block_queue: GraphQueueSnapshot,
-    pub function_queue: GraphQueueSnapshot,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct GraphInstructionSnapshot {
-    pub architecture: String,
-    pub address: u64,
-    pub is_prologue: bool,
-    pub is_block_start: bool,
-    pub is_function_start: bool,
-    pub bytes: Vec<u8>,
-    pub chromosome_mask: Vec<u8>,
-    pub pattern: String,
-    pub is_return: bool,
-    pub is_call: bool,
-    pub functions: BTreeSet<u64>,
-    pub is_jump: bool,
-    pub is_conditional: bool,
-    pub is_trap: bool,
-    pub has_indirect_target: bool,
-    pub to: BTreeSet<u64>,
-    pub edges: usize,
-    pub mnemonic: String,
-    pub disassembly: String,
-    pub operands: Vec<crate::controlflow::Operand>,
-    pub lir: Option<Lir>,
-}
 
 /// Queue structure used within `Graph` for managing addresses in processing stages.
 pub struct GraphQueue {
@@ -464,6 +420,8 @@ pub struct Graph {
     pub instructions: GraphQueue,
     /// Configuration
     pub config: Configuration,
+    /// Virtual image used as decode context.
+    pub image: Image,
     metadata: Mutex<BTreeMap<String, Value>>,
     revision: AtomicU64,
     callgraph_state: Mutex<GraphCallgraphState>,
@@ -479,11 +437,24 @@ impl Graph {
     /// Returns a `Graph` instance with empty instructions, blocks, and functions.
     #[allow(dead_code)]
     pub fn new(architecture: Architecture, config: Configuration) -> Self {
-        Self::new_with_metadata(architecture, config, BTreeMap::new())
+        Self::new_with_image_metadata(architecture, Image::new(), config, BTreeMap::new())
     }
 
     pub fn new_with_metadata(
         architecture: Architecture,
+        config: Configuration,
+        metadata: BTreeMap<String, Value>,
+    ) -> Self {
+        Self::new_with_image_metadata(architecture, Image::new(), config, metadata)
+    }
+
+    pub fn new_with_image(architecture: Architecture, image: Image, config: Configuration) -> Self {
+        Self::new_with_image_metadata(architecture, image, config, BTreeMap::new())
+    }
+
+    pub fn new_with_image_metadata(
+        architecture: Architecture,
+        image: Image,
         config: Configuration,
         metadata: BTreeMap<String, Value>,
     ) -> Self {
@@ -494,99 +465,13 @@ impl Graph {
             functions: GraphQueue::new(),
             instructions: GraphQueue::new(),
             config,
+            image,
             metadata: Mutex::new(metadata),
             revision: AtomicU64::new(0),
             callgraph_state: Mutex::new(GraphCallgraphState::default()),
             block_layout_state: Mutex::new(GraphBlockLayoutState::default()),
             function_layout_state: Mutex::new(GraphFunctionLayoutState::default()),
         }
-    }
-
-    pub fn snapshot(&self) -> GraphSnapshot {
-        let instructions = self
-            .listing
-            .iter()
-            .map(|entry| {
-                let instruction = entry.value();
-                GraphInstructionSnapshot {
-                    architecture: instruction.architecture.to_string(),
-                    address: instruction.address,
-                    is_prologue: instruction.is_prologue,
-                    is_block_start: instruction.is_block_start,
-                    is_function_start: instruction.is_function_start,
-                    bytes: instruction.bytes.clone(),
-                    chromosome_mask: instruction.chromosome_mask.clone(),
-                    pattern: instruction.pattern.clone(),
-                    is_return: instruction.is_return,
-                    is_call: instruction.is_call,
-                    functions: instruction.functions.clone(),
-                    is_jump: instruction.is_jump,
-                    is_conditional: instruction.is_conditional,
-                    is_trap: instruction.is_trap,
-                    has_indirect_target: instruction.has_indirect_target,
-                    to: instruction.to.clone(),
-                    edges: instruction.edges,
-                    mnemonic: instruction.mnemonic.clone(),
-                    disassembly: instruction.disassembly.clone(),
-                    operands: instruction.operands.clone(),
-                    lir: instruction.lir.clone(),
-                }
-            })
-            .collect();
-        GraphSnapshot {
-            architecture: self.architecture.to_string(),
-            instructions,
-            metadata: self.metadata(),
-            instruction_queue: Self::snapshot_queue(&self.instructions),
-            block_queue: Self::snapshot_queue(&self.blocks),
-            function_queue: Self::snapshot_queue(&self.functions),
-        }
-    }
-
-    pub fn from_snapshot(snapshot: GraphSnapshot, config: Configuration) -> Result<Self, Error> {
-        let architecture = Architecture::from_string(&snapshot.architecture)?;
-        let mut graph = Self::new(architecture, config.clone());
-        graph.replace_metadata(snapshot.metadata);
-
-        for snapshot_instruction in snapshot.instructions {
-            let instruction_architecture =
-                Architecture::from_string(&snapshot_instruction.architecture)?;
-            if instruction_architecture != architecture {
-                return Err(Error::other(format!(
-                    "snapshot instruction architecture mismatch: expected {}, got {}",
-                    architecture, instruction_architecture
-                )));
-            }
-
-            let mut instruction =
-                Instruction::create(snapshot_instruction.address, architecture, config.clone());
-            instruction.is_prologue = snapshot_instruction.is_prologue;
-            instruction.is_block_start = snapshot_instruction.is_block_start;
-            instruction.is_function_start = snapshot_instruction.is_function_start;
-            instruction.is_return = snapshot_instruction.is_return;
-            instruction.is_call = snapshot_instruction.is_call;
-            instruction.is_jump = snapshot_instruction.is_jump;
-            instruction.is_conditional = snapshot_instruction.is_conditional;
-            instruction.is_trap = snapshot_instruction.is_trap;
-            instruction.has_indirect_target = snapshot_instruction.has_indirect_target;
-            instruction.edges = snapshot_instruction.edges;
-            instruction.mnemonic = snapshot_instruction.mnemonic;
-            instruction.disassembly = snapshot_instruction.disassembly;
-            instruction.operands = snapshot_instruction.operands;
-            instruction.bytes = snapshot_instruction.bytes;
-            instruction.chromosome_mask = snapshot_instruction.chromosome_mask;
-            instruction.pattern = snapshot_instruction.pattern;
-            instruction.functions = snapshot_instruction.functions;
-            instruction.to = snapshot_instruction.to;
-            instruction.lir = snapshot_instruction.lir;
-            graph.listing.insert(instruction.address, instruction);
-        }
-
-        Self::restore_queue(&mut graph.instructions, snapshot.instruction_queue);
-        Self::restore_queue(&mut graph.blocks, snapshot.block_queue);
-        Self::restore_queue(&mut graph.functions, snapshot.function_queue);
-
-        Ok(graph)
     }
 
     pub fn instructions(&self) -> Vec<Instruction<'_>> {
@@ -641,6 +526,14 @@ impl Graph {
 
     pub fn metadata(&self) -> BTreeMap<String, Value> {
         self.metadata.lock().unwrap().clone()
+    }
+
+    pub fn image(&self) -> &Image {
+        &self.image
+    }
+
+    pub fn executable_virtual_address_ranges(&self) -> BTreeMap<u64, u64> {
+        self.image.executable_virtual_address_ranges()
     }
 
     pub fn replace_metadata(&mut self, metadata: BTreeMap<String, Value>) {
@@ -1300,81 +1193,5 @@ impl Graph {
         let mut function_layout_state = self.function_layout_state.lock().unwrap();
         function_layout_state.revision = None;
         function_layout_state.blocks.clear();
-    }
-
-    fn snapshot_queue(queue: &GraphQueue) -> GraphQueueSnapshot {
-        GraphQueueSnapshot {
-            valid: queue.valid_addresses(),
-            invalid: queue.invalid_addresses(),
-            processed: queue.processed_addresses(),
-        }
-    }
-
-    fn restore_queue(queue: &mut GraphQueue, snapshot: GraphQueueSnapshot) {
-        for address in snapshot.processed {
-            queue.insert_processed(address);
-        }
-        for address in snapshot.valid {
-            queue.insert_valid(address);
-        }
-        for address in snapshot.invalid {
-            queue.insert_invalid(address);
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Graph;
-    use crate::controlflow::Instruction;
-    use crate::controlflow::{Block, Function};
-    use crate::{Architecture, Configuration};
-
-    #[test]
-    fn snapshot_roundtrip_preserves_wildcard_patterns_when_mask_output_disabled() {
-        let config = Configuration::default();
-        let mut graph = Graph::new(Architecture::AMD64, config.clone());
-
-        let mut first = Instruction::create(0x1000, Architecture::AMD64, config.clone());
-        first.bytes = vec![0x48, 0x8b, 0x05];
-        first.chromosome_mask = vec![0x00, 0x00, 0xFF];
-        first.pattern = "488b??".to_string();
-        graph.listing.insert(first.address, first);
-        graph.instructions.insert_processed(0x1000);
-        graph.instructions.insert_valid(0x1000);
-
-        let mut second = Instruction::create(0x1003, Architecture::AMD64, config.clone());
-        second.bytes = vec![0xc3];
-        second.chromosome_mask = vec![0x00];
-        second.pattern = "c3".to_string();
-        second.is_return = true;
-        graph.listing.insert(second.address, second);
-        graph.instructions.insert_processed(0x1003);
-        graph.instructions.insert_valid(0x1003);
-
-        graph.blocks.insert_processed(0x1000);
-        graph.blocks.insert_valid(0x1000);
-        graph.functions.insert_processed(0x1000);
-        graph.functions.insert_valid(0x1000);
-
-        let restored = Graph::from_snapshot(graph.snapshot(), config)
-            .expect("snapshot should restore wildcard masks");
-
-        let instruction = restored
-            .instruction(0x1000)
-            .expect("instruction should exist after restore");
-        assert_eq!(instruction.chromosome().pattern(), "488b??");
-
-        let block = Block::new(0x1000, &restored).expect("block should restore");
-        assert_eq!(block.chromosome().pattern(), "488b??c3");
-
-        let function = Function::new(0x1000, &restored).expect("function should restore");
-        assert_eq!(
-            function
-                .chromosome()
-                .expect("function chromosome should exist")
-                .pattern(),
-            "488b??c3"
-        );
     }
 }

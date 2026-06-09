@@ -9,9 +9,6 @@
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -20,57 +17,107 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use memmap2::{Mmap, MmapMut};
 use serde::{Deserialize, Serialize};
-use std::fs::OpenOptions;
 use std::hash::{Hash, Hasher};
-use std::io::{self, Error, Read, Seek, SeekFrom, Write};
-use std::path::PathBuf;
+use std::io::Error;
 
-#[cfg(windows)]
-use winapi::um::ioapiset::DeviceIoControl;
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ImagePermissions {
+    pub read: bool,
+    pub write: bool,
+    pub execute: bool,
+}
 
-#[cfg(windows)]
-use winapi::um::winioctl::FSCTL_SET_SPARSE;
+impl ImagePermissions {
+    pub fn new(read: bool, write: bool, execute: bool) -> Self {
+        Self {
+            read,
+            write,
+            execute,
+        }
+    }
 
-#[cfg(windows)]
-use std::os::windows::io::AsRawHandle;
+    pub fn readable() -> Self {
+        Self::new(true, false, false)
+    }
 
-#[cfg(windows)]
-use std::os::windows::fs::OpenOptionsExt;
+    pub fn executable() -> Self {
+        Self::new(true, false, true)
+    }
+}
 
-#[cfg(windows)]
-use winapi::um::winnt::{FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE};
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ImageSegmentData {
+    Bytes(Vec<u8>),
+    Zeroes,
+}
 
-/// Reconstructed binary image backed by a cached or temporary file with mmap access.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ImageSegment {
+    pub name: Option<String>,
+    pub virtual_address: u64,
+    pub size: u64,
+    pub data: ImageSegmentData,
+    pub permissions: ImagePermissions,
+}
+
+impl ImageSegment {
+    pub fn bytes(
+        name: Option<String>,
+        virtual_address: u64,
+        bytes: Vec<u8>,
+        permissions: ImagePermissions,
+    ) -> Self {
+        Self {
+            name,
+            virtual_address,
+            size: bytes.len() as u64,
+            data: ImageSegmentData::Bytes(bytes),
+            permissions,
+        }
+    }
+
+    pub fn zeroes(
+        name: Option<String>,
+        virtual_address: u64,
+        size: u64,
+        permissions: ImagePermissions,
+    ) -> Self {
+        Self {
+            name,
+            virtual_address,
+            size,
+            data: ImageSegmentData::Zeroes,
+            permissions,
+        }
+    }
+
+    pub fn end(&self) -> u64 {
+        self.virtual_address.saturating_add(self.size)
+    }
+
+    pub fn contains(&self, address: u64) -> bool {
+        address >= self.virtual_address && address < self.end()
+    }
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Image {
-    /// Path to the file as a `String`.
-    pub path: String,
-    /// Handle to the file as an optional open file descriptor.
-    pub handle: Option<std::fs::File>,
-    /// Flag indicating whether the file is already cached (exists on disk).
-    pub is_cached: bool,
-    /// Flag to determine if the file should be cached. If `false`, the file will
-    /// be deleted upon the object being dropped.
-    pub cache: bool,
-    base: u64,
-    mmap: Option<Mmap>,
-    mmap_mut: Option<MmapMut>,
+    segments: Vec<ImageSegment>,
 }
 
 pub trait VirtualImage {
-    fn read_virtual_bytes(&self, address: u64, max_len: usize) -> Result<Option<Vec<u8>>, Error>;
+    fn read_virtual_address(&self, address: u64, size: usize) -> Result<Option<Vec<u8>>, Error>;
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ImageContext {
-    pub path: String,
-    pub base: u64,
+    image: Image,
 }
 
 impl PartialEq for ImageContext {
     fn eq(&self, other: &Self) -> bool {
-        self.path == other.path && self.base == other.base
+        self.image == other.image
     }
 }
 
@@ -78,249 +125,255 @@ impl Eq for ImageContext {}
 
 impl Hash for ImageContext {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.path.hash(state);
-        self.base.hash(state);
+        self.image.hash(state);
     }
 }
 
 impl ImageContext {
     pub fn from_image(image: &Image) -> Self {
         Self {
-            path: image.path.clone(),
-            base: image.base(),
+            image: image.clone(),
         }
     }
 }
 
 impl VirtualImage for ImageContext {
-    fn read_virtual_bytes(&self, address: u64, max_len: usize) -> Result<Option<Vec<u8>>, Error> {
-        let Some(offset) = address.checked_sub(self.base) else {
-            return Ok(None);
-        };
-        if max_len == 0 {
-            return Ok(Some(Vec::new()));
-        }
-        let mut handle = OpenOptions::new().read(true).open(&self.path)?;
-        let size = handle.metadata()?.len();
-        if offset >= size {
-            return Ok(None);
-        }
-        let len = max_len.min((size - offset) as usize);
-        let mut bytes = vec![0; len];
-        handle.seek(SeekFrom::Start(offset))?;
-        let read = handle.read(&mut bytes)?;
-        bytes.truncate(read);
-        Ok(Some(bytes))
+    fn read_virtual_address(&self, address: u64, size: usize) -> Result<Option<Vec<u8>>, Error> {
+        self.image.read_virtual_address(address, size)
+    }
+}
+
+impl PartialEq for Image {
+    fn eq(&self, other: &Self) -> bool {
+        self.segments == other.segments
+    }
+}
+
+impl Eq for Image {}
+
+impl Hash for Image {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.segments.hash(state);
     }
 }
 
 impl Image {
-    pub fn new(path: PathBuf, cache: bool) -> Result<Self, Error> {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn from_segments(segments: Vec<ImageSegment>) -> Self {
+        let mut image = Self { segments };
+        image.sort_segments();
+        image
+    }
+
+    pub fn add_segment(&mut self, segment: ImageSegment) {
+        if segment.size == 0 {
+            return;
         }
+        self.segments.push(segment);
+        self.sort_segments();
+    }
 
-        let is_cached = path.is_file();
+    pub fn segments(&self) -> &[ImageSegment] {
+        &self.segments
+    }
 
-        let mut options = OpenOptions::new();
-        options.read(true).write(true).create(true);
+    pub fn mapped_size(&self) -> u64 {
+        self.segments
+            .iter()
+            .fold(0u64, |total, segment| total.saturating_add(segment.size))
+    }
 
-        #[cfg(windows)]
-        options.share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE);
+    pub fn executable_virtual_address_ranges(&self) -> std::collections::BTreeMap<u64, u64> {
+        self.segments
+            .iter()
+            .filter(|segment| segment.permissions.execute)
+            .map(|segment| (segment.virtual_address, segment.end()))
+            .collect()
+    }
 
-        let handle = options.open(&path)?;
+    pub fn virtual_min(&self) -> Option<u64> {
+        self.segments
+            .iter()
+            .map(|segment| segment.virtual_address)
+            .min()
+    }
 
-        #[cfg(windows)]
-        {
-            let handle_raw = handle.as_raw_handle() as *mut winapi::ctypes::c_void;
-            let mut bytes_returned = 0;
-
-            let result = unsafe {
-                DeviceIoControl(
-                    handle_raw,
-                    FSCTL_SET_SPARSE,
-                    std::ptr::null_mut(),
-                    0,
-                    std::ptr::null_mut(),
-                    0,
-                    &mut bytes_returned,
-                    std::ptr::null_mut(),
-                )
-            };
-
-            if result == 0 {
-                return Err(io::Error::last_os_error());
-            }
-        }
-
-        Ok(Self {
-            path: path.to_string_lossy().into_owned(),
-            handle: Some(handle),
-            is_cached,
-            cache,
-            base: 0,
-            mmap: None,
-            mmap_mut: None,
-        })
+    pub fn virtual_max(&self) -> Option<u64> {
+        self.segments.iter().map(ImageSegment::end).max()
     }
 
     pub fn base(&self) -> u64 {
-        self.base
-    }
-
-    pub fn set_base(&mut self, base: u64) {
-        self.base = base;
-    }
-
-    pub fn seek_from_current(&mut self, offset: i64) -> Result<u64, io::Error> {
-        if let Some(ref mut handle) = self.handle {
-            let pos = handle.seek(SeekFrom::Current(offset))?;
-            Ok(pos)
-        } else {
-            Err(io::Error::other("file handle is closed"))
-        }
-    }
-
-    pub fn seek(&mut self, offset: u64) -> Result<u64, io::Error> {
-        if let Some(ref mut handle) = self.handle {
-            let pos = handle.seek(SeekFrom::Start(offset))?;
-            Ok(pos)
-        } else {
-            Err(io::Error::other("file handle is closed"))
-        }
-    }
-
-    pub fn seek_to_end(&mut self) -> Result<u64, io::Error> {
-        if let Some(ref mut handle) = self.handle {
-            let pos = handle.seek(SeekFrom::End(0))?;
-            Ok(pos)
-        } else {
-            Err(io::Error::other("File handle is closed"))
-        }
-    }
-
-    pub fn close(&mut self) {
-        if let Some(file) = self.handle.take() {
-            drop(file);
-        }
-    }
-
-    pub fn is_cached(&self) -> bool {
-        self.is_cached
-    }
-
-    pub fn path(&self) -> String {
-        self.path.clone()
-    }
-
-    pub fn write<R: Read>(&mut self, mut reader: R) -> Result<u64, Error> {
-        if let Some(ref mut handle) = self.handle {
-            if handle.metadata()?.permissions().readonly() {
-                return Err(Error::other("File is read-only"));
-            }
-
-            let bytes_written = io::copy(&mut reader, handle)?;
-            handle.flush()?;
-            Ok(bytes_written)
-        } else {
-            Err(Error::other("File handle is closed"))
-        }
-    }
-
-    pub fn write_padding(&mut self, length: usize) -> Result<(), Error> {
-        if let Some(ref mut handle) = self.handle {
-            let current_size = handle.metadata()?.len();
-            let new_size = current_size + length as u64;
-
-            handle.set_len(new_size)?;
-            handle.seek(SeekFrom::Start(new_size))?;
-            Ok(())
-        } else {
-            Err(Error::other("File handle is closed"))
-        }
-    }
-
-    pub fn mmap_mut(&mut self) -> Result<&mut MmapMut, Error> {
-        if self.mmap_mut.is_none() {
-            if let Some(ref handle) = self.handle {
-                self.mmap_mut = Some(unsafe { MmapMut::map_mut(handle)? });
-            } else {
-                return Err(Error::other("File handle is closed"));
-            }
-        }
-        self.mmap_mut
-            .as_mut()
-            .ok_or_else(|| Error::other("Failed to create mutable memory map"))
-    }
-
-    pub fn mmap(&mut self) -> Result<&Mmap, Error> {
-        if self.mmap.is_none() {
-            if let Some(ref handle) = self.handle {
-                self.mmap = Some(unsafe { Mmap::map(handle)? });
-            } else {
-                return Err(Error::other("File handle is closed"));
-            }
-        }
-        self.mmap
-            .as_ref()
-            .ok_or_else(|| Error::other("Failed to create memory map"))
-    }
-
-    pub fn unmap(&mut self) {
-        self.mmap = None;
-        self.mmap_mut = None;
+        self.virtual_min().unwrap_or(0)
     }
 
     pub fn size(&self) -> Result<u64, Error> {
-        if let Some(ref handle) = self.handle {
-            Ok(handle.metadata()?.len())
+        Ok(self.mapped_size())
+    }
+
+    pub fn materialize(&self) -> Result<Option<(u64, Vec<u8>)>, Error> {
+        let Some(start) = self.virtual_min() else {
+            return Ok(None);
+        };
+        let Some(end) = self.virtual_max() else {
+            return Ok(None);
+        };
+        let size = end.saturating_sub(start);
+        let size = usize::try_from(size)
+            .map_err(|_| Error::other("virtual image span does not fit in memory"))?;
+        let mut bytes = vec![0; size];
+        for segment in &self.segments {
+            let offset = usize::try_from(segment.virtual_address.saturating_sub(start))
+                .map_err(|_| Error::other("virtual image segment offset does not fit in memory"))?;
+            let segment_size = usize::try_from(segment.size)
+                .map_err(|_| Error::other("virtual image segment size does not fit in memory"))?;
+            match &segment.data {
+                ImageSegmentData::Bytes(segment_bytes) => {
+                    let copy_size = segment_size.min(segment_bytes.len());
+                    bytes[offset..offset + copy_size].copy_from_slice(&segment_bytes[0..copy_size]);
+                }
+                ImageSegmentData::Zeroes => {}
+            }
+        }
+        Ok(Some((start, bytes)))
+    }
+
+    pub fn is_virtual_address(&self, address: u64) -> bool {
+        self.segment_containing(address).is_some()
+    }
+
+    pub fn read_virtual_address(
+        &self,
+        address: u64,
+        size: usize,
+    ) -> Result<Option<Vec<u8>>, Error> {
+        if size == 0 {
+            return Ok(Some(Vec::new()));
+        }
+
+        let mut current = address;
+        let mut remaining = size;
+        let mut result = Vec::with_capacity(size);
+
+        while remaining > 0 {
+            let Some(segment) = self.segment_containing(current) else {
+                break;
+            };
+            let segment_offset = current - segment.virtual_address;
+            let available = remaining.min((segment.size - segment_offset) as usize);
+            self.read_segment_bytes(segment, segment_offset, available, &mut result);
+            current = current.saturating_add(available as u64);
+            remaining -= available;
+            if remaining > 0 && self.segment_starting_at(current).is_none() {
+                break;
+            }
+        }
+
+        if result.is_empty() {
+            Ok(None)
         } else {
-            Err(Error::other("File handle is closed"))
+            Ok(Some(result))
         }
     }
 
-    pub fn read_virtual_bytes(
+    fn sort_segments(&mut self) {
+        self.segments
+            .sort_by_key(|segment| (segment.virtual_address, segment.end()));
+    }
+
+    fn segment_containing(&self, address: u64) -> Option<&ImageSegment> {
+        self.segments
+            .iter()
+            .find(|segment| segment.contains(address))
+    }
+
+    fn segment_starting_at(&self, address: u64) -> Option<&ImageSegment> {
+        self.segments
+            .iter()
+            .find(|segment| segment.virtual_address == address)
+    }
+
+    fn read_segment_bytes(
         &self,
-        address: u64,
-        max_len: usize,
-    ) -> Result<Option<Vec<u8>>, Error> {
-        let Some(offset) = address.checked_sub(self.base) else {
-            return Ok(None);
-        };
-        if max_len == 0 {
-            return Ok(Some(Vec::new()));
+        segment: &ImageSegment,
+        offset: u64,
+        size: usize,
+        result: &mut Vec<u8>,
+    ) {
+        match &segment.data {
+            ImageSegmentData::Bytes(bytes) => {
+                let start = offset as usize;
+                let end = (start + size).min(bytes.len());
+                if start < end {
+                    result.extend_from_slice(&bytes[start..end]);
+                }
+                if end.saturating_sub(start) < size {
+                    result.resize(result.len() + (size - end.saturating_sub(start)), 0);
+                }
+            }
+            ImageSegmentData::Zeroes => {
+                result.resize(result.len() + size, 0);
+            }
         }
-        let mut handle = OpenOptions::new().read(true).open(&self.path)?;
-        let size = handle.metadata()?.len();
-        if offset >= size {
-            return Ok(None);
-        }
-        let len = max_len.min((size - offset) as usize);
-        let mut bytes = vec![0; len];
-        handle.seek(SeekFrom::Start(offset))?;
-        let read = handle.read(&mut bytes)?;
-        bytes.truncate(read);
-        Ok(Some(bytes))
     }
 }
 
 impl VirtualImage for Image {
-    fn read_virtual_bytes(&self, address: u64, max_len: usize) -> Result<Option<Vec<u8>>, Error> {
-        self.read_virtual_bytes(address, max_len)
+    fn read_virtual_address(&self, address: u64, size: usize) -> Result<Option<Vec<u8>>, Error> {
+        self.read_virtual_address(address, size)
     }
 }
 
-impl Drop for Image {
-    fn drop(&mut self) {
-        self.unmap();
-        self.close();
+#[cfg(test)]
+mod tests {
+    use super::{Image, ImagePermissions, ImageSegment};
 
-        if !self.cache {
-            if let Err(error) = std::fs::remove_file(&self.path) {
-                if error.kind() != io::ErrorKind::NotFound {
-                    eprintln!("Failed to remove file {}: {}", self.path, error);
-                }
-            }
-        }
+    #[test]
+    fn virtual_reads_stop_at_unmapped_gaps() {
+        let mut image = Image::new();
+        image.add_segment(ImageSegment::bytes(
+            Some(".text".to_string()),
+            0x1000,
+            vec![1, 2, 3, 4],
+            ImagePermissions::readable(),
+        ));
+        image.add_segment(ImageSegment::bytes(
+            Some(".data".to_string()),
+            0x2000,
+            vec![5, 6],
+            ImagePermissions::readable(),
+        ));
+
+        assert_eq!(
+            image.read_virtual_address(0x1002, 8).unwrap(),
+            Some(vec![3, 4])
+        );
+        assert_eq!(image.read_virtual_address(0x1004, 1).unwrap(), None);
+    }
+
+    #[test]
+    fn virtual_reads_cross_adjacent_segments_and_zeroes() {
+        let mut image = Image::new();
+        image.add_segment(ImageSegment::bytes(
+            Some(".data".to_string()),
+            0x3000,
+            vec![0xaa, 0xbb],
+            ImagePermissions::readable(),
+        ));
+        image.add_segment(ImageSegment::zeroes(
+            Some(".bss".to_string()),
+            0x3002,
+            3,
+            ImagePermissions::readable(),
+        ));
+
+        assert_eq!(
+            image.read_virtual_address(0x3000, 5).unwrap(),
+            Some(vec![0xaa, 0xbb, 0, 0, 0])
+        );
+        assert!(image.is_virtual_address(0x3004));
+        assert!(!image.is_virtual_address(0x3005));
     }
 }

@@ -106,40 +106,6 @@ fn accuracy_gated_lir_regressions_stay_partial() {
 }
 
 #[test]
-fn instruction_lir_survive_snapshot_roundtrip() {
-    let instruction = disassemble_single("adc eax, ebx", Architecture::I386, &[0x11, 0xd8]);
-    let original_mnemonic = instruction.mnemonic();
-    let original_disassembly = instruction.disassembly();
-    let original_operands = instruction.operands();
-    let original = instruction
-        .lir
-        .clone()
-        .expect("instruction should carry lir");
-
-    let config = Configuration::default();
-    let mut graph = Graph::new(Architecture::I386, config.clone());
-    graph.insert_instruction(instruction);
-
-    let restored =
-        Graph::from_snapshot(graph.snapshot(), config).expect("snapshot roundtrip should restore");
-    let restored_instruction = restored
-        .instruction(0)
-        .expect("restored instruction should exist");
-    let restored_lir = restored_instruction
-        .lir
-        .as_ref()
-        .expect("restored instruction should keep lir");
-
-    assert_eq!(restored_lir.status, original.status);
-    assert_eq!(restored_lir.terminator.kind(), original.terminator.kind());
-    assert_eq!(restored_lir.effects.len(), original.effects.len());
-    assert_eq!(restored_lir.diagnostics.len(), original.diagnostics.len());
-    assert_eq!(restored_instruction.mnemonic(), original_mnemonic);
-    assert_eq!(restored_instruction.disassembly(), original_disassembly);
-    assert_eq!(restored_instruction.operands(), original_operands);
-}
-
-#[test]
 fn graph_merge_prefers_more_complete_instruction_lir() {
     let config = Configuration::default();
     let mut base = Graph::new(Architecture::AMD64, config.clone());
