@@ -23,7 +23,9 @@
 pub mod function;
 pub mod lir;
 
-pub use function::{lower_function_to_mir, lower_lir_function_to_mir};
+pub use function::{
+    lower_function_to_mir, lower_lir_function_to_mir, lower_lir_function_to_mir_with_symbols,
+};
 pub use lir::{
     MirLowerError, lower_lir_block_to_mir, lower_lir_to_mir, materialize_entry_parameters,
 };

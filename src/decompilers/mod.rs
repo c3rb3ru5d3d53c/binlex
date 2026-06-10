@@ -26,7 +26,7 @@ use crate::io::Stderr;
 use crate::irs::ast::AstFunction;
 use crate::irs::hir::HirFunction;
 use crate::irs::lir::LirFunction;
-use crate::irs::mir::lower::lower_lir_function_to_mir;
+use crate::irs::mir::lower::lower_lir_function_to_mir_with_symbols;
 use crate::irs::mir::{
     MirBlockParameter, MirControlTarget, MirFunction, MirOperationKind, MirType, MirValue,
 };
@@ -35,6 +35,8 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Error;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -58,6 +60,96 @@ pub type DecompiledFunctionState = Vec<u8>;
 pub struct Decompiler<'a> {
     graph: &'a Graph,
     backend: DecompilerBackend,
+}
+
+struct DecompilerContext {
+    symbols: BTreeMap<u64, String>,
+    metrics: Option<Arc<DecompileStageMetrics>>,
+}
+
+impl DecompilerContext {
+    fn new(graph: &Graph, debug_enabled: bool) -> Self {
+        Self {
+            symbols: graph.symbols(),
+            metrics: debug_enabled.then(|| Arc::new(DecompileStageMetrics::default())),
+        }
+    }
+
+    fn record_lir(&self, started_at: Option<Instant>) {
+        self.record(started_at, |metrics, nanos| {
+            metrics.lir.fetch_add(nanos, Ordering::Relaxed);
+        });
+    }
+
+    fn record_mir(&self, started_at: Option<Instant>) {
+        self.record(started_at, |metrics, nanos| {
+            metrics.mir.fetch_add(nanos, Ordering::Relaxed);
+        });
+    }
+
+    fn record_hir(&self, started_at: Option<Instant>) {
+        self.record(started_at, |metrics, nanos| {
+            metrics.hir.fetch_add(nanos, Ordering::Relaxed);
+        });
+    }
+
+    fn record_ast(&self, started_at: Option<Instant>) {
+        self.record(started_at, |metrics, nanos| {
+            metrics.ast.fetch_add(nanos, Ordering::Relaxed);
+        });
+    }
+
+    fn record_cache(&self, started_at: Option<Instant>) {
+        self.record(started_at, |metrics, nanos| {
+            metrics.cache.fetch_add(nanos, Ordering::Relaxed);
+        });
+    }
+
+    fn record<F>(&self, started_at: Option<Instant>, update: F)
+    where
+        F: FnOnce(&DecompileStageMetrics, u64),
+    {
+        let (Some(metrics), Some(started_at)) = (&self.metrics, started_at) else {
+            return;
+        };
+        let nanos = started_at.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
+        update(metrics, nanos);
+    }
+}
+
+#[derive(Default)]
+struct DecompileStageMetrics {
+    lir: AtomicU64,
+    mir: AtomicU64,
+    hir: AtomicU64,
+    ast: AtomicU64,
+    cache: AtomicU64,
+}
+
+impl DecompileStageMetrics {
+    fn ns_to_ms(nanos: u64) -> f64 {
+        nanos as f64 / 1_000_000.0
+    }
+
+    fn lir_ms(&self) -> f64 {
+        Self::ns_to_ms(self.lir.load(Ordering::Relaxed))
+    }
+
+    fn mir_ms(&self) -> f64 {
+        Self::ns_to_ms(self.mir.load(Ordering::Relaxed))
+    }
+
+    fn hir_ms(&self) -> f64 {
+        Self::ns_to_ms(self.hir.load(Ordering::Relaxed))
+    }
+
+    fn ast_ms(&self) -> f64 {
+        Self::ns_to_ms(self.ast.load(Ordering::Relaxed))
+    }
+
+    fn cache_ms(&self) -> f64 {
+        Self::ns_to_ms(self.cache.load(Ordering::Relaxed))
+    }
 }
 
 impl<'a> Decompiler<'a> {
@@ -85,14 +177,29 @@ impl<'a> Decompiler<'a> {
         self.graph.function(address)
     }
 
-    fn decompile_inner(&self, function: &Function<'a>) -> Result<DecompiledFunction, Error> {
+    fn decompile_inner(
+        &self,
+        function: &Function<'a>,
+        context: &DecompilerContext,
+    ) -> Result<DecompiledFunction, Error> {
         match self.backend {
             DecompilerBackend::Default => {
-                let lir = function.lir()?;
-                let mir = lower_lir_function_to_mir(function, &lir)?;
+                let lir_started_at = context.metrics.as_ref().map(|_| Instant::now());
+                let lir = function.build_lir(&context.symbols)?;
+                context.record_lir(lir_started_at);
+
+                let mir_started_at = context.metrics.as_ref().map(|_| Instant::now());
+                let mir = lower_lir_function_to_mir_with_symbols(function, &lir, &context.symbols)?;
+                context.record_mir(mir_started_at);
+
+                let hir_started_at = context.metrics.as_ref().map(|_| Instant::now());
                 let hir = HirFunction::from_mir(None, &mir)
                     .map_err(|error| Error::other(error.to_string()))?;
-                let ast = AstFunction::from_hir(&hir).with_image(self.image());
+                context.record_hir(hir_started_at);
+
+                let ast_started_at = context.metrics.as_ref().map(|_| Instant::now());
+                let ast = AstFunction::from_hir(&hir);
+                context.record_ast(ast_started_at);
                 Ok(DecompiledFunction {
                     address: function.address(),
                     lir,
@@ -108,7 +215,8 @@ impl<'a> Decompiler<'a> {
         let Some(function) = self.function(address) else {
             return Ok(None);
         };
-        let artifact = self.decompile_inner(&function)?;
+        let context = DecompilerContext::new(self.graph, self.configuration().debug);
+        let artifact = self.decompile_inner(&function, &context)?;
         self.graph.cache_decompilation(&artifact)?;
         Ok(Some(artifact))
     }
@@ -125,6 +233,7 @@ impl<'a> Decompiler<'a> {
         &self,
         addresses: &[u64],
     ) -> Result<Vec<DecompiledFunction>, Error> {
+        let context = DecompilerContext::new(self.graph, self.configuration().debug);
         let threads = self.configuration().resolved_threads();
         let mut functions = if threads <= 1 || addresses.len() <= 1 {
             addresses
@@ -132,7 +241,7 @@ impl<'a> Decompiler<'a> {
                 .copied()
                 .map(|address| {
                     let function = Function::new(address, self.graph)?;
-                    self.decompile_inner(&function)
+                    self.decompile_inner(&function, &context)
                 })
                 .collect::<Result<Vec<_>, _>>()?
         } else {
@@ -148,7 +257,7 @@ impl<'a> Decompiler<'a> {
                     .copied()
                     .map(|address| {
                         let function = Function::new(address, self.graph)?;
-                        self.decompile_inner(&function)
+                        self.decompile_inner(&function, &context)
                     })
                     .collect::<Result<Vec<_>, _>>()
             })?
@@ -160,6 +269,7 @@ impl<'a> Decompiler<'a> {
 
     fn decompile_to_graph_cache(&self, addresses: &[u64]) -> Result<(), Error> {
         let debug_enabled = self.configuration().debug;
+        let context = DecompilerContext::new(self.graph, debug_enabled);
         let started_at = if debug_enabled {
             Some(Instant::now())
         } else {
@@ -169,8 +279,10 @@ impl<'a> Decompiler<'a> {
         if threads <= 1 || addresses.len() <= 1 {
             for address in addresses {
                 let function = Function::new(*address, self.graph)?;
-                let artifact = self.decompile_inner(&function)?;
+                let artifact = self.decompile_inner(&function, &context)?;
+                let cache_started_at = context.metrics.as_ref().map(|_| Instant::now());
                 self.graph.cache_decompilation(&artifact)?;
+                context.record_cache(cache_started_at);
             }
         } else {
             let pool = ThreadPoolBuilder::new()
@@ -182,20 +294,36 @@ impl<'a> Decompiler<'a> {
             pool.install(|| {
                 addresses.par_iter().copied().try_for_each(|address| {
                     let function = Function::new(address, self.graph)?;
-                    let artifact = self.decompile_inner(&function)?;
-                    self.graph.cache_decompilation(&artifact)
+                    let artifact = self.decompile_inner(&function, &context)?;
+                    let cache_started_at = context.metrics.as_ref().map(|_| Instant::now());
+                    self.graph.cache_decompilation(&artifact)?;
+                    context.record_cache(cache_started_at);
+                    Ok::<(), Error>(())
                 })
             })?
         }
 
         if let Some(started_at) = started_at {
+            let metrics = context.metrics.as_ref().expect("metrics should exist");
             Stderr::print_debug(
                 self.configuration(),
                 format!(
-                    "[timing] decompiler.decompile.functions functions={} threads={} cache={:.3} ms",
+                    "[timing] decompiler.decompile.functions functions={} threads={} elapsed={:.3} ms",
                     addresses.len(),
                     threads,
                     started_at.elapsed().as_secs_f64() * 1000.0,
+                ),
+            );
+            Stderr::print_debug(
+                self.configuration(),
+                format!(
+                    "[timing] decompiler.decompile.stages functions={} lir={:.3} ms mir={:.3} ms hir={:.3} ms ast={:.3} ms cache={:.3} ms",
+                    addresses.len(),
+                    metrics.lir_ms(),
+                    metrics.mir_ms(),
+                    metrics.hir_ms(),
+                    metrics.ast_ms(),
+                    metrics.cache_ms(),
                 ),
             );
         }
@@ -224,6 +352,23 @@ impl<'a> Decompiler<'a> {
                 self.configuration(),
                 format!(
                     "[timing] decompiler.decompile.collect functions={} elapsed={:.3} ms",
+                    addresses.len(),
+                    started_at.elapsed().as_secs_f64() * 1000.0,
+                ),
+            );
+        }
+        let prepare_started_at = if self.configuration().debug {
+            Some(Instant::now())
+        } else {
+            None
+        };
+        self.graph.block_reference_maps();
+        self.graph.function_reference_maps();
+        if let Some(started_at) = prepare_started_at {
+            Stderr::print_debug(
+                self.configuration(),
+                format!(
+                    "[timing] decompiler.decompile.prepare functions={} elapsed={:.3} ms",
                     addresses.len(),
                     started_at.elapsed().as_secs_f64() * 1000.0,
                 ),
@@ -447,7 +592,7 @@ fn reconcile_cached_function(
 
     function.hir = HirFunction::from_mir(None, &function.mir)
         .map_err(|error| Error::other(error.to_string()))?;
-    function.ast = AstFunction::from_hir(&function.hir).with_image(graph.image());
+    function.ast = AstFunction::from_hir(&function.hir);
     graph.cache_decompilation(&function)?;
     Ok(true)
 }
@@ -470,13 +615,24 @@ fn local_target_addresses(
     graph: &Graph,
     addresses: &[u64],
 ) -> Result<BTreeMap<String, u64>, Error> {
+    let entries = addresses
+        .par_iter()
+        .copied()
+        .map(|address| {
+            let Some(function) = graph.cached_decompilation(address)? else {
+                return Ok(Vec::<(String, u64)>::new());
+            };
+            Ok(local_target_names(&function)
+                .into_iter()
+                .map(|target| (target, address))
+                .collect::<Vec<_>>())
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
+
     let mut targets = BTreeMap::new();
-    for address in addresses {
-        let Some(function) = graph.cached_decompilation(*address)? else {
-            continue;
-        };
-        for target in local_target_names(&function) {
-            targets.insert(target, *address);
+    for entry in entries {
+        for (target, address) in entry {
+            targets.insert(target, address);
         }
     }
     Ok(targets)
@@ -527,14 +683,39 @@ fn observed_local_signatures_cached(
     addresses: &[u64],
     targets: &BTreeMap<String, u64>,
 ) -> Result<BTreeMap<String, ObservedSignature>, Error> {
-    let mut observed = BTreeMap::<String, ObservedSignature>::new();
-    for address in addresses {
-        let Some(function) = graph.cached_decompilation(*address)? else {
-            continue;
-        };
-        observe_local_signatures_from_mir(&function.mir, targets, &mut observed);
+    addresses
+        .par_iter()
+        .copied()
+        .map(|address| {
+            let mut observed = BTreeMap::<String, ObservedSignature>::new();
+            let Some(function) = graph.cached_decompilation(address)? else {
+                return Ok(observed);
+            };
+            observe_local_signatures_from_mir(&function.mir, targets, &mut observed);
+            Ok(observed)
+        })
+        .try_reduce(BTreeMap::new, |mut left, right| {
+            merge_observed_signatures(&mut left, right);
+            Ok(left)
+        })
+}
+
+fn merge_observed_signatures(
+    left: &mut BTreeMap<String, ObservedSignature>,
+    right: BTreeMap<String, ObservedSignature>,
+) {
+    for (target, signature) in right {
+        let entry = left.entry(target).or_insert_with(ObservedSignature::new);
+        entry.arities.extend(signature.arities);
+        if entry.types.len() < signature.types.len() {
+            entry.types.resize(signature.types.len(), None);
+        }
+        for (index, ty) in signature.types.into_iter().enumerate() {
+            if let Some(ty) = ty {
+                merge_type(&mut entry.types[index], ty);
+            }
+        }
     }
-    Ok(observed)
 }
 
 fn observe_local_signatures_from_mir(

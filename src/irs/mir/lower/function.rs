@@ -36,19 +36,27 @@ pub fn lower_lir_function_to_mir(
     function: &Function<'_>,
     lir: &crate::irs::lir::LirFunction,
 ) -> Result<MirFunction, Error> {
+    lower_lir_function_to_mir_with_symbols(function, lir, &function.cfg.symbols())
+}
+
+pub fn lower_lir_function_to_mir_with_symbols(
+    function: &Function<'_>,
+    lir: &crate::irs::lir::LirFunction,
+    symbol_map: &BTreeMap<u64, String>,
+) -> Result<MirFunction, Error> {
     let mut mir =
         MirFunction::from_lir(None, lir).map_err(|error| Error::other(error.to_string()))?;
-    trim_function_call_arguments(function, &mut mir)?;
-    apply_observed_import_signature(function, &mut mir)?;
+    trim_function_call_arguments_with_symbols(function, &mut mir, symbol_map)?;
+    apply_observed_import_signature_with_symbols(function, &mut mir, symbol_map)?;
     apply_observed_call_argument_types(&mut mir);
     Ok(mir)
 }
 
-pub(crate) fn trim_function_call_arguments(
+pub(crate) fn trim_function_call_arguments_with_symbols(
     function: &Function<'_>,
     mir: &mut MirFunction,
+    symbol_map: &BTreeMap<u64, String>,
 ) -> Result<(), Error> {
-    let symbol_map = function.cfg.symbols();
     let entry_parameter_names = mir
         .entry_parameters
         .iter()
@@ -119,11 +127,11 @@ pub(crate) fn trim_function_call_arguments(
     Ok(())
 }
 
-fn apply_observed_import_signature(
+fn apply_observed_import_signature_with_symbols(
     function: &Function<'_>,
     mir: &mut MirFunction,
+    symbol_map: &BTreeMap<u64, String>,
 ) -> Result<(), Error> {
-    let symbol_map = function.cfg.symbols();
     let Some(symbol_name) = symbol_map.get(&function.address) else {
         return Ok(());
     };

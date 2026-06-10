@@ -526,7 +526,10 @@ impl<'function> Function<'function> {
             .unwrap_or_else(|| format!("function_{:x}", self.address))
     }
 
-    fn build_lir(&self, symbol_map: &BTreeMap<u64, String>) -> Result<LirFunction, Error> {
+    pub(crate) fn build_lir(
+        &self,
+        symbol_map: &BTreeMap<u64, String>,
+    ) -> Result<LirFunction, Error> {
         let blocks = self
             .blocks()
             .into_iter()
