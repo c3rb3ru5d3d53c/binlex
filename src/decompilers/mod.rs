@@ -26,6 +26,7 @@ use crate::io::Stderr;
 use crate::irs::ast::AstFunction;
 use crate::irs::hir::HirFunction;
 use crate::irs::lir::LirFunction;
+use crate::irs::mir::lower::lower_lir_function_to_mir;
 use crate::irs::mir::{
     MirBlockParameter, MirControlTarget, MirFunction, MirOperationKind, MirType, MirValue,
 };
@@ -88,7 +89,7 @@ impl<'a> Decompiler<'a> {
         match self.backend {
             DecompilerBackend::Default => {
                 let lir = function.lir()?;
-                let mir = function.mir()?;
+                let mir = lower_lir_function_to_mir(function, &lir)?;
                 let hir = HirFunction::from_mir(None, &mir)
                     .map_err(|error| Error::other(error.to_string()))?;
                 let ast = AstFunction::from_hir(&hir).with_image(self.image());

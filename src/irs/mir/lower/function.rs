@@ -29,8 +29,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::Error;
 
 pub fn lower_function_to_mir(function: &Function<'_>) -> Result<MirFunction, Error> {
-    let mut mir = MirFunction::from_lir(None, &function.lir()?)
-        .map_err(|error| Error::other(error.to_string()))?;
+    lower_lir_function_to_mir(function, &function.lir()?)
+}
+
+pub fn lower_lir_function_to_mir(
+    function: &Function<'_>,
+    lir: &crate::irs::lir::LirFunction,
+) -> Result<MirFunction, Error> {
+    let mut mir =
+        MirFunction::from_lir(None, lir).map_err(|error| Error::other(error.to_string()))?;
     trim_function_call_arguments(function, &mut mir)?;
     apply_observed_import_signature(function, &mut mir)?;
     apply_observed_call_argument_types(&mut mir);
@@ -92,7 +99,7 @@ pub(crate) fn trim_function_call_arguments(
                     if address == function.address {
                         continue;
                     }
-                    let Some(callee) = function.cfg.function(address) else {
+                    if function.cfg.function(address).is_none() {
                         trim_import_or_external_call_arguments(
                             operation,
                             &target_name,
@@ -100,12 +107,7 @@ pub(crate) fn trim_function_call_arguments(
                             &defs,
                         );
                         continue;
-                    };
-                    let mut callee_lir = callee.lir()?;
-                    callee_lir.optimize();
-                    let callee_mir = MirFunction::from_lir(None, &callee_lir)
-                        .map_err(|error| Error::other(error.to_string()))?;
-                    trim_local_call_metadata(operation, callee_mir.entry_parameters.len());
+                    }
                 }
                 MirControlTarget::FunctionIndirect(_) | MirControlTarget::BlockIndirect(_) => {
                     trim_external_call_arguments(operation, &entry_parameter_names, &defs);
