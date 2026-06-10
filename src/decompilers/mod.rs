@@ -22,6 +22,7 @@
 
 use crate::config::RAYON_WORKER_STACK_SIZE;
 use crate::controlflow::{Function, Graph};
+use crate::io::Stderr;
 use crate::irs::ast::AstFunction;
 use crate::irs::hir::HirFunction;
 use crate::irs::lir::LirFunction;
@@ -33,6 +34,7 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Error;
+use std::time::Instant;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -156,6 +158,12 @@ impl<'a> Decompiler<'a> {
     }
 
     fn decompile_to_graph_cache(&self, addresses: &[u64]) -> Result<(), Error> {
+        let debug_enabled = self.configuration().debug;
+        let started_at = if debug_enabled {
+            Some(Instant::now())
+        } else {
+            None
+        };
         let threads = self.configuration().resolved_threads();
         if threads <= 1 || addresses.len() <= 1 {
             for address in addresses {
@@ -179,6 +187,18 @@ impl<'a> Decompiler<'a> {
             })?
         }
 
+        if let Some(started_at) = started_at {
+            Stderr::print_debug(
+                self.configuration(),
+                format!(
+                    "[timing] decompiler.decompile.functions functions={} threads={} cache={:.3} ms",
+                    addresses.len(),
+                    threads,
+                    started_at.elapsed().as_secs_f64() * 1000.0,
+                ),
+            );
+        }
+
         reconcile_local_function_signatures_cached(self.graph, addresses)
     }
 
@@ -192,8 +212,33 @@ impl<'a> Decompiler<'a> {
     }
 
     pub fn decompile(&self) -> Result<(), Error> {
+        let started_at = if self.configuration().debug {
+            Some(Instant::now())
+        } else {
+            None
+        };
         let addresses = self.function_addresses();
-        self.decompile_to_graph_cache(&addresses)
+        if let Some(started_at) = started_at {
+            Stderr::print_debug(
+                self.configuration(),
+                format!(
+                    "[timing] decompiler.decompile.collect functions={} elapsed={:.3} ms",
+                    addresses.len(),
+                    started_at.elapsed().as_secs_f64() * 1000.0,
+                ),
+            );
+        }
+        self.decompile_to_graph_cache(&addresses)?;
+        if self.configuration().debug {
+            Stderr::print_debug(
+                self.configuration(),
+                format!(
+                    "[timing] decompiler.decompile.complete functions={}",
+                    addresses.len(),
+                ),
+            );
+        }
+        Ok(())
     }
 }
 
@@ -244,7 +289,7 @@ fn reconcile_local_function_signatures(functions: &mut [DecompiledFunction]) -> 
         let Some(arity) = signature.reconciled_arity() else {
             continue;
         };
-        rewrite_entry_signature(&mut functions[*index].mir, arity, &signature.types);
+        let _ = rewrite_entry_signature(&mut functions[*index].mir, arity, &signature.types);
     }
 
     trim_local_calls_to_reconciled_signatures(functions, &observed);
@@ -260,35 +305,150 @@ fn reconcile_local_function_signatures_cached(
     graph: &Graph,
     addresses: &[u64],
 ) -> Result<(), Error> {
+    let debug_enabled = graph.config.debug;
+    let total_started_at = if debug_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
+    let targets_started_at = if debug_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
     let targets = local_target_addresses(graph, addresses)?;
+    if let Some(started_at) = targets_started_at {
+        Stderr::print_debug(
+            &graph.config,
+            format!(
+                "[timing] decompiler.reconcile.targets functions={} targets={} elapsed={:.3} ms",
+                addresses.len(),
+                targets.len(),
+                started_at.elapsed().as_secs_f64() * 1000.0,
+            ),
+        );
+    }
+
+    let observe_started_at = if debug_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
     let observed = observed_local_signatures_cached(graph, addresses, &targets)?;
+    if let Some(started_at) = observe_started_at {
+        Stderr::print_debug(
+            &graph.config,
+            format!(
+                "[timing] decompiler.reconcile.observe functions={} signatures={} elapsed={:.3} ms",
+                addresses.len(),
+                observed.len(),
+                started_at.elapsed().as_secs_f64() * 1000.0,
+            ),
+        );
+    }
     if observed.is_empty() {
+        if let Some(started_at) = total_started_at {
+            Stderr::print_debug(
+                &graph.config,
+                format!(
+                    "[timing] decompiler.reconcile.total functions={} elapsed={:.3} ms",
+                    addresses.len(),
+                    started_at.elapsed().as_secs_f64() * 1000.0,
+                ),
+            );
+        }
         return Ok(());
     }
 
-    for address in addresses {
-        let Some(mut function) = graph.cached_decompilation(*address)? else {
-            continue;
-        };
-
-        for target in local_target_names(&function) {
-            let Some(signature) = observed.get(&target) else {
-                continue;
-            };
-            let Some(arity) = signature.reconciled_arity() else {
-                continue;
-            };
-            rewrite_entry_signature(&mut function.mir, arity, &signature.types);
-        }
-
-        trim_local_calls_to_reconciled_signature(&mut function, &observed);
-        function.hir = HirFunction::from_mir(None, &function.mir)
+    let rewrite_started_at = if debug_enabled {
+        Some(Instant::now())
+    } else {
+        None
+    };
+    let threads = graph.config.resolved_threads();
+    let rewritten = if threads <= 1 || addresses.len() <= 1 {
+        addresses
+            .iter()
+            .copied()
+            .try_fold(0usize, |rewritten, address| {
+                Ok::<usize, Error>(
+                    rewritten + usize::from(reconcile_cached_function(graph, address, &observed)?),
+                )
+            })?
+    } else {
+        let pool = ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .stack_size(RAYON_WORKER_STACK_SIZE)
+            .build()
             .map_err(|error| Error::other(error.to_string()))?;
-        function.ast = AstFunction::from_hir(&function.hir).with_image(graph.image());
-        graph.cache_decompilation(&function)?;
+
+        pool.install(|| {
+            addresses
+                .par_iter()
+                .copied()
+                .map(|address| {
+                    reconcile_cached_function(graph, address, &observed).map(usize::from)
+                })
+                .try_reduce(|| 0usize, |left, right| Ok(left + right))
+        })?
+    };
+
+    if let Some(started_at) = rewrite_started_at {
+        Stderr::print_debug(
+            &graph.config,
+            format!(
+                "[timing] decompiler.reconcile.rewrite functions={} rewritten={} elapsed={:.3} ms",
+                addresses.len(),
+                rewritten,
+                started_at.elapsed().as_secs_f64() * 1000.0,
+            ),
+        );
+    }
+
+    if let Some(started_at) = total_started_at {
+        Stderr::print_debug(
+            &graph.config,
+            format!(
+                "[timing] decompiler.reconcile.total functions={} elapsed={:.3} ms",
+                addresses.len(),
+                started_at.elapsed().as_secs_f64() * 1000.0,
+            ),
+        );
     }
 
     Ok(())
+}
+
+fn reconcile_cached_function(
+    graph: &Graph,
+    address: u64,
+    observed: &BTreeMap<String, ObservedSignature>,
+) -> Result<bool, Error> {
+    let Some(mut function) = graph.cached_decompilation(address)? else {
+        return Ok(false);
+    };
+
+    let mut changed = false;
+    for target in local_target_names(&function) {
+        let Some(signature) = observed.get(&target) else {
+            continue;
+        };
+        let Some(arity) = signature.reconciled_arity() else {
+            continue;
+        };
+        changed |= rewrite_entry_signature(&mut function.mir, arity, &signature.types);
+    }
+
+    changed |= trim_local_calls_to_reconciled_signature(&mut function, observed);
+    if !changed {
+        return Ok(false);
+    }
+
+    function.hir = HirFunction::from_mir(None, &function.mir)
+        .map_err(|error| Error::other(error.to_string()))?;
+    function.ast = AstFunction::from_hir(&function.hir).with_image(graph.image());
+    graph.cache_decompilation(&function)?;
+    Ok(true)
 }
 
 fn local_target_indices(functions: &[DecompiledFunction]) -> BTreeMap<String, usize> {
@@ -406,7 +566,7 @@ fn rewrite_entry_signature(
     mir: &mut MirFunction,
     arity: usize,
     observed_types: &[Option<MirType>],
-) {
+) -> bool {
     let mut parameters = Vec::with_capacity(arity);
     let mut used_names = BTreeSet::<String>::new();
     for index in 0..arity {
@@ -423,10 +583,20 @@ fn rewrite_entry_signature(
         parameters.push(MirBlockParameter::new(Some(name), ty));
     }
 
+    if mir.entry_parameters == parameters
+        && mir
+            .blocks()
+            .first()
+            .is_none_or(|entry_block| entry_block.parameters == parameters)
+    {
+        return false;
+    }
+
     mir.entry_parameters = parameters.clone();
     if let Some(entry_block) = mir.blocks_mut().first_mut() {
         entry_block.parameters = parameters;
     }
+    true
 }
 
 fn next_argument_name(used_names: &mut BTreeSet<String>) -> String {
@@ -473,12 +643,13 @@ fn trim_local_calls_to_reconciled_signatures(
 fn trim_local_calls_to_reconciled_signature(
     function: &mut DecompiledFunction,
     observed: &BTreeMap<String, ObservedSignature>,
-) {
+) -> bool {
     let arities = observed
         .iter()
         .filter_map(|(target, signature)| signature.reconciled_arity().map(|arity| (target, arity)))
         .collect::<BTreeMap<_, _>>();
 
+    let mut changed = false;
     for block in function.mir.blocks_mut() {
         for operation in &mut block.operations {
             let MirOperationKind::Call {
@@ -494,9 +665,11 @@ fn trim_local_calls_to_reconciled_signature(
             };
             if arguments.len() > arity {
                 arguments.truncate(arity);
+                changed = true;
             }
         }
     }
+    changed
 }
 
 fn value_type(value: &MirValue) -> MirType {
