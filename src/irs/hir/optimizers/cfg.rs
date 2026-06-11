@@ -4,6 +4,7 @@ use crate::irs::hir::{
     HirType,
 };
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::{Duration, Instant};
 
 const MAX_CFG_OPTIMIZE_ITERATIONS: usize = 64;
 
@@ -38,6 +39,138 @@ pub fn optimize_cfg(function: &mut HirFunction) {
         }
     }
     optimize_boolean(function);
+}
+
+pub(crate) fn optimize_cfg_with_timing<F>(function: &mut HirFunction, mut record: F)
+where
+    F: FnMut(&'static str, Duration),
+{
+    macro_rules! pass {
+        ($changed:ident, $name:literal, $call:expr) => {{
+            let started_at = Instant::now();
+            let pass_changed = $call;
+            record($name, started_at.elapsed());
+            $changed |= pass_changed;
+        }};
+    }
+
+    for block in &mut function.blocks {
+        for _ in 0..MAX_CFG_OPTIMIZE_ITERATIONS {
+            let mut changed = false;
+            pass!(
+                changed,
+                "hir_cfg.inline_single_entry_regions",
+                inline_single_entry_regions(block)
+            );
+            pass!(
+                changed,
+                "hir_cfg.structure_top_level_regions",
+                structure_top_level_regions(block)
+            );
+            pass!(
+                changed,
+                "hir_cfg.collapse_guard_jump_chains",
+                collapse_guard_jump_chains(block)
+            );
+            pass!(
+                changed,
+                "hir_cfg.fold_forward_guard_regions",
+                fold_forward_guard_regions(block)
+            );
+            pass!(
+                changed,
+                "hir_cfg.recover_if_no_exit_regions",
+                recover_if_no_exit_regions(block)
+            );
+            pass!(
+                changed,
+                "hir_cfg.fold_known_conditions",
+                fold_known_conditions(block, &[])
+            );
+            pass!(
+                changed,
+                "hir_cfg.replace_return_gotos",
+                replace_return_gotos(block)
+            );
+            pass!(
+                changed,
+                "hir_cfg.fold_two_entry_continuation_regions",
+                fold_two_entry_continuation_regions(block)
+            );
+            pass!(
+                changed,
+                "hir_cfg.fold_guarded_return_continuation_regions",
+                fold_guarded_return_continuation_regions(block)
+            );
+            pass!(
+                changed,
+                "hir_cfg.fold_two_path_return_continuations",
+                fold_two_path_return_continuations(block)
+            );
+            pass!(
+                changed,
+                "hir_cfg.inline_terminal_label_gotos",
+                inline_terminal_label_gotos(block)
+            );
+            pass!(
+                changed,
+                "hir_cfg.fold_return_guarded_continuations",
+                fold_return_guarded_continuations(block)
+            );
+            pass!(
+                changed,
+                "hir_cfg.fold_shared_terminal_if_tails",
+                fold_shared_terminal_if_tails(block)
+            );
+            pass!(
+                changed,
+                "hir_cfg.eliminate_redundant_terminal_if_suffixes",
+                eliminate_redundant_terminal_if_suffixes(block)
+            );
+            pass!(
+                changed,
+                "hir_cfg.fold_if_fallthrough_labels",
+                fold_if_fallthrough_labels(block)
+            );
+            pass!(
+                changed,
+                "hir_cfg.simplify_if_goto_chains",
+                simplify_if_goto_chains(block)
+            );
+            pass!(
+                changed,
+                "hir_cfg.remove_fallthrough_gotos",
+                remove_fallthrough_gotos(block)
+            );
+            pass!(
+                changed,
+                "hir_cfg.recover_while_loops",
+                recover_while_loops(block)
+            );
+            pass!(
+                changed,
+                "hir_cfg.fold_loop_breaks_to_while",
+                fold_loop_breaks_to_while(block)
+            );
+            pass!(
+                changed,
+                "hir_cfg.prune_unreferenced_labels",
+                prune_unreferenced_labels(block)
+            );
+            pass!(
+                changed,
+                "hir_cfg.remove_unreachable_after_terminal",
+                remove_unreachable_after_terminal(block)
+            );
+            if !changed {
+                break;
+            }
+        }
+    }
+
+    let started_at = Instant::now();
+    optimize_boolean(function);
+    record("hir_cfg.optimize_boolean", started_at.elapsed());
 }
 
 pub fn optimize_cfg_module(module: &mut HirModule) {

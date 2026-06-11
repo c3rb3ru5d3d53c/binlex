@@ -26,7 +26,9 @@ use crate::io::Stderr;
 use crate::irs::ast::AstFunction;
 use crate::irs::hir::HirFunction;
 use crate::irs::lir::LirFunction;
-use crate::irs::mir::lower::lower_lir_function_to_mir_with_symbols;
+use crate::irs::mir::lower::{
+    lower_lir_function_to_mir_with_symbols, lower_lir_function_to_mir_with_symbols_and_timing,
+};
 use crate::irs::mir::{
     MirBlockParameter, MirControlTarget, MirFunction, MirOperationKind, MirType, MirValue,
 };
@@ -35,9 +37,9 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Error;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Instant;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -105,6 +107,68 @@ impl DecompilerContext {
         });
     }
 
+    fn record_mir_lowering(&self, stage: &'static str, elapsed: Duration) {
+        self.record_lowering(elapsed, |metrics, nanos| {
+            match stage {
+                "clone_lir" => metrics.mir_clone_lir.fetch_add(nanos, Ordering::Relaxed),
+                "optimize_lir" => metrics.mir_optimize_lir.fetch_add(nanos, Ordering::Relaxed),
+                "lower_lir" => metrics.mir_lower_lir.fetch_add(nanos, Ordering::Relaxed),
+                "trim_calls" => metrics.mir_trim_calls.fetch_add(nanos, Ordering::Relaxed),
+                "import_signatures" => metrics
+                    .mir_import_signatures
+                    .fetch_add(nanos, Ordering::Relaxed),
+                "argument_types" => metrics
+                    .mir_argument_types
+                    .fetch_add(nanos, Ordering::Relaxed),
+                _ => {
+                    metrics.record_detail(&metrics.mir_lower_detail, stage, nanos);
+                    0
+                }
+            };
+        });
+    }
+
+    fn record_hir_lowering(&self, stage: &'static str, elapsed: Duration) {
+        self.record_lowering(elapsed, |metrics, nanos| {
+            match stage {
+                "clone_mir" => metrics.hir_clone_mir.fetch_add(nanos, Ordering::Relaxed),
+                "optimize_mir" => metrics.hir_optimize_mir.fetch_add(nanos, Ordering::Relaxed),
+                "lower_mir" => metrics.hir_lower_mir.fetch_add(nanos, Ordering::Relaxed),
+                _ => {
+                    metrics.record_detail(&metrics.hir_optimize_mir_detail, stage, nanos);
+                    0
+                }
+            };
+        });
+    }
+
+    fn record_ast_lowering(&self, stage: &'static str, elapsed: Duration) {
+        self.record_lowering(elapsed, |metrics, nanos| {
+            match stage {
+                "clone_hir" => metrics.ast_clone_hir.fetch_add(nanos, Ordering::Relaxed),
+                "optimize_hir" => metrics.ast_optimize_hir.fetch_add(nanos, Ordering::Relaxed),
+                "locals" => metrics.ast_locals.fetch_add(nanos, Ordering::Relaxed),
+                "infer_storage" => metrics
+                    .ast_infer_storage
+                    .fetch_add(nanos, Ordering::Relaxed),
+                "lower_blocks" => metrics.ast_lower_blocks.fetch_add(nanos, Ordering::Relaxed),
+                "promote_parameters" => metrics
+                    .ast_promote_parameters
+                    .fetch_add(nanos, Ordering::Relaxed),
+                "optimize_ast" => metrics.ast_optimize_ast.fetch_add(nanos, Ordering::Relaxed),
+                "cleanup" => metrics.ast_cleanup.fetch_add(nanos, Ordering::Relaxed),
+                _ if stage.starts_with("hir_") => {
+                    metrics.record_detail(&metrics.ast_optimize_hir_detail, stage, nanos);
+                    0
+                }
+                _ => {
+                    metrics.record_detail(&metrics.ast_optimize_ast_detail, stage, nanos);
+                    0
+                }
+            };
+        });
+    }
+
     fn record<F>(&self, started_at: Option<Instant>, update: F)
     where
         F: FnOnce(&DecompileStageMetrics, u64),
@@ -113,6 +177,17 @@ impl DecompilerContext {
             return;
         };
         let nanos = started_at.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
+        update(metrics, nanos);
+    }
+
+    fn record_lowering<F>(&self, elapsed: Duration, update: F)
+    where
+        F: FnOnce(&DecompileStageMetrics, u64),
+    {
+        let Some(metrics) = &self.metrics else {
+            return;
+        };
+        let nanos = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
         update(metrics, nanos);
     }
 }
@@ -124,6 +199,27 @@ struct DecompileStageMetrics {
     hir: AtomicU64,
     ast: AtomicU64,
     cache: AtomicU64,
+    mir_clone_lir: AtomicU64,
+    mir_optimize_lir: AtomicU64,
+    mir_lower_lir: AtomicU64,
+    mir_trim_calls: AtomicU64,
+    mir_import_signatures: AtomicU64,
+    mir_argument_types: AtomicU64,
+    hir_clone_mir: AtomicU64,
+    hir_optimize_mir: AtomicU64,
+    hir_lower_mir: AtomicU64,
+    ast_clone_hir: AtomicU64,
+    ast_optimize_hir: AtomicU64,
+    ast_locals: AtomicU64,
+    ast_infer_storage: AtomicU64,
+    ast_lower_blocks: AtomicU64,
+    ast_promote_parameters: AtomicU64,
+    ast_optimize_ast: AtomicU64,
+    ast_cleanup: AtomicU64,
+    mir_lower_detail: Mutex<BTreeMap<&'static str, u64>>,
+    hir_optimize_mir_detail: Mutex<BTreeMap<&'static str, u64>>,
+    ast_optimize_hir_detail: Mutex<BTreeMap<&'static str, u64>>,
+    ast_optimize_ast_detail: Mutex<BTreeMap<&'static str, u64>>,
 }
 
 impl DecompileStageMetrics {
@@ -149,6 +245,33 @@ impl DecompileStageMetrics {
 
     fn cache_ms(&self) -> f64 {
         Self::ns_to_ms(self.cache.load(Ordering::Relaxed))
+    }
+
+    fn ms(value: &AtomicU64) -> f64 {
+        Self::ns_to_ms(value.load(Ordering::Relaxed))
+    }
+
+    fn record_detail(
+        &self,
+        detail: &Mutex<BTreeMap<&'static str, u64>>,
+        stage: &'static str,
+        nanos: u64,
+    ) {
+        let mut detail = detail
+            .lock()
+            .expect("decompiler timing detail lock poisoned");
+        *detail.entry(stage).or_insert(0) += nanos;
+    }
+
+    fn detail_text(&self, detail: &Mutex<BTreeMap<&'static str, u64>>) -> String {
+        let detail = detail
+            .lock()
+            .expect("decompiler timing detail lock poisoned");
+        detail
+            .iter()
+            .map(|(stage, nanos)| format!("{stage}={:.3} ms", Self::ns_to_ms(*nanos)))
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 }
 
@@ -189,16 +312,37 @@ impl<'a> Decompiler<'a> {
                 context.record_lir(lir_started_at);
 
                 let mir_started_at = context.metrics.as_ref().map(|_| Instant::now());
-                let mir = lower_lir_function_to_mir_with_symbols(function, &lir, &context.symbols)?;
+                let mir = if context.metrics.is_some() {
+                    lower_lir_function_to_mir_with_symbols_and_timing(
+                        function,
+                        &lir,
+                        &context.symbols,
+                        |stage, elapsed| context.record_mir_lowering(stage, elapsed),
+                    )?
+                } else {
+                    lower_lir_function_to_mir_with_symbols(function, &lir, &context.symbols)?
+                };
                 context.record_mir(mir_started_at);
 
                 let hir_started_at = context.metrics.as_ref().map(|_| Instant::now());
-                let hir = HirFunction::from_mir(None, &mir)
-                    .map_err(|error| Error::other(error.to_string()))?;
+                let hir = if context.metrics.is_some() {
+                    HirFunction::from_mir_with_timing(None, &mir, |stage, elapsed| {
+                        context.record_hir_lowering(stage, elapsed);
+                    })
+                } else {
+                    HirFunction::from_mir(None, &mir)
+                }
+                .map_err(|error| Error::other(error.to_string()))?;
                 context.record_hir(hir_started_at);
 
                 let ast_started_at = context.metrics.as_ref().map(|_| Instant::now());
-                let ast = AstFunction::from_hir(&hir);
+                let ast = if context.metrics.is_some() {
+                    AstFunction::from_hir_with_timing(&hir, |stage, elapsed| {
+                        context.record_ast_lowering(stage, elapsed);
+                    })
+                } else {
+                    AstFunction::from_hir(&hir)
+                };
                 context.record_ast(ast_started_at);
                 Ok(DecompiledFunction {
                     address: function.address(),
@@ -326,6 +470,88 @@ impl<'a> Decompiler<'a> {
                     metrics.cache_ms(),
                 ),
             );
+            Stderr::print_debug(
+                self.configuration(),
+                format!(
+                    "[timing] decompiler.decompile.lower.mir functions={} clone_lir={:.3} ms optimize_lir={:.3} ms lower_lir={:.3} ms trim_calls={:.3} ms import_signatures={:.3} ms argument_types={:.3} ms",
+                    addresses.len(),
+                    DecompileStageMetrics::ms(&metrics.mir_clone_lir),
+                    DecompileStageMetrics::ms(&metrics.mir_optimize_lir),
+                    DecompileStageMetrics::ms(&metrics.mir_lower_lir),
+                    DecompileStageMetrics::ms(&metrics.mir_trim_calls),
+                    DecompileStageMetrics::ms(&metrics.mir_import_signatures),
+                    DecompileStageMetrics::ms(&metrics.mir_argument_types),
+                ),
+            );
+            let mir_lower_detail = metrics.detail_text(&metrics.mir_lower_detail);
+            if !mir_lower_detail.is_empty() {
+                Stderr::print_debug(
+                    self.configuration(),
+                    format!(
+                        "[timing] decompiler.decompile.lower.mir.detail functions={} {}",
+                        addresses.len(),
+                        mir_lower_detail,
+                    ),
+                );
+            }
+            Stderr::print_debug(
+                self.configuration(),
+                format!(
+                    "[timing] decompiler.decompile.lower.hir functions={} clone_mir={:.3} ms optimize_mir={:.3} ms lower_mir={:.3} ms",
+                    addresses.len(),
+                    DecompileStageMetrics::ms(&metrics.hir_clone_mir),
+                    DecompileStageMetrics::ms(&metrics.hir_optimize_mir),
+                    DecompileStageMetrics::ms(&metrics.hir_lower_mir),
+                ),
+            );
+            let hir_optimize_mir_detail = metrics.detail_text(&metrics.hir_optimize_mir_detail);
+            if !hir_optimize_mir_detail.is_empty() {
+                Stderr::print_debug(
+                    self.configuration(),
+                    format!(
+                        "[timing] decompiler.decompile.lower.hir.optimize_mir.detail functions={} {}",
+                        addresses.len(),
+                        hir_optimize_mir_detail,
+                    ),
+                );
+            }
+            Stderr::print_debug(
+                self.configuration(),
+                format!(
+                    "[timing] decompiler.decompile.lower.ast functions={} clone_hir={:.3} ms optimize_hir={:.3} ms locals={:.3} ms infer_storage={:.3} ms lower_blocks={:.3} ms promote_parameters={:.3} ms optimize_ast={:.3} ms cleanup={:.3} ms",
+                    addresses.len(),
+                    DecompileStageMetrics::ms(&metrics.ast_clone_hir),
+                    DecompileStageMetrics::ms(&metrics.ast_optimize_hir),
+                    DecompileStageMetrics::ms(&metrics.ast_locals),
+                    DecompileStageMetrics::ms(&metrics.ast_infer_storage),
+                    DecompileStageMetrics::ms(&metrics.ast_lower_blocks),
+                    DecompileStageMetrics::ms(&metrics.ast_promote_parameters),
+                    DecompileStageMetrics::ms(&metrics.ast_optimize_ast),
+                    DecompileStageMetrics::ms(&metrics.ast_cleanup),
+                ),
+            );
+            let ast_optimize_hir_detail = metrics.detail_text(&metrics.ast_optimize_hir_detail);
+            if !ast_optimize_hir_detail.is_empty() {
+                Stderr::print_debug(
+                    self.configuration(),
+                    format!(
+                        "[timing] decompiler.decompile.lower.ast.optimize_hir.detail functions={} {}",
+                        addresses.len(),
+                        ast_optimize_hir_detail,
+                    ),
+                );
+            }
+            let ast_optimize_ast_detail = metrics.detail_text(&metrics.ast_optimize_ast_detail);
+            if !ast_optimize_ast_detail.is_empty() {
+                Stderr::print_debug(
+                    self.configuration(),
+                    format!(
+                        "[timing] decompiler.decompile.lower.ast.optimize_ast.detail functions={} {}",
+                        addresses.len(),
+                        ast_optimize_ast_detail,
+                    ),
+                );
+            }
         }
 
         reconcile_local_function_signatures_cached(self.graph, addresses)

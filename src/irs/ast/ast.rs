@@ -1,7 +1,9 @@
 use super::block::AstBlock;
 use super::c::{format_c_function, format_c_function_with_image, format_c_module};
 use super::expression::AstExpression;
-use super::optimizers::{optimize_ast_function, optimize_ast_module};
+use super::optimizers::{
+    optimize_ast_function, optimize_ast_function_with_timing, optimize_ast_module,
+};
 use super::place::AstPlace;
 use super::statement::{AstLocal, AstParameter, AstStatement};
 use super::target::AstTarget;
@@ -16,6 +18,8 @@ use crate::irs::storage::IrStorage;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::{Hash, Hasher};
+use std::time::Duration;
+use std::time::Instant;
 
 const STACK_ARGUMENT_BASE_OFFSET: i128 = 0x20;
 const FRAME_ARGUMENT_BASE_OFFSET: i128 = 0x8;
@@ -97,11 +101,32 @@ impl AstFunction {
     pub fn from_hir(hir: &HirFunction) -> Self {
         let mut hir = hir.clone();
         optimize_hir_for_ast(&mut hir);
+        ast_from_optimized_hir(hir)
+    }
+
+    pub(crate) fn from_hir_with_timing<F>(hir: &HirFunction, mut record: F) -> Self
+    where
+        F: FnMut(&'static str, Duration),
+    {
+        let started_at = Instant::now();
+        let mut hir = hir.clone();
+        record("clone_hir", started_at.elapsed());
+
+        let started_at = Instant::now();
+        optimize_hir_for_ast_with_timing(&mut hir, |stage, elapsed| {
+            record(stage, elapsed);
+        });
+        record("optimize_hir", started_at.elapsed());
+
+        let started_at = Instant::now();
         let mut locals = hir
             .locals
             .iter()
             .map(AstLocal::from_hir)
             .collect::<Vec<_>>();
+        record("locals", started_at.elapsed());
+
+        let started_at = Instant::now();
         let inferred_storage = infer_local_storage_with_seed(&hir.blocks, &locals);
         for local in &mut locals {
             if local.storage.is_none()
@@ -110,19 +135,38 @@ impl AstFunction {
                 local.storage = Some(storage.clone());
             }
         }
+        record("infer_storage", started_at.elapsed());
+
+        let started_at = Instant::now();
+        let parameters = hir.parameters.iter().map(AstParameter::from_hir).collect();
+        let returns = hir.returns.clone();
+        let blocks = hir.blocks.iter().map(AstBlock::from_hir).collect();
+        record("lower_blocks", started_at.elapsed());
+
         let mut function = Self {
             name: hir.name.clone(),
             comment: None,
             abi: hir.abi.clone(),
-            parameters: hir.parameters.iter().map(AstParameter::from_hir).collect(),
-            returns: hir.returns.clone(),
+            parameters,
+            returns,
             locals,
-            blocks: hir.blocks.iter().map(AstBlock::from_hir).collect(),
+            blocks,
             image: None,
         };
+
+        let started_at = Instant::now();
         let promoted_parameters = promote_incoming_stack_parameters(&mut function);
-        optimize_ast_function(&mut function);
+        record("promote_parameters", started_at.elapsed());
+
+        let started_at = Instant::now();
+        optimize_ast_function_with_timing(&mut function, |stage, elapsed| {
+            record(stage, elapsed);
+        });
+        record("optimize_ast", started_at.elapsed());
+
+        let started_at = Instant::now();
         remove_unused_promoted_parameters(&mut function, &promoted_parameters);
+        record("cleanup", started_at.elapsed());
         function
     }
 
@@ -190,6 +234,36 @@ impl AstFunction {
     pub fn print(&self) {
         self.print_c();
     }
+}
+
+fn ast_from_optimized_hir(hir: HirFunction) -> AstFunction {
+    let mut locals = hir
+        .locals
+        .iter()
+        .map(AstLocal::from_hir)
+        .collect::<Vec<_>>();
+    let inferred_storage = infer_local_storage_with_seed(&hir.blocks, &locals);
+    for local in &mut locals {
+        if local.storage.is_none()
+            && let Some(storage) = inferred_storage.get(&local.name)
+        {
+            local.storage = Some(storage.clone());
+        }
+    }
+    let mut function = AstFunction {
+        name: hir.name.clone(),
+        comment: None,
+        abi: hir.abi.clone(),
+        parameters: hir.parameters.iter().map(AstParameter::from_hir).collect(),
+        returns: hir.returns.clone(),
+        locals,
+        blocks: hir.blocks.iter().map(AstBlock::from_hir).collect(),
+        image: None,
+    };
+    let promoted_parameters = promote_incoming_stack_parameters(&mut function);
+    optimize_ast_function(&mut function);
+    remove_unused_promoted_parameters(&mut function, &promoted_parameters);
+    function
 }
 
 fn promote_incoming_stack_parameters(function: &mut AstFunction) -> BTreeSet<String> {
@@ -835,6 +909,38 @@ fn optimize_hir_for_ast(hir: &mut HirFunction) {
     hir.optimize_condition_idioms();
     hir.optimize_boolean();
     hir.optimize_locals();
+}
+
+fn optimize_hir_for_ast_with_timing<F>(hir: &mut HirFunction, mut record: F)
+where
+    F: FnMut(&'static str, Duration),
+{
+    macro_rules! pass {
+        ($name:literal, $call:expr) => {{
+            let started_at = Instant::now();
+            $call;
+            record($name, started_at.elapsed());
+        }};
+    }
+
+    pass!("hir_inline_temps_1", hir.optimize_inline_temps());
+    pass!("hir_algebraic_1", hir.optimize_algebraic());
+    pass!("hir_condition_idioms_1", hir.optimize_condition_idioms());
+    pass!("hir_boolean_1", hir.optimize_boolean());
+    pass!("hir_load_hoisting", hir.optimize_load_hoisting());
+    pass!("hir_call_arguments", hir.optimize_call_arguments());
+    pass!("hir_memory_forms", hir.optimize_memory_forms());
+    pass!("hir_pointer_reads", hir.optimize_pointer_reads());
+    pass!("hir_cfg", {
+        hir.optimize_cfg_with_timing(|stage, elapsed| record(stage, elapsed));
+    });
+    pass!("hir_undefs_1", hir.optimize_undefs());
+    pass!("hir_inline_temps_2", hir.optimize_inline_temps());
+    pass!("hir_undefs_2", hir.optimize_undefs());
+    pass!("hir_algebraic_2", hir.optimize_algebraic());
+    pass!("hir_condition_idioms_2", hir.optimize_condition_idioms());
+    pass!("hir_boolean_2", hir.optimize_boolean());
+    pass!("hir_locals", hir.optimize_locals());
 }
 
 #[cfg(test)]

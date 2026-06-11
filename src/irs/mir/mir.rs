@@ -28,17 +28,21 @@ use super::optimizers::{
     optimize_memory_aliases, optimize_memory_state, optimize_register_state, optimize_returns,
     optimize_ssa, optimize_ssa_liveness, optimize_stack, optimize_stack_pointers,
     optimize_stack_slots, optimize_subexpressions, optimize_targets, optimize_undefs,
+    optimize_with_timing,
 };
 use super::print::{format_mir_function, format_mir_module};
 use crate::irs::lir::{LirAbi, LirFunction, LirModule};
 use crate::irs::mir::lower::{
-    MirLowerError, lower_function_to_mir, lower_lir_to_mir, materialize_entry_parameters,
+    MirLowerError, lower_function_to_mir, lower_lir_to_mir, lower_lir_to_mir_with_timing,
+    materialize_entry_parameters,
 };
 use crate::irs::mir::mlir::MirMlirModule;
 use crate::irs::storage::IrStorage;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::io::Error;
+use std::time::Duration;
+use std::time::Instant;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub struct MirFunction {
@@ -59,6 +63,34 @@ impl MirFunction {
         let mut lir = lir.clone();
         lir.optimize();
         lower_lir_to_mir(name.or_else(|| lir.name.clone()), &lir)
+    }
+
+    pub(crate) fn from_lir_with_timing<F>(
+        name: Option<String>,
+        lir: &LirFunction,
+        mut record: F,
+    ) -> Result<Self, MirLowerError>
+    where
+        F: FnMut(&'static str, Duration),
+    {
+        let started_at = Instant::now();
+        let mut lir = lir.clone();
+        record("clone_lir", started_at.elapsed());
+
+        let started_at = Instant::now();
+        lir.optimize();
+        record("optimize_lir", started_at.elapsed());
+
+        let started_at = Instant::now();
+        let mir = lower_lir_to_mir_with_timing(
+            name.or_else(|| lir.name.clone()),
+            &lir,
+            |stage, elapsed| {
+                record(stage, elapsed);
+            },
+        );
+        record("lower_lir", started_at.elapsed());
+        mir
     }
 
     pub fn from_function(function: &crate::controlflow::Function<'_>) -> Result<Self, Error> {
@@ -186,6 +218,18 @@ impl MirFunction {
     pub fn optimize(&mut self) {
         optimize(self);
         materialize_entry_parameters(self);
+    }
+
+    pub(crate) fn optimize_with_timing<F>(&mut self, mut record: F)
+    where
+        F: FnMut(&'static str, Duration),
+    {
+        optimize_with_timing(self, |stage, elapsed| {
+            record(stage, elapsed);
+        });
+        let started_at = Instant::now();
+        materialize_entry_parameters(self);
+        record("materialize_entry_parameters", started_at.elapsed());
     }
 
     pub fn text(&self) -> String {

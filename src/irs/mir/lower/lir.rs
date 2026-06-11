@@ -33,6 +33,7 @@ use crate::irs::mir::{MirCastOperation, MirCompareOperation, MirFloatCompareOper
 use crate::irs::storage::IrStorage;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::{Display, Formatter};
+use std::time::{Duration, Instant};
 
 #[derive(Clone, Debug)]
 pub struct MirLowerError {
@@ -139,11 +140,48 @@ pub fn lower_lir_to_mir(
     name: Option<String>,
     lir: &LirFunction,
 ) -> Result<MirFunction, MirLowerError> {
+    lower_lir_to_mir_inner(name, lir, None::<fn(&'static str, Duration)>)
+}
+
+pub(crate) fn lower_lir_to_mir_with_timing<F>(
+    name: Option<String>,
+    lir: &LirFunction,
+    record: F,
+) -> Result<MirFunction, MirLowerError>
+where
+    F: FnMut(&'static str, Duration),
+{
+    lower_lir_to_mir_inner(name, lir, Some(record))
+}
+
+fn lower_lir_to_mir_inner<F>(
+    name: Option<String>,
+    lir: &LirFunction,
+    mut record: Option<F>,
+) -> Result<MirFunction, MirLowerError>
+where
+    F: FnMut(&'static str, Duration),
+{
+    macro_rules! timed {
+        ($name:literal, $body:block) => {{
+            if let Some(record) = record.as_mut() {
+                let started_at = Instant::now();
+                let result = $body;
+                record($name, started_at.elapsed());
+                result
+            } else {
+                $body
+            }
+        }};
+    }
+
     let mut mir = MirFunction::new(name);
-    let explicit_abi = lir.abi.clone().or_else(|| {
-        lir.instructions()
-            .into_iter()
-            .find_map(|instruction| instruction.abi.clone())
+    let explicit_abi = timed!("abi", {
+        lir.abi.clone().or_else(|| {
+            lir.instructions()
+                .into_iter()
+                .find_map(|instruction| instruction.abi.clone())
+        })
     });
     mir.abi = explicit_abi.clone().or_else(|| default_function_abi(lir));
 
@@ -154,42 +192,73 @@ pub fn lower_lir_to_mir(
         return Ok(mir);
     }
 
-    let block_names = build_block_names(&lir.blocks);
-    let mut address_to_block = HashMap::new();
-    for (lir_block, block_name) in lir.blocks.iter().zip(block_names.iter()) {
-        for lir in &lir_block.instructions {
-            if let Some(encoding) = lir.encoding.as_ref() {
-                address_to_block
-                    .entry(encoding.address)
-                    .or_insert_with(|| block_name.clone());
+    let block_names = timed!("block_names", { build_block_names(&lir.blocks) });
+    let address_to_block = timed!("address_to_block", {
+        let mut address_to_block = HashMap::new();
+        for (lir_block, block_name) in lir.blocks.iter().zip(block_names.iter()) {
+            for lir in &lir_block.instructions {
+                if let Some(encoding) = lir.encoding.as_ref() {
+                    address_to_block
+                        .entry(encoding.address)
+                        .or_insert_with(|| block_name.clone());
+                }
             }
         }
-    }
+        address_to_block
+    });
 
     let mut context = LoweringContext::with_abi(mir.abi.as_ref());
-    mir.entry_parameters =
-        build_entry_parameters(lir, mir.abi.as_ref(), explicit_abi.is_some(), &mut context);
+    mir.entry_parameters = timed!("entry_parameters", {
+        build_entry_parameters(lir, mir.abi.as_ref(), explicit_abi.is_some(), &mut context)
+    });
 
-    for (index, lir_block) in lir.blocks.iter().enumerate() {
-        if lir_block.instructions.is_empty() {
-            continue;
+    if let Some(record) = record.as_mut() {
+        let started_at = Instant::now();
+        for (index, lir_block) in lir.blocks.iter().enumerate() {
+            if lir_block.instructions.is_empty() {
+                continue;
+            }
+            let block_started_at = Instant::now();
+            let block = lower_lir_block_with_context_and_timing(
+                block_names[index].clone(),
+                lir_block,
+                mir.abi.as_ref(),
+                index,
+                &block_names,
+                &address_to_block,
+                &mut context,
+                record,
+            )?;
+            record("block.total", block_started_at.elapsed());
+            mir.append_block(block);
         }
-        mir.append_block(lower_lir_block_with_context(
-            block_names[index].clone(),
-            lir_block,
-            mir.abi.as_ref(),
-            index,
-            &block_names,
-            &address_to_block,
-            &mut context,
-        )?);
+        record("blocks", started_at.elapsed());
+    } else {
+        for (index, lir_block) in lir.blocks.iter().enumerate() {
+            if lir_block.instructions.is_empty() {
+                continue;
+            }
+            mir.append_block(lower_lir_block_with_context(
+                block_names[index].clone(),
+                lir_block,
+                mir.abi.as_ref(),
+                index,
+                &block_names,
+                &address_to_block,
+                &mut context,
+            )?);
+        }
     }
 
-    let entry_parameters = mir.entry_parameters.clone();
-    if let Some(entry_block) = mir.blocks_mut().first_mut() {
-        append_entry_parameters(entry_block, &entry_parameters);
-    }
-    mir.local_storage = context.local_storage.clone();
+    timed!("materialize_entry", {
+        let entry_parameters = mir.entry_parameters.clone();
+        if let Some(entry_block) = mir.blocks_mut().first_mut() {
+            append_entry_parameters(entry_block, &entry_parameters);
+        }
+    });
+    timed!("local_storage", {
+        mir.local_storage = context.local_storage.clone();
+    });
 
     Ok(mir)
 }
@@ -287,6 +356,71 @@ fn lower_lir_block_with_context(
         &mut block,
         context,
     );
+    block.set_terminator(terminator);
+    Ok(block)
+}
+
+fn lower_lir_block_with_context_and_timing<F>(
+    block_name: String,
+    lir_block: &LirBasicBlock,
+    function_abi: Option<&LirAbi>,
+    index: usize,
+    block_names: &[String],
+    address_to_block: &HashMap<u64, String>,
+    context: &mut LoweringContext,
+    record: &mut F,
+) -> Result<MirBlock, MirLowerError>
+where
+    F: FnMut(&'static str, Duration),
+{
+    if lir_block.instructions.is_empty() {
+        return Err(MirLowerError {
+            message: format!("cannot lower empty LIR block {block_name}"),
+        });
+    }
+
+    let started_at = Instant::now();
+    let mut block = MirBlock::new(block_name);
+    record("block.init", started_at.elapsed());
+
+    for (lir_index, lir) in lir_block.instructions.iter().enumerate() {
+        for effect in &lir.effects {
+            let started_at = Instant::now();
+            lower_effect(effect, &mut block, context);
+            record("block.effects", started_at.elapsed());
+        }
+
+        let is_last_instruction = lir_index + 1 == lir_block.instructions.len();
+        if !is_last_instruction
+            && let LirTerminator::Call {
+                target,
+                does_return,
+                ..
+            } = &lir.terminator
+        {
+            let started_at = Instant::now();
+            lower_call_operations(lir, target, *does_return, function_abi, &mut block, context);
+            record("block.non_final_calls", started_at.elapsed());
+            if matches!(does_return, Some(false)) {
+                block.set_terminator(MirTerminator::Unreachable);
+                return Ok(block);
+            }
+        }
+    }
+
+    let lir = lir_block.instructions.last().expect("non-empty block");
+    let started_at = Instant::now();
+    let terminator = lower_terminator(
+        lir,
+        &lir.terminator,
+        function_abi,
+        index,
+        block_names,
+        address_to_block,
+        &mut block,
+        context,
+    );
+    record("block.terminator", started_at.elapsed());
     block.set_terminator(terminator);
     Ok(block)
 }

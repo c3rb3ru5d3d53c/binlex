@@ -23,9 +23,11 @@
 pub mod function;
 pub mod lir;
 
+pub(crate) use function::lower_lir_function_to_mir_with_symbols_and_timing;
 pub use function::{
     lower_function_to_mir, lower_lir_function_to_mir, lower_lir_function_to_mir_with_symbols,
 };
+pub(crate) use lir::lower_lir_to_mir_with_timing;
 pub use lir::{
     MirLowerError, lower_lir_block_to_mir, lower_lir_to_mir, materialize_entry_parameters,
 };

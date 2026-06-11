@@ -16,6 +16,7 @@ pub use algebraic::optimize_algebraic;
 pub use boolean::optimize_boolean;
 pub use call_arguments::optimize_call_arguments;
 pub use cfg::optimize_cfg;
+pub(crate) use cfg::optimize_cfg_with_timing;
 pub use condition_idioms::optimize_condition_idioms;
 pub use inline_temps::optimize_inline_temps;
 pub use load_hoisting::optimize_load_hoisting;

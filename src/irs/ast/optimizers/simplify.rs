@@ -4,18 +4,140 @@ use crate::irs::ast::{
 };
 use crate::irs::storage::IrStorage;
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::{Duration, Instant};
 
 pub fn optimize_ast_function(function: &mut AstFunction) {
+    let mut run_guarded_shift_conditions = true;
+    let mut run_stack_cookie_check_calls = true;
     for _ in 0..4 {
         inline_single_use_temps(function);
-        simplify_guarded_shift_conditions(function);
+        if run_guarded_shift_conditions {
+            run_guarded_shift_conditions = simplify_guarded_shift_conditions(function);
+        }
         fold_guard_prefixes_to_fallthrough(function);
         structure_dispatch_regions(function);
         materialize_loop_induction_updates(function);
         cleanup_redundant_labels_and_gotos(function);
-        simplify_stack_cookie_check_calls(function);
+        if run_stack_cookie_check_calls {
+            run_stack_cookie_check_calls = simplify_stack_cookie_check_calls(function);
+        }
         eliminate_dead_assignments(function);
         prune_unused_locals(function);
+    }
+}
+
+pub(crate) fn optimize_ast_function_with_timing<F>(function: &mut AstFunction, mut record: F)
+where
+    F: FnMut(&'static str, Duration),
+{
+    let mut run_guarded_shift_conditions = true;
+    let mut run_stack_cookie_check_calls = true;
+    for iteration in 0..4 {
+        let suffix = match iteration {
+            0 => "1",
+            1 => "2",
+            2 => "3",
+            _ => "4",
+        };
+        macro_rules! pass {
+            ($name:literal, $call:expr) => {{
+                let started_at = Instant::now();
+                let result = $call;
+                let name = match $name {
+                    "inline_single_use_temps" => match suffix {
+                        "1" => "inline_single_use_temps_1",
+                        "2" => "inline_single_use_temps_2",
+                        "3" => "inline_single_use_temps_3",
+                        _ => "inline_single_use_temps_4",
+                    },
+                    "simplify_guarded_shift_conditions" => match suffix {
+                        "1" => "simplify_guarded_shift_conditions_1",
+                        "2" => "simplify_guarded_shift_conditions_2",
+                        "3" => "simplify_guarded_shift_conditions_3",
+                        _ => "simplify_guarded_shift_conditions_4",
+                    },
+                    "fold_guard_prefixes_to_fallthrough" => match suffix {
+                        "1" => "fold_guard_prefixes_to_fallthrough_1",
+                        "2" => "fold_guard_prefixes_to_fallthrough_2",
+                        "3" => "fold_guard_prefixes_to_fallthrough_3",
+                        _ => "fold_guard_prefixes_to_fallthrough_4",
+                    },
+                    "structure_dispatch_regions" => match suffix {
+                        "1" => "structure_dispatch_regions_1",
+                        "2" => "structure_dispatch_regions_2",
+                        "3" => "structure_dispatch_regions_3",
+                        _ => "structure_dispatch_regions_4",
+                    },
+                    "materialize_loop_induction_updates" => match suffix {
+                        "1" => "materialize_loop_induction_updates_1",
+                        "2" => "materialize_loop_induction_updates_2",
+                        "3" => "materialize_loop_induction_updates_3",
+                        _ => "materialize_loop_induction_updates_4",
+                    },
+                    "cleanup_redundant_labels_and_gotos" => match suffix {
+                        "1" => "cleanup_redundant_labels_and_gotos_1",
+                        "2" => "cleanup_redundant_labels_and_gotos_2",
+                        "3" => "cleanup_redundant_labels_and_gotos_3",
+                        _ => "cleanup_redundant_labels_and_gotos_4",
+                    },
+                    "simplify_stack_cookie_check_calls" => match suffix {
+                        "1" => "simplify_stack_cookie_check_calls_1",
+                        "2" => "simplify_stack_cookie_check_calls_2",
+                        "3" => "simplify_stack_cookie_check_calls_3",
+                        _ => "simplify_stack_cookie_check_calls_4",
+                    },
+                    "eliminate_dead_assignments" => match suffix {
+                        "1" => "eliminate_dead_assignments_1",
+                        "2" => "eliminate_dead_assignments_2",
+                        "3" => "eliminate_dead_assignments_3",
+                        _ => "eliminate_dead_assignments_4",
+                    },
+                    _ => match suffix {
+                        "1" => "prune_unused_locals_1",
+                        "2" => "prune_unused_locals_2",
+                        "3" => "prune_unused_locals_3",
+                        _ => "prune_unused_locals_4",
+                    },
+                };
+                record(name, started_at.elapsed());
+                result
+            }};
+        }
+
+        pass!("inline_single_use_temps", inline_single_use_temps(function));
+        if run_guarded_shift_conditions {
+            run_guarded_shift_conditions = pass!(
+                "simplify_guarded_shift_conditions",
+                simplify_guarded_shift_conditions(function)
+            );
+        }
+        pass!(
+            "fold_guard_prefixes_to_fallthrough",
+            fold_guard_prefixes_to_fallthrough(function)
+        );
+        pass!(
+            "structure_dispatch_regions",
+            structure_dispatch_regions(function)
+        );
+        pass!(
+            "materialize_loop_induction_updates",
+            materialize_loop_induction_updates(function)
+        );
+        pass!(
+            "cleanup_redundant_labels_and_gotos",
+            cleanup_redundant_labels_and_gotos(function)
+        );
+        if run_stack_cookie_check_calls {
+            run_stack_cookie_check_calls = pass!(
+                "simplify_stack_cookie_check_calls",
+                simplify_stack_cookie_check_calls(function)
+            );
+        }
+        pass!(
+            "eliminate_dead_assignments",
+            eliminate_dead_assignments(function)
+        );
+        pass!("prune_unused_locals", prune_unused_locals(function));
     }
 }
 
@@ -235,7 +357,7 @@ fn collect_direct_goto_targets(block: &AstBlock, targets: &mut BTreeSet<String>)
     }
 }
 
-fn simplify_stack_cookie_check_calls(function: &mut AstFunction) {
+fn simplify_stack_cookie_check_calls(function: &mut AstFunction) -> bool {
     let stack_pointer_locals = function
         .locals
         .iter()
@@ -246,27 +368,33 @@ fn simplify_stack_cookie_check_calls(function: &mut AstFunction) {
             is_stack_pointer_name(name).then(|| local.name.clone())
         })
         .collect::<BTreeSet<_>>();
+    if stack_pointer_locals.is_empty() {
+        return false;
+    }
+    let mut changed = false;
     for block in &mut function.blocks {
-        simplify_stack_cookie_check_calls_in_block(
+        changed |= simplify_stack_cookie_check_calls_in_block(
             block,
             &stack_pointer_locals,
             &mut BTreeMap::new(),
         );
     }
+    changed
 }
 
 fn simplify_stack_cookie_check_calls_in_block(
     block: &mut AstBlock,
     stack_pointer_locals: &BTreeSet<String>,
     definitions: &mut BTreeMap<String, AstExpression>,
-) {
+) -> bool {
+    let mut changed = false;
     for statement in &mut block.statements {
         match statement {
             AstStatement::Assign {
                 target: AstPlace::Named { name, .. },
                 value,
             } => {
-                simplify_stack_cookie_check_call_in_expression(
+                changed |= simplify_stack_cookie_check_call_in_expression(
                     value,
                     stack_pointer_locals,
                     definitions,
@@ -274,19 +402,19 @@ fn simplify_stack_cookie_check_calls_in_block(
                 definitions.insert(name.clone(), value.clone());
             }
             AstStatement::Assign { target, value } => {
-                simplify_stack_cookie_check_call_in_expression(
+                changed |= simplify_stack_cookie_check_call_in_expression(
                     value,
                     stack_pointer_locals,
                     definitions,
                 );
-                simplify_stack_cookie_check_call_in_place(
+                changed |= simplify_stack_cookie_check_call_in_place(
                     target,
                     stack_pointer_locals,
                     definitions,
                 );
             }
             AstStatement::Expr(value) => {
-                simplify_stack_cookie_check_call_in_expression(
+                changed |= simplify_stack_cookie_check_call_in_expression(
                     value,
                     stack_pointer_locals,
                     definitions,
@@ -297,18 +425,18 @@ fn simplify_stack_cookie_check_calls_in_block(
                 then_body,
                 else_body,
             } => {
-                simplify_stack_cookie_check_call_in_expression(
+                changed |= simplify_stack_cookie_check_call_in_expression(
                     condition,
                     stack_pointer_locals,
                     definitions,
                 );
-                simplify_stack_cookie_check_calls_in_block(
+                changed |= simplify_stack_cookie_check_calls_in_block(
                     then_body,
                     stack_pointer_locals,
                     &mut definitions.clone(),
                 );
                 if let Some(else_body) = else_body {
-                    simplify_stack_cookie_check_calls_in_block(
+                    changed |= simplify_stack_cookie_check_calls_in_block(
                         else_body,
                         stack_pointer_locals,
                         &mut definitions.clone(),
@@ -316,19 +444,19 @@ fn simplify_stack_cookie_check_calls_in_block(
                 }
             }
             AstStatement::While { condition, body } => {
-                simplify_stack_cookie_check_call_in_expression(
+                changed |= simplify_stack_cookie_check_call_in_expression(
                     condition,
                     stack_pointer_locals,
                     definitions,
                 );
-                simplify_stack_cookie_check_calls_in_block(
+                changed |= simplify_stack_cookie_check_calls_in_block(
                     body,
                     stack_pointer_locals,
                     &mut definitions.clone(),
                 );
             }
             AstStatement::Loop { body } => {
-                simplify_stack_cookie_check_calls_in_block(
+                changed |= simplify_stack_cookie_check_calls_in_block(
                     body,
                     stack_pointer_locals,
                     &mut definitions.clone(),
@@ -339,20 +467,20 @@ fn simplify_stack_cookie_check_calls_in_block(
                 cases,
                 default,
             } => {
-                simplify_stack_cookie_check_call_in_expression(
+                changed |= simplify_stack_cookie_check_call_in_expression(
                     value,
                     stack_pointer_locals,
                     definitions,
                 );
                 for case in cases {
-                    simplify_stack_cookie_check_calls_in_block(
+                    changed |= simplify_stack_cookie_check_calls_in_block(
                         &mut case.body,
                         stack_pointer_locals,
                         &mut definitions.clone(),
                     );
                 }
                 if let Some(default) = default {
-                    simplify_stack_cookie_check_calls_in_block(
+                    changed |= simplify_stack_cookie_check_calls_in_block(
                         default,
                         stack_pointer_locals,
                         &mut definitions.clone(),
@@ -361,7 +489,7 @@ fn simplify_stack_cookie_check_calls_in_block(
             }
             AstStatement::Return { values } => {
                 for value in values {
-                    simplify_stack_cookie_check_call_in_expression(
+                    changed |= simplify_stack_cookie_check_call_in_expression(
                         value,
                         stack_pointer_locals,
                         definitions,
@@ -369,7 +497,7 @@ fn simplify_stack_cookie_check_calls_in_block(
                 }
             }
             AstStatement::Goto(AstTarget::Indirect(value)) => {
-                simplify_stack_cookie_check_call_in_expression(
+                changed |= simplify_stack_cookie_check_call_in_expression(
                     value,
                     stack_pointer_locals,
                     definitions,
@@ -384,13 +512,14 @@ fn simplify_stack_cookie_check_calls_in_block(
             | AstStatement::Unreachable => {}
         }
     }
+    changed
 }
 
 fn simplify_stack_cookie_check_call_in_place(
     place: &mut AstPlace,
     stack_pointer_locals: &BTreeSet<String>,
     definitions: &BTreeMap<String, AstExpression>,
-) {
+) -> bool {
     match place {
         AstPlace::Dereference { pointer, .. }
         | AstPlace::Memory {
@@ -401,14 +530,19 @@ fn simplify_stack_cookie_check_call_in_place(
             definitions,
         ),
         AstPlace::Index { base, index, .. } => {
-            simplify_stack_cookie_check_call_in_expression(base, stack_pointer_locals, definitions);
-            simplify_stack_cookie_check_call_in_expression(
+            let mut changed = simplify_stack_cookie_check_call_in_expression(
+                base,
+                stack_pointer_locals,
+                definitions,
+            );
+            changed |= simplify_stack_cookie_check_call_in_expression(
                 index,
                 stack_pointer_locals,
                 definitions,
             );
+            changed
         }
-        AstPlace::Named { .. } => {}
+        AstPlace::Named { .. } => false,
     }
 }
 
@@ -416,13 +550,14 @@ fn simplify_stack_cookie_check_call_in_expression(
     expression: &mut AstExpression,
     stack_pointer_locals: &BTreeSet<String>,
     definitions: &BTreeMap<String, AstExpression>,
-) {
+) -> bool {
+    let mut changed = false;
     match expression {
         AstExpression::Call {
             target, arguments, ..
         } => {
             for argument in arguments.iter_mut() {
-                simplify_stack_cookie_check_call_in_expression(
+                changed |= simplify_stack_cookie_check_call_in_expression(
                     argument,
                     stack_pointer_locals,
                     definitions,
@@ -438,13 +573,14 @@ fn simplify_stack_cookie_check_call_in_expression(
                     .cloned()
             {
                 *arguments = vec![cookie_argument];
+                changed = true;
             }
         }
         AstExpression::Unary { value, .. }
         | AstExpression::Extract { value, .. }
         | AstExpression::Cast { value, .. }
         | AstExpression::Dereference { pointer: value, .. } => {
-            simplify_stack_cookie_check_call_in_expression(
+            changed |= simplify_stack_cookie_check_call_in_expression(
                 value,
                 stack_pointer_locals,
                 definitions,
@@ -458,8 +594,16 @@ fn simplify_stack_cookie_check_call_in_expression(
             index: rhs,
             ..
         } => {
-            simplify_stack_cookie_check_call_in_expression(lhs, stack_pointer_locals, definitions);
-            simplify_stack_cookie_check_call_in_expression(rhs, stack_pointer_locals, definitions);
+            changed |= simplify_stack_cookie_check_call_in_expression(
+                lhs,
+                stack_pointer_locals,
+                definitions,
+            );
+            changed |= simplify_stack_cookie_check_call_in_expression(
+                rhs,
+                stack_pointer_locals,
+                definitions,
+            );
         }
         AstExpression::Select {
             condition,
@@ -467,17 +611,17 @@ fn simplify_stack_cookie_check_call_in_expression(
             when_false,
             ..
         } => {
-            simplify_stack_cookie_check_call_in_expression(
+            changed |= simplify_stack_cookie_check_call_in_expression(
                 condition,
                 stack_pointer_locals,
                 definitions,
             );
-            simplify_stack_cookie_check_call_in_expression(
+            changed |= simplify_stack_cookie_check_call_in_expression(
                 when_true,
                 stack_pointer_locals,
                 definitions,
             );
-            simplify_stack_cookie_check_call_in_expression(
+            changed |= simplify_stack_cookie_check_call_in_expression(
                 when_false,
                 stack_pointer_locals,
                 definitions,
@@ -485,7 +629,7 @@ fn simplify_stack_cookie_check_call_in_expression(
         }
         AstExpression::Concat { parts, .. } => {
             for part in parts {
-                simplify_stack_cookie_check_call_in_expression(
+                changed |= simplify_stack_cookie_check_call_in_expression(
                     part,
                     stack_pointer_locals,
                     definitions,
@@ -493,7 +637,7 @@ fn simplify_stack_cookie_check_call_in_expression(
             }
         }
         AstExpression::Load { address, .. } => {
-            simplify_stack_cookie_check_call_in_expression(
+            changed |= simplify_stack_cookie_check_call_in_expression(
                 address,
                 stack_pointer_locals,
                 definitions,
@@ -501,7 +645,7 @@ fn simplify_stack_cookie_check_call_in_expression(
         }
         AstExpression::Intrinsic { arguments, .. } => {
             for argument in arguments {
-                simplify_stack_cookie_check_call_in_expression(
+                changed |= simplify_stack_cookie_check_call_in_expression(
                     argument,
                     stack_pointer_locals,
                     definitions,
@@ -509,13 +653,19 @@ fn simplify_stack_cookie_check_call_in_expression(
             }
         }
         AstExpression::AddressOf { place, .. } => {
-            simplify_stack_cookie_check_call_in_place(place, stack_pointer_locals, definitions);
+            changed |=
+                simplify_stack_cookie_check_call_in_place(place, stack_pointer_locals, definitions);
         }
         AstExpression::Member { base, .. } => {
-            simplify_stack_cookie_check_call_in_expression(base, stack_pointer_locals, definitions);
+            changed |= simplify_stack_cookie_check_call_in_expression(
+                base,
+                stack_pointer_locals,
+                definitions,
+            );
         }
         AstExpression::Value(_) => {}
     }
+    changed
 }
 
 fn is_stack_cookie_expression(
@@ -610,10 +760,12 @@ fn is_integer_expression(expression: &AstExpression) -> bool {
     )
 }
 
-fn simplify_guarded_shift_conditions(function: &mut AstFunction) {
+fn simplify_guarded_shift_conditions(function: &mut AstFunction) -> bool {
+    let mut changed = false;
     for block in &mut function.blocks {
-        simplify_guarded_shift_conditions_in_block(block, &BTreeMap::new());
+        changed |= simplify_guarded_shift_conditions_in_block(block, &BTreeMap::new());
     }
+    changed
 }
 
 fn materialize_loop_induction_updates(function: &mut AstFunction) {
@@ -1176,62 +1328,64 @@ fn statement_is_terminal(statement: &AstStatement) -> bool {
 fn simplify_guarded_shift_conditions_in_block(
     block: &mut AstBlock,
     incoming_definitions: &BTreeMap<String, AstExpression>,
-) {
+) -> bool {
     let mut definitions = incoming_definitions.clone();
+    let mut changed = false;
     for statement in &mut block.statements {
         match statement {
             AstStatement::Assign {
                 target: AstPlace::Named { name, .. },
                 value,
             } => {
-                *value = simplify_expression_with_definitions(value.clone(), &definitions);
+                changed |= simplify_expression_in_place(value, &definitions);
                 definitions.insert(name.clone(), value.clone());
             }
             AstStatement::Assign { target, value } => {
-                simplify_guarded_shift_conditions_in_place(target, &definitions);
-                *value = simplify_expression_with_definitions(value.clone(), &definitions);
+                changed |= simplify_guarded_shift_conditions_in_place(target, &definitions);
+                changed |= simplify_expression_in_place(value, &definitions);
             }
             AstStatement::Expr(value) => {
-                *value = simplify_expression_with_definitions(value.clone(), &definitions);
+                changed |= simplify_expression_in_place(value, &definitions);
             }
             AstStatement::If {
                 condition,
                 then_body,
                 else_body,
             } => {
-                *condition = simplify_expression_with_definitions(condition.clone(), &definitions);
-                simplify_guarded_shift_conditions_in_block(then_body, &definitions);
+                changed |= simplify_expression_in_place(condition, &definitions);
+                changed |= simplify_guarded_shift_conditions_in_block(then_body, &definitions);
                 if let Some(else_body) = else_body {
-                    simplify_guarded_shift_conditions_in_block(else_body, &definitions);
+                    changed |= simplify_guarded_shift_conditions_in_block(else_body, &definitions);
                 }
             }
             AstStatement::While { condition, body } => {
-                *condition = simplify_expression_with_definitions(condition.clone(), &definitions);
-                simplify_guarded_shift_conditions_in_block(body, &definitions);
+                changed |= simplify_expression_in_place(condition, &definitions);
+                changed |= simplify_guarded_shift_conditions_in_block(body, &definitions);
             }
             AstStatement::Loop { body } => {
-                simplify_guarded_shift_conditions_in_block(body, &definitions)
+                changed |= simplify_guarded_shift_conditions_in_block(body, &definitions)
             }
             AstStatement::Switch {
                 value,
                 cases,
                 default,
             } => {
-                *value = simplify_expression_with_definitions(value.clone(), &definitions);
+                changed |= simplify_expression_in_place(value, &definitions);
                 for case in cases {
-                    simplify_guarded_shift_conditions_in_block(&mut case.body, &definitions);
+                    changed |=
+                        simplify_guarded_shift_conditions_in_block(&mut case.body, &definitions);
                 }
                 if let Some(default) = default {
-                    simplify_guarded_shift_conditions_in_block(default, &definitions);
+                    changed |= simplify_guarded_shift_conditions_in_block(default, &definitions);
                 }
             }
             AstStatement::Return { values } => {
                 for value in values {
-                    *value = simplify_expression_with_definitions(value.clone(), &definitions);
+                    changed |= simplify_expression_in_place(value, &definitions);
                 }
             }
             AstStatement::Goto(target) => {
-                simplify_guarded_shift_conditions_in_target(target, &definitions)
+                changed |= simplify_guarded_shift_conditions_in_target(target, &definitions)
             }
             AstStatement::Break
             | AstStatement::Continue
@@ -1241,6 +1395,19 @@ fn simplify_guarded_shift_conditions_in_block(
             | AstStatement::Unreachable => {}
         }
     }
+    changed
+}
+
+fn simplify_expression_in_place(
+    expression: &mut AstExpression,
+    definitions: &BTreeMap<String, AstExpression>,
+) -> bool {
+    let simplified = simplify_expression_with_definitions(expression.clone(), definitions);
+    if &simplified == expression {
+        return false;
+    }
+    *expression = simplified;
+    true
 }
 
 fn simplify_expression_with_definitions(
@@ -1254,41 +1421,29 @@ fn simplify_expression_with_definitions(
 fn simplify_guarded_shift_conditions_in_place(
     place: &mut AstPlace,
     definitions: &BTreeMap<String, AstExpression>,
-) {
+) -> bool {
     match place {
         AstPlace::Dereference { pointer, .. }
         | AstPlace::Memory {
             address: pointer, ..
-        } => {
-            *pointer = Box::new(simplify_expression_with_definitions(
-                (**pointer).clone(),
-                definitions,
-            ));
-        }
+        } => simplify_expression_in_place(pointer, definitions),
         AstPlace::Index { base, index, .. } => {
-            *base = Box::new(simplify_expression_with_definitions(
-                (**base).clone(),
-                definitions,
-            ));
-            *index = Box::new(simplify_expression_with_definitions(
-                (**index).clone(),
-                definitions,
-            ));
+            let mut changed = simplify_expression_in_place(base, definitions);
+            changed |= simplify_expression_in_place(index, definitions);
+            changed
         }
-        AstPlace::Named { .. } => {}
+        AstPlace::Named { .. } => false,
     }
 }
 
 fn simplify_guarded_shift_conditions_in_target(
     target: &mut AstTarget,
     definitions: &BTreeMap<String, AstExpression>,
-) {
+) -> bool {
     if let AstTarget::Indirect(expression) = target {
-        *expression = Box::new(simplify_expression_with_definitions(
-            (**expression).clone(),
-            definitions,
-        ));
+        return simplify_expression_in_place(expression, definitions);
     }
+    false
 }
 
 fn prune_unused_locals(function: &mut AstFunction) {

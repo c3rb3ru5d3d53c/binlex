@@ -25,8 +25,9 @@ use super::kind::HirType;
 use super::lower::{HirLowerError, lower_mir_function_to_hir, lower_mir_module_to_hir};
 use super::optimizers::{
     optimize, optimize_algebraic, optimize_boolean, optimize_call_arguments, optimize_cfg,
-    optimize_condition_idioms, optimize_inline_temps, optimize_load_hoisting, optimize_locals,
-    optimize_memory_forms, optimize_pointer_reads, optimize_undefs,
+    optimize_cfg_with_timing, optimize_condition_idioms, optimize_inline_temps,
+    optimize_load_hoisting, optimize_locals, optimize_memory_forms, optimize_pointer_reads,
+    optimize_undefs,
 };
 use super::print::{format_hir_function, format_hir_module};
 use super::statement::{HirLocal, HirParameter};
@@ -34,6 +35,8 @@ use crate::irs::hir::mlir::HirMlirModule;
 use crate::irs::lir::{LirAbi, LirFunction, LirModule};
 use crate::irs::mir::{MirFunction, MirModule};
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
+use std::time::Instant;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub struct HirFunction {
@@ -56,6 +59,30 @@ impl HirFunction {
         let mut mir = mir.clone();
         mir.optimize();
         lower_mir_function_to_hir(name.or_else(|| mir.name.clone()), &mir)
+    }
+
+    pub(crate) fn from_mir_with_timing<F>(
+        name: Option<String>,
+        mir: &MirFunction,
+        mut record: F,
+    ) -> Result<Self, HirLowerError>
+    where
+        F: FnMut(&'static str, Duration),
+    {
+        let started_at = Instant::now();
+        let mut mir = mir.clone();
+        record("clone_mir", started_at.elapsed());
+
+        let started_at = Instant::now();
+        mir.optimize_with_timing(|stage, elapsed| {
+            record(stage, elapsed);
+        });
+        record("optimize_mir", started_at.elapsed());
+
+        let started_at = Instant::now();
+        let hir = lower_mir_function_to_hir(name.or_else(|| mir.name.clone()), &mir);
+        record("lower_mir", started_at.elapsed());
+        hir
     }
 
     pub fn from_lir(name: Option<String>, lir: &LirFunction) -> Result<Self, HirLowerError> {
@@ -121,6 +148,13 @@ impl HirFunction {
 
     pub fn optimize_cfg(&mut self) {
         optimize_cfg(self);
+    }
+
+    pub(crate) fn optimize_cfg_with_timing<F>(&mut self, record: F)
+    where
+        F: FnMut(&'static str, Duration),
+    {
+        optimize_cfg_with_timing(self, record);
     }
 
     pub fn optimize_locals(&mut self) {

@@ -27,6 +27,8 @@ use crate::irs::mir::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Error;
+use std::time::Duration;
+use std::time::Instant;
 
 pub fn lower_function_to_mir(function: &Function<'_>) -> Result<MirFunction, Error> {
     lower_lir_function_to_mir(function, &function.lir()?)
@@ -49,6 +51,34 @@ pub fn lower_lir_function_to_mir_with_symbols(
     trim_function_call_arguments_with_symbols(function, &mut mir, symbol_map)?;
     apply_observed_import_signature_with_symbols(function, &mut mir, symbol_map)?;
     apply_observed_call_argument_types(&mut mir);
+    Ok(mir)
+}
+
+pub(crate) fn lower_lir_function_to_mir_with_symbols_and_timing<F>(
+    function: &Function<'_>,
+    lir: &crate::irs::lir::LirFunction,
+    symbol_map: &BTreeMap<u64, String>,
+    mut record: F,
+) -> Result<MirFunction, Error>
+where
+    F: FnMut(&'static str, Duration),
+{
+    let mut mir = MirFunction::from_lir_with_timing(None, lir, |stage, elapsed| {
+        record(stage, elapsed);
+    })
+    .map_err(|error| Error::other(error.to_string()))?;
+
+    let started_at = Instant::now();
+    trim_function_call_arguments_with_symbols(function, &mut mir, symbol_map)?;
+    record("trim_calls", started_at.elapsed());
+
+    let started_at = Instant::now();
+    apply_observed_import_signature_with_symbols(function, &mut mir, symbol_map)?;
+    record("import_signatures", started_at.elapsed());
+
+    let started_at = Instant::now();
+    apply_observed_call_argument_types(&mut mir);
+    record("argument_types", started_at.elapsed());
     Ok(mir)
 }
 
