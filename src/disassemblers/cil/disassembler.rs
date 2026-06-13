@@ -589,6 +589,7 @@ impl<'disassembler> Disassembler<'disassembler> {
         cfg.functions.enqueue_extend(addresses);
 
         let external_image = self.image;
+        let external_image_base = self.image_base;
         let external_machine = self.architecture;
         let external_executable_address_ranges = self.executable_address_ranges.clone();
         let external_config = self.config.clone();
@@ -621,9 +622,10 @@ impl<'disassembler> Disassembler<'disassembler> {
                     .fold(
                         || {
                             (
-                                Disassembler::new(
+                                Disassembler::new_with_image_base(
                                     external_machine,
                                     external_image,
+                                    external_image_base,
                                     external_executable_address_ranges.clone(),
                                     external_config.clone(),
                                 )

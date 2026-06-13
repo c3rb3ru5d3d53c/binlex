@@ -51,6 +51,8 @@ use lief::pe::data_directory::Type as DATA_DIRECTORY;
 use lief::pe::debug::Entries;
 use lief::pe::headers::MachineType;
 use lief::pe::section::Characteristics;
+use serde_json::Value;
+use serde_json::json;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
@@ -70,6 +72,358 @@ pub struct ParsedStreamHeader {
 }
 
 impl PE {
+    fn dotnet_table_name(index: u64) -> &'static str {
+        match index {
+            0 => "Module",
+            1 => "TypeRef",
+            2 => "TypeDef",
+            3 => "FieldPtr",
+            4 => "Field",
+            5 => "MethodPtr",
+            6 => "MethodDef",
+            7 => "ParamPtr",
+            8 => "Param",
+            9 => "InterfaceImpl",
+            10 => "MemberRef",
+            11 => "Constant",
+            12 => "CustomAttribute",
+            13 => "FieldMarshal",
+            14 => "DeclSecurity",
+            15 => "ClassLayout",
+            16 => "FieldLayout",
+            17 => "StandAloneSig",
+            18 => "EventMap",
+            19 => "EventPtr",
+            20 => "Event",
+            21 => "PropertyMap",
+            22 => "PropertyPtr",
+            23 => "Property",
+            24 => "MethodSemantics",
+            25 => "MethodImpl",
+            26 => "ModuleRef",
+            27 => "TypeSpec",
+            28 => "ImplMap",
+            29 => "FieldRva",
+            30 => "EncLog",
+            31 => "EncMap",
+            32 => "Assembly",
+            33 => "AssemblyProcessor",
+            34 => "AssemblyOs",
+            35 => "AssemblyRef",
+            36 => "AssemblyRefProcessor",
+            37 => "AssemblyRefOs",
+            38 => "File",
+            39 => "ExportedType",
+            40 => "ManifestResource",
+            41 => "NestedClass",
+            42 => "GenericParam",
+            43 => "MethodSpec",
+            44 => "GenericParamConstraint",
+            48 => "Document",
+            49 => "MethodDebugInformation",
+            50 => "LocalScope",
+            51 => "LocalVariable",
+            52 => "LocalConstant",
+            53 => "ImportScope",
+            54 => "StateMachineMethod",
+            55 => "CustomDebugInformation",
+            _ => "Unknown",
+        }
+    }
+
+    fn dotnet_table_id(name: &str) -> Option<u64> {
+        (0..64).find(|index| Self::dotnet_table_name(*index) == name)
+    }
+
+    fn dotnet_metadata_token(table_index: u64, rid: u64) -> u64 {
+        (table_index << 24) | rid
+    }
+
+    fn dotnet_metadata_token_string(table_index: u64, rid: u64) -> String {
+        format!("0x{:08x}", Self::dotnet_metadata_token(table_index, rid))
+    }
+
+    fn parse_dotnet_metadata_token(value: &str) -> Option<u64> {
+        if let Some(hex) = value
+            .strip_prefix("0x")
+            .or_else(|| value.strip_prefix("0X"))
+        {
+            return u64::from_str_radix(hex, 16).ok();
+        }
+        value.parse::<u64>().ok()
+    }
+
+    fn dotnet_bytes_hex(bytes: &[u8]) -> String {
+        bytes
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    }
+
+    fn dotnet_compressed_u32(bytes: &[u8], offset: usize) -> Option<(u32, usize)> {
+        let first = *bytes.get(offset)?;
+        if first & 0x80 == 0 {
+            Some((first as u32, 1))
+        } else if first & 0xC0 == 0x80 {
+            let second = *bytes.get(offset + 1)?;
+            Some(((((first & 0x3F) as u32) << 8) | second as u32, 2))
+        } else if first & 0xE0 == 0xC0 {
+            let second = *bytes.get(offset + 1)?;
+            let third = *bytes.get(offset + 2)?;
+            let fourth = *bytes.get(offset + 3)?;
+            Some((
+                (((first & 0x1F) as u32) << 24)
+                    | ((second as u32) << 16)
+                    | ((third as u32) << 8)
+                    | fourth as u32,
+                4,
+            ))
+        } else {
+            None
+        }
+    }
+
+    fn dotnet_string_index_metadata(&self, index: &crate::formats::cli::StringHeapIndex) -> Value {
+        json!({
+            "heap": "#Strings",
+            "index": index.offset,
+            "size": index.size,
+            "value": self.dotnet_string(index),
+        })
+    }
+
+    fn dotnet_guid_index_metadata(&self, index: &crate::formats::cli::GuidHeapIndex) -> Value {
+        json!({
+            "heap": "#GUID",
+            "index": index.offset,
+            "size": index.size,
+        })
+    }
+
+    fn dotnet_blob_bytes(&self, index: &crate::formats::cli::BlobHeapIndex) -> Option<Vec<u8>> {
+        if index.offset == 0 {
+            return None;
+        }
+        let blobs = self.dotnet_stream_data("#Blob")?;
+        let offset = index.offset as usize;
+        if offset >= blobs.len() {
+            return None;
+        }
+        let (length, header_size) = Self::dotnet_compressed_u32(blobs, offset)?;
+        let start = offset.checked_add(header_size)?;
+        let end = start.checked_add(length as usize)?;
+        (end <= blobs.len()).then(|| blobs[start..end].to_vec())
+    }
+
+    fn dotnet_blob_index_metadata(&self, index: &crate::formats::cli::BlobHeapIndex) -> Value {
+        let raw = self
+            .dotnet_blob_bytes(index)
+            .map(|bytes| Self::dotnet_bytes_hex(&bytes));
+        json!({
+            "heap": "#Blob",
+            "index": index.offset,
+            "size": index.size,
+            "raw": raw,
+        })
+    }
+
+    fn dotnet_simple_table_index_metadata(
+        table: &str,
+        index: &crate::formats::cli::SimpleTableIndex,
+    ) -> Value {
+        json!({
+            "table": table,
+            "rid": index.offset,
+            "size": index.size,
+        })
+    }
+
+    fn dotnet_typedef_or_ref_metadata(index: &crate::formats::cli::TypeDefOrRefIndex) -> Value {
+        let tag = index.offset & 0x3;
+        let rid = index.offset >> 2;
+        let table = match tag {
+            0 => "TypeDef",
+            1 => "TypeRef",
+            2 => "TypeSpec",
+            _ => "Unknown",
+        };
+        let token = Self::dotnet_table_id(table)
+            .filter(|_| rid != 0)
+            .map(|table_id| Self::dotnet_metadata_token_string(table_id, rid as u64));
+        json!({
+            "coded_index": "TypeDefOrRef",
+            "table": table,
+            "rid": rid,
+            "token": token,
+            "raw": index.offset,
+            "size": index.size,
+        })
+    }
+
+    fn dotnet_resolution_scope_metadata(
+        index: &crate::formats::cli::ResolutionScopeIndex,
+    ) -> Value {
+        let tag = index.offset & 0x3;
+        let rid = index.offset >> 2;
+        let table = match tag {
+            0 => "Module",
+            1 => "ModuleRef",
+            2 => "AssemblyRef",
+            3 => "TypeRef",
+            _ => "Unknown",
+        };
+        let token = Self::dotnet_table_id(table)
+            .filter(|_| rid != 0)
+            .map(|table_id| Self::dotnet_metadata_token_string(table_id, rid as u64));
+        json!({
+            "coded_index": "ResolutionScope",
+            "table": table,
+            "rid": rid,
+            "token": token,
+            "raw": index.offset,
+            "size": index.size,
+        })
+    }
+
+    fn dotnet_method_body_metadata(&self, rva: u32) -> Option<Value> {
+        if rva == 0 {
+            return None;
+        }
+        let header_virtual_address = self.relative_virtual_address_to_virtual_address(rva as u64);
+        let header = self.dotnet_method_header(header_virtual_address).ok()?;
+        let header_size = header.size()?;
+        let code_size = header.code_size()?;
+        let code_virtual_address = header_virtual_address + header_size as u64;
+        let file_offset = self.virtual_address_to_file_offset(header_virtual_address);
+        let code_file_offset = self.virtual_address_to_file_offset(code_virtual_address);
+        let mut result = json!({
+            "relative_virtual_address": rva,
+            "header_virtual_address": header_virtual_address,
+            "header_file_offset": file_offset,
+            "code_virtual_address": code_virtual_address,
+            "code_file_offset": code_file_offset,
+            "header_size": header_size,
+            "code_size": code_size,
+        });
+        if let Value::Object(ref mut object) = result {
+            match header {
+                MethodHeader::Tiny(header) => {
+                    object.insert("format".to_string(), json!("tiny"));
+                    object.insert("max_stack".to_string(), json!(8));
+                    object.insert("init_locals".to_string(), json!(false));
+                    object.insert("local_var_sig_token".to_string(), Value::Null);
+                    object.insert("flags".to_string(), json!(0));
+                    object.insert("tiny_flags".to_string(), json!(header.code_size));
+                }
+                MethodHeader::Fat(header) => {
+                    object.insert("format".to_string(), json!("fat"));
+                    object.insert("max_stack".to_string(), json!(header.max_stack));
+                    object.insert("init_locals".to_string(), json!((header.flags & 0x10) != 0));
+                    object.insert(
+                        "local_var_sig_token".to_string(),
+                        json!(format!("0x{:08x}", header.local_var_sig_token)),
+                    );
+                    object.insert("flags".to_string(), json!(header.flags));
+                }
+            }
+        }
+        Some(result)
+    }
+
+    fn dotnet_strings_heap_metadata(&self) -> Value {
+        let mut strings = Vec::<Value>::new();
+        let Some(data) = self.dotnet_stream_data("#Strings") else {
+            return json!({ "strings": strings });
+        };
+
+        let mut offset = 1usize;
+        while offset < data.len() {
+            let tail = &data[offset..];
+            let Some(length) = tail.iter().position(|byte| *byte == 0) else {
+                break;
+            };
+            if length > 0 {
+                strings.push(json!({
+                    "index": offset,
+                    "value": String::from_utf8_lossy(&tail[..length]).to_string(),
+                }));
+            }
+            offset += length + 1;
+        }
+
+        json!({
+            "strings": strings,
+        })
+    }
+
+    fn dotnet_user_strings_heap_metadata(&self) -> Value {
+        let mut strings = Vec::<Value>::new();
+        let Some(data) = self.dotnet_stream_data("#US") else {
+            return json!({ "strings": strings });
+        };
+
+        let mut offset = 1usize;
+        while offset < data.len() {
+            let Some((length, header_size)) = Self::dotnet_compressed_u32(data, offset) else {
+                break;
+            };
+            if length == 0 {
+                offset += header_size;
+                continue;
+            }
+
+            let start = match offset.checked_add(header_size) {
+                Some(start) => start,
+                None => break,
+            };
+            let end = match start.checked_add(length as usize) {
+                Some(end) if end <= data.len() => end,
+                _ => break,
+            };
+
+            let payload = &data[start..end];
+            let string_bytes = payload
+                .get(..payload.len().saturating_sub(1))
+                .unwrap_or(payload);
+            let code_units = string_bytes
+                .chunks_exact(2)
+                .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+                .collect::<Vec<_>>();
+            strings.push(json!({
+                "index": offset,
+                "token": format!("0x{:08x}", 0x7000_0000u64 | offset as u64),
+                "value": String::from_utf16_lossy(&code_units),
+                "raw": Self::dotnet_bytes_hex(payload),
+            }));
+
+            offset = end;
+        }
+
+        json!({
+            "strings": strings,
+        })
+    }
+
+    fn dotnet_heaps_metadata(&self) -> Value {
+        json!({
+            "#Strings": self.dotnet_strings_heap_metadata(),
+            "#US": self.dotnet_user_strings_heap_metadata(),
+        })
+    }
+
+    fn dotnet_push_table_row(tables: &mut serde_json::Map<String, Value>, table: &str, row: Value) {
+        let table_id = Self::dotnet_table_id(table).unwrap_or(u64::MAX);
+        let entry = tables.entry(table.to_string()).or_insert_with(|| {
+            json!({
+                "id": table_id,
+                "rows": [],
+            })
+        });
+        if let Some(rows) = entry.get_mut("rows").and_then(Value::as_array_mut) {
+            rows.push(row);
+        }
+    }
+
     fn dotnet_stream_name(header: &ParsedStreamHeader) -> String {
         let bytes = &header.name;
         let end = bytes
@@ -628,6 +982,205 @@ impl PE {
         Some(entries)
     }
 
+    /// Builds canonical metadata for a .NET PE using logical CLI metadata tables.
+    ///
+    /// The returned value is intentionally table-oriented: rows keep their RID and token,
+    /// heap references preserve their source heap/index, and resolved values are embedded
+    /// when the parser can resolve them cheaply. Helper accessors derive from this layout
+    /// instead of serializing separate convenience maps.
+    pub fn metadata(&self) -> Value {
+        let mut result = json!({
+            "format": "pe",
+        });
+
+        if !self.is_dotnet() {
+            return result;
+        }
+
+        let cor20_header = self.dotnet_cor20_header();
+        let storage_signature = self.dotnet_storage_signature();
+        let storage_header = self.dotnet_storage_header();
+        let metadata_table = self.dotnet_metadata_table();
+
+        let streams = self
+            .dotnet_stream_headers()
+            .into_iter()
+            .map(|header| {
+                let name = Self::dotnet_stream_name(&header);
+                (
+                    name,
+                    json!({
+                        "offset": header.header.offset,
+                        "size": header.header.size,
+                    }),
+                )
+            })
+            .collect::<serde_json::Map<String, Value>>();
+
+        let present_tables = metadata_table
+            .map(|table| {
+                (0..64)
+                    .filter(|index| (table.mask_valid & (1u64 << index)) != 0)
+                    .map(|index| {
+                        json!({
+                            "id": index,
+                            "name": Self::dotnet_table_name(index),
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        let entries = self.dotnet_metadata_table_entries().unwrap_or_default();
+        let mut tables = serde_json::Map::<String, Value>::new();
+
+        let mut module_rid = 0u64;
+        let mut type_ref_rid = 0u64;
+        let mut type_def_rid = 0u64;
+        let mut field_rid = 0u64;
+        let mut method_def_rid = 0u64;
+
+        for entry in entries {
+            match entry {
+                Entry::Module(entry) => {
+                    module_rid += 1;
+                    Self::dotnet_push_table_row(
+                        &mut tables,
+                        "Module",
+                        json!({
+                            "rid": module_rid,
+                            "token": Self::dotnet_metadata_token_string(MetadataToken::Module as u64, module_rid),
+                            "generation": entry.generation,
+                            "name": self.dotnet_string_index_metadata(&entry.name),
+                            "mvid": self.dotnet_guid_index_metadata(&entry.mv_id),
+                            "enc_id": self.dotnet_guid_index_metadata(&entry.enc_id),
+                            "enc_base_id": self.dotnet_guid_index_metadata(&entry.enc_base_id),
+                        }),
+                    );
+                }
+                Entry::TypeRef(entry) => {
+                    type_ref_rid += 1;
+                    Self::dotnet_push_table_row(
+                        &mut tables,
+                        "TypeRef",
+                        json!({
+                            "rid": type_ref_rid,
+                            "token": Self::dotnet_metadata_token_string(MetadataToken::TypeRef as u64, type_ref_rid),
+                            "resolution_scope": Self::dotnet_resolution_scope_metadata(&entry.resolution_scope),
+                            "name": self.dotnet_string_index_metadata(&entry.name),
+                            "namespace": self.dotnet_string_index_metadata(&entry.namespace),
+                        }),
+                    );
+                }
+                Entry::TypeDef(entry) => {
+                    type_def_rid += 1;
+                    Self::dotnet_push_table_row(
+                        &mut tables,
+                        "TypeDef",
+                        json!({
+                            "rid": type_def_rid,
+                            "token": Self::dotnet_metadata_token_string(MetadataToken::TypeDef as u64, type_def_rid),
+                            "flags": entry.flags,
+                            "name": self.dotnet_string_index_metadata(&entry.name),
+                            "namespace": self.dotnet_string_index_metadata(&entry.namespace),
+                            "extends": Self::dotnet_typedef_or_ref_metadata(&entry.extends),
+                            "field_list": Self::dotnet_simple_table_index_metadata("Field", &entry.field_list),
+                            "method_list": Self::dotnet_simple_table_index_metadata("MethodDef", &entry.method_list),
+                        }),
+                    );
+                }
+                Entry::Field(entry) => {
+                    field_rid += 1;
+                    Self::dotnet_push_table_row(
+                        &mut tables,
+                        "Field",
+                        json!({
+                            "rid": field_rid,
+                            "token": Self::dotnet_metadata_token_string(MetadataToken::Field as u64, field_rid),
+                            "flags": entry.flags,
+                            "name": self.dotnet_string_index_metadata(&entry.name),
+                            "signature": self.dotnet_blob_index_metadata(&entry.signature),
+                        }),
+                    );
+                }
+                Entry::MethodDef(entry) => {
+                    method_def_rid += 1;
+                    Self::dotnet_push_table_row(
+                        &mut tables,
+                        "MethodDef",
+                        json!({
+                            "rid": method_def_rid,
+                            "token": Self::dotnet_metadata_token_string(MetadataToken::MethodDef as u64, method_def_rid),
+                            "rva": entry.rva,
+                            "impl_flags": entry.impl_flags,
+                            "flags": entry.flags,
+                            "name": self.dotnet_string_index_metadata(&entry.name),
+                            "signature": self.dotnet_blob_index_metadata(&entry.signature),
+                            "param_list": Self::dotnet_simple_table_index_metadata("Param", &entry.param_list),
+                            "body": self.dotnet_method_body_metadata(entry.rva),
+                        }),
+                    );
+                }
+            }
+        }
+
+        let cil = json!({
+            "metadata": {
+                "cor20_header": cor20_header.map(|header| json!({
+                    "cb": header.cb,
+                    "major_runtime_version": header.major_runtime_version,
+                    "minor_runtime_version": header.minor_runtime_version,
+                    "metadata": {
+                        "relative_virtual_address": header.meta_data.virtual_address,
+                        "virtual_address": self.relative_virtual_address_to_virtual_address(header.meta_data.virtual_address as u64),
+                        "size": header.meta_data.size,
+                    },
+                    "flags": header.flags,
+                    "resources": {
+                        "relative_virtual_address": header.resources.virtual_address,
+                        "size": header.resources.size,
+                    },
+                    "strong_name_signature": {
+                        "relative_virtual_address": header.strong_name_signature.virtual_address,
+                        "size": header.strong_name_signature.size,
+                    },
+                })),
+                "storage": {
+                    "signature": storage_signature.map(|signature| json!({
+                        "signature": signature.signature,
+                        "major_version": signature.major_version,
+                        "minor_version": signature.minor_version,
+                        "extra_data": signature.extra_data,
+                        "version_string_size": signature.version_string_size,
+                    })),
+                    "header": storage_header.map(|header| json!({
+                        "flags": header.flags,
+                        "number_of_streams": header.number_of_streams,
+                    })),
+                },
+                "streams": streams,
+                "heaps": self.dotnet_heaps_metadata(),
+                "tables_header": metadata_table.map(|table| json!({
+                    "reserved": table.reserved,
+                    "major_version": table.major_version,
+                    "minor_version": table.minor_version,
+                    "heap_sizes": table.heap_sizes,
+                    "rid": table.rid,
+                    "mask_valid": table.mask_valid,
+                    "mask_sorted": table.mask_sorted,
+                    "present_tables": present_tables,
+                })),
+                "tables": tables,
+            }
+        });
+
+        if let Value::Object(ref mut object) = result {
+            object.insert("cil".to_string(), cil);
+        }
+
+        result
+    }
+
     /// Computes a .NET metadata token from a given table index and entry index.
     ///
     /// # Parameters
@@ -654,38 +1207,31 @@ impl PE {
     /// - The value is the corresponding virtual address.
     pub fn dotnet_metadata_token_virtual_addresses(&self) -> BTreeMap<u64, u64> {
         let mut result = BTreeMap::<u64, u64>::new();
-        if !self.is_dotnet() {
+        let metadata = self.metadata();
+        let rows = metadata
+            .get("cil")
+            .and_then(|cil| cil.get("metadata"))
+            .and_then(|metadata| metadata.get("tables"))
+            .and_then(|tables| tables.get("MethodDef"))
+            .and_then(|table| table.get("rows"))
+            .and_then(Value::as_array);
+
+        let Some(rows) = rows else {
             return result;
-        }
-        let entries = match self.dotnet_metadata_table_entries() {
-            Some(entries) => entries,
-            None => {
-                return result;
-            }
         };
 
-        let mut i: u64 = 0;
-
-        for entry in entries {
-            if let Entry::MethodDef(entry) = entry {
-                let token: u64 = PE::dotnet_metadata_token_from_index(6, i);
-                i += 1;
-
-                if entry.rva == 0 {
-                    continue;
-                }
-
-                let mut va = self.relative_virtual_address_to_virtual_address(entry.rva as u64);
-
-                let method_header = match self.dotnet_method_header(va) {
-                    Ok(h) => h,
-                    Err(_) => continue,
-                };
-
-                if let Some(size) = method_header.size() {
-                    va += size as u64;
-                    result.insert(token, va);
-                }
+        for row in rows {
+            let token = row
+                .get("token")
+                .and_then(Value::as_str)
+                .and_then(Self::parse_dotnet_metadata_token);
+            let address = row
+                .get("body")
+                .and_then(Value::as_object)
+                .and_then(|body| body.get("code_virtual_address"))
+                .and_then(Value::as_u64);
+            if let (Some(token), Some(address)) = (token, address) {
+                result.insert(token, address);
             }
         }
         result
@@ -915,44 +1461,30 @@ impl PE {
     ///   * Values represent the end of the method's executable code (virtual address).
     pub fn dotnet_executable_virtual_address_ranges(&self) -> BTreeMap<u64, u64> {
         let mut result = BTreeMap::<u64, u64>::new();
-        if !self.is_dotnet() {
+        let metadata = self.metadata();
+        let rows = metadata
+            .get("cil")
+            .and_then(|cil| cil.get("metadata"))
+            .and_then(|metadata| metadata.get("tables"))
+            .and_then(|tables| tables.get("MethodDef"))
+            .and_then(|table| table.get("rows"))
+            .and_then(Value::as_array);
+
+        let Some(rows) = rows else {
             return result;
-        }
-        let entries = match self.dotnet_metadata_table_entries() {
-            Some(entries) => entries,
-            None => return result,
         };
 
-        for entry in entries {
-            let Entry::MethodDef(entry) = entry else {
-                continue;
-            };
-
-            if entry.rva == 0 {
-                continue;
+        for row in rows {
+            let body = row.get("body").and_then(Value::as_object);
+            let start = body
+                .and_then(|body| body.get("code_virtual_address"))
+                .and_then(Value::as_u64);
+            let size = body
+                .and_then(|body| body.get("code_size"))
+                .and_then(Value::as_u64);
+            if let (Some(start), Some(size)) = (start, size) {
+                result.insert(start, start + size);
             }
-
-            let va = self.relative_virtual_address_to_virtual_address(entry.rva as u64);
-
-            let header = match self.dotnet_method_header(va).ok() {
-                Some(header) => header,
-                None => continue,
-            };
-
-            let header_size = match header.size() {
-                Some(size) => size,
-                None => continue,
-            };
-
-            let code_size = match header.code_size() {
-                Some(size) => size,
-                None => continue,
-            };
-
-            result.insert(
-                va + header_size as u64,
-                va + header_size as u64 + code_size as u64,
-            );
         }
         result
     }
@@ -1102,29 +1634,27 @@ impl PE {
     /// A `BTreeSet` of function addresses in the PE file.
     pub fn dotnet_entrypoint_virtual_addresses(&self) -> BTreeSet<u64> {
         let mut addresses = BTreeSet::<u64>::new();
-        if !self.is_dotnet() {
+        let metadata = self.metadata();
+        let rows = metadata
+            .get("cil")
+            .and_then(|cil| cil.get("metadata"))
+            .and_then(|metadata| metadata.get("tables"))
+            .and_then(|tables| tables.get("MethodDef"))
+            .and_then(|table| table.get("rows"))
+            .and_then(Value::as_array);
+
+        let Some(rows) = rows else {
             return addresses;
-        }
-        let entries = match self.dotnet_metadata_table_entries() {
-            Some(entries) => entries,
-            None => {
-                return addresses;
-            }
         };
-        for entry in entries {
-            if let Entry::MethodDef(header) = entry {
-                if header.rva == 0 {
-                    continue;
-                }
 
-                let mut va = self.relative_virtual_address_to_virtual_address(header.rva as u64);
-
-                if let Ok(method_header) = self.dotnet_method_header(va) {
-                    if let Some(size) = method_header.size() {
-                        va += size as u64;
-                        addresses.insert(va);
-                    }
-                }
+        for row in rows {
+            if let Some(address) = row
+                .get("body")
+                .and_then(Value::as_object)
+                .and_then(|body| body.get("code_virtual_address"))
+                .and_then(Value::as_u64)
+            {
+                addresses.insert(address);
             }
         }
         addresses
@@ -1448,69 +1978,84 @@ impl PE {
 
     pub fn dotnet_symbols(&self) -> BTreeMap<u64, BlSymbol> {
         let mut symbols = BTreeMap::<u64, BlSymbol>::new();
-        if !self.is_dotnet() {
-            return symbols;
-        }
+        let metadata = self.metadata();
+        let tables = metadata
+            .get("cil")
+            .and_then(|cil| cil.get("metadata"))
+            .and_then(|metadata| metadata.get("tables"));
 
-        let entries = match self.dotnet_metadata_table_entries() {
-            Some(entries) => entries,
-            None => return symbols,
+        let Some(tables) = tables else {
+            return symbols;
         };
 
-        let mut type_definitions = Vec::<TypeDefEntry>::new();
-        let mut methoddefs = Vec::<MethodDefEntry>::new();
-        for entry in entries {
-            match entry {
-                Entry::TypeDef(entry) => type_definitions.push(entry),
-                Entry::MethodDef(entry) => methoddefs.push(entry),
-                _ => {}
-            }
-        }
+        let type_def_rows = tables
+            .get("TypeDef")
+            .and_then(|table| table.get("rows"))
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let method_def_rows = tables
+            .get("MethodDef")
+            .and_then(|table| table.get("rows"))
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
 
-        let mut method_owner_names = vec![None::<String>; methoddefs.len()];
-        for (type_index, type_definition) in type_definitions.iter().enumerate() {
-            let start = type_definition.method_list.offset.saturating_sub(1) as usize;
-            let end = type_definitions
+        let mut method_owner_names = vec![None::<String>; method_def_rows.len()];
+        for (type_index, type_definition) in type_def_rows.iter().enumerate() {
+            let start = type_definition
+                .get("method_list")
+                .and_then(|value| value.get("rid"))
+                .and_then(Value::as_u64)
+                .unwrap_or(0)
+                .saturating_sub(1) as usize;
+            let end = type_def_rows
                 .get(type_index + 1)
-                .map(|next| next.method_list.offset.saturating_sub(1) as usize)
-                .unwrap_or(methoddefs.len());
-            let type_name = self
-                .dotnet_string(&type_definition.name)
+                .and_then(|next| next.get("method_list"))
+                .and_then(|value| value.get("rid"))
+                .and_then(Value::as_u64)
+                .map(|rid| rid.saturating_sub(1) as usize)
+                .unwrap_or(method_def_rows.len());
+            let type_name = type_definition
+                .get("name")
+                .and_then(|value| value.get("value"))
+                .and_then(Value::as_str)
                 .unwrap_or_default();
-            let type_namespace = self
-                .dotnet_string(&type_definition.namespace)
+            let type_namespace = type_definition
+                .get("namespace")
+                .and_then(|value| value.get("value"))
+                .and_then(Value::as_str)
                 .unwrap_or_default();
             let qualified_name = if type_namespace.is_empty() {
-                type_name
+                type_name.to_string()
             } else if type_name.is_empty() {
-                type_namespace
+                type_namespace.to_string()
             } else {
                 format!("{type_namespace}.{type_name}")
             };
             for owner_slot in method_owner_names
                 .iter_mut()
-                .take(end.min(methoddefs.len()))
-                .skip(start.min(methoddefs.len()))
+                .take(end.min(method_def_rows.len()))
+                .skip(start.min(method_def_rows.len()))
             {
                 *owner_slot = Some(qualified_name.clone());
             }
         }
 
-        for (index, method) in methoddefs.iter().enumerate() {
-            if method.rva == 0 {
-                continue;
-            }
-            let mut address = self.relative_virtual_address_to_virtual_address(method.rva as u64);
-            let Ok(method_header) = self.dotnet_method_header(address) else {
-                continue;
-            };
-            let Some(size) = method_header.size() else {
+        for (index, method) in method_def_rows.iter().enumerate() {
+            let Some(address) = method
+                .get("body")
+                .and_then(Value::as_object)
+                .and_then(|body| body.get("code_virtual_address"))
+                .and_then(Value::as_u64)
+            else {
                 continue;
             };
-            address += size as u64;
-
-            let method_name = self
-                .dotnet_string(&method.name)
+            let method_name = method
+                .get("name")
+                .and_then(|value| value.get("value"))
+                .and_then(Value::as_str)
+                .map(ToString::to_string)
                 .unwrap_or_else(|| format!("method_{}", index + 1));
             let qualified_name = match method_owner_names.get(index).and_then(|name| name.as_ref())
             {

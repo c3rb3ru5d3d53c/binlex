@@ -33,7 +33,7 @@ from binlex_bindings.binlex.controlflow import Reference as _ReferenceBinding
 from binlex_bindings.binlex.controlflow.instruction import Operand as Operand
 from binlex_bindings.binlex.controlflow.instruction import OperandKind as OperandKind
 
-from binlex.core.architecture import _coerce_architecture
+from binlex.core.architecture import Architecture, _coerce_architecture
 from binlex.formats import Image
 from binlex.hashing import MinHash32, SHA256, SSDeep, TLSH
 from binlex.irs.hir import HirFunction
@@ -895,7 +895,7 @@ class Graph:
 
     def architecture(self):
         """Return the graph architecture."""
-        return self._inner.architecture()
+        return Architecture.from_binding(self._inner.architecture())
 
     def image(self):
         """Return the graph-owned image."""
