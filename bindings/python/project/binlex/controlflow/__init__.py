@@ -307,11 +307,12 @@ class Instruction:
         return VexModule._from_inner(self._inner.vex(), self._config)
 
     def lir(self):
-        """Return canonical LIR for this instruction, if present."""
-        lir = self._inner.lir()
-        if lir is None:
-            return None
-        return LirInstruction._from_inner(lir)
+        """Return canonical LIR for this instruction."""
+        return LirInstruction._from_inner(self._inner.lir())
+
+    def lir_ssa(self):
+        """Return SSA-renamed LIR for this instruction."""
+        return LirInstruction._from_inner(self._inner.lir_ssa())
 
     def set_lir(self, lir):
         """Replace the canonical LIR for this instruction inside the graph."""
@@ -444,6 +445,10 @@ class Block:
     def lir(self):
         """Return canonical LIR for this block."""
         return LirBlock._from_inner(self._inner.lir())
+
+    def lir_ssa(self):
+        """Return SSA-renamed LIR for this block."""
+        return LirBlock._from_inner(self._inner.lir_ssa())
 
     def tlsh(self):
         """Return the TLSH object for this block, if available."""
@@ -628,6 +633,11 @@ class Function:
     def lir(self):
         """Return raw LIR for this function."""
         result = LirFunction._from_inner(self._inner.lir())
+        return result
+
+    def lir_ssa(self):
+        """Return SSA-renamed LIR for this function."""
+        result = LirFunction._from_inner(self._inner.lir_ssa())
         return result
 
     def tlsh(self):

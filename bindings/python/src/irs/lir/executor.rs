@@ -93,6 +93,20 @@ fn collect_lir(py: Python<'_>, lir: Py<PyLirModule>) -> ::binlex::irs::lir::LirM
     lir.borrow(py).inner.lock().unwrap().clone()
 }
 
+fn evaluate_program_counter(
+    state: &::binlex::irs::lir::executor::LirExecutorState,
+) -> PyResult<Option<u64>> {
+    let Some(program_counter) = state.cpu().program_counter() else {
+        return Err(PyRuntimeError::new_err(format!(
+            "{} has no program counter register",
+            state.cpu().name()
+        )));
+    };
+    state
+        .evaluate_register(&program_counter.name, program_counter.bits)
+        .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+}
+
 #[pymethods]
 impl LirExecutor {
     #[new]
@@ -175,10 +189,7 @@ impl LirExecutor {
                 .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
 
             for candidate in states {
-                let Some(address) = candidate
-                    .program_counter()
-                    .map_err(|error| PyRuntimeError::new_err(error.to_string()))?
-                else {
+                let Some(address) = evaluate_program_counter(&candidate)? else {
                     final_states.push(wrap_state(py, candidate)?);
                     continue;
                 };
@@ -310,15 +321,6 @@ impl LirExecutorState {
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
-    #[pyo3(text_signature = "($self)")]
-    pub fn program_counter(&self) -> PyResult<Option<u64>> {
-        self.inner
-            .lock()
-            .unwrap()
-            .program_counter()
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
-    }
-
     #[pyo3(text_signature = "($self, address, size)")]
     pub fn map_memory(&self, address: u64, size: u64) {
         self.inner.lock().unwrap().map_memory(address, size);
@@ -409,6 +411,11 @@ impl LirExecutorState {
     #[pyo3(text_signature = "($self)")]
     pub fn constraints(&self) -> Vec<String> {
         self.inner.lock().unwrap().constraints()
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    pub fn smt(&self) -> String {
+        self.inner.lock().unwrap().smt()
     }
 
     #[pyo3(text_signature = "($self)")]

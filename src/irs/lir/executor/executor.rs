@@ -3,6 +3,8 @@ use crate::irs::lir::executor::LirExecutorState;
 use crate::irs::lir::{LirInstruction, LirModule, LirStatus, LirTerminator};
 use std::collections::{BTreeSet, HashMap};
 
+pub const DEFAULT_RUN_STEP_LIMIT: usize = 1024;
+
 #[derive(Clone)]
 pub struct LirExecutor {
     breakpoints: BTreeSet<u64>,
@@ -59,7 +61,24 @@ impl LirExecutor {
         }
         let (lir, working, _, start_index) = self.prepare_state_and_lir(lir.clone(), state)?;
         let instructions = lir.instructions();
-        self.step_instruction(instructions[start_index], &working)
+        let instruction = instructions[start_index];
+        let previous_pc = working.eval_program_counter_u64()?;
+        let mut states = self.step_instruction(instruction, &working)?;
+
+        if matches!(instruction.terminator, LirTerminator::FallThrough)
+            && previous_pc == working.eval_program_counter_u64()?
+            && start_index + 1 < instructions.len()
+        {
+            if let Some(address) = instructions[start_index + 1].address {
+                for state in &mut states {
+                    if state.eval_program_counter_u64()? == previous_pc {
+                        self.materialize_program_counter(state, instruction.address, address)?;
+                    }
+                }
+            }
+        }
+
+        Ok(states)
     }
 
     pub fn run(
@@ -74,7 +93,8 @@ impl LirExecutor {
         if lir.is_empty() {
             return Ok(vec![state.clone()]);
         }
-        let mut active_states = vec![(start_index, initial_state, steps)];
+        let step_limit = steps.unwrap_or(DEFAULT_RUN_STEP_LIMIT);
+        let mut active_states = vec![(start_index, initial_state, step_limit)];
         let mut final_states = Vec::new();
 
         while !active_states.is_empty() {
@@ -88,7 +108,7 @@ impl LirExecutor {
                     }
                 }
 
-                if remaining_steps == Some(0) {
+                if remaining_steps == 0 {
                     final_states.push(live);
                     continue;
                 }
@@ -100,7 +120,7 @@ impl LirExecutor {
                         stepped.push(candidate);
                     }
                 }
-                let next_remaining_steps = remaining_steps.map(|value| value.saturating_sub(1));
+                let next_remaining_steps = remaining_steps.saturating_sub(1);
 
                 if stepped.is_empty() {
                     continue;
@@ -202,6 +222,25 @@ impl LirExecutor {
             self.apply_effect(&mut working, lir.address, effect)?;
         }
         self.apply_terminator(working, lir.address, &lir.terminator)
+    }
+
+    fn materialize_program_counter(
+        &self,
+        state: &mut LirExecutorState,
+        instruction: Option<u64>,
+        address: u64,
+    ) -> Result<(), LirExecutorError> {
+        let value = state
+            .backend()
+            .const_bv(address as u128, state.address_bits())?;
+        let def_id = state.define_location(
+            instruction,
+            "program_counter".to_string(),
+            &value,
+            &BTreeSet::new(),
+        );
+        state.set_program_counter(value, def_id)?;
+        Ok(())
     }
 }
 
@@ -1035,6 +1074,12 @@ mod tests {
         assert!(targets.contains(&0x1002));
         assert!(targets.contains(&0x1005));
         for state in states {
+            let smt = state.smt();
+            assert!(smt.contains("(assert"));
+            assert!(smt.contains("state_register_eax"));
+            assert!(smt.contains("input_eax"));
+            assert!(smt.contains("(check-sat)"));
+            assert!(smt.contains("(get-model)"));
             assert_eq!(
                 state.evaluate_register("ebx", 32).expect("eval register"),
                 None
@@ -1088,6 +1133,72 @@ mod tests {
                 .evaluate_register("rbx", 64)
                 .expect("eval register"),
             None
+        );
+    }
+
+    #[test]
+    fn symbolic_step_materializes_fallthrough_program_counter() {
+        let executor = LirExecutor::new();
+        let state =
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
+        let first = LirInstruction {
+            status: LirStatus::Complete,
+            address: Some(0x401000),
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Register {
+                    name: "rax".to_string(),
+                    bits: 64,
+                },
+                expression: LirExpression::Const { value: 7, bits: 64 },
+            }],
+            terminator: LirTerminator::FallThrough,
+        };
+        let second = LirInstruction {
+            status: LirStatus::Complete,
+            address: Some(0x401004),
+            effects: Vec::new(),
+            terminator: LirTerminator::FallThrough,
+        };
+
+        let states = executor
+            .step(&lir_many(vec![first, second]), &state)
+            .expect("step");
+        assert_eq!(states.len(), 1);
+        assert_eq!(
+            states[0]
+                .evaluate_register("rip", 64)
+                .expect("eval register")
+                .expect("concrete value"),
+            0x401004
+        );
+    }
+
+    #[test]
+    fn symbolic_run_defaults_to_bounded_execution() {
+        let executor = LirExecutor::new();
+        let state =
+            LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
+        let instruction = LirInstruction {
+            status: LirStatus::Complete,
+            address: Some(0x401000),
+            effects: Vec::new(),
+            terminator: LirTerminator::Jump {
+                target: LirExpression::Const {
+                    value: 0x401000,
+                    bits: 64,
+                },
+            },
+        };
+
+        let states = executor
+            .run(&lir_of(instruction), &state, None)
+            .expect("run");
+        assert_eq!(states.len(), 1);
+        assert_eq!(
+            states[0]
+                .evaluate_register("rip", 64)
+                .expect("eval register"),
+            Some(0x401000)
         );
     }
 

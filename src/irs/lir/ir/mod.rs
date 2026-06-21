@@ -22,6 +22,7 @@
 
 pub mod instruction;
 pub mod normalize;
+pub mod ssa;
 pub mod validate;
 
 pub use instruction::{
@@ -43,4 +44,5 @@ pub use instruction::{
     LirTerminatorUnreachable, LirTrapKind,
 };
 pub use normalize::normalize_instruction_lir;
+pub use ssa::{ssa_block_lir, ssa_function_lir, ssa_instruction_lir, ssa_module_lir};
 pub use validate::validate_instruction_lir;

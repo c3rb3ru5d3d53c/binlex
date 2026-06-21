@@ -369,13 +369,6 @@ impl LirCpu {
         })
     }
 
-    pub(crate) fn program_counter_name(&self, bits: u16) -> Option<&str> {
-        self.program_counter
-            .as_ref()
-            .filter(|program_counter| program_counter.bits == bits)
-            .map(|program_counter| program_counter.name.as_str())
-    }
-
     fn validate(&self) -> Result<(), LirExecutorError> {
         validate_bits(self.address_bits, "address width")?;
         if self.name.trim().is_empty() {

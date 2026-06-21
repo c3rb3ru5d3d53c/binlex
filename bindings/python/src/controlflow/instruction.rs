@@ -35,6 +35,10 @@ use binlex::controlflow::EntityKind as InnerEntityKind;
 use binlex::controlflow::Instruction as RawInnerInstruction;
 use binlex::controlflow::Operand as InnerOperand;
 use binlex::controlflow::OperandKind as InnerOperandKind;
+use binlex::irs::lir::LirEffect as InnerLirEffect;
+use binlex::irs::lir::LirInstruction as InnerLirInstruction;
+use binlex::irs::lir::LirStatus as InnerLirStatus;
+use binlex::irs::lir::LirTerminator as InnerLirTerminator;
 use pyo3::class::basic::CompareOp;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes};
@@ -43,6 +47,15 @@ use std::collections::BTreeSet;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use std::sync::Mutex;
+
+fn fallback_lir(address: u64) -> InnerLirInstruction {
+    InnerLirInstruction {
+        address: Some(address),
+        status: InnerLirStatus::Partial,
+        effects: Vec::<InnerLirEffect>::new(),
+        terminator: InnerLirTerminator::FallThrough,
+    }
+}
 
 type InnerInstruction = RawInnerInstruction<'static>;
 
@@ -517,13 +530,26 @@ impl Instruction {
     }
 
     #[pyo3(text_signature = "($self)")]
-    /// Return the canonical LIR for this instruction, building it on demand if possible.
-    pub fn lir(&self, py: Python) -> PyResult<Option<Py<PyLirInstruction>>> {
+    /// Return the canonical LIR for this instruction, building a partial fallback if needed.
+    pub fn lir(&self, py: Python) -> PyResult<Py<PyLirInstruction>> {
         self.with_inner_instruction(py, |instruction| {
-            let Some(lir) = instruction.lir.clone().or_else(|| instruction.build_lir()) else {
-                return Ok(None);
-            };
-            Ok(Some(Py::new(py, PyLirInstruction::from_inner(lir))?))
+            let lir = instruction
+                .lir
+                .clone()
+                .or_else(|| instruction.build_lir())
+                .unwrap_or_else(|| fallback_lir(instruction.address()));
+            Py::new(py, PyLirInstruction::from_inner(lir))
+        })
+    }
+
+    #[pyo3(text_signature = "($self)")]
+    /// Return SSA-renamed LIR for this instruction, building a partial fallback if needed.
+    pub fn lir_ssa(&self, py: Python) -> PyResult<Py<PyLirInstruction>> {
+        self.with_inner_instruction(py, |instruction| {
+            let lir = instruction
+                .lir_ssa()
+                .unwrap_or_else(|| fallback_lir(instruction.address()).ssa());
+            Py::new(py, PyLirInstruction::from_inner(lir))
         })
     }
 

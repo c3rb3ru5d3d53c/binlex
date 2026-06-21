@@ -103,6 +103,12 @@ impl LirBlock {
         }
     }
 
+    pub fn address(&self) -> Option<u64> {
+        self.instructions
+            .iter()
+            .find_map(|instruction| instruction.address())
+    }
+
     pub fn instructions(&self) -> &[LirInstruction] {
         &self.instructions
     }
@@ -122,6 +128,10 @@ impl LirBlock {
     pub fn print(&self) {
         println!("{}", self.text());
     }
+
+    pub fn ssa(&self) -> Self {
+        crate::irs::lir::ssa_block_lir(self)
+    }
 }
 
 impl LirFunction {
@@ -139,6 +149,10 @@ impl LirFunction {
             name,
             blocks: vec![block],
         }
+    }
+
+    pub fn address(&self) -> Option<u64> {
+        self.blocks.iter().find_map(|block| block.address())
     }
 
     pub fn blocks(&self) -> &[LirBlock] {
@@ -166,6 +180,10 @@ impl LirFunction {
 
     pub fn print(&self) {
         println!("{}", self.text());
+    }
+
+    pub fn ssa(&self) -> Self {
+        crate::irs::lir::ssa_function_lir(self)
     }
 }
 
@@ -236,6 +254,10 @@ impl LirModule {
 
     pub fn print(&self) {
         println!("{}", self.text());
+    }
+
+    pub fn ssa(&self) -> Self {
+        crate::irs::lir::ssa_module_lir(self)
     }
 
     pub fn mlir(&self) -> mlir::Result<crate::irs::lir::LirMlirModule> {
@@ -1856,6 +1878,10 @@ pub enum LirOperation {
 }
 
 impl LirInstruction {
+    pub fn address(&self) -> Option<u64> {
+        self.address
+    }
+
     pub fn set_address(&mut self, address: Option<u64>) {
         self.address = address;
     }
@@ -1878,6 +1904,10 @@ impl LirInstruction {
 
     pub fn print(&self) {
         println!("{}", self.text());
+    }
+
+    pub fn ssa(&self) -> Self {
+        crate::irs::lir::ssa_instruction_lir(self)
     }
 }
 
@@ -2785,7 +2815,64 @@ fn default_terminator_for_kind(kind: LirTerminatorKind) -> LirTerminator {
 
 #[cfg(test)]
 mod tests {
-    use super::{LirExpression, LirInstruction, LirStatus, LirTerminator};
+    use super::{LirBlock, LirExpression, LirFunction, LirInstruction, LirStatus, LirTerminator};
+
+    fn instruction(address: Option<u64>) -> LirInstruction {
+        LirInstruction {
+            address,
+            status: LirStatus::Complete,
+            effects: Vec::new(),
+            terminator: LirTerminator::FallThrough,
+        }
+    }
+
+    #[test]
+    fn lir_instruction_address_returns_stored_address() {
+        assert_eq!(instruction(Some(0x401000)).address(), Some(0x401000));
+        assert_eq!(instruction(None).address(), None);
+    }
+
+    #[test]
+    fn lir_block_address_returns_first_addressed_instruction() {
+        let mut block = LirBlock::new(None);
+        block.append_instruction(instruction(None));
+        block.append_instruction(instruction(Some(0x401004)));
+        block.append_instruction(instruction(Some(0x401008)));
+
+        assert_eq!(block.address(), Some(0x401004));
+    }
+
+    #[test]
+    fn lir_block_address_returns_none_when_addressless() {
+        let mut block = LirBlock::new(None);
+        block.append_instruction(instruction(None));
+
+        assert_eq!(block.address(), None);
+    }
+
+    #[test]
+    fn lir_function_address_returns_first_addressed_block() {
+        let mut first = LirBlock::new(None);
+        first.append_instruction(instruction(None));
+        let mut second = LirBlock::new(None);
+        second.append_instruction(instruction(Some(0x401010)));
+
+        let mut function = LirFunction::new(None);
+        function.append_block(first);
+        function.append_block(second);
+
+        assert_eq!(function.address(), Some(0x401010));
+    }
+
+    #[test]
+    fn lir_function_address_returns_none_when_addressless() {
+        let mut block = LirBlock::new(None);
+        block.append_instruction(instruction(None));
+        let mut function = LirFunction::new(None);
+        function.append_block(block);
+
+        assert_eq!(function.address(), None);
+    }
 
     #[test]
     fn lir_const_serde_serializes_u128_as_string() {

@@ -547,7 +547,7 @@ impl LirExecutor {
                     &coerced,
                     &value.deps,
                 );
-                state.set_program_counter(coerced, def_id);
+                state.set_program_counter(coerced, def_id)?;
                 Ok(())
             }
             LirLocation::Temporary { id, bits } => {

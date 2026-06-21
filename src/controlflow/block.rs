@@ -134,6 +134,10 @@ impl<'block> Block<'block> {
         })
     }
 
+    pub fn lir_ssa(&self) -> Result<LirBlock, Error> {
+        Ok(self.lir()?.ssa())
+    }
+
     /// Return an embedding vector for this block using the default backend and dimensions.
     pub fn embedding(&self) -> Option<Vec<f32>> {
         self.embedding_with_options(None, None)

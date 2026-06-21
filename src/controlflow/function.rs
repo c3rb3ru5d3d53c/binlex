@@ -546,6 +546,10 @@ impl<'function> Function<'function> {
         self.build_lir(&self.cfg.symbols())
     }
 
+    pub fn lir_ssa(&self) -> Result<LirFunction, Error> {
+        Ok(self.lir()?.ssa())
+    }
+
     /// Retrieves all blocks that fall within the contiguous reconstruction region.
     ///
     /// This includes local directly reached code that may extend beyond the

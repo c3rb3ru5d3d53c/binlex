@@ -340,6 +340,13 @@ impl InstructionRecord {
             .map(|_| self.unsupported_fallthrough_lir("instruction detail unavailable"))
     }
 
+    pub fn lir_ssa(&self) -> Option<LirInstruction> {
+        self.lir
+            .clone()
+            .or_else(|| self.build_lir())
+            .map(|lir| lir.ssa())
+    }
+
     pub fn build_and_log_lir(&self) -> Option<LirInstruction> {
         let lir = self.build_lir()?;
         log_lir_debug(

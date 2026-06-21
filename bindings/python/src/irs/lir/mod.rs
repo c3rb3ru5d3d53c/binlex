@@ -2001,6 +2001,9 @@ impl LirInstruction {
     pub fn text(&self) -> String {
         self.inner.lock().unwrap().text()
     }
+    pub fn ssa(&self) -> Self {
+        Self::from_inner(self.inner.lock().unwrap().ssa())
+    }
     pub fn print(&self) -> PyResult<()> {
         self.inner.lock().unwrap().print();
         Ok(())
@@ -2070,6 +2073,10 @@ impl LirBlock {
         self.inner.lock().unwrap().name.clone()
     }
 
+    pub fn address(&self) -> Option<u64> {
+        self.inner.lock().unwrap().address()
+    }
+
     pub fn instructions(&self, py: Python<'_>) -> PyResult<Vec<Py<LirInstruction>>> {
         self.inner
             .lock()
@@ -2092,6 +2099,9 @@ impl LirBlock {
 
     pub fn text(&self) -> String {
         self.inner.lock().unwrap().text()
+    }
+    pub fn ssa(&self) -> Self {
+        Self::from_inner(self.inner.lock().unwrap().ssa())
     }
 
     pub fn print(&self) -> PyResult<()> {
@@ -2124,6 +2134,10 @@ impl LirFunction {
         self.inner.lock().unwrap().name.clone()
     }
 
+    pub fn address(&self) -> Option<u64> {
+        self.inner.lock().unwrap().address()
+    }
+
     pub fn blocks(&self, py: Python<'_>) -> PyResult<Vec<Py<LirBlock>>> {
         self.inner
             .lock()
@@ -2146,6 +2160,9 @@ impl LirFunction {
 
     pub fn text(&self) -> String {
         self.inner.lock().unwrap().text()
+    }
+    pub fn ssa(&self) -> Self {
+        Self::from_inner(self.inner.lock().unwrap().ssa())
     }
 
     pub fn print(&self) -> PyResult<()> {
@@ -2233,6 +2250,9 @@ impl LirModule {
 
     pub fn text(&self) -> String {
         self.inner.lock().unwrap().text()
+    }
+    pub fn ssa(&self) -> Self {
+        Self::from_inner(self.inner.lock().unwrap().ssa())
     }
 
     pub fn bytecode(&self, py: Python<'_>) -> PyResult<Py<PyBytes>> {

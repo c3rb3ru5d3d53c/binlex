@@ -42,7 +42,7 @@ pub use ir::{
     LirFenceKind, LirFunction, LirInstruction, LirLocation, LirLocationKind, LirModule,
     LirOperation, LirOperationBinary, LirOperationCast, LirOperationCompare, LirOperationUnary,
     LirStatus, LirTerminator, LirTerminatorKind, LirTrapKind, normalize_instruction_lir,
-    validate_instruction_lir,
+    ssa_block_lir, ssa_function_lir, ssa_instruction_lir, ssa_module_lir, validate_instruction_lir,
 };
 pub use mlir::LirMlirModule;
 pub use print::{

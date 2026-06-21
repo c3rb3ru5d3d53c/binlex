@@ -31,7 +31,6 @@ pub struct LirExecutorState {
     registers: HashMap<String, LirExecutorCell>,
     flags: HashMap<String, LirExecutorCell>,
     temporaries: HashMap<u32, LirExecutorCell>,
-    program_counter: Option<LirExecutorCell>,
     memory: FlatMemory,
     indexed_memory: HashMap<String, HashMap<String, LirExecutorCell>>,
     stack_memory: HashMap<String, HashMap<u32, LirExecutorCell>>,
@@ -101,8 +100,14 @@ impl LirExecutorState {
         Ok(merged)
     }
 
-    fn instruction_pointer_register_name(&self, bits: u16) -> Option<&str> {
-        self.cpu.program_counter_name(bits)
+    fn program_counter_register(&self) -> Result<(String, u16), LirExecutorError> {
+        let Some(program_counter) = self.cpu.program_counter() else {
+            return Err(LirExecutorError::UnsupportedCpu(format!(
+                "{} has no program counter register",
+                self.cpu.name()
+            )));
+        };
+        Ok((program_counter.name.clone(), program_counter.bits))
     }
 
     pub fn new(cpu: LirCpu) -> Self {
@@ -118,7 +123,6 @@ impl LirExecutorState {
             registers: HashMap::new(),
             flags: HashMap::new(),
             temporaries: HashMap::new(),
-            program_counter: None,
             memory: FlatMemory::new(&backend, address_bits as u32),
             indexed_memory: HashMap::new(),
             stack_memory: HashMap::new(),
@@ -245,15 +249,29 @@ impl LirExecutorState {
         self.constraints.iter().map(ToString::to_string).collect()
     }
 
-    pub fn program_counter(&self) -> Result<Option<u64>, LirExecutorError> {
-        match self.program_counter.as_ref() {
-            Some(value) => self.backend.eval_bv_u64(&self.constraints, &value.value),
-            None => Ok(None),
+    pub fn smt(&self) -> String {
+        let mut assertions = self.constraints.clone();
+        for (name, cell) in &self.registers {
+            assertions.push(self.smt_cell_assertion("register", name, cell));
         }
+        for (name, cell) in &self.flags {
+            assertions.push(self.smt_cell_assertion("flag", name, cell));
+        }
+        for (id, cell) in &self.temporaries {
+            assertions.push(self.smt_cell_assertion("temporary", &id.to_string(), cell));
+        }
+        self.backend.smt(&assertions)
+    }
+
+    fn smt_cell_assertion(&self, kind: &str, name: &str, cell: &LirExecutorCell) -> Bool {
+        let symbol = format!("state_{kind}_{name}");
+        let value = BV::new_const(symbol, cell.value.get_size());
+        value.eq(&cell.value)
     }
 
     pub(crate) fn eval_program_counter_u64(&self) -> Result<Option<u64>, LirExecutorError> {
-        self.program_counter()
+        let (name, bits) = self.program_counter_register()?;
+        self.evaluate_register(&name, bits)
     }
 
     pub fn evaluate_memory(
@@ -354,14 +372,15 @@ impl LirExecutorState {
         self.lir_data_addresses.get(name).copied()
     }
 
-    pub(crate) fn set_program_counter(&mut self, value: BV, def_id: Option<u64>) {
-        if let Some(name) = self
-            .instruction_pointer_register_name(value.get_size() as u16)
-            .map(str::to_string)
-        {
-            self.set_register_value(&name, value.clone(), def_id);
-        }
-        self.program_counter = Some(LirExecutorCell { value, def_id });
+    pub(crate) fn set_program_counter(
+        &mut self,
+        value: BV,
+        def_id: Option<u64>,
+    ) -> Result<(), LirExecutorError> {
+        let (name, bits) = self.program_counter_register()?;
+        let value = self.backend.coerce_bv_width(&value, bits)?;
+        self.set_register_value(&name, value, def_id);
+        Ok(())
     }
 
     pub(crate) fn get_or_create_register(
@@ -432,15 +451,6 @@ impl LirExecutorState {
                     resolution.zero_extend_on_write,
                 )
                 .expect("merge register alias");
-            if self
-                .instruction_pointer_register_name(merged.get_size() as u16)
-                .is_some_and(|ip_name| ip_name == canonical.as_str())
-            {
-                self.program_counter = Some(LirExecutorCell {
-                    value: merged.clone(),
-                    def_id,
-                });
-            }
             self.registers.insert(
                 canonical,
                 LirExecutorCell {
@@ -449,15 +459,6 @@ impl LirExecutorState {
                 },
             );
             return;
-        }
-        if self
-            .instruction_pointer_register_name(value.get_size() as u16)
-            .is_some_and(|ip_name| ip_name == name)
-        {
-            self.program_counter = Some(LirExecutorCell {
-                value: value.clone(),
-                def_id,
-            });
         }
         self.registers
             .insert(name.to_string(), LirExecutorCell { value, def_id });
@@ -681,24 +682,15 @@ impl LirExecutorState {
         &mut self,
         bits: u16,
     ) -> Result<LirExecutorCell, LirExecutorError> {
-        if let Some(value) = self.program_counter.as_ref() {
+        let (name, pc_bits) = self.program_counter_register()?;
+        if let Some(value) = self.get_register_cell(&name, pc_bits)? {
             return Ok(LirExecutorCell {
                 value: self.backend.coerce_bv_width(&value.value, bits)?,
                 def_id: value.def_id,
             });
         }
-        if let Some(name) = self.instruction_pointer_register_name(bits) {
-            if let Some(value) = self.registers.get(name) {
-                let value = LirExecutorCell {
-                    value: self.backend.coerce_bv_width(&value.value, bits)?,
-                    def_id: value.def_id,
-                };
-                self.program_counter = Some(value.clone());
-                return Ok(value);
-            }
-        }
         let symbol = "program_counter".to_string();
-        let value = self.backend.fresh_bv(&symbol, bits)?;
+        let value = self.backend.fresh_bv(&symbol, pc_bits)?;
         self.tracked
             .insert(symbol.clone(), TrackedAst::BitVector(value.clone()));
         let def_id =
@@ -707,11 +699,11 @@ impl LirExecutorState {
             value: value.clone(),
             def_id: Some(def_id),
         };
-        if let Some(name) = self.instruction_pointer_register_name(bits) {
-            self.registers.insert(name.to_string(), cell.clone());
-        }
-        self.program_counter = Some(cell.clone());
-        Ok(cell)
+        self.set_register_value(&name, value, Some(def_id));
+        Ok(LirExecutorCell {
+            value: self.backend.coerce_bv_width(&cell.value, bits)?,
+            def_id: cell.def_id,
+        })
     }
 
     pub(crate) fn fresh_value(

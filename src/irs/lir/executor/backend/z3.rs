@@ -93,6 +93,21 @@ impl Z3Backend {
         ))
     }
 
+    pub(crate) fn smt(&self, constraints: &[Bool]) -> String {
+        let solver = self.solver_from_constraints(constraints);
+        let mut script = solver.to_smt2();
+        if !script.ends_with('\n') {
+            script.push('\n');
+        }
+        if !script.contains("(check-sat)") {
+            script.push_str("(check-sat)\n");
+        }
+        if !script.contains("(get-model)") {
+            script.push_str("(get-model)\n");
+        }
+        script
+    }
+
     pub(crate) fn model(
         &self,
         constraints: &[Bool],

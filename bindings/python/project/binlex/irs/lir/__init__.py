@@ -494,6 +494,9 @@ class LirInstruction:
     def text(self):
         return self._inner.text()
 
+    def ssa(self):
+        return LirInstruction._from_inner(self._inner.ssa())
+
     def print(self):
         self._inner.print()
 
@@ -638,6 +641,9 @@ class LirBlock:
     def text(self):
         return self._inner.text()
 
+    def ssa(self):
+        return LirBlock._from_inner(self._inner.ssa())
+
     def print(self):
         self._inner.print()
 
@@ -669,6 +675,9 @@ class LirFunction:
 
     def text(self):
         return self._inner.text()
+
+    def ssa(self):
+        return LirFunction._from_inner(self._inner.ssa())
 
     def print(self):
         self._inner.print()
@@ -726,6 +735,11 @@ class LirModule:
         if self._mlir:
             return self._inner.text()
         return self._inner.text()
+
+    def ssa(self):
+        if self._mlir:
+            raise TypeError("MLIR-backed LIR modules do not support SSA rewriting")
+        return LirModule._from_inner(self._inner.ssa())
 
     def bytecode(self):
         return self._inner.bytecode()

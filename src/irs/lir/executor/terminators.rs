@@ -20,7 +20,7 @@ impl LirExecutor {
                     &target_value,
                     &target.deps,
                 );
-                state.set_program_counter(target_value, def_id);
+                state.set_program_counter(target_value, def_id)?;
                 Ok(vec![state])
             }
             LirTerminator::Branch {
@@ -46,7 +46,7 @@ impl LirExecutor {
                     &true_target_value,
                     &taken_parents,
                 );
-                taken.set_program_counter(true_target_value, taken_def_id);
+                taken.set_program_counter(true_target_value, taken_def_id)?;
 
                 let mut not_taken = state;
                 not_taken.add_constraint(condition.value.not());
@@ -58,7 +58,7 @@ impl LirExecutor {
                     &false_target_value,
                     &not_taken_parents,
                 );
-                not_taken.set_program_counter(false_target_value, not_taken_def_id);
+                not_taken.set_program_counter(false_target_value, not_taken_def_id)?;
 
                 Ok(vec![taken, not_taken])
             }
@@ -73,7 +73,7 @@ impl LirExecutor {
                         &target_value,
                         &target.deps,
                     );
-                    state.set_program_counter(target_value, def_id);
+                    state.set_program_counter(target_value, def_id)?;
                 }
                 Ok(vec![state])
             }
@@ -88,7 +88,7 @@ impl LirExecutor {
                     &target_value,
                     &target.deps,
                 );
-                state.set_program_counter(target_value, def_id);
+                state.set_program_counter(target_value, def_id)?;
                 Ok(vec![state])
             }
         }
