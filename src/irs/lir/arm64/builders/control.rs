@@ -24,11 +24,11 @@ use crate::irs::lir::arm64::InstructionDetailArm64;
 use crate::irs::lir::arm64::helpers::{compare, complete, condition_from_suffix, const_u64};
 use crate::irs::lir::arm64::{Arm64OperandKind, Arm64OperandView};
 use crate::irs::lir::{
-    Lir, LirEffect, LirExpression, LirLocation, LirOperationCompare, LirStatus, LirTerminator,
-    LirTrapKind,
+    LirEffect, LirExpression, LirInstruction, LirLocation, LirOperationCompare, LirStatus,
+    LirTerminator, LirTrapKind,
 };
 
-pub(crate) fn build(view: &InstructionDetailArm64) -> Option<Lir> {
+pub(crate) fn build(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let bits = 64;
     let next = const_u64(view.address + view.bytes.len() as u64, bits);
     match view.mnemonic.as_str() {
@@ -103,18 +103,13 @@ pub(crate) fn build(view: &InstructionDetailArm64) -> Option<Lir> {
             );
             Some(complete(LirTerminator::Return { expression }, Vec::new()))
         }
-        "brk" => Some(Lir {
-            version: 1,
+        "brk" => Some(LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: Default::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Trap {
                 kind: LirTrapKind::Breakpoint,
             }],
             terminator: LirTerminator::Trap,
-            diagnostics: Vec::new(),
         }),
         _ => None,
     }
@@ -125,7 +120,7 @@ fn build_compare_branch(
     compare_op: LirOperationCompare,
     lhs_operand: &Arm64OperandView,
     target_operand: &Arm64OperandView,
-) -> Option<Lir> {
+) -> Option<LirInstruction> {
     let bits = operand_bits(lhs_operand);
     let condition = compare(
         compare_op,
@@ -147,7 +142,7 @@ fn build_compare_branch(
 fn build_test_bit_branch(
     view: &InstructionDetailArm64,
     compare_op: LirOperationCompare,
-) -> Option<Lir> {
+) -> Option<LirInstruction> {
     let value = operand_expression(view.operands().first()?)?;
     let bit = view.operand(1)?.immediate_value()? as u16;
     let target = operand_expression(view.operand(2)?)?;

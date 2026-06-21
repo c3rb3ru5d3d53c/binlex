@@ -1,8 +1,5 @@
 """LLVM IR wrappers backed by the Rust core implementation."""
 
-import ctypes
-
-from binlex_bindings.binlex.irs.llvm import JittedFunction as _JittedFunctionBinding
 from binlex_bindings.binlex.irs.llvm import LiftedFunction as _LiftedFunctionBinding
 from binlex_bindings.binlex.irs.llvm import LlvmModule as _LlvmModuleBinding
 
@@ -27,7 +24,7 @@ def _module_for_block(block, name=None):
 
 def _module_for_function(function, name=None):
     if name is not None:
-        replacement = LirFunction(name=name, abi=function.abi())
+        replacement = LirFunction(name=name)
         for block in function.blocks():
             replacement.append_block(block)
         function = replacement
@@ -81,11 +78,6 @@ class LlvmModule:
             return self
         return None
 
-    def set_abi(self, abi=None):
-        if self._inner.set_abi(abi):
-            return self
-        return None
-
     def append_block_lir(self, lir):
         lir_module = _module_for_block(lir)
         if not self._inner.append_block_lir(lir_module._inner):
@@ -93,10 +85,8 @@ class LlvmModule:
         return self
 
     def append_function_lir(self, lir, name=None):
-        function = lir
         lir_module = _module_for_function(lir, name)
-        abi = _call_or_value(function, "abi")
-        if not self._inner.append_function_lir(lir_module._inner, abi, name):
+        if not self._inner.append_function_lir(lir_module._inner, name):
             return None
         return self
 
@@ -372,17 +362,6 @@ class LlvmFunction:
         data = self._require_inner().object()
         return None if data is None else bytes(data)
 
-    def jit(self, return_type=None, parameter_types=None, links=None):
-        resolved_links = _resolve_jit_links(links or {})
-        handle = self._require_inner().jit(resolved_links)
-        if handle is None:
-            return None
-        return NativeFunction(
-            handle,
-            return_type=return_type,
-            parameter_types=parameter_types,
-        )
-
 
 class LlvmBlock:
     def __init__(self, function, inner):
@@ -408,61 +387,4 @@ class LlvmBlock:
         return self._inner.print()
 
 
-class NativeFunction:
-    def __init__(self, handle, return_type=None, parameter_types=None):
-        if not isinstance(handle, _JittedFunctionBinding):
-            raise TypeError("handle must be a binlex llvm jitted function")
-        self._handle = handle
-        self._return_type = ctypes.c_int if return_type is None else return_type
-        self._parameter_types = list(parameter_types or [])
-        self._functype = ctypes.CFUNCTYPE(self._return_type, *self._parameter_types)
-        self._callable = self._functype(handle.address())
-
-    def name(self):
-        return self._handle.name()
-
-    def address(self):
-        return self._handle.address()
-
-    def __call__(self, *args):
-        return self._callable(*args)
-
-
-def _resolve_jit_links(links):
-    resolved = {}
-    for name, value in links.items():
-        resolved[str(name)] = _resolve_jit_link_target(str(name), value)
-    return resolved
-
-
-def _resolve_jit_link_target(name, value):
-    if isinstance(value, NativeFunction):
-        return int(value.address())
-    if isinstance(value, _JittedFunctionBinding):
-        return int(value.address())
-    if isinstance(value, int):
-        return int(value)
-
-    target = value
-    if _looks_like_ctypes_library(value):
-        try:
-            target = getattr(value, name)
-        except AttributeError as exc:
-            raise ValueError(f"jit link target {name!r} not found on module {value!r}") from exc
-
-    try:
-        pointer = ctypes.cast(target, ctypes.c_void_p).value
-    except Exception as exc:
-        raise TypeError(
-            f"unsupported jit link target for {name!r}: expected ctypes module, ctypes function, raw address, or jitted function"
-        ) from exc
-    if pointer is None:
-        raise ValueError(f"jit link target for {name!r} does not have an address")
-    return int(pointer)
-
-
-def _looks_like_ctypes_library(value):
-    return hasattr(value, "_handle") and not hasattr(value, "address")
-
-
-__all__ = ["LlvmBlock", "LlvmFunction", "LlvmModule", "NativeFunction"]
+__all__ = ["LlvmBlock", "LlvmFunction", "LlvmModule"]

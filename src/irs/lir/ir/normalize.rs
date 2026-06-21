@@ -1,16 +1,11 @@
-use crate::irs::lir::{Lir, LirEffect, LirExpression, LirLocation, LirTerminator};
+use crate::irs::lir::{LirEffect, LirExpression, LirInstruction, LirLocation, LirTerminator};
 
-pub fn normalize_instruction_lir(lir: &Lir) -> Lir {
-    Lir {
-        version: lir.version,
+pub fn normalize_instruction_lir(lir: &LirInstruction) -> LirInstruction {
+    LirInstruction {
+        address: lir.address,
         status: lir.status,
-        metadata: Default::default(),
-        abi: lir.abi.clone(),
-        encoding: lir.encoding.clone(),
-        temporaries: lir.temporaries.clone(),
         effects: lir.effects.iter().map(normalize_effect).collect(),
         terminator: normalize_terminator(&lir.terminator),
-        diagnostics: lir.diagnostics.clone(),
     }
 }
 

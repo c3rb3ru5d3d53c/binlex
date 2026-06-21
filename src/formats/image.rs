@@ -62,6 +62,25 @@ pub struct ImageSegment {
 }
 
 impl ImageSegment {
+    pub fn new(
+        name: Option<String>,
+        virtual_address: u64,
+        data: Option<Vec<u8>>,
+        size: Option<u64>,
+        permissions: ImagePermissions,
+    ) -> Result<Self, Error> {
+        match (data, size) {
+            (Some(bytes), None) => Ok(Self::bytes(name, virtual_address, bytes, permissions)),
+            (None, Some(size)) => Ok(Self::zeroes(name, virtual_address, size, permissions)),
+            (Some(_), Some(_)) => Err(Error::other(
+                "image segment cannot define both data and size",
+            )),
+            (None, None) => Err(Error::other(
+                "image segment requires data bytes or a zero-filled size",
+            )),
+        }
+    }
+
     pub fn bytes(
         name: Option<String>,
         virtual_address: u64,
@@ -328,7 +347,44 @@ impl VirtualImage for Image {
 
 #[cfg(test)]
 mod tests {
-    use super::{Image, ImagePermissions, ImageSegment};
+    use super::{Image, ImagePermissions, ImageSegment, ImageSegmentData};
+
+    #[test]
+    fn segment_new_builds_bytes_or_zeroes() {
+        let bytes = ImageSegment::new(
+            Some(".text".to_string()),
+            0x1000,
+            Some(vec![0xc3]),
+            None,
+            ImagePermissions::executable(),
+        )
+        .expect("bytes segment");
+        assert_eq!(bytes.size, 1);
+        assert!(matches!(bytes.data, ImageSegmentData::Bytes(_)));
+
+        let zeroes = ImageSegment::new(
+            Some(".bss".to_string()),
+            0x2000,
+            None,
+            Some(0x20),
+            ImagePermissions::readable(),
+        )
+        .expect("zeroes segment");
+        assert_eq!(zeroes.size, 0x20);
+        assert!(matches!(zeroes.data, ImageSegmentData::Zeroes));
+
+        assert!(ImageSegment::new(None, 0x3000, None, None, ImagePermissions::readable()).is_err());
+        assert!(
+            ImageSegment::new(
+                None,
+                0x3000,
+                Some(vec![0]),
+                Some(1),
+                ImagePermissions::readable()
+            )
+            .is_err()
+        );
+    }
 
     #[test]
     fn virtual_reads_stop_at_unmapped_gaps() {

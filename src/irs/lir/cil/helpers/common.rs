@@ -22,38 +22,30 @@
 
 use crate::irs::lir::cil::InstructionDetailCil;
 use crate::irs::lir::{
-    Lir, LirAddressSpace, LirDiagnostic, LirDiagnosticKind, LirEffect, LirExpression, LirLocation,
-    LirOperationBinary, LirOperationCast, LirOperationCompare, LirOperationUnary, LirStatus,
-    LirTerminator,
+    LirAddressSpace, LirEffect, LirExpression, LirInstruction, LirLocation, LirOperationBinary,
+    LirOperationCast, LirOperationCompare, LirOperationUnary, LirStatus, LirTerminator,
 };
 
 pub(crate) fn partial_intrinsic_fallthrough(
     instruction: &InstructionDetailCil,
-    message: &str,
-) -> Lir {
-    Lir {
-        version: 1,
+    _message: &str,
+) -> LirInstruction {
+    LirInstruction {
+        address: None,
         status: LirStatus::Partial,
-        metadata: Default::default(),
-        abi: None,
-        encoding: None,
-        temporaries: Vec::new(),
         effects: vec![LirEffect::Intrinsic {
             name: format!("cil.{}", instruction.mnemonic),
             args: Vec::new(),
             outputs: Vec::new(),
         }],
         terminator: LirTerminator::FallThrough,
-        diagnostics: vec![diagnostic(
-            LirDiagnosticKind::Named {
-                name: "cil.stack".to_string(),
-            },
-            message,
-        )],
     }
 }
 
-pub(crate) fn push_runtime_unary_intrinsic(instruction: &InstructionDetailCil, name: &str) -> Lir {
+pub(crate) fn push_runtime_unary_intrinsic(
+    instruction: &InstructionDetailCil,
+    name: &str,
+) -> LirInstruction {
     let (effects, value) = pop_stack();
     let mut args = vec![value];
     args.extend(operand_args(instruction));
@@ -67,7 +59,10 @@ pub(crate) fn push_runtime_unary_intrinsic(instruction: &InstructionDetailCil, n
     )
 }
 
-pub(crate) fn push_runtime_binary_intrinsic(instruction: &InstructionDetailCil, name: &str) -> Lir {
+pub(crate) fn push_runtime_binary_intrinsic(
+    instruction: &InstructionDetailCil,
+    name: &str,
+) -> LirInstruction {
     let (mut effects, right) = pop_stack();
     let (mut more_effects, left) = pop_stack();
     effects.append(&mut more_effects);
@@ -86,7 +81,7 @@ pub(crate) fn push_runtime_binary_intrinsic(instruction: &InstructionDetailCil, 
 pub(crate) fn effect_runtime_ternary_intrinsic(
     instruction: &InstructionDetailCil,
     name: &str,
-) -> Lir {
+) -> LirInstruction {
     let (mut effects, third) = pop_stack();
     let (mut more_effects, second) = pop_stack();
     let (mut first_effects, first) = pop_stack();
@@ -102,16 +97,19 @@ pub(crate) fn effect_runtime_ternary_intrinsic(
     complete_with_effects(LirTerminator::FallThrough, effects)
 }
 
-pub(crate) fn push_expression(expression: LirExpression) -> Lir {
+pub(crate) fn push_expression(expression: LirExpression) -> LirInstruction {
     complete_with_effects(LirTerminator::FallThrough, push_effects(expression))
 }
 
-pub(crate) fn push_with_prefix(mut effects: Vec<LirEffect>, expression: LirExpression) -> Lir {
+pub(crate) fn push_with_prefix(
+    mut effects: Vec<LirEffect>,
+    expression: LirExpression,
+) -> LirInstruction {
     effects.extend(push_effects(expression));
     complete_with_effects(LirTerminator::FallThrough, effects)
 }
 
-pub(crate) fn pop_to_location(dst: LirLocation) -> Lir {
+pub(crate) fn pop_to_location(dst: LirLocation) -> LirInstruction {
     let (mut effects, value) = pop_stack();
     effects.push(LirEffect::Set {
         dst,
@@ -138,24 +136,15 @@ pub(crate) fn operand_value(instruction: &InstructionDetailCil) -> u64 {
     u64::from_le_bytes(bytes)
 }
 
-pub(crate) fn diagnostic(kind: LirDiagnosticKind, message: &str) -> LirDiagnostic {
-    LirDiagnostic {
-        kind,
-        message: message.to_string(),
-    }
-}
-
-pub(crate) fn complete_with_effects(terminator: LirTerminator, effects: Vec<LirEffect>) -> Lir {
-    Lir {
-        version: 1,
+pub(crate) fn complete_with_effects(
+    terminator: LirTerminator,
+    effects: Vec<LirEffect>,
+) -> LirInstruction {
+    LirInstruction {
+        address: None,
         status: LirStatus::Complete,
-        metadata: Default::default(),
-        abi: None,
-        encoding: None,
-        temporaries: Vec::new(),
         effects,
         terminator,
-        diagnostics: Vec::new(),
     }
 }
 

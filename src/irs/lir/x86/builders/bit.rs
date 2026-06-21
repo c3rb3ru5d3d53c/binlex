@@ -25,10 +25,10 @@ use crate::irs::lir::x86::helpers as common;
 use crate::irs::lir::x86::instruction::InstructionDetailX86;
 use crate::irs::lir::x86::operand::{X86OperandKind, X86OperandView};
 use crate::irs::lir::{
-    Lir, LirEffect, LirExpression, LirLocation, LirOperationBinary, LirOperationCast,
+    LirEffect, LirExpression, LirInstruction, LirLocation, LirOperationBinary, LirOperationCast,
     LirOperationCompare, LirOperationUnary, LirTerminator,
 };
-pub fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+pub fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     match view.mnemonic.as_str() {
         "bt" => bit_test(machine, view, false),
         "btc" => bit_complement(machine, view),
@@ -56,7 +56,11 @@ enum BlsKind {
     Reset,
 }
 
-fn bit_test(machine: Architecture, view: &InstructionDetailX86, update_base: bool) -> Option<Lir> {
+fn bit_test(
+    machine: Architecture,
+    view: &InstructionDetailX86,
+    update_base: bool,
+) -> Option<LirInstruction> {
     let base = operand_expr(machine, view.operands().first()?)?;
     let index = operand_expr(machine, view.operands().get(1)?)?;
     let dst = operand_location(machine, view.operands().first()?)?;
@@ -104,7 +108,7 @@ fn bit_test(machine: Architecture, view: &InstructionDetailX86, update_base: boo
     Some(common::complete(LirTerminator::FallThrough, effects))
 }
 
-fn bit_reset(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn bit_reset(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let base = operand_expr(machine, view.operands().first()?)?;
     let index = operand_expr(machine, view.operands().get(1)?)?;
     let dst = operand_location(machine, view.operands().first()?)?;
@@ -162,7 +166,7 @@ fn bit_reset(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> 
     ))
 }
 
-fn bit_complement(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn bit_complement(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let base = operand_expr(machine, view.operands().first()?)?;
     let index = operand_expr(machine, view.operands().get(1)?)?;
     let dst = operand_location(machine, view.operands().first()?)?;
@@ -216,7 +220,11 @@ fn bit_complement(machine: Architecture, view: &InstructionDetailX86) -> Option<
     ))
 }
 
-fn bit_scan(machine: Architecture, view: &InstructionDetailX86, reverse: bool) -> Option<Lir> {
+fn bit_scan(
+    machine: Architecture,
+    view: &InstructionDetailX86,
+    reverse: bool,
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let dst_expr = LirExpression::Read(Box::new(dst.clone()));
     let src = operand_expr(machine, view.operands().get(1)?)?;
@@ -283,7 +291,11 @@ fn bit_scan(machine: Architecture, view: &InstructionDetailX86, reverse: bool) -
     ))
 }
 
-fn count_zeros(machine: Architecture, view: &InstructionDetailX86, leading: bool) -> Option<Lir> {
+fn count_zeros(
+    machine: Architecture,
+    view: &InstructionDetailX86,
+    leading: bool,
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let bits = common::location_bits(&dst);
@@ -346,7 +358,11 @@ fn count_zeros(machine: Architecture, view: &InstructionDetailX86, leading: bool
     ))
 }
 
-fn bls(machine: Architecture, view: &InstructionDetailX86, kind: BlsKind) -> Option<Lir> {
+fn bls(
+    machine: Architecture,
+    view: &InstructionDetailX86,
+    kind: BlsKind,
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let bits = common::location_bits(&dst);
@@ -408,7 +424,7 @@ fn bls(machine: Architecture, view: &InstructionDetailX86, kind: BlsKind) -> Opt
     ))
 }
 
-fn bextr(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn bextr(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let control = operand_expr(machine, view.operands().get(2)?)?;
@@ -522,7 +538,7 @@ fn bextr(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
     ))
 }
 
-fn bzhi(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn bzhi(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let index = operand_expr(machine, view.operands().get(2)?)?;
@@ -596,7 +612,11 @@ fn bzhi(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
     ))
 }
 
-fn pdep_pext(machine: Architecture, view: &InstructionDetailX86, deposit: bool) -> Option<Lir> {
+fn pdep_pext(
+    machine: Architecture,
+    view: &InstructionDetailX86,
+    deposit: bool,
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let mask = operand_expr(machine, view.operands().get(2)?)?;

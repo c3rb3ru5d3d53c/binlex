@@ -24,11 +24,9 @@ use crate::Architecture;
 use crate::irs::lir::x86::InstructionDetailX86;
 use crate::irs::lir::x86::helpers as common;
 use crate::irs::lir::x86::{X86OperandKind, X86OperandView};
-use crate::irs::lir::{
-    Lir, LirDiagnosticKind, LirEffect, LirExpression, LirLocation, LirTerminator,
-};
+use crate::irs::lir::{LirEffect, LirExpression, LirInstruction, LirLocation, LirTerminator};
 
-pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     if is_return(view) {
         let pointer_bits = common::pointer_bits(machine);
         let stack_pointer = stack_pointer_location(machine);
@@ -98,9 +96,8 @@ pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Optio
             .first()
             .and_then(|operand| operand_location(machine, operand))
         else {
-            return Some(unsupported_with_kind_from_view(
+            return Some(unsupported_from_view(
                 view,
-                LirDiagnosticKind::UnsupportedOperandForm,
                 "setcc destination operand not supported",
                 LirTerminator::FallThrough,
             ));
@@ -108,10 +105,6 @@ pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Optio
         let Some(condition) = common::condition_from_mnemonic(mnemonic) else {
             return Some(common::partial_with_effects(
                 LirTerminator::FallThrough,
-                vec![common::diagnostic(
-                    LirDiagnosticKind::PartialFlags,
-                    format!("0x{:x}: setcc condition modeled as intrinsic", view.address),
-                )],
                 vec![LirEffect::Set {
                     dst,
                     expression: condition_intrinsic(mnemonic),
@@ -134,9 +127,8 @@ pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Optio
             .first()
             .and_then(|operand| operand_location(machine, operand))
         else {
-            return Some(unsupported_with_kind_from_view(
+            return Some(unsupported_from_view(
                 view,
-                LirDiagnosticKind::UnsupportedOperandForm,
                 "cmovcc destination operand not supported",
                 LirTerminator::FallThrough,
             ));
@@ -146,9 +138,8 @@ pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Optio
             .get(1)
             .and_then(|operand| operand_expr(machine, operand))
         else {
-            return Some(unsupported_with_kind_from_view(
+            return Some(unsupported_from_view(
                 view,
-                LirDiagnosticKind::UnsupportedOperandForm,
                 "cmovcc source operand not supported",
                 LirTerminator::FallThrough,
             ));
@@ -158,13 +149,6 @@ pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Optio
         let Some(condition) = common::condition_from_mnemonic(mnemonic) else {
             return Some(common::partial_with_effects(
                 LirTerminator::FallThrough,
-                vec![common::diagnostic(
-                    LirDiagnosticKind::PartialFlags,
-                    format!(
-                        "0x{:x}: cmovcc condition modeled as intrinsic",
-                        view.address
-                    ),
-                )],
                 vec![LirEffect::Set {
                     dst,
                     expression: LirExpression::Select {
@@ -229,20 +213,11 @@ pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Optio
                 Vec::new(),
             ));
         }
-        return Some(common::partial(
-            LirTerminator::Branch {
-                condition: condition_intrinsic(mnemonic),
-                true_target,
-                false_target,
-            },
-            vec![common::diagnostic(
-                LirDiagnosticKind::PartialFlags,
-                format!(
-                    "0x{:x}: branch condition modeled as intrinsic",
-                    view.address
-                ),
-            )],
-        ));
+        return Some(common::partial(LirTerminator::Branch {
+            condition: condition_intrinsic(mnemonic),
+            true_target,
+            false_target,
+        }));
     }
 
     if is_loop_family(view) {
@@ -462,17 +437,10 @@ fn condition_intrinsic(mnemonic: &str) -> LirExpression {
     }
 }
 
-fn unsupported_with_kind_from_view(
-    view: &InstructionDetailX86,
-    kind: LirDiagnosticKind,
-    message: &str,
+fn unsupported_from_view(
+    _view: &InstructionDetailX86,
+    _message: &str,
     terminator: LirTerminator,
-) -> Lir {
-    common::partial(
-        terminator,
-        vec![common::diagnostic(
-            kind,
-            format!("0x{:x}: {} ({})", view.address, message, view.mnemonic),
-        )],
-    )
+) -> LirInstruction {
+    common::partial(terminator)
 }

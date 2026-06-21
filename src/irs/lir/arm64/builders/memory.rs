@@ -27,10 +27,11 @@ use crate::irs::lir::arm64::helpers::{
 };
 use crate::irs::lir::arm64::{Arm64OperandKind, Arm64OperandView};
 use crate::irs::lir::{
-    Lir, LirAddressSpace, LirEffect, LirExpression, LirLocation, LirOperationBinary, LirTerminator,
+    LirAddressSpace, LirEffect, LirExpression, LirInstruction, LirLocation, LirOperationBinary,
+    LirTerminator,
 };
 
-pub(crate) fn build(view: &InstructionDetailArm64) -> Option<Lir> {
+pub(crate) fn build(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     match view.mnemonic.as_str() {
         // Single-transfer forms now use the normalized memory operand plus the
         // optional writeback operand so pre/post-indexed addressing can stay in
@@ -95,7 +96,7 @@ fn build_load(
     view: &InstructionDetailArm64,
     kind: LoadKind,
     load_bits: Option<u16>,
-) -> Option<Lir> {
+) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let addr = effective_memory_address(view, view.operand(1)?, view.operand(2))?;
     let dst_bits = location_bits(&dst);
@@ -131,7 +132,7 @@ fn build_load(
     Some(complete(LirTerminator::FallThrough, effects))
 }
 
-fn build_store(view: &InstructionDetailArm64, store_bits: Option<u16>) -> Option<Lir> {
+fn build_store(view: &InstructionDetailArm64, store_bits: Option<u16>) -> Option<LirInstruction> {
     let src = operand_expression(view.operand(0)?)?;
     let addr = effective_memory_address(view, view.operand(1)?, view.operand(2))?;
     let expression = match store_bits {
@@ -153,7 +154,7 @@ fn build_store(view: &InstructionDetailArm64, store_bits: Option<u16>) -> Option
     Some(complete(LirTerminator::FallThrough, effects))
 }
 
-pub(super) fn build_load_pair(view: &InstructionDetailArm64) -> Option<Lir> {
+pub(super) fn build_load_pair(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let first_dst = register_location(view.operand(0)?)?;
     let second_dst = register_location(view.operand(1)?)?;
     let base_addr = effective_memory_address(view, view.operand(2)?, view.operand(3))?;
@@ -191,7 +192,7 @@ pub(super) fn build_load_pair(view: &InstructionDetailArm64) -> Option<Lir> {
     Some(complete(LirTerminator::FallThrough, effects))
 }
 
-fn build_load_pair_signed_word(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_load_pair_signed_word(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let first_dst = register_location(view.operand(0)?)?;
     let second_dst = register_location(view.operand(1)?)?;
     let base_addr = effective_memory_address(view, view.operand(2)?, view.operand(3))?;
@@ -234,7 +235,7 @@ fn build_load_pair_signed_word(view: &InstructionDetailArm64) -> Option<Lir> {
     Some(complete(LirTerminator::FallThrough, effects))
 }
 
-pub(super) fn build_store_pair(view: &InstructionDetailArm64) -> Option<Lir> {
+pub(super) fn build_store_pair(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let first_src = operand_expression(view.operand(0)?)?;
     let second_src = operand_expression(view.operand(1)?)?;
     let base_addr = effective_memory_address(view, view.operand(2)?, view.operand(3))?;
@@ -272,7 +273,7 @@ fn build_load_base_immediate(
     view: &InstructionDetailArm64,
     kind: LoadKind,
     load_bits: Option<u16>,
-) -> Option<Lir> {
+) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let addr = base_immediate_address(view.operand(1)?, view.operand(2))?;
     let dst_bits = location_bits(&dst);
@@ -309,7 +310,7 @@ fn build_load_base_immediate(
 fn build_store_base_immediate(
     view: &InstructionDetailArm64,
     store_bits: Option<u16>,
-) -> Option<Lir> {
+) -> Option<LirInstruction> {
     let src = operand_expression(view.operand(0)?)?;
     let addr = base_immediate_address(view.operand(1)?, view.operand(2))?;
     let expression = match store_bits {

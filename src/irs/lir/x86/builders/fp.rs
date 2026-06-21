@@ -25,7 +25,7 @@ use crate::irs::lir::x86::helpers as common;
 use crate::irs::lir::x86::instruction::InstructionDetailX86;
 use crate::irs::lir::x86::operand::{X86OperandKind, X86OperandView};
 use crate::irs::lir::{
-    Lir, LirEffect, LirExpression, LirLocation, LirOperationBinary, LirOperationCast,
+    LirEffect, LirExpression, LirInstruction, LirLocation, LirOperationBinary, LirOperationCast,
     LirOperationCompare, LirTerminator,
 };
 
@@ -33,7 +33,7 @@ use crate::irs::lir::{
 mod x87_helpers;
 
 use x87_helpers::x87;
-pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     match view.mnemonic.as_str() {
         "movsd" => movsd(machine, view),
         "vmovsd" => vmovsd(machine, view),
@@ -151,7 +151,7 @@ pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Optio
     }
 }
 
-fn movsd(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn movsd(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let dst_bits = common::location_bits(&dst);
     let src = operand_expr(machine, view.operands().get(1)?)?;
@@ -185,7 +185,7 @@ fn movsd(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
     ))
 }
 
-fn vmovsd(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn vmovsd(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     if view.operands().len() == 2 {
         return movsd(machine, view);
     }
@@ -222,7 +222,7 @@ fn vmovsd(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
     ))
 }
 
-fn compare_fp(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn compare_fp(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
     let (left, right) = match view.mnemonic.as_str() {
@@ -251,7 +251,7 @@ fn compare_fp(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir>
     ))
 }
 
-fn pcmpistri(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn pcmpistri(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let args = view
         .operands()
         .iter()
@@ -275,7 +275,7 @@ fn pcmpistri(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> 
     ))
 }
 
-fn scalar_convert(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn scalar_convert(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let bits = common::location_bits(&dst);
     let src = operand_expr(machine, view.operands().get(1)?)?;
@@ -293,7 +293,7 @@ fn scalar_convert(machine: Architecture, view: &InstructionDetailX86) -> Option<
     ))
 }
 
-fn packed_convert(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn packed_convert(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let dst_bits = common::location_bits(&dst);
@@ -395,7 +395,7 @@ fn scalar_convert_expression(
     }
 }
 
-fn scalar_fp(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn scalar_fp(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let args = view
         .operands()
@@ -476,7 +476,7 @@ fn scalar_fp(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> 
     ))
 }
 
-fn packed_fp(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn packed_fp(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let dst_bits = common::location_bits(&dst);
     let args = view
@@ -520,7 +520,7 @@ fn packed_fp(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> 
     ))
 }
 
-fn scalar_ss(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn scalar_ss(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let dst_bits = common::location_bits(&dst);
     let args = view
@@ -576,7 +576,7 @@ fn scalar_ss(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> 
     ))
 }
 
-fn scalar_vfma(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn scalar_vfma(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let dst_bits = common::location_bits(&dst);
     let src1 = operand_expr(machine, view.operands().get(1)?)?;

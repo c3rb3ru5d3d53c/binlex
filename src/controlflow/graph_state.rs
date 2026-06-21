@@ -1,7 +1,7 @@
 use crate::controlflow::{Graph, GraphQueue, Instruction, InstructionRecord, Operand};
 use crate::decompilers::DecompiledFunctionState;
 use crate::formats::Image;
-use crate::irs::lir::Lir;
+use crate::irs::lir::LirInstruction;
 use crate::{Architecture, Configuration};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -50,7 +50,7 @@ pub struct GraphInstructionState {
     pub mnemonic: String,
     pub disassembly: String,
     pub operands: Vec<Operand>,
-    pub lir: Option<Lir>,
+    pub lir: Option<LirInstruction>,
 }
 
 impl GraphState {

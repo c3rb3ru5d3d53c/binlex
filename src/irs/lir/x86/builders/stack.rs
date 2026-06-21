@@ -25,11 +25,11 @@ use crate::irs::lir::x86::InstructionDetailX86;
 use crate::irs::lir::x86::helpers as common;
 use crate::irs::lir::x86::{X86OperandKind, X86OperandView};
 use crate::irs::lir::{
-    Lir, LirAddressSpace, LirEffect, LirExpression, LirLocation, LirStatus, LirTemporary,
+    LirAddressSpace, LirEffect, LirExpression, LirInstruction, LirLocation, LirStatus,
     LirTerminator,
 };
 
-pub(crate) fn build(view: &InstructionDetailX86) -> Option<Lir> {
+pub(crate) fn build(view: &InstructionDetailX86) -> Option<LirInstruction> {
     match view.mnemonic.as_str() {
         "push" => push(view.machine, view.operands()),
         "pop" => pop(view.machine, view.operands()),
@@ -41,7 +41,7 @@ pub(crate) fn build(view: &InstructionDetailX86) -> Option<Lir> {
     }
 }
 
-fn pushal(machine: Architecture) -> Option<Lir> {
+fn pushal(machine: Architecture) -> Option<LirInstruction> {
     if !matches!(machine, Architecture::I386) {
         return None;
     }
@@ -77,7 +77,7 @@ fn pushal(machine: Architecture) -> Option<Lir> {
     Some(common::complete(LirTerminator::FallThrough, effects))
 }
 
-fn popal(machine: Architecture) -> Option<Lir> {
+fn popal(machine: Architecture) -> Option<LirInstruction> {
     if !matches!(machine, Architecture::I386) {
         return None;
     }
@@ -131,7 +131,7 @@ fn popal(machine: Architecture) -> Option<Lir> {
     ))
 }
 
-fn enter(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn enter(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let frame_size = operands.first()?.immediate_value()?;
     let nesting_level = operands.get(1)?.immediate_value()?;
 
@@ -203,7 +203,7 @@ fn enter(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
     Some(common::complete(LirTerminator::FallThrough, effects))
 }
 
-fn push(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn push(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let expression = operand_expr(machine, operands.first()?)?;
     let stack_pointer = stack_pointer_location(machine);
     let pointer_bits = common::pointer_bits(machine);
@@ -230,7 +230,7 @@ fn push(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
     ))
 }
 
-fn pop(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn pop(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let dst = operand_location(machine, operands.first()?)?;
     let stack_pointer = stack_pointer_location(machine);
     let pointer_bits = common::pointer_bits(machine);
@@ -259,7 +259,7 @@ fn pop(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
     ))
 }
 
-fn leave(machine: Architecture) -> Option<Lir> {
+fn leave(machine: Architecture) -> Option<LirInstruction> {
     let pointer_bits = common::pointer_bits(machine);
     let slot_bytes = (pointer_bits / 8) as u64;
     let base_pointer = base_pointer_location(machine);
@@ -268,17 +268,9 @@ fn leave(machine: Architecture) -> Option<Lir> {
         id: 0,
         bits: pointer_bits,
     };
-    Some(Lir {
-        version: 1,
+    Some(LirInstruction {
+        address: None,
         status: LirStatus::Complete,
-        metadata: Default::default(),
-        abi: None,
-        encoding: None,
-        temporaries: vec![LirTemporary {
-            id: 0,
-            bits: pointer_bits,
-            name: Some("saved_base_pointer".to_string()),
-        }],
         effects: vec![
             LirEffect::Set {
                 dst: saved_bp.clone(),
@@ -302,7 +294,6 @@ fn leave(machine: Architecture) -> Option<Lir> {
             },
         ],
         terminator: LirTerminator::FallThrough,
-        diagnostics: Vec::new(),
     })
 }
 

@@ -25,11 +25,11 @@ use crate::irs::lir::x86::helpers as common;
 use crate::irs::lir::x86::instruction::InstructionDetailX86;
 use crate::irs::lir::x86::operand::{X86OperandKind, X86OperandView};
 use crate::irs::lir::{
-    Lir, LirEffect, LirExpression, LirLocation, LirOperationBinary, LirOperationCast,
+    LirEffect, LirExpression, LirInstruction, LirLocation, LirOperationBinary, LirOperationCast,
     LirOperationCompare, LirOperationUnary, LirTerminator,
 };
 
-pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     match view.mnemonic.as_str() {
         "movups" | "movupd" | "movaps" | "movapd" | "movdqu" | "movdqa" | "lddqu" | "movd"
         | "movq" | "movntdq" | "movntpd" | "movntps" | "movntq" | "movnti" => assign(machine, view),
@@ -129,7 +129,7 @@ pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Optio
     }
 }
 
-fn assign(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn assign(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let expression = operand_expr(machine, view.operands().get(1)?)?;
     Some(common::complete(
@@ -138,7 +138,7 @@ fn assign(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
     ))
 }
 
-fn movdq2q(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn movdq2q(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let bits = common::location_bits(&dst);
@@ -151,7 +151,7 @@ fn movdq2q(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
     ))
 }
 
-fn movq2dq(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn movq2dq(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let bits = common::location_bits(&dst);
@@ -176,7 +176,7 @@ fn movq2dq(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
     ))
 }
 
-fn avx_assign(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn avx_assign(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let expression = operand_expr(machine, view.operands().get(1)?)?;
     Some(common::complete(
@@ -185,7 +185,10 @@ fn avx_assign(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir>
     ))
 }
 
-fn scalar_single_move(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn scalar_single_move(
+    machine: Architecture,
+    view: &InstructionDetailX86,
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let dst_bits = common::location_bits(&dst);
     let src = operand_expr(machine, view.operands().get(1)?)?;
@@ -223,7 +226,7 @@ fn scalar_single_move(machine: Architecture, view: &InstructionDetailX86) -> Opt
     ))
 }
 
-fn packed_widen(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn packed_widen(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let dst_bits = common::location_bits(&dst);
@@ -263,7 +266,7 @@ fn packed_widen(machine: Architecture, view: &InstructionDetailX86) -> Option<Li
     ))
 }
 
-fn partial_lane_move(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn partial_lane_move(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let dst_bits = common::location_bits(&dst);
     if dst_bits < 128 {
@@ -296,7 +299,7 @@ fn partial_lane_move(machine: Architecture, view: &InstructionDetailX86) -> Opti
     ))
 }
 
-fn duplicate_move(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn duplicate_move(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let dst_bits = common::location_bits(&dst);
@@ -340,7 +343,7 @@ fn binary(
     machine: Architecture,
     view: &InstructionDetailX86,
     operation: LirOperationBinary,
-) -> Option<Lir> {
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -363,7 +366,7 @@ fn avx_binary(
     machine: Architecture,
     view: &InstructionDetailX86,
     operation: LirOperationBinary,
-) -> Option<Lir> {
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let bits = common::location_bits(&dst);
     let left = operand_expr(machine, view.operands().get(1)?)?;
@@ -384,7 +387,7 @@ fn avx_binary(
     ))
 }
 
-fn pandn(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn pandn(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -398,7 +401,7 @@ fn pandn(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
     ))
 }
 
-fn avx_pandn(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn avx_pandn(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let bits = common::location_bits(&dst);
     let left = cast_to_bits(operand_expr(machine, view.operands().get(1)?)?, bits);
@@ -412,7 +415,7 @@ fn avx_pandn(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> 
     ))
 }
 
-fn avx_packed_pack(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn avx_packed_pack(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().get(1)?)?;
     let right = operand_expr(machine, view.operands().get(2)?)?;
@@ -485,7 +488,7 @@ fn avx_packed_pack(machine: Architecture, view: &InstructionDetailX86) -> Option
     ))
 }
 
-fn packed_pack(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn packed_pack(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -618,7 +621,7 @@ fn signed_min_value(src_bits: u16, dst_bits: u16) -> u128 {
     (1u128 << src_bits) - (1u128 << (dst_bits - 1))
 }
 
-fn packed_lane_op(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn packed_lane_op(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -657,7 +660,10 @@ fn packed_lane_op(machine: Architecture, view: &InstructionDetailX86) -> Option<
     ))
 }
 
-fn avx_packed_lane_op(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn avx_packed_lane_op(
+    machine: Architecture,
+    view: &InstructionDetailX86,
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let bits = common::location_bits(&dst);
     let left = cast_to_bits(operand_expr(machine, view.operands().get(1)?)?, bits);
@@ -702,7 +708,7 @@ fn avx_packed_lane_op(machine: Architecture, view: &InstructionDetailX86) -> Opt
 fn packed_unsigned_saturating_add(
     machine: Architecture,
     view: &InstructionDetailX86,
-) -> Option<Lir> {
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -758,7 +764,10 @@ fn packed_unsigned_saturating_add(
     ))
 }
 
-fn packed_signed_saturating_add(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn packed_signed_saturating_add(
+    machine: Architecture,
+    view: &InstructionDetailX86,
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -806,7 +815,7 @@ fn packed_signed_saturating_add(machine: Architecture, view: &InstructionDetailX
 fn avx_packed_unsigned_saturating_add(
     machine: Architecture,
     view: &InstructionDetailX86,
-) -> Option<Lir> {
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().get(1)?)?;
     let right = operand_expr(machine, view.operands().get(2)?)?;
@@ -865,7 +874,7 @@ fn avx_packed_unsigned_saturating_add(
 fn avx_packed_signed_saturating_add(
     machine: Architecture,
     view: &InstructionDetailX86,
-) -> Option<Lir> {
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().get(1)?)?;
     let right = operand_expr(machine, view.operands().get(2)?)?;
@@ -910,7 +919,7 @@ fn avx_packed_signed_saturating_add(
     ))
 }
 
-fn packed_abs(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn packed_abs(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let bits = common::location_bits(&dst);
@@ -948,7 +957,7 @@ fn packed_abs(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir>
     ))
 }
 
-fn packed_average(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn packed_average(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -1007,7 +1016,7 @@ fn packed_average(machine: Architecture, view: &InstructionDetailX86) -> Option<
     ))
 }
 
-fn packed_horizontal(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn packed_horizontal(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -1058,7 +1067,10 @@ fn packed_horizontal(machine: Architecture, view: &InstructionDetailX86) -> Opti
     ))
 }
 
-fn avx_packed_horizontal(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn avx_packed_horizontal(
+    machine: Architecture,
+    view: &InstructionDetailX86,
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().get(1)?)?;
     let right = operand_expr(machine, view.operands().get(2)?)?;
@@ -1106,7 +1118,7 @@ fn avx_packed_horizontal(machine: Architecture, view: &InstructionDetailX86) -> 
     ))
 }
 
-fn packed_sign(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn packed_sign(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -1157,7 +1169,7 @@ fn packed_sign(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir
     ))
 }
 
-fn packed_multiply(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn packed_multiply(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -1187,7 +1199,10 @@ fn packed_multiply(machine: Architecture, view: &InstructionDetailX86) -> Option
     ))
 }
 
-fn avx_packed_multiply(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn avx_packed_multiply(
+    machine: Architecture,
+    view: &InstructionDetailX86,
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let bits = common::location_bits(&dst);
     let left =
@@ -1206,7 +1221,7 @@ fn avx_packed_multiply(machine: Architecture, view: &InstructionDetailX86) -> Op
     ))
 }
 
-fn psadbw(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn psadbw(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -1227,7 +1242,7 @@ fn psadbw(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
 fn packed_unsigned_saturating_sub(
     machine: Architecture,
     view: &InstructionDetailX86,
-) -> Option<Lir> {
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -1324,7 +1339,7 @@ fn packed_lanes(
     Some(LirExpression::Concat { parts, bits })
 }
 
-fn shuffle(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn shuffle(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let imm = view.operands().get(2)?.immediate_value()? as u8;
@@ -1342,7 +1357,7 @@ fn shuffle(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
     ))
 }
 
-fn avx_shuffle(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn avx_shuffle(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let imm = view.operands().get(2)?.immediate_value()? as u8;
@@ -1369,7 +1384,7 @@ fn avx_shuffle(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir
     ))
 }
 
-fn pshufb(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn pshufb(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().first()?)?;
     let mask = operand_expr(machine, view.operands().get(1)?)?;
@@ -1418,7 +1433,7 @@ fn pshufb(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
     ))
 }
 
-fn unpack(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn unpack(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
@@ -1467,7 +1482,7 @@ fn unpack(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
     ))
 }
 
-fn avx_unpack(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn avx_unpack(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().get(1)?)?;
     let right = operand_expr(machine, view.operands().get(2)?)?;
@@ -1512,7 +1527,7 @@ fn avx_unpack(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir>
     ))
 }
 
-fn packed_extract(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn packed_extract(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let dst_bits = common::location_bits(&dst);
@@ -1552,7 +1567,7 @@ fn packed_extract(machine: Architecture, view: &InstructionDetailX86) -> Option<
     ))
 }
 
-fn packed_insert(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn packed_insert(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src_vec = operand_expr(machine, view.operands().first()?)?;
     let inserted = operand_expr(machine, view.operands().get(1)?)?;
@@ -1610,7 +1625,7 @@ fn packed_insert(machine: Architecture, view: &InstructionDetailX86) -> Option<L
     ))
 }
 
-fn vextracti128(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn vextracti128(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let lane = (view.operands().get(2)?.immediate_value()? as u8 & 0x1) as u16;
@@ -1629,7 +1644,7 @@ fn vextracti128(machine: Architecture, view: &InstructionDetailX86) -> Option<Li
     ))
 }
 
-fn vinsertf128(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn vinsertf128(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let base = operand_expr(machine, view.operands().get(1)?)?;
     let inserted = operand_expr(machine, view.operands().get(2)?)?;
@@ -1653,7 +1668,7 @@ fn vinsertf128(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir
     ))
 }
 
-fn movemask(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn movemask(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let src_bits = view.operands().get(1)?.size_bits;
@@ -1693,7 +1708,7 @@ fn movemask(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
     ))
 }
 
-fn maskmovq(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn maskmovq(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let mask = operand_expr(machine, view.operands().first()?)?;
     let data = operand_expr(machine, view.operands().get(1)?)?;
     Some(common::complete(
@@ -1706,7 +1721,7 @@ fn maskmovq(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
     ))
 }
 
-fn vperm2i128(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn vperm2i128(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().get(1)?)?;
     let right = operand_expr(machine, view.operands().get(2)?)?;
@@ -1739,7 +1754,7 @@ fn vperm2i128(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir>
     ))
 }
 
-fn vpermq(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn vpermq(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let imm = view.operands().get(2)?.immediate_value()? as u8;
@@ -1757,7 +1772,7 @@ fn vpermq(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
     ))
 }
 
-fn vpbroadcastb(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn vpbroadcastb(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let bits = common::location_bits(&dst);
@@ -1772,7 +1787,7 @@ fn vpbroadcastb(machine: Architecture, view: &InstructionDetailX86) -> Option<Li
     ))
 }
 
-fn vpsignw(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn vpsignw(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().get(1)?)?;
     let right = operand_expr(machine, view.operands().get(2)?)?;
@@ -1812,7 +1827,7 @@ fn vpsignw(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
     ))
 }
 
-fn vmaskmov(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn vmaskmov(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let mnemonic = view.mnemonic.as_str();
     let dst = operand_location(machine, view.operands().first()?)?;
     let bits = common::location_bits(&dst);
@@ -1843,7 +1858,7 @@ fn vmaskmov(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
     ))
 }
 
-fn vzeroupper() -> Lir {
+fn vzeroupper() -> LirInstruction {
     common::complete(
         LirTerminator::FallThrough,
         vec![LirEffect::Intrinsic {
@@ -1854,7 +1869,7 @@ fn vzeroupper() -> Lir {
     )
 }
 
-fn packed_shift(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn packed_shift(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().first()?)?;
     let count = operand_expr(machine, view.operands().get(1)?)?;
@@ -1873,7 +1888,7 @@ fn packed_shift(machine: Architecture, view: &InstructionDetailX86) -> Option<Li
     ))
 }
 
-fn avx_packed_shift(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn avx_packed_shift(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let src = operand_expr(machine, view.operands().get(1)?)?;
     let count = operand_expr(machine, view.operands().get(2)?)?;
@@ -2035,7 +2050,7 @@ fn cast_count(count: LirExpression, bits: u16) -> LirExpression {
     }
 }
 
-fn ptest(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn ptest(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
     let bits = left.bits().max(right.bits());
@@ -2082,7 +2097,7 @@ fn ptest(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
     ))
 }
 
-fn avx_ptest(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn avx_ptest(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;
     let bits = left.bits().max(right.bits());
@@ -2129,7 +2144,7 @@ fn avx_ptest(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> 
     ))
 }
 
-fn palignr(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn palignr(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let left = operand_expr(machine, view.operands().first()?)?;
     let right = operand_expr(machine, view.operands().get(1)?)?;

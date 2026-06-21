@@ -21,14 +21,14 @@
 // SOFTWARE.
 
 use crate::irs::lir::cil::InstructionDetailCil;
-use crate::irs::lir::{Lir, LirAddressSpace, LirEffect, LirExpression, LirTerminator};
+use crate::irs::lir::{LirAddressSpace, LirEffect, LirExpression, LirInstruction, LirTerminator};
 
 use super::super::helpers::common::{
     complete_with_effects, const_u64, operand_value, pop_stack, push_effects, push_expression,
     push_with_prefix,
 };
 
-pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Lir> {
+pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<LirInstruction> {
     match instruction.mnemonic_text() {
         "newarr" => {
             let token = operand_value(instruction) as u32;

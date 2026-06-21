@@ -1,6 +1,6 @@
 use crate::irs::lir::executor::LirExecutorError;
 use crate::irs::lir::executor::LirExecutorState;
-use crate::irs::lir::{Lir, LirModule, LirStatus, LirTerminator};
+use crate::irs::lir::{LirInstruction, LirModule, LirStatus, LirTerminator};
 use std::collections::{BTreeSet, HashMap};
 
 #[derive(Clone)]
@@ -81,11 +81,7 @@ impl LirExecutor {
             let mut next_states = Vec::new();
             for (index, live, remaining_steps) in active_states {
                 let instruction = lir[index];
-                if let Some(address) = instruction
-                    .encoding
-                    .as_ref()
-                    .map(|encoding| encoding.address)
-                {
+                if let Some(address) = instruction.address {
                     if self.breakpoints.contains(&address) || self.hooks.contains(&address) {
                         final_states.push(live);
                         continue;
@@ -137,7 +133,7 @@ impl LirExecutor {
 
     fn resolve_successor_index(
         &self,
-        lir: &[&Lir],
+        lir: &[&LirInstruction],
         address_to_index: &HashMap<u64, usize>,
         current_index: usize,
         previous_pc: Option<u64>,
@@ -180,8 +176,8 @@ impl LirExecutor {
         working_state.load_lir_data(&lir.data)?;
         let mut address_to_index = HashMap::new();
         for (index, instruction) in lir.instructions().into_iter().enumerate() {
-            if let Some(encoding) = instruction.encoding.as_ref() {
-                address_to_index.entry(encoding.address).or_insert(index);
+            if let Some(address) = instruction.address {
+                address_to_index.entry(address).or_insert(index);
             }
         }
         let start_index = working_state
@@ -193,7 +189,7 @@ impl LirExecutor {
 
     fn step_instruction(
         &self,
-        lir: &Lir,
+        lir: &LirInstruction,
         state: &LirExecutorState,
     ) -> Result<Vec<LirExecutorState>, LirExecutorError> {
         if !matches!(lir.status, LirStatus::Complete) {
@@ -203,9 +199,9 @@ impl LirExecutor {
         }
         let mut working = state.clone();
         for effect in &lir.effects {
-            self.apply_effect(&mut working, lir.encoding.as_ref(), effect)?;
+            self.apply_effect(&mut working, lir.address, effect)?;
         }
-        self.apply_terminator(working, lir.encoding.as_ref(), &lir.terminator)
+        self.apply_terminator(working, lir.address, &lir.terminator)
     }
 }
 
@@ -220,13 +216,13 @@ mod tests {
     use crate::disassemblers::capstone::Disassembler;
     use crate::formats::{Image, ImagePermissions, ImageSegment};
     use crate::irs::lir::{
-        Lir, LirAddressSpace, LirCpu, LirData, LirEffect, LirEncoding, LirExpression, LirLocation,
-        LirMetadata, LirModule, LirOperationBinary, LirOperationCast, LirOperationCompare,
-        LirOperationUnary, LirStatus, LirTerminator,
+        LirAddressSpace, LirCpu, LirData, LirEffect, LirExpression, LirInstruction, LirLocation,
+        LirModule, LirOperationBinary, LirOperationCast, LirOperationCompare, LirOperationUnary,
+        LirStatus, LirTerminator,
     };
     use std::collections::{BTreeMap, BTreeSet};
 
-    fn assembled_lir(architecture: Architecture, assembly: &str) -> Vec<Lir> {
+    fn assembled_lir(architecture: Architecture, assembly: &str) -> Vec<LirInstruction> {
         let config = Configuration::default();
         let assembler = Assembler::new(architecture, config.clone(), AssemblerBackend::Default)
             .expect("assembler");
@@ -249,11 +245,11 @@ mod tests {
             .collect()
     }
 
-    fn lir_of(lir: Lir) -> LirModule {
+    fn lir_of(lir: LirInstruction) -> LirModule {
         LirModule::from_instructions(vec![lir])
     }
 
-    fn lir_many(lir: Vec<Lir>) -> LirModule {
+    fn lir_many(lir: Vec<LirInstruction>) -> LirModule {
         LirModule::from_instructions(lir)
     }
 
@@ -266,13 +262,9 @@ mod tests {
             .symbolize_register("x0", 64, Some("input_x0"))
             .expect("symbolize register");
 
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: Vec::new(),
             terminator: LirTerminator::Branch {
                 condition: LirExpression::Compare {
@@ -293,7 +285,6 @@ mod tests {
                     bits: 64,
                 },
             },
-            diagnostics: Vec::new(),
         };
 
         let states = executor.step(&lir_of(lir), &state).expect("step");
@@ -323,13 +314,9 @@ mod tests {
             LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
         state.set_register("rdi", 64, 2).expect("set register");
 
-        let body = Lir {
-            version: 1,
+        let body = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "rax".to_string(),
@@ -357,7 +344,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::Return { expression: None },
-            diagnostics: Vec::new(),
         };
         let lir = LirModule::from_instructions_with_data(
             vec![body],
@@ -402,13 +388,9 @@ mod tests {
 
         state.map_image(&image);
 
-        let lir = LirModule::from_instructions(vec![Lir {
-            version: 1,
+        let lir = LirModule::from_instructions(vec![LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "rax".to_string(),
@@ -424,7 +406,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::Return { expression: None },
-            diagnostics: Vec::new(),
         }]);
 
         let states = executor.run(&lir, &state, None).expect("run");
@@ -441,13 +422,9 @@ mod tests {
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
 
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![
                 LirEffect::Store {
                     space: crate::irs::lir::LirAddressSpace::Default,
@@ -477,7 +454,6 @@ mod tests {
                 },
             ],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor.step(&lir_of(lir), &state).expect("step");
@@ -499,13 +475,9 @@ mod tests {
             index: Box::new(LirExpression::Const { value: 2, bits: 32 }),
             bits: 32,
         };
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![
                 LirEffect::Set {
                     dst: location.clone(),
@@ -523,7 +495,6 @@ mod tests {
                 },
             ],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor.step(&lir_of(lir), &state).expect("step");
@@ -545,13 +516,9 @@ mod tests {
             offset: 0,
             bits: 32,
         };
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![
                 LirEffect::Set {
                     dst: location.clone(),
@@ -569,7 +536,6 @@ mod tests {
                 },
             ],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor.step(&lir_of(lir), &state).expect("step");
@@ -586,13 +552,9 @@ mod tests {
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
 
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![
                 LirEffect::Push {
                     stack: "value_stack".to_string(),
@@ -618,7 +580,6 @@ mod tests {
                 },
             ],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor.step(&lir_of(lir), &state).expect("step");
@@ -648,13 +609,9 @@ mod tests {
             kind: "object".to_string(),
             bits: 64,
         };
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![
                 LirEffect::Set {
                     dst: LirLocation::Temporary { id: 0, bits: 64 },
@@ -684,7 +641,6 @@ mod tests {
                 },
             ],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor.step(&lir_of(lir), &state).expect("step");
@@ -703,13 +659,9 @@ mod tests {
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::CIL).expect("cpu"));
 
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![
                 LirEffect::Set {
                     dst: LirLocation::Temporary { id: 0, bits: 64 },
@@ -745,7 +697,6 @@ mod tests {
                 },
             ],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor.step(&lir_of(lir), &state).expect("step");
@@ -779,13 +730,9 @@ mod tests {
         let executor = LirExecutor::new();
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x0".to_string(),
@@ -801,7 +748,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
         let states = executor.step(&lir_of(lir), &state).expect("step");
         assert_eq!(
@@ -818,13 +764,9 @@ mod tests {
         let executor = LirExecutor::new();
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x0".to_string(),
@@ -841,7 +783,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
         let states = executor.step(&lir_of(lir), &state).expect("step");
         assert_eq!(
@@ -858,16 +799,11 @@ mod tests {
         let executor = LirExecutor::new();
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Partial,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: Vec::new(),
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
         assert!(executor.step(&lir_of(lir), &state).is_err());
     }
@@ -877,13 +813,9 @@ mod tests {
         let executor = LirExecutor::new();
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
-        let first = Lir {
-            version: 1,
+        let first = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "rax".to_string(),
@@ -892,15 +824,10 @@ mod tests {
                 expression: LirExpression::Const { value: 7, bits: 64 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
-        let second = Lir {
-            version: 1,
+        let second = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "rbx".to_string(),
@@ -922,7 +849,6 @@ mod tests {
                     bits: 64,
                 },
             },
-            diagnostics: Vec::new(),
         };
         let states = executor
             .run(&lir_many(vec![first, second]), &state, None)
@@ -949,19 +875,9 @@ mod tests {
         let executor = LirExecutor::new();
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
-        let setup = Lir {
-            version: 1,
+        let setup = LirInstruction {
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: Some(LirEncoding {
-                architecture: "i386".to_string(),
-                mnemonic: "mov".to_string(),
-                disassembly: "mov ecx, 3".to_string(),
-                address: 0x1000,
-                bytes: vec![0xb9, 0x03, 0x00, 0x00, 0x00],
-            }),
-            temporaries: Vec::new(),
+            address: Some(0x1000),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "ecx".to_string(),
@@ -970,21 +886,10 @@ mod tests {
                 expression: LirExpression::Const { value: 3, bits: 32 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
-        let loop_body = Lir {
-            version: 1,
+        let loop_body = LirInstruction {
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: Some(LirEncoding {
-                architecture: "i386".to_string(),
-                mnemonic: "dec".to_string(),
-                disassembly: "dec ecx".to_string(),
-                address: 0x1005,
-                bytes: vec![0x49],
-            }),
-            temporaries: Vec::new(),
+            address: Some(0x1005),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "ecx".to_string(),
@@ -1019,21 +924,10 @@ mod tests {
                     bits: 32,
                 },
             },
-            diagnostics: Vec::new(),
         };
-        let exit = Lir {
-            version: 1,
+        let exit = LirInstruction {
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: Some(LirEncoding {
-                architecture: "i386".to_string(),
-                mnemonic: "mov".to_string(),
-                disassembly: "mov eax, 0x41".to_string(),
-                address: 0x1006,
-                bytes: vec![0xb8, 0x41, 0x00, 0x00, 0x00],
-            }),
-            temporaries: Vec::new(),
+            address: Some(0x1006),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "eax".to_string(),
@@ -1045,7 +939,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -1077,19 +970,9 @@ mod tests {
             .symbolize_register("eax", 32, Some("input_eax"))
             .expect("symbolize register");
 
-        let branch = Lir {
-            version: 1,
+        let branch = LirInstruction {
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: Some(LirEncoding {
-                architecture: "i386".to_string(),
-                mnemonic: "jne".to_string(),
-                disassembly: "jne 0x1005".to_string(),
-                address: 0x1000,
-                bytes: vec![0x75, 0x03],
-            }),
-            temporaries: Vec::new(),
+            address: Some(0x1000),
             effects: Vec::new(),
             terminator: LirTerminator::Branch {
                 condition: LirExpression::Compare {
@@ -1110,21 +993,10 @@ mod tests {
                     bits: 32,
                 },
             },
-            diagnostics: Vec::new(),
         };
-        let taken = Lir {
-            version: 1,
+        let taken = LirInstruction {
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: Some(LirEncoding {
-                architecture: "i386".to_string(),
-                mnemonic: "mov".to_string(),
-                disassembly: "mov ebx, 1".to_string(),
-                address: 0x1002,
-                bytes: vec![0xbb, 0x01, 0x00, 0x00, 0x00],
-            }),
-            temporaries: Vec::new(),
+            address: Some(0x1002),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "ebx".to_string(),
@@ -1133,21 +1005,10 @@ mod tests {
                 expression: LirExpression::Const { value: 1, bits: 32 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
-        let not_taken = Lir {
-            version: 1,
+        let not_taken = LirInstruction {
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: Some(LirEncoding {
-                architecture: "i386".to_string(),
-                mnemonic: "mov".to_string(),
-                disassembly: "mov ebx, 2".to_string(),
-                address: 0x1005,
-                bytes: vec![0xbb, 0x02, 0x00, 0x00, 0x00],
-            }),
-            temporaries: Vec::new(),
+            address: Some(0x1005),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "ebx".to_string(),
@@ -1156,7 +1017,6 @@ mod tests {
                 expression: LirExpression::Const { value: 2, bits: 32 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -1187,19 +1047,9 @@ mod tests {
         let executor = LirExecutor::new();
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
-        let first = Lir {
-            version: 1,
+        let first = LirInstruction {
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: Some(LirEncoding {
-                architecture: "amd64".to_string(),
-                mnemonic: "mov".to_string(),
-                disassembly: "mov rax, 7".to_string(),
-                address: 0x401000,
-                bytes: vec![0x48, 0xc7, 0xc0, 0x07, 0x00, 0x00, 0x00],
-            }),
-            temporaries: Vec::new(),
+            address: Some(0x401000),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "rax".to_string(),
@@ -1208,21 +1058,10 @@ mod tests {
                 expression: LirExpression::Const { value: 7, bits: 64 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
-        let second = Lir {
-            version: 1,
+        let second = LirInstruction {
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: Some(LirEncoding {
-                architecture: "amd64".to_string(),
-                mnemonic: "mov".to_string(),
-                disassembly: "mov rbx, 9".to_string(),
-                address: 0x401001,
-                bytes: vec![0x48, 0xc7, 0xc3, 0x09, 0x00, 0x00, 0x00],
-            }),
-            temporaries: Vec::new(),
+            address: Some(0x401001),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "rbx".to_string(),
@@ -1231,7 +1070,6 @@ mod tests {
                 expression: LirExpression::Const { value: 9, bits: 64 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -1259,19 +1097,9 @@ mod tests {
         executor.set_breakpoint(0x401001);
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
-        let first = Lir {
-            version: 1,
+        let first = LirInstruction {
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: Some(LirEncoding {
-                architecture: "amd64".to_string(),
-                mnemonic: "mov".to_string(),
-                disassembly: "mov rax, 7".to_string(),
-                address: 0x401000,
-                bytes: vec![0x48, 0xc7, 0xc0, 0x07, 0x00, 0x00, 0x00],
-            }),
-            temporaries: Vec::new(),
+            address: Some(0x401000),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "rax".to_string(),
@@ -1280,21 +1108,10 @@ mod tests {
                 expression: LirExpression::Const { value: 7, bits: 64 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
-        let second = Lir {
-            version: 1,
+        let second = LirInstruction {
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: Some(LirEncoding {
-                architecture: "amd64".to_string(),
-                mnemonic: "mov".to_string(),
-                disassembly: "mov rbx, 9".to_string(),
-                address: 0x401001,
-                bytes: vec![0x48, 0xc7, 0xc3, 0x09, 0x00, 0x00, 0x00],
-            }),
-            temporaries: Vec::new(),
+            address: Some(0x401001),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "rbx".to_string(),
@@ -1303,7 +1120,6 @@ mod tests {
                 expression: LirExpression::Const { value: 9, bits: 64 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -1338,19 +1154,9 @@ mod tests {
         executor.add_hook(0x401001);
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::AMD64).expect("cpu"));
-        let first = Lir {
-            version: 1,
+        let first = LirInstruction {
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: Some(LirEncoding {
-                architecture: "amd64".to_string(),
-                mnemonic: "mov".to_string(),
-                disassembly: "mov rax, 7".to_string(),
-                address: 0x401000,
-                bytes: vec![0x48, 0xc7, 0xc0, 0x07, 0x00, 0x00, 0x00],
-            }),
-            temporaries: Vec::new(),
+            address: Some(0x401000),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "rax".to_string(),
@@ -1359,21 +1165,10 @@ mod tests {
                 expression: LirExpression::Const { value: 7, bits: 64 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
-        let second = Lir {
-            version: 1,
+        let second = LirInstruction {
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: Some(LirEncoding {
-                architecture: "amd64".to_string(),
-                mnemonic: "mov".to_string(),
-                disassembly: "mov rbx, 9".to_string(),
-                address: 0x401001,
-                bytes: vec![0x48, 0xc7, 0xc3, 0x09, 0x00, 0x00, 0x00],
-            }),
-            temporaries: Vec::new(),
+            address: Some(0x401001),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "rbx".to_string(),
@@ -1382,7 +1177,6 @@ mod tests {
                 expression: LirExpression::Const { value: 9, bits: 64 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -1550,13 +1344,9 @@ mod tests {
         let executor = LirExecutor::new();
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: Vec::new(),
             terminator: LirTerminator::Call {
                 target: LirExpression::Const {
@@ -1566,7 +1356,6 @@ mod tests {
                 return_target: None,
                 does_return: Some(true),
             },
-            diagnostics: Vec::new(),
         };
         let states = executor.step(&lir_of(lir), &state).expect("step");
         assert_eq!(
@@ -1588,19 +1377,9 @@ mod tests {
             .expect("symbolize memory");
         state.set_register("rdi", 64, 0x1000).expect("set register");
 
-        let first = Lir {
-            version: 1,
+        let first = LirInstruction {
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: Some(LirEncoding {
-                architecture: "amd64".to_string(),
-                mnemonic: "movzx".to_string(),
-                disassembly: "movzx eax, byte ptr [rdi]".to_string(),
-                address: 0x40058b,
-                bytes: vec![0x0f, 0xb6, 0x07],
-            }),
-            temporaries: Vec::new(),
+            address: Some(0x40058b),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "eax".to_string(),
@@ -1616,21 +1395,10 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
-        let second = Lir {
-            version: 1,
+        let second = LirInstruction {
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: Some(LirEncoding {
-                architecture: "amd64".to_string(),
-                mnemonic: "sub".to_string(),
-                disassembly: "sub eax, 1".to_string(),
-                address: 0x400591,
-                bytes: vec![0x83, 0xe8, 0x01],
-            }),
-            temporaries: Vec::new(),
+            address: Some(0x400591),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "eax".to_string(),
@@ -1647,21 +1415,10 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
-        let third = Lir {
-            version: 1,
+        let third = LirInstruction {
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: Some(LirEncoding {
-                architecture: "amd64".to_string(),
-                mnemonic: "mov".to_string(),
-                disassembly: "mov ecx, eax".to_string(),
-                address: 0x400597,
-                bytes: vec![0x89, 0xc1],
-            }),
-            temporaries: Vec::new(),
+            address: Some(0x400597),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "ecx".to_string(),
@@ -1673,7 +1430,6 @@ mod tests {
                 })),
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -1684,9 +1440,9 @@ mod tests {
             .expect("slice register");
         let nodes = slice.nodes();
         assert_eq!(nodes.len(), 4);
-        assert_eq!(nodes[1].instruction.as_ref().unwrap().mnemonic, "movzx");
-        assert_eq!(nodes[2].instruction.as_ref().unwrap().mnemonic, "sub");
-        assert_eq!(nodes[3].instruction.as_ref().unwrap().mnemonic, "mov");
+        assert_eq!(nodes[1].instruction.as_ref().unwrap().address, 0x40058b);
+        assert_eq!(nodes[2].instruction.as_ref().unwrap().address, 0x400591);
+        assert_eq!(nodes[3].instruction.as_ref().unwrap().address, 0x400597);
         assert_eq!(nodes[3].location, "register:ecx");
     }
 
@@ -1699,19 +1455,9 @@ mod tests {
             .symbolize_register("al", 8, Some("input_al"))
             .expect("symbolize register");
 
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: Some(LirEncoding {
-                architecture: "amd64".to_string(),
-                mnemonic: "mov".to_string(),
-                disassembly: "mov byte ptr [0x3000], al".to_string(),
-                address: 0x401000,
-                bytes: vec![0x88, 0x05, 0x00, 0x30, 0x00, 0x00],
-            }),
-            temporaries: Vec::new(),
+            address: Some(0x401000),
             effects: vec![LirEffect::Store {
                 space: crate::irs::lir::LirAddressSpace::Default,
                 addr: LirExpression::Const {
@@ -1725,7 +1471,6 @@ mod tests {
                 bits: 8,
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor.step(&lir_of(lir), &state).expect("step");
@@ -1734,7 +1479,7 @@ mod tests {
             .expect("slice memory");
         let nodes = slice.nodes();
         assert_eq!(nodes.len(), 2);
-        assert_eq!(nodes[1].instruction.as_ref().unwrap().mnemonic, "mov");
+        assert_eq!(nodes[1].instruction.as_ref().unwrap().address, 0x401000);
         assert_eq!(nodes[1].location, "memory[0x3000]");
     }
 
@@ -1748,19 +1493,9 @@ mod tests {
             .expect("symbolize memory");
         state.set_register("rdi", 64, 0x1000).expect("set register");
 
-        let first = Lir {
-            version: 1,
+        let first = LirInstruction {
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: Some(LirEncoding {
-                architecture: "amd64".to_string(),
-                mnemonic: "movzx".to_string(),
-                disassembly: "movzx eax, byte ptr [rdi]".to_string(),
-                address: 0x40058b,
-                bytes: vec![0x0f, 0xb6, 0x07],
-            }),
-            temporaries: Vec::new(),
+            address: Some(0x40058b),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "eax".to_string(),
@@ -1776,21 +1511,10 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
-        let second = Lir {
-            version: 1,
+        let second = LirInstruction {
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: Some(LirEncoding {
-                architecture: "amd64".to_string(),
-                mnemonic: "movsx".to_string(),
-                disassembly: "movsx eax, al".to_string(),
-                address: 0x40058e,
-                bytes: vec![0x0f, 0xbe, 0xc0],
-            }),
-            temporaries: Vec::new(),
+            address: Some(0x40058e),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "eax".to_string(),
@@ -1806,21 +1530,10 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
-        let third = Lir {
-            version: 1,
+        let third = LirInstruction {
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: Some(LirEncoding {
-                architecture: "amd64".to_string(),
-                mnemonic: "mov".to_string(),
-                disassembly: "mov ecx, eax".to_string(),
-                address: 0x400597,
-                bytes: vec![0x89, 0xc1],
-            }),
-            temporaries: Vec::new(),
+            address: Some(0x400597),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "ecx".to_string(),
@@ -1832,7 +1545,6 @@ mod tests {
                 })),
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -1841,16 +1553,16 @@ mod tests {
         let slice = states[0]
             .slice_from_register("ecx", 32)
             .expect("slice register");
-        let mnemonics = slice
+        let addresses = slice
             .nodes()
             .iter()
             .filter_map(|node| {
                 node.instruction
                     .as_ref()
-                    .map(|instruction| instruction.mnemonic.as_str())
+                    .map(|instruction| instruction.address)
             })
             .collect::<Vec<_>>();
-        assert_eq!(mnemonics, vec!["movzx", "movsx", "mov"]);
+        assert_eq!(addresses, vec![0x40058b, 0x40058e, 0x400597]);
     }
 
     #[test]
@@ -1865,13 +1577,9 @@ mod tests {
             .set_register("s1", 32, 2.25f32.to_bits() as u64)
             .expect("set register");
 
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "s2".to_string(),
@@ -1891,7 +1599,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor.step(&lir_of(lir), &state).expect("step");
@@ -1911,13 +1618,9 @@ mod tests {
             LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         state.set_register("x0", 64, 42).expect("set register");
 
-        let to_float = Lir {
-            version: 1,
+        let to_float = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "d0".to_string(),
@@ -1933,15 +1636,10 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
-        let from_float = Lir {
-            version: 1,
+        let from_float = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x1".to_string(),
@@ -1957,7 +1655,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -1991,13 +1688,9 @@ mod tests {
             .set_register("d1", 64, 1.0f64.to_bits())
             .expect("set register");
 
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x2".to_string(),
@@ -2017,7 +1710,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor.step(&lir_of(lir), &state).expect("step");
@@ -2039,13 +1731,9 @@ mod tests {
             .set_register("d0", 64, 3.5f64.to_bits())
             .expect("set register");
 
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "d1".to_string(),
@@ -2061,7 +1749,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor.step(&lir_of(lir), &state).expect("step");
@@ -2080,13 +1767,9 @@ mod tests {
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
 
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "d1".to_string(),
@@ -2102,7 +1785,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor.step(&lir_of(lir), &state).expect("step");
@@ -2124,13 +1806,9 @@ mod tests {
             .write_memory(0x8000, &3.5f64.to_bits().to_le_bytes())
             .expect("write memory");
 
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "d1".to_string(),
@@ -2150,7 +1828,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor.step(&lir_of(lir), &state).expect("step");
@@ -2170,13 +1847,9 @@ mod tests {
             LirExecutorState::new(LirCpu::from_architecture(Architecture::ARM64).expect("cpu"));
         state.set_register("x0", 64, 7).expect("set register");
 
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x1".to_string(),
@@ -2192,7 +1865,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor.step(&lir_of(lir), &state).expect("step");
@@ -2213,13 +1885,9 @@ mod tests {
         state.set_register("eax", 32, 1).expect("set register");
         state.set_register("ebx", 32, 2).expect("set register");
 
-        let to_fp80_left = Lir {
-            version: 1,
+        let to_fp80_left = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
@@ -2235,16 +1903,11 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let to_fp80_right = Lir {
-            version: 1,
+        let to_fp80_right = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x87_st1".to_string(),
@@ -2260,16 +1923,11 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let compare = Lir {
-            version: 1,
+        let compare = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "ecx".to_string(),
@@ -2289,7 +1947,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -2315,13 +1972,9 @@ mod tests {
             LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 42).expect("set register");
 
-        let to_fp80 = Lir {
-            version: 1,
+        let to_fp80 = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
@@ -2337,16 +1990,11 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let truncate = Lir {
-            version: 1,
+        let truncate = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "xmm0".to_string(),
@@ -2362,7 +2010,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -2385,13 +2032,9 @@ mod tests {
         state.set_register("eax", 32, 7).expect("set register");
         state.set_register("ebx", 32, 2).expect("set register");
 
-        let lhs = Lir {
-            version: 1,
+        let lhs = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
@@ -2407,16 +2050,11 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let rhs = Lir {
-            version: 1,
+        let rhs = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x87_st1".to_string(),
@@ -2432,16 +2070,11 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let add = Lir {
-            version: 1,
+        let add = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
@@ -2463,16 +2096,11 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let store = Lir {
-            version: 1,
+        let store = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "xmm0".to_string(),
@@ -2488,7 +2116,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -2512,13 +2139,9 @@ mod tests {
             .write_memory(0x9000, &3.25f32.to_bits().to_le_bytes())
             .expect("write memory");
 
-        let load = Lir {
-            version: 1,
+        let load = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
@@ -2538,16 +2161,11 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let store = Lir {
-            version: 1,
+        let store = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "xmm0".to_string(),
@@ -2563,7 +2181,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -2584,13 +2201,9 @@ mod tests {
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
 
-        let load = Lir {
-            version: 1,
+        let load = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
@@ -2603,16 +2216,11 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let store = Lir {
-            version: 1,
+        let store = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Store {
                 space: crate::irs::lir::LirAddressSpace::Default,
                 addr: LirExpression::Const {
@@ -2634,7 +2242,6 @@ mod tests {
                 bits: 32,
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -2657,13 +2264,9 @@ mod tests {
         state.set_register("eax", 32, 7).expect("set register");
         state.set_register("ebx", 32, 2).expect("set register");
 
-        let to_fp80 = Lir {
-            version: 1,
+        let to_fp80 = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
@@ -2679,16 +2282,11 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let divide = Lir {
-            version: 1,
+        let divide = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![
                 LirEffect::Set {
                     dst: LirLocation::Register {
@@ -2726,16 +2324,11 @@ mod tests {
                 },
             ],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let store = Lir {
-            version: 1,
+        let store = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Store {
                 space: crate::irs::lir::LirAddressSpace::Default,
                 addr: LirExpression::Const {
@@ -2757,7 +2350,6 @@ mod tests {
                 bits: 32,
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -2781,13 +2373,9 @@ mod tests {
             .set_register("xmm0", 64, (-0.0f64).to_bits())
             .expect("set register");
 
-        let load = Lir {
-            version: 1,
+        let load = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
@@ -2803,16 +2391,11 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Intrinsic {
                 name: "x86.x87.xam".to_string(),
                 args: vec![LirExpression::Read(Box::new(LirLocation::Register {
@@ -2839,7 +2422,6 @@ mod tests {
                 ],
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -2884,13 +2466,9 @@ mod tests {
             .set_register("xmm0", 64, f64::INFINITY.to_bits())
             .expect("set register");
 
-        let load = Lir {
-            version: 1,
+        let load = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
@@ -2906,16 +2484,11 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Intrinsic {
                 name: "x86.x87.xam".to_string(),
                 args: vec![LirExpression::Read(Box::new(LirLocation::Register {
@@ -2942,7 +2515,6 @@ mod tests {
                 ],
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -2987,13 +2559,9 @@ mod tests {
             .set_register("xmm0", 64, 0.0f64.to_bits())
             .expect("set register");
 
-        let load = Lir {
-            version: 1,
+        let load = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
@@ -3009,16 +2577,11 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let sin = Lir {
-            version: 1,
+        let sin = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
@@ -3034,16 +2597,11 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let store = Lir {
-            version: 1,
+        let store = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "xmm1".to_string(),
@@ -3059,7 +2617,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -3081,13 +2638,9 @@ mod tests {
             .set_register("xmm0", 64, 0.0f64.to_bits())
             .expect("set register");
 
-        let load = Lir {
-            version: 1,
+        let load = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
@@ -3103,16 +2656,11 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let cos = Lir {
-            version: 1,
+        let cos = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
@@ -3128,16 +2676,11 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let store = Lir {
-            version: 1,
+        let store = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "xmm1".to_string(),
@@ -3153,7 +2696,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -3175,13 +2717,9 @@ mod tests {
             LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 1).expect("set register");
 
-        let lhs = Lir {
-            version: 1,
+        let lhs = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![
                 LirEffect::Set {
                     dst: LirLocation::Register {
@@ -3213,16 +2751,11 @@ mod tests {
                 },
             ],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let atan2 = Lir {
-            version: 1,
+        let atan2 = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x87_st1".to_string(),
@@ -3244,16 +2777,11 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let store = Lir {
-            version: 1,
+        let store = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "xmm1".to_string(),
@@ -3269,7 +2797,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -3292,13 +2819,9 @@ mod tests {
         state.set_register("eax", 32, 3).expect("set register");
         state.set_register("ebx", 32, 2).expect("set register");
 
-        let load = Lir {
-            version: 1,
+        let load = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![
                 LirEffect::Set {
                     dst: LirLocation::Register {
@@ -3330,16 +2853,11 @@ mod tests {
                 },
             ],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let scale = Lir {
-            version: 1,
+        let scale = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
@@ -3361,16 +2879,11 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let store = Lir {
-            version: 1,
+        let store = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "xmm1".to_string(),
@@ -3386,7 +2899,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -3408,13 +2920,9 @@ mod tests {
             LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 1).expect("set register");
 
-        let load = Lir {
-            version: 1,
+        let load = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
@@ -3430,16 +2938,11 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let op = Lir {
-            version: 1,
+        let op = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
@@ -3455,16 +2958,11 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let store = Lir {
-            version: 1,
+        let store = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "xmm1".to_string(),
@@ -3480,7 +2978,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -3501,13 +2998,9 @@ mod tests {
         let state =
             LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
 
-        let load = Lir {
-            version: 1,
+        let load = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
@@ -3523,16 +3016,11 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let store = Lir {
-            version: 1,
+        let store = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "xmm1".to_string(),
@@ -3548,7 +3036,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor
@@ -3570,13 +3057,9 @@ mod tests {
             LirExecutorState::new(LirCpu::from_architecture(Architecture::I386).expect("cpu"));
         state.set_register("eax", 32, 42).expect("set register");
 
-        let load = Lir {
-            version: 1,
+        let load = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "x87_st0".to_string(),
@@ -3592,16 +3075,11 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
-        let store = Lir {
-            version: 1,
+        let store = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Store {
                 space: crate::irs::lir::LirAddressSpace::Default,
                 addr: LirExpression::Const {
@@ -3619,7 +3097,6 @@ mod tests {
                 bits: 80,
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let states = executor

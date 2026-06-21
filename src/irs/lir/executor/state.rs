@@ -3,7 +3,7 @@ use crate::irs::lir::executor::LirExecutorError;
 use crate::irs::lir::executor::backend::z3::{TrackedAst, Z3Backend};
 use crate::irs::lir::executor::memory::FlatMemory;
 use crate::irs::lir::executor::slice::{Slice, SliceInstruction, SliceNode};
-use crate::irs::lir::{LirCpu, LirData, LirEncoding};
+use crate::irs::lir::{LirCpu, LirData};
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::sync::Arc;
 use z3::ast::{BV, Bool};
@@ -850,7 +850,7 @@ impl LirExecutorState {
 
     pub(crate) fn define_location(
         &mut self,
-        instruction: Option<&LirEncoding>,
+        instruction: Option<u64>,
         location: String,
         value: &BV,
         parents: &BTreeSet<u64>,
@@ -864,7 +864,7 @@ impl LirExecutorState {
             id,
             DefinitionNode {
                 id,
-                instruction: instruction.map(SliceInstruction::from_encoding),
+                instruction: instruction.map(SliceInstruction::from_address),
                 location,
                 value: value.to_string(),
                 parents: parents.iter().copied().collect(),

@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::irs::lir::Lir;
+use crate::irs::lir::LirInstruction;
 
 pub mod builders;
 pub mod helpers;
@@ -31,7 +31,7 @@ mod tests;
 
 pub use instruction::InstructionDetailCil;
 
-pub fn build(view: InstructionDetailCil) -> Lir {
+pub fn build(view: InstructionDetailCil) -> LirInstruction {
     if let Some(lir) = builders::control::build(&view) {
         return lir;
     }

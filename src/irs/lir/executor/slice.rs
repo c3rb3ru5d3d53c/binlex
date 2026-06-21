@@ -1,23 +1,11 @@
-use crate::irs::lir::LirEncoding;
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SliceInstruction {
-    pub architecture: String,
-    pub mnemonic: String,
-    pub disassembly: String,
     pub address: u64,
-    pub bytes: Vec<u8>,
 }
 
 impl SliceInstruction {
-    pub(crate) fn from_encoding(encoding: &LirEncoding) -> Self {
-        Self {
-            architecture: encoding.architecture.clone(),
-            mnemonic: encoding.mnemonic.clone(),
-            disassembly: encoding.disassembly.clone(),
-            address: encoding.address,
-            bytes: encoding.bytes.clone(),
-        }
+    pub(crate) fn from_address(address: u64) -> Self {
+        Self { address }
     }
 }
 

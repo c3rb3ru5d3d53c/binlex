@@ -28,11 +28,11 @@ use crate::irs::lir::arm64::helpers::{
 };
 use crate::irs::lir::arm64::{Arm64OperandKind, Arm64OperandView};
 use crate::irs::lir::{
-    Lir, LirEffect, LirExpression, LirLocation, LirOperationBinary, LirOperationCast,
+    LirEffect, LirExpression, LirInstruction, LirLocation, LirOperationBinary, LirOperationCast,
     LirOperationCompare, LirOperationUnary, LirTerminator,
 };
 
-pub(crate) fn build(view: &InstructionDetailArm64) -> Option<Lir> {
+pub(crate) fn build(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     match view.mnemonic.as_str() {
         "mov" | "adr" | "adrp" => build_move(view),
         "movk" => build_movk(view),
@@ -94,7 +94,7 @@ pub(crate) fn build(view: &InstructionDetailArm64) -> Option<Lir> {
     }
 }
 
-fn build_move(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_move(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     Some(complete(
@@ -106,7 +106,7 @@ fn build_move(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_movk(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_movk(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let bits = location_bits(&dst);
     let current = LirExpression::Read(Box::new(dst.clone()));
@@ -137,7 +137,7 @@ fn build_movk(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_movz(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_movz(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let bits = location_bits(&dst);
     let (immediate, shift) = parse_move_wide_immediate(view, bits)?;
@@ -153,7 +153,7 @@ fn build_movz(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_movn(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_movn(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let bits = location_bits(&dst);
     let (immediate, shift) = parse_move_wide_immediate(view, bits)?;
@@ -179,7 +179,7 @@ fn build_binary_assign(
     view: &InstructionDetailArm64,
     op: LirOperationBinary,
     update_flags: bool,
-) -> Option<Lir> {
+) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -198,7 +198,7 @@ fn build_binary_assign(
     Some(complete(LirTerminator::FallThrough, effects))
 }
 
-fn build_adc(view: &InstructionDetailArm64, update_flags: bool) -> Option<Lir> {
+fn build_adc(view: &InstructionDetailArm64, update_flags: bool) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -229,7 +229,7 @@ fn build_adc(view: &InstructionDetailArm64, update_flags: bool) -> Option<Lir> {
     Some(complete(LirTerminator::FallThrough, effects))
 }
 
-fn build_sbc(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_sbc(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -253,7 +253,10 @@ fn build_sbc(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_shift_assign(view: &InstructionDetailArm64, op: LirOperationBinary) -> Option<Lir> {
+fn build_shift_assign(
+    view: &InstructionDetailArm64,
+    op: LirOperationBinary,
+) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let amount = operand_expression(view.operand(2)?)?;
@@ -268,7 +271,7 @@ fn build_shift_assign(view: &InstructionDetailArm64, op: LirOperationBinary) -> 
     ))
 }
 
-fn build_compare_flags(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_compare_flags(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let left = operand_expression(view.operand(0)?)?;
     let right = operand_expression(view.operand(1)?)?;
     let result = binary(
@@ -284,7 +287,7 @@ fn build_compare_flags(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_compare_add_flags(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_compare_add_flags(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let left = operand_expression(view.operand(0)?)?;
     let right = operand_expression(view.operand(1)?)?;
     let result = binary(
@@ -300,7 +303,7 @@ fn build_compare_add_flags(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_test_flags(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_test_flags(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let left = operand_expression(view.operand(0)?)?;
     let right = operand_expression(view.operand(1)?)?;
     let bits = left.bits();
@@ -320,7 +323,7 @@ fn build_test_flags(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_abs(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_abs(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -341,7 +344,7 @@ fn build_abs(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_clz(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_clz(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -359,7 +362,7 @@ fn build_clz(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_eon(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_eon(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -384,7 +387,7 @@ fn build_eon(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_orn(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_orn(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -404,7 +407,7 @@ fn build_orn(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_bic(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_bic(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -424,7 +427,7 @@ fn build_bic(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_bics(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_bics(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let left = operand_expression(view.operand(1)?)?;
     let right = operand_expression(view.operand(2)?)?;
@@ -454,7 +457,7 @@ fn build_bics(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_mvn(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_mvn(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -472,7 +475,7 @@ fn build_mvn(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_neg(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_neg(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -486,7 +489,7 @@ fn build_neg(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_rbit(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_rbit(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -504,7 +507,7 @@ fn build_rbit(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_rev(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_rev(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -522,7 +525,7 @@ fn build_rev(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_rev16(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_rev16(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -534,7 +537,7 @@ fn build_rev16(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_rev32(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_rev32(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -546,7 +549,7 @@ fn build_rev32(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_conditional_select(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_conditional_select(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let when_true = operand_expression(view.operand(1)?)?;
     let when_false = operand_expression(view.operand(2)?)?;
@@ -567,7 +570,7 @@ fn build_conditional_select(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_cset(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_cset(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let bits = location_bits(&dst);
     let condition = condition_operand(view, 1)?;
@@ -586,7 +589,7 @@ fn build_cset(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_csetm(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_csetm(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let bits = location_bits(&dst);
     let condition = condition_operand(view, 1)?;
@@ -605,7 +608,7 @@ fn build_csetm(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_conditional_select_increment(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_conditional_select_increment(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let when_true = operand_expression(view.operand(1)?)?;
     let base_false = operand_expression(view.operand(2)?)?;
@@ -632,7 +635,7 @@ fn build_conditional_select_increment(view: &InstructionDetailArm64) -> Option<L
     ))
 }
 
-fn build_conditional_increment(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_conditional_increment(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let base = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -658,7 +661,7 @@ fn build_conditional_increment(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_conditional_invert(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_conditional_invert(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let base = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -683,7 +686,7 @@ fn build_conditional_invert(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_conditional_select_invert(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_conditional_select_invert(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let when_true = operand_expression(view.operand(1)?)?;
     let false_src = operand_expression(view.operand(2)?)?;
@@ -709,7 +712,7 @@ fn build_conditional_select_invert(view: &InstructionDetailArm64) -> Option<Lir>
     ))
 }
 
-fn build_conditional_negate(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_conditional_negate(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -735,7 +738,7 @@ fn build_conditional_negate(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_conditional_select_negate(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_conditional_select_negate(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let when_true = operand_expression(view.operand(1)?)?;
     let false_src = operand_expression(view.operand(2)?)?;
@@ -757,7 +760,10 @@ fn build_conditional_select_negate(view: &InstructionDetailArm64) -> Option<Lir>
     ))
 }
 
-fn build_conditional_compare(view: &InstructionDetailArm64, op: LirOperationBinary) -> Option<Lir> {
+fn build_conditional_compare(
+    view: &InstructionDetailArm64,
+    op: LirOperationBinary,
+) -> Option<LirInstruction> {
     let left = operand_expression(view.operand(0)?)?;
     let right = operand_expression(view.operand(1)?)?;
     let fallback_nzcv = view.operand(2)?.immediate_value()? as u64;
@@ -789,7 +795,7 @@ fn build_conditional_compare(view: &InstructionDetailArm64, op: LirOperationBina
     Some(complete(LirTerminator::FallThrough, effects))
 }
 
-fn build_unsigned_bitfield_extract(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_unsigned_bitfield_extract(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let lsb = view.operand(2)?.immediate_value()? as u16;
@@ -813,7 +819,7 @@ fn build_unsigned_bitfield_extract(view: &InstructionDetailArm64) -> Option<Lir>
     ))
 }
 
-fn build_signed_bitfield_extract(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_signed_bitfield_extract(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let lsb = view.operand(2)?.immediate_value()? as u16;
@@ -837,7 +843,7 @@ fn build_signed_bitfield_extract(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_unsigned_bitfield_insert(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_unsigned_bitfield_insert(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let lsb = view.operand(2)?.immediate_value()? as u16;
@@ -868,7 +874,7 @@ fn build_unsigned_bitfield_insert(view: &InstructionDetailArm64) -> Option<Lir> 
     ))
 }
 
-fn build_signed_bitfield_insert(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_signed_bitfield_insert(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let lsb = view.operand(2)?.immediate_value()? as u16;
@@ -899,7 +905,7 @@ fn build_signed_bitfield_insert(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_bitfield_insert(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_bitfield_insert(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let current = LirExpression::Read(Box::new(dst.clone()));
     let src = operand_expression(view.operand(1)?)?;
@@ -941,7 +947,7 @@ fn build_bitfield_insert(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_bitfield_insert_low(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_bitfield_insert_low(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let current = LirExpression::Read(Box::new(dst.clone()));
     let src = operand_expression(view.operand(1)?)?;
@@ -985,7 +991,7 @@ fn build_bitfield_insert_low(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_sign_extend_word(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_sign_extend_word(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -1003,7 +1009,7 @@ fn build_sign_extend_word(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_sign_extend_byte(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_sign_extend_byte(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -1021,7 +1027,7 @@ fn build_sign_extend_byte(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_sign_extend_halfword(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_sign_extend_halfword(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -1039,7 +1045,7 @@ fn build_sign_extend_halfword(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_zero_extend_byte(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_zero_extend_byte(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -1053,7 +1059,7 @@ fn build_zero_extend_byte(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_zero_extend_halfword(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_zero_extend_halfword(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);

@@ -32,7 +32,6 @@ pub mod formats;
 pub mod genetics;
 pub mod hashing;
 pub mod hex;
-pub mod imaging;
 pub mod io;
 pub mod irs;
 pub mod math;
@@ -57,10 +56,7 @@ pub use disassemblers::Disassembler;
 pub use disassemblers::DisassemblerBackend;
 pub use embeddings::Embedding;
 pub use embeddings::EmbeddingBackend;
-pub use irs::hir::{HirFunction, HirModule};
 pub use irs::lir::{
-    LirAbi, LirAbiCdecl, LirAbiFastcall, LirAbiKind, LirAbiLinuxSyscall, LirAbiStdcall, LirAbiSysv,
-    LirAbiTrap, LirAbiWindows64, LirAbiWindowsSyscall, LirCpuAmd64, LirCpuArm64, LirCpuCil,
-    LirCpuI386, LirCpuKind, LirExecutor, LirExecutorState,
+    LirCpuAmd64, LirCpuArm64, LirCpuCil, LirCpuI386, LirCpuKind, LirExecutor, LirExecutorState,
 };
 pub use math::entropy;

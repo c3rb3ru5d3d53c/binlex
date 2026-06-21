@@ -124,9 +124,6 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
     fn initial_location_value(&self, location: &LirLocation) -> Result<IntValue<'ctx>, Error> {
         // Lowered functions do not inherit ambient host machine state by default.
-        // The only callable boundary state we model is what the user passes
-        // explicitly through the selected ABI, which is bound separately via
-        // `bind_function_arguments()`.
         match location {
             LirLocation::Register { bits, .. } => Ok(self.int_type(*bits).const_zero()),
             LirLocation::Flag { bits, .. } => Ok(self.int_type(*bits).const_zero()),

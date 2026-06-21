@@ -30,7 +30,7 @@ use crate::controlflow::Reference;
 use crate::controlflow::graph_state::GraphState;
 use crate::decompilers::{DecompiledFunction, DecompiledFunctionState};
 use crate::formats::{Image, Symbol, SymbolKind};
-use crate::irs::lir::Lir;
+use crate::irs::lir::LirInstruction;
 use crossbeam::queue::SegQueue;
 use crossbeam_skiplist::SkipMap;
 use crossbeam_skiplist::SkipSet;
@@ -868,7 +868,10 @@ impl Graph {
         }
     }
 
-    fn merge_instruction_lir(existing: Option<Lir>, incoming: Option<Lir>) -> Option<Lir> {
+    fn merge_instruction_lir(
+        existing: Option<LirInstruction>,
+        incoming: Option<LirInstruction>,
+    ) -> Option<LirInstruction> {
         match (existing, incoming) {
             (None, None) => None,
             (Some(lir), None) => Some(lir),

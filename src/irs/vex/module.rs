@@ -6,16 +6,16 @@ use crate::Configuration;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::core::Architecture;
 use crate::irs::lir::{
-    Lir, LirAddressSpace, LirBlock, LirDiagnostic, LirEffect, LirExpression, LirFunction,
-    LirLocation, LirModule, LirOperationBinary, LirOperationCast, LirOperationCompare,
-    LirOperationUnary, LirTerminator,
+    LirAddressSpace, LirBlock, LirEffect, LirExpression, LirFunction, LirInstruction, LirLocation,
+    LirModule, LirOperationBinary, LirOperationCast, LirOperationCompare, LirOperationUnary,
+    LirTerminator,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct InstructionRequest {
     address: u64,
     bytes: Vec<u8>,
-    lir: Lir,
+    lir: LirInstruction,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -384,37 +384,15 @@ fn render_lir_block_statements(block: &LirBlock) -> Vec<String> {
     lines
 }
 
-fn render_lir_instruction_body(instruction: &Lir) -> Vec<String> {
-    let address = instruction
-        .encoding
-        .as_ref()
-        .map(|encoding| encoding.address)
-        .unwrap_or(0);
-    let byte_len = instruction
-        .encoding
-        .as_ref()
-        .map(|encoding| encoding.bytes.len())
-        .unwrap_or(0);
+fn render_lir_instruction_body(instruction: &LirInstruction) -> Vec<String> {
+    let address = instruction.address.unwrap_or(0);
     let mut lines = vec![format!(
         "   ------ IMark(0x{:016x}, {}, 0) ------",
-        address, byte_len
+        address, 0
     )];
-
-    for temp in &instruction.temporaries {
-        let name = temp
-            .name
-            .as_deref()
-            .map(|value| format!(" ; {}", value))
-            .unwrap_or_default();
-        lines.push(format!("   t{}:{}{}", temp.id, temp.bits, name));
-    }
 
     for effect in &instruction.effects {
         lines.push(format!("   {}", render_effect(effect)));
-    }
-
-    for diagnostic in &instruction.diagnostics {
-        lines.push(format!("   ; diag {}", render_diagnostic(diagnostic)));
     }
 
     lines.push(format!("   {}", render_terminator(&instruction.terminator)));
@@ -452,21 +430,8 @@ fn render_instruction_body(instruction: &InstructionRequest) -> Vec<String> {
         instruction.bytes.len()
     )];
 
-    for temp in &instruction.lir.temporaries {
-        let name = temp
-            .name
-            .as_deref()
-            .map(|value| format!(" ; {}", value))
-            .unwrap_or_default();
-        lines.push(format!("   t{}:{}{}", temp.id, temp.bits, name));
-    }
-
     for effect in &instruction.lir.effects {
         lines.push(format!("   {}", render_effect(effect)));
-    }
-
-    for diagnostic in &instruction.lir.diagnostics {
-        lines.push(format!("   ; diag {}", render_diagnostic(diagnostic)));
     }
 
     lines.push(format!(
@@ -474,10 +439,6 @@ fn render_instruction_body(instruction: &InstructionRequest) -> Vec<String> {
         render_terminator(&instruction.lir.terminator)
     ));
     lines
-}
-
-fn render_diagnostic(diagnostic: &LirDiagnostic) -> String {
-    format!("{:?}: {}", diagnostic.kind, diagnostic.message)
 }
 
 fn render_effect(effect: &LirEffect) -> String {

@@ -11,7 +11,6 @@ impl VexFromLir for LirBlock {
     fn from_lir(&self, config: Configuration) -> Result<VexModule, Error> {
         let function = LirFunction {
             name: self.name.clone(),
-            abi: None,
             blocks: vec![self.clone()],
         };
         function.from_lir(config)

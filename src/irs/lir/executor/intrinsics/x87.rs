@@ -319,7 +319,7 @@ impl LirExecutor {
     pub(crate) fn apply_intrinsic_effect(
         &self,
         state: &mut LirExecutorState,
-        instruction: Option<&crate::irs::lir::LirEncoding>,
+        instruction: Option<u64>,
         name: &str,
         args: &[LirExpression],
         outputs: &[LirLocation],
@@ -333,7 +333,7 @@ impl LirExecutor {
     fn apply_x87_xam_effect(
         &self,
         state: &mut LirExecutorState,
-        instruction: Option<&crate::irs::lir::LirEncoding>,
+        instruction: Option<u64>,
         args: &[LirExpression],
         outputs: &[LirLocation],
     ) -> Result<(), LirExecutorError> {

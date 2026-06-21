@@ -1,10 +1,10 @@
-use self::helpers::{push_unique_location, render_location, sanitize_symbol};
+use self::helpers::{push_unique_location, sanitize_symbol};
 use crate::Architecture;
 use crate::Configuration;
 use crate::controlflow::{Block, Function, Instruction};
 use crate::io::Stderr;
 use crate::irs::lir::{
-    Lir, LirAbi, LirCpu, LirCpuKind, LirData, LirEffect, LirExpression, LirLocation, LirModule,
+    LirCpu, LirCpuKind, LirData, LirEffect, LirExpression, LirInstruction, LirLocation, LirModule,
     LirTerminator,
 };
 use crate::irs::llvm::optimizers::Optimizers;
@@ -15,7 +15,6 @@ use inkwell::attributes::AttributeLoc;
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
-use inkwell::execution_engine::ExecutionEngine;
 use inkwell::llvm_sys::core::{
     LLVMContextSetDiagnosticHandler, LLVMDisposeMessage, LLVMGetDiagInfoDescription,
 };
@@ -49,18 +48,10 @@ pub struct LlvmModule {
     context: &'static Context,
     module: Module<'static>,
     emitted: BTreeSet<String>,
-    function_abis: HashMap<String, LirAbi>,
     data_symbols: HashMap<String, Vec<u8>>,
     cpu: LirCpu,
     architecture: Architecture,
     triple: String,
-    abi: Option<LirAbi>,
-}
-
-pub struct JittedFunction {
-    engine: ExecutionEngine<'static>,
-    address: usize,
-    name: String,
 }
 
 #[derive(Default)]
@@ -103,10 +94,6 @@ struct LoweringContext<'ctx, 'm> {
     native_return_adjust: Option<u16>,
     cached_flags_register: RefCell<Option<IntValue<'ctx>>>,
     emit_terminator_helpers: bool,
-    abi: Option<LirAbi>,
-    current_lir_abi: Option<LirAbi>,
-    function_arguments: Vec<LirLocation>,
-    known_function_abis: HashMap<String, LirAbi>,
     stack_layouts: HashMap<String, u32>,
 }
 
@@ -152,12 +139,10 @@ impl LlvmModule {
             context,
             module,
             emitted: BTreeSet::new(),
-            function_abis: HashMap::new(),
             data_symbols: HashMap::new(),
             cpu,
             architecture,
             triple,
-            abi: None,
         };
         let _ = lifter.bind_architecture();
         Ok(lifter)
@@ -173,14 +158,6 @@ impl LlvmModule {
     ) -> Self {
         let cpu = LirCpu::from_architecture(architecture).expect("builtin cpu");
         Self::with_config(None, cpu, config, None).expect("llvm module")
-    }
-
-    pub fn set_abi(&mut self, abi: Option<LirAbi>) -> Result<(), Error> {
-        if let Some(abi) = abi.as_ref() {
-            self.validate_abi(abi)?;
-        }
-        self.abi = abi;
-        Ok(())
     }
 
     pub fn from_lir(&mut self, lir: &LirModule, config: Configuration) -> Result<(), Error> {
@@ -208,14 +185,14 @@ impl LlvmModule {
             return Ok(());
         }
         let function = self.add_void_function(&name);
-        let mut lowering = self.lowering_context(function, None, Vec::new(), HashMap::new())?;
+        let mut lowering = self.lowering_context(function, HashMap::new())?;
         lowering
             .lower_prepared_instruction_record(instruction.address, instruction.prepared_lir()?)?;
         lowering.finish()?;
         Ok(())
     }
 
-    pub fn populate_block(&mut self, block: &Block<'_>, abi: Option<&LirAbi>) -> Result<(), Error> {
+    pub fn populate_block(&mut self, block: &Block<'_>) -> Result<(), Error> {
         if self.architecture != block.architecture() {
             return Err(Error::other(format!(
                 "llvm lift block architecture mismatch: module={} block={}",
@@ -228,12 +205,9 @@ impl LlvmModule {
         if !self.emitted.insert(name.clone()) {
             return Ok(());
         }
-        let abi = self.resolve_override_abi(abi)?;
-        let function_arguments = self.active_function_arguments_for_block(block, abi.as_ref());
-        let function = self.add_function_for_lift(&name, abi.clone(), &function_arguments);
-        let stack_layouts = self.collect_stack_layouts_for_block(block, abi.as_ref());
-        let mut lowering =
-            self.lowering_context(function, abi, function_arguments, stack_layouts)?;
+        let function = self.add_function_for_lift(&name, None);
+        let stack_layouts = self.collect_stack_layouts_for_block(block);
+        let mut lowering = self.lowering_context(function, stack_layouts)?;
         for instruction_address in block.instruction_addresses() {
             let lowered = block
                 .cfg
@@ -248,19 +222,14 @@ impl LlvmModule {
         Ok(())
     }
 
-    pub fn populate_function(
-        &mut self,
-        function: &Function<'_>,
-        abi: Option<&LirAbi>,
-    ) -> Result<(), Error> {
+    pub fn populate_function(&mut self, function: &Function<'_>) -> Result<(), Error> {
         let name = format!("function_{:x}", function.address());
-        self.populate_function_named(function, abi, &name, None)
+        self.populate_function_named(function, &name, None)
     }
 
     pub fn populate_function_named(
         &mut self,
         function: &Function<'_>,
-        abi: Option<&LirAbi>,
         name: &str,
         block_names: Option<&BTreeMap<u64, String>>,
     ) -> Result<(), Error> {
@@ -276,37 +245,24 @@ impl LlvmModule {
             return Ok(());
         }
         let prepared_blocks = self.prepare_function_blocks(function);
-        let abi = self.resolve_override_abi(abi)?;
-        let function_arguments =
-            self.active_function_arguments_for_function(&prepared_blocks, abi.as_ref());
-        let llvm_function = self.add_function_for_lift(name, abi.clone(), &function_arguments);
-        let stack_layouts = self.collect_stack_layouts_for_function(&prepared_blocks, abi.as_ref());
-        let mut lowering =
-            self.lowering_context(llvm_function, abi, function_arguments, stack_layouts)?;
+        let llvm_function =
+            self.add_function_for_lift(name, infer_return_bits_from_blocks(&prepared_blocks));
+        let stack_layouts = self.collect_stack_layouts_for_function(&prepared_blocks);
+        let mut lowering = self.lowering_context(llvm_function, stack_layouts)?;
         lowering.emit_terminator_helpers = false;
         lowering.lower_function(function.address(), &prepared_blocks, block_names)?;
         lowering.finish()?;
         Ok(())
     }
 
-    pub fn populate_block_lir(
-        &mut self,
-        lir: &LirModule,
-        abi: Option<&LirAbi>,
-    ) -> Result<(), Error> {
+    pub fn populate_block_lir(&mut self, lir: &LirModule) -> Result<(), Error> {
         self.bind_architecture()?;
         self.declare_lir_data(&lir.data)?;
         let instructions = lir.instructions().into_iter().cloned().collect::<Vec<_>>();
-        let abi = self
-            .resolve_override_abi(abi)?
-            .or_else(|| self.resolve_lir_abi(&instructions));
         let name = self.next_emitted_name("lir_block");
-        let function_arguments =
-            self.active_function_arguments_for_lir(&instructions, abi.as_ref());
-        let function = self.add_function_for_lift(&name, abi.clone(), &function_arguments);
-        let stack_layouts = self.collect_stack_layouts_for_lir(&instructions, abi.as_ref());
-        let mut lowering =
-            self.lowering_context(function, abi, function_arguments, stack_layouts)?;
+        let function = self.add_function_for_lift(&name, infer_return_bits(&instructions));
+        let stack_layouts = self.collect_stack_layouts_for_lir(&instructions);
+        let mut lowering = self.lowering_context(function, stack_layouts)?;
         for lir in &instructions {
             lowering.lower_instruction_lir(lir)?;
         }
@@ -314,36 +270,25 @@ impl LlvmModule {
         Ok(())
     }
 
-    pub fn populate_function_lir(
-        &mut self,
-        lir: &LirModule,
-        abi: Option<&LirAbi>,
-    ) -> Result<(), Error> {
+    pub fn populate_function_lir(&mut self, lir: &LirModule) -> Result<(), Error> {
         let name = self.next_emitted_name("lir_function");
-        self.populate_function_lir_named(lir, abi, &name)
+        self.populate_function_lir_named(lir, &name)
     }
 
     pub fn populate_function_lir_named(
         &mut self,
         lir: &LirModule,
-        abi: Option<&LirAbi>,
         name: &str,
     ) -> Result<(), Error> {
         self.bind_architecture()?;
         self.declare_lir_data(&lir.data)?;
         let instructions = lir.instructions().into_iter().cloned().collect::<Vec<_>>();
-        let abi = self
-            .resolve_override_abi(abi)?
-            .or_else(|| self.resolve_lir_abi(&instructions));
         if !self.emitted.insert(name.to_string()) {
             return Ok(());
         }
-        let function_arguments =
-            self.active_function_arguments_for_lir(&instructions, abi.as_ref());
-        let function = self.add_function_for_lift(name, abi.clone(), &function_arguments);
-        let stack_layouts = self.collect_stack_layouts_for_lir(&instructions, abi.as_ref());
-        let mut lowering =
-            self.lowering_context(function, abi, function_arguments, stack_layouts)?;
+        let function = self.add_function_for_lift(name, infer_return_bits(&instructions));
+        let stack_layouts = self.collect_stack_layouts_for_lir(&instructions);
+        let mut lowering = self.lowering_context(function, stack_layouts)?;
         for lir in &instructions {
             lowering.lower_instruction_lir(lir)?;
         }
@@ -354,7 +299,6 @@ impl LlvmModule {
     pub fn clear(&mut self) -> Result<(), Error> {
         self.module = self.context.create_module(&self.module_name());
         self.emitted.clear();
-        self.function_abis.clear();
         self.data_symbols.clear();
         self.bind_architecture()
     }
@@ -372,7 +316,6 @@ impl LlvmModule {
             .create_module_from_ir(buffer)
             .map_err(|err| Error::other(err.to_string()))?;
         self.module = module;
-        self.function_abis.clear();
         self.refresh_emitted_from_module();
         Ok(())
     }
@@ -382,7 +325,6 @@ impl LlvmModule {
         let module = Module::parse_bitcode_from_buffer(&buffer, self.context)
             .map_err(|err| Error::other(err.to_string()))?;
         self.module = module;
-        self.function_abis.clear();
         self.refresh_emitted_from_module();
         Ok(())
     }
@@ -442,45 +384,6 @@ impl LlvmModule {
             .write_to_memory_buffer(&codegen.module, inkwell::targets::FileType::Object)
             .map_err(|err| Error::other(err.to_string()))?;
         Ok(buffer.as_slice().to_vec())
-    }
-
-    pub fn jit_function(
-        self,
-        function_name: &str,
-        links: &BTreeMap<String, usize>,
-    ) -> Result<JittedFunction, Error> {
-        self.verify_if_enabled()?;
-        self.ensure_native_jit_supported()?;
-        let function = self
-            .module
-            .get_function(function_name)
-            .ok_or_else(|| Error::other(format!("llvm function {function_name} does not exist")))?;
-        if function.get_first_basic_block().is_none() {
-            return Err(Error::other(format!(
-                "llvm function {function_name} has no body"
-            )));
-        }
-        Target::initialize_native(&InitializationConfig::default())
-            .map_err(|err| Error::other(err.to_string()))?;
-        let engine = self
-            .module
-            .create_jit_execution_engine(OptimizationLevel::Default)
-            .map_err(|err| Error::other(err.to_string()))?;
-        for (symbol, address) in links {
-            let function = self
-                .module
-                .get_function(symbol)
-                .ok_or_else(|| Error::other(format!("unknown jit link target symbol {symbol}")))?;
-            engine.add_global_mapping(&function, *address);
-        }
-        let address = engine
-            .get_function_address(function_name)
-            .map_err(|err| Error::other(err.to_string()))?;
-        Ok(JittedFunction {
-            engine,
-            address,
-            name: function_name.to_string(),
-        })
     }
 
     pub fn optimizers(&self) -> Result<Optimizers, Error> {
@@ -569,35 +472,6 @@ impl LlvmModule {
         verify_module(&self.module)
     }
 
-    fn resolve_override_abi(&self, abi: Option<&LirAbi>) -> Result<Option<LirAbi>, Error> {
-        let abi = abi.or(self.abi.as_ref());
-        let Some(abi) = abi else {
-            return Ok(None);
-        };
-        self.validate_abi(abi)?;
-        Ok(Some(abi.clone()))
-    }
-
-    fn validate_abi(&self, abi: &LirAbi) -> Result<(), Error> {
-        if abi.supports_architecture(self.architecture) {
-            Ok(())
-        } else {
-            Err(Error::other(format!(
-                "lir abi={} unsupported for architecture={}",
-                abi, self.architecture
-            )))
-        }
-    }
-
-    fn resolve_lir_abi(&self, lir: &[Lir]) -> Option<LirAbi> {
-        lir.iter().find_map(|lir| {
-            lir.abi
-                .as_ref()
-                .filter(|abi| abi.supports_architecture(self.architecture))
-                .cloned()
-        })
-    }
-
     fn next_emitted_name(&mut self, prefix: &str) -> String {
         let mut index = self.emitted.len();
         loop {
@@ -626,20 +500,13 @@ impl LlvmModule {
     fn add_function_for_lift(
         &mut self,
         name: &str,
-        abi: Option<LirAbi>,
-        function_arguments: &[LirLocation],
+        return_bits: Option<u16>,
     ) -> FunctionValue<'static> {
         if let Some(function) = self.module.get_function(name) {
-            if let Some(abi) = abi {
-                self.function_abis.insert(name.to_string(), abi);
-            }
             return function;
         }
-        let args = function_arguments
-            .iter()
-            .map(|location| self.int_type(location.bits()).into())
-            .collect::<Vec<_>>();
-        let fn_type = match abi.as_ref().and_then(|abi| abi.function_return_bits) {
+        let args = [];
+        let fn_type = match return_bits {
             Some(bits) if bits > 0 => self.int_type(bits).fn_type(&args, false),
             _ => self.context.void_type().fn_type(&args, false),
         };
@@ -649,9 +516,6 @@ impl LlvmModule {
             self.context
                 .create_string_attribute("frame-pointer", "none"),
         );
-        if let Some(abi) = abi {
-            self.function_abis.insert(name.to_string(), abi);
-        }
         function
     }
 
@@ -673,14 +537,12 @@ impl LlvmModule {
     fn lowering_context(
         &self,
         function: FunctionValue<'static>,
-        abi: Option<LirAbi>,
-        function_arguments: Vec<LirLocation>,
         stack_layouts: HashMap<String, u32>,
     ) -> Result<LoweringContext<'static, '_>, Error> {
         let builder = self.context.create_builder();
         let entry = self.context.append_basic_block(function, "entry");
         builder.position_at_end(entry);
-        let mut lowering = LoweringContext {
+        let lowering = LoweringContext {
             context: self.context,
             module: &self.module,
             architecture: self.architecture,
@@ -697,13 +559,8 @@ impl LlvmModule {
             native_return_adjust: None,
             cached_flags_register: RefCell::new(None),
             emit_terminator_helpers: true,
-            abi,
-            current_lir_abi: None,
-            function_arguments,
-            known_function_abis: self.function_abis.clone(),
             stack_layouts,
         };
-        lowering.bind_function_arguments()?;
         Ok(lowering)
     }
 
@@ -721,8 +578,6 @@ impl LlvmModule {
             self.emitted
                 .insert(function.get_name().to_string_lossy().into_owned());
         }
-        self.function_abis
-            .retain(|name, _| self.emitted.contains(name));
     }
 
     fn validate_imported_module(
@@ -760,12 +615,10 @@ impl LlvmModule {
             context,
             module,
             emitted: self.emitted.clone(),
-            function_abis: self.function_abis.clone(),
             data_symbols: self.data_symbols.clone(),
             cpu: self.cpu.clone(),
             architecture: self.architecture,
             triple: self.triple.clone(),
-            abi: self.abi.clone(),
         })
     }
 
@@ -814,34 +667,6 @@ impl LlvmModule {
         Ok(())
     }
 
-    pub fn duplicate_function_view(&self, function_name: &str) -> Result<Self, Error> {
-        let mut duplicate = self.duplicate()?;
-        let target_exists = duplicate
-            .module
-            .get_function(function_name)
-            .filter(|function| function.get_first_basic_block().is_some())
-            .is_some();
-        if !target_exists {
-            return Err(Error::other(format!(
-                "llvm function {function_name} does not exist"
-            )));
-        }
-
-        let functions = duplicate.module.get_functions().collect::<Vec<_>>();
-        for function in functions {
-            let name = function.get_name().to_string_lossy().into_owned();
-            if name == function_name || function.get_first_basic_block().is_none() {
-                continue;
-            }
-            unsafe {
-                function.delete();
-            }
-        }
-        duplicate.refresh_emitted_from_module();
-        duplicate.verify_if_enabled()?;
-        Ok(duplicate)
-    }
-
     fn default_triple_for_architecture(architecture: Architecture) -> &'static str {
         match architecture {
             Architecture::I386 => "i386-unknown-unknown",
@@ -851,109 +676,15 @@ impl LlvmModule {
         }
     }
 
-    fn ensure_native_jit_supported(&self) -> Result<(), Error> {
-        match self.architecture {
-            Architecture::I386 => {
-                #[cfg(target_arch = "x86")]
-                {
-                    Ok(())
-                }
-                #[cfg(not(target_arch = "x86"))]
-                {
-                    Err(Error::other(
-                        "native llvm jit for i386 requires an x86 host process",
-                    ))
-                }
-            }
-            Architecture::AMD64 => {
-                #[cfg(target_arch = "x86_64")]
-                {
-                    Ok(())
-                }
-                #[cfg(not(target_arch = "x86_64"))]
-                {
-                    Err(Error::other(
-                        "native llvm jit for amd64 requires an x86_64 host process",
-                    ))
-                }
-            }
-            Architecture::ARM64 => {
-                #[cfg(target_arch = "aarch64")]
-                {
-                    Ok(())
-                }
-                #[cfg(not(target_arch = "aarch64"))]
-                {
-                    Err(Error::other(
-                        "native llvm jit for arm64 requires an aarch64 host process",
-                    ))
-                }
-            }
-            _ => Err(Error::other(
-                "native llvm jit is unsupported for this architecture",
-            )),
-        }
-    }
-
-    fn active_function_arguments_for_lir(
-        &self,
-        lir: &[Lir],
-        abi: Option<&LirAbi>,
-    ) -> Vec<LirLocation> {
-        let Some(abi) = abi else {
-            return Vec::new();
-        };
-        let mut read_locations = std::collections::HashSet::new();
-        for lir in lir {
-            collect_lir_read_locations(lir, &mut read_locations);
-        }
-        active_function_arguments(&read_locations, abi)
-    }
-
-    fn collect_stack_layouts_for_lir(
-        &self,
-        lir: &[Lir],
-        abi: Option<&LirAbi>,
-    ) -> HashMap<String, u32> {
+    fn collect_stack_layouts_for_lir(&self, lir: &[LirInstruction]) -> HashMap<String, u32> {
         let mut layouts = HashMap::new();
         for lir in lir {
             collect_lir_stack_layouts(lir, &mut layouts);
         }
-        if let Some(abi) = abi {
-            collect_abi_stack_layouts(abi, &mut layouts);
-        }
         layouts
     }
 
-    fn active_function_arguments_for_block(
-        &self,
-        block: &Block<'_>,
-        abi: Option<&LirAbi>,
-    ) -> Vec<LirLocation> {
-        let Some(abi) = abi else {
-            return Vec::new();
-        };
-        let mut read_locations = std::collections::HashSet::new();
-        for instruction_address in block.instruction_addresses() {
-            block
-                .cfg
-                .with_instruction_record(instruction_address, |record| {
-                    if let Some(lir) = record.lir.as_ref() {
-                        collect_lir_read_locations(lir, &mut read_locations);
-                    }
-                });
-        }
-        if let Some(lir) = block.terminator.lir.as_ref() {
-            collect_lir_read_locations(lir, &mut read_locations);
-        }
-        active_function_arguments(&read_locations, abi)
-    }
-
-    fn collect_stack_layouts_for_block(
-        &self,
-        block: &Block<'_>,
-        abi: Option<&LirAbi>,
-    ) -> HashMap<String, u32> {
+    fn collect_stack_layouts_for_block(&self, block: &Block<'_>) -> HashMap<String, u32> {
         let mut layouts = HashMap::new();
         for instruction_address in block.instruction_addresses() {
             block
@@ -966,9 +697,6 @@ impl LlvmModule {
         }
         if let Some(lir) = block.terminator.lir.as_ref() {
             collect_lir_stack_layouts(lir, &mut layouts);
-        }
-        if let Some(abi) = abi {
-            collect_abi_stack_layouts(abi, &mut layouts);
         }
         layouts
     }
@@ -985,36 +713,9 @@ impl LlvmModule {
             .collect()
     }
 
-    fn active_function_arguments_for_function(
-        &self,
-        blocks: &[(Block<'_>, Vec<u64>)],
-        abi: Option<&LirAbi>,
-    ) -> Vec<LirLocation> {
-        let Some(abi) = abi else {
-            return Vec::new();
-        };
-        let mut read_locations = std::collections::HashSet::new();
-        for (block, instruction_addresses) in blocks {
-            for instruction_address in instruction_addresses {
-                block
-                    .cfg
-                    .with_instruction_record(*instruction_address, |record| {
-                        if let Some(lir) = record.lir.as_ref() {
-                            collect_lir_read_locations(lir, &mut read_locations);
-                        }
-                    });
-            }
-            if let Some(lir) = block.terminator.lir.as_ref() {
-                collect_lir_read_locations(lir, &mut read_locations);
-            }
-        }
-        active_function_arguments(&read_locations, abi)
-    }
-
     fn collect_stack_layouts_for_function(
         &self,
         blocks: &[(Block<'_>, Vec<u64>)],
-        abi: Option<&LirAbi>,
     ) -> HashMap<String, u32> {
         let mut layouts = HashMap::new();
         for (block, instruction_addresses) in blocks {
@@ -1030,9 +731,6 @@ impl LlvmModule {
             if let Some(lir) = block.terminator.lir.as_ref() {
                 collect_lir_stack_layouts(lir, &mut layouts);
             }
-        }
-        if let Some(abi) = abi {
-            collect_abi_stack_layouts(abi, &mut layouts);
         }
         layouts
     }
@@ -1225,246 +923,47 @@ impl LlvmModule {
     }
 }
 
-#[cfg(test)]
-mod jit_tests {
-    use super::LlvmModule;
-    use crate::irs::lir::{
-        Lir, LirAbi, LirCpu, LirEffect, LirExpression, LirLocation, LirMetadata, LirModule,
-        LirOperationBinary, LirStatus, LirTerminator,
-    };
-    use std::collections::BTreeMap;
-
-    #[cfg(all(target_arch = "x86_64", not(target_os = "windows")))]
-    #[test]
-    fn jit_function_executes_amd64_add_two() {
-        let cpu = LirCpu::amd64().expect("cpu");
-        let abi = LirAbi::sysv(&cpu).expect("sysv abi");
-        let mut lifter = LlvmModule::new(None, cpu, None).expect("llvm module");
-
-        let lir = LirModule::from_instructions(vec![Lir {
-            version: 1,
-            status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
-            effects: vec![LirEffect::Set {
-                dst: LirLocation::Register {
-                    name: "rax".to_string(),
-                    bits: 64,
-                },
-                expression: LirExpression::Binary {
-                    op: LirOperationBinary::Add,
-                    left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
-                        name: "rdi".to_string(),
-                        bits: 64,
-                    }))),
-                    right: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
-                        name: "rsi".to_string(),
-                        bits: 64,
-                    }))),
-                    bits: 64,
-                },
-            }],
-            terminator: LirTerminator::Return { expression: None },
-            diagnostics: Vec::new(),
-        }]);
-
-        lifter
-            .populate_function_lir_named(&lir, Some(&abi), "add_two")
-            .expect("function lift");
-        lifter.optimize_mem2reg().expect("mem2reg");
-        lifter.optimize_sroa().expect("sroa");
-        lifter.optimize_instcombine().expect("instcombine");
-        lifter.optimize_gvn().expect("gvn");
-        lifter.optimize_dce().expect("dce");
-
-        let jitted = lifter
-            .duplicate_function_view("add_two")
-            .expect("function view")
-            .jit_function("add_two", &BTreeMap::new())
-            .expect("jit function");
-
-        let function: extern "C" fn(u64, u64) -> u64 =
-            unsafe { std::mem::transmute(jitted.address()) };
-        assert_eq!(function(1, 1), 2);
-        assert_eq!(jitted.name(), "add_two");
-    }
+fn infer_return_bits(lir: &[LirInstruction]) -> Option<u16> {
+    lir.iter()
+        .rev()
+        .find_map(|instruction| match &instruction.terminator {
+            LirTerminator::Return {
+                expression: Some(expression),
+            } => Some(expression.bits()),
+            _ => None,
+        })
 }
 
-impl JittedFunction {
-    pub fn address(&self) -> usize {
-        self.address
-    }
+fn infer_return_bits_from_blocks(blocks: &[(Block<'_>, Vec<u64>)]) -> Option<u16> {
+    blocks
+        .iter()
+        .rev()
+        .find_map(|(block, instruction_addresses)| {
+            if let Some(bits) = block
+                .terminator
+                .lir
+                .as_ref()
+                .and_then(|lir| infer_return_bits(std::slice::from_ref(lir)))
+            {
+                return Some(bits);
+            }
 
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn keepalive_token(&self) -> usize {
-        (&self.engine as *const ExecutionEngine<'static>) as usize
-    }
+            instruction_addresses.iter().rev().find_map(|address| {
+                block.cfg.with_instruction_record(*address, |record| {
+                    record
+                        .lir
+                        .as_ref()
+                        .and_then(|lir| infer_return_bits(std::slice::from_ref(lir)))
+                })?
+            })
+        })
 }
 
-fn active_function_arguments(
-    read_locations: &std::collections::HashSet<LirLocation>,
-    abi: &LirAbi,
-) -> Vec<LirLocation> {
-    let mut highest_used = None;
-    for (index, location) in abi.function_arguments.iter().enumerate() {
-        if read_locations
-            .iter()
-            .any(|read| location_matches_abi_argument(read, location))
-        {
-            highest_used = Some(index);
-        }
-    }
-    highest_used
-        .map(|index| abi.function_arguments[..=index].to_vec())
-        .unwrap_or_default()
-}
-
-fn location_matches_abi_argument(read: &LirLocation, argument: &LirLocation) -> bool {
-    if read == argument {
-        return true;
-    }
-    match (
-        x86_argument_register_alias(read),
-        x86_argument_register_alias(argument),
-    ) {
-        (Some(read), Some(argument)) => read == argument,
-        _ => false,
-    }
-}
-
-fn x86_argument_register_alias(location: &LirLocation) -> Option<(String, u16)> {
-    let LirLocation::Register { name, bits } = location else {
-        return None;
-    };
-    match (*bits, name.as_str()) {
-        (8, "al") | (8, "ah") | (16, "ax") => Some(("eax".to_string(), 32)),
-        (8, "bl") | (8, "bh") | (16, "bx") => Some(("ebx".to_string(), 32)),
-        (8, "cl") | (8, "ch") | (16, "cx") => Some(("ecx".to_string(), 32)),
-        (8, "dl") | (8, "dh") | (16, "dx") => Some(("edx".to_string(), 32)),
-        _ => Some((name.clone(), *bits)),
-    }
-}
-
-fn collect_abi_stack_layouts(abi: &LirAbi, layouts: &mut HashMap<String, u32>) {
-    for location in &abi.function_arguments {
-        collect_stack_layout_for_location(location, layouts);
-    }
-    for location in &abi.return_locations {
-        collect_stack_layout_for_location(location, layouts);
-    }
-    for trap in &abi.traps {
-        if let Some(location) = &trap.number_register {
-            collect_stack_layout_for_location(location, layouts);
-        }
-        for location in &trap.argument_registers {
-            collect_stack_layout_for_location(location, layouts);
-        }
-        for location in &trap.result_registers {
-            collect_stack_layout_for_location(location, layouts);
-        }
-        for location in &trap.shadow_registers {
-            collect_stack_layout_for_location(location, layouts);
-        }
-    }
-}
-
-fn collect_lir_read_locations(lir: &Lir, reads: &mut std::collections::HashSet<LirLocation>) {
-    for effect in &lir.effects {
-        collect_effect_read_locations(effect, reads);
-    }
-    collect_terminator_read_locations(&lir.terminator, reads);
-}
-
-fn collect_lir_stack_layouts(lir: &Lir, layouts: &mut HashMap<String, u32>) {
-    for temporary in &lir.temporaries {
-        let _ = temporary;
-    }
+fn collect_lir_stack_layouts(lir: &LirInstruction, layouts: &mut HashMap<String, u32>) {
     for effect in &lir.effects {
         collect_effect_stack_layouts(effect, layouts);
     }
     collect_terminator_stack_layouts(&lir.terminator, layouts);
-}
-
-fn collect_effect_read_locations(
-    effect: &LirEffect,
-    reads: &mut std::collections::HashSet<LirLocation>,
-) {
-    match effect {
-        LirEffect::Set { expression, .. } => collect_expression_read_locations(expression, reads),
-        LirEffect::Store {
-            addr, expression, ..
-        } => {
-            collect_expression_read_locations(addr, reads);
-            collect_expression_read_locations(expression, reads);
-        }
-        LirEffect::MemorySet {
-            addr,
-            value,
-            count,
-            decrement,
-            ..
-        } => {
-            collect_expression_read_locations(addr, reads);
-            collect_expression_read_locations(value, reads);
-            collect_expression_read_locations(count, reads);
-            collect_expression_read_locations(decrement, reads);
-        }
-        LirEffect::MemoryCopy {
-            src_addr,
-            dst_addr,
-            count,
-            decrement,
-            ..
-        } => {
-            collect_expression_read_locations(src_addr, reads);
-            collect_expression_read_locations(dst_addr, reads);
-            collect_expression_read_locations(count, reads);
-            collect_expression_read_locations(decrement, reads);
-        }
-        LirEffect::AtomicCmpXchg {
-            addr,
-            expected,
-            desired,
-            ..
-        } => {
-            collect_expression_read_locations(addr, reads);
-            collect_expression_read_locations(expected, reads);
-            collect_expression_read_locations(desired, reads);
-        }
-        LirEffect::WriteProperty {
-            reference,
-            expression,
-            ..
-        } => {
-            collect_expression_read_locations(reference, reads);
-            collect_expression_read_locations(expression, reads);
-        }
-        LirEffect::WriteElement {
-            reference,
-            index,
-            expression,
-            ..
-        } => {
-            collect_expression_read_locations(reference, reads);
-            collect_expression_read_locations(index, reads);
-            collect_expression_read_locations(expression, reads);
-        }
-        LirEffect::Push { expression, .. } => collect_expression_read_locations(expression, reads),
-        LirEffect::Intrinsic { args, .. } => {
-            for arg in args {
-                collect_expression_read_locations(arg, reads);
-            }
-        }
-        LirEffect::Pop { .. }
-        | LirEffect::Fence { .. }
-        | LirEffect::Trap { .. }
-        | LirEffect::Nop => {}
-    }
 }
 
 fn collect_effect_stack_layouts(effect: &LirEffect, layouts: &mut HashMap<String, u32>) {
@@ -1547,40 +1046,6 @@ fn collect_effect_stack_layouts(effect: &LirEffect, layouts: &mut HashMap<String
     }
 }
 
-fn collect_terminator_read_locations(
-    terminator: &LirTerminator,
-    reads: &mut std::collections::HashSet<LirLocation>,
-) {
-    match terminator {
-        LirTerminator::Jump { target } => collect_expression_read_locations(target, reads),
-        LirTerminator::Branch {
-            condition,
-            true_target,
-            false_target,
-        } => {
-            collect_expression_read_locations(condition, reads);
-            collect_expression_read_locations(true_target, reads);
-            collect_expression_read_locations(false_target, reads);
-        }
-        LirTerminator::Call {
-            target,
-            return_target,
-            ..
-        } => {
-            collect_expression_read_locations(target, reads);
-            if let Some(return_target) = return_target {
-                collect_expression_read_locations(return_target, reads);
-            }
-        }
-        LirTerminator::Return { expression } => {
-            if let Some(expression) = expression {
-                collect_expression_read_locations(expression, reads);
-            }
-        }
-        LirTerminator::FallThrough | LirTerminator::Trap | LirTerminator::Unreachable => {}
-    }
-}
-
 fn collect_terminator_stack_layouts(
     terminator: &LirTerminator,
     layouts: &mut HashMap<String, u32>,
@@ -1612,68 +1077,6 @@ fn collect_terminator_stack_layouts(
             }
         }
         LirTerminator::FallThrough | LirTerminator::Trap | LirTerminator::Unreachable => {}
-    }
-}
-
-fn collect_expression_read_locations(
-    expression: &LirExpression,
-    reads: &mut std::collections::HashSet<LirLocation>,
-) {
-    match expression {
-        LirExpression::DataAddress { .. } => {}
-        LirExpression::AddressOf { .. } => {}
-        LirExpression::Read(location) => {
-            reads.insert(location.as_ref().clone());
-            match location.as_ref() {
-                LirLocation::Memory { addr, .. } => collect_expression_read_locations(addr, reads),
-                LirLocation::IndexedMemory { index, .. } => {
-                    collect_expression_read_locations(index, reads)
-                }
-                LirLocation::Register { .. }
-                | LirLocation::Flag { .. }
-                | LirLocation::ProgramCounter { .. }
-                | LirLocation::Temporary { .. }
-                | LirLocation::StackMemory { .. } => {}
-            }
-        }
-        LirExpression::Load { addr, .. } => collect_expression_read_locations(addr, reads),
-        LirExpression::ReadProperty { reference, .. } => {
-            collect_expression_read_locations(reference, reads)
-        }
-        LirExpression::ReadElement {
-            reference, index, ..
-        } => {
-            collect_expression_read_locations(reference, reads);
-            collect_expression_read_locations(index, reads);
-        }
-        LirExpression::Unary { arg, .. }
-        | LirExpression::Cast { arg, .. }
-        | LirExpression::Extract { arg, .. } => collect_expression_read_locations(arg, reads),
-        LirExpression::Binary { left, right, .. } | LirExpression::Compare { left, right, .. } => {
-            collect_expression_read_locations(left, reads);
-            collect_expression_read_locations(right, reads);
-        }
-        LirExpression::Select {
-            condition,
-            when_true,
-            when_false,
-            ..
-        } => {
-            collect_expression_read_locations(condition, reads);
-            collect_expression_read_locations(when_true, reads);
-            collect_expression_read_locations(when_false, reads);
-        }
-        LirExpression::Concat { parts, .. } | LirExpression::Intrinsic { args: parts, .. } => {
-            for part in parts {
-                collect_expression_read_locations(part, reads);
-            }
-        }
-        LirExpression::Const { .. }
-        | LirExpression::Function { .. }
-        | LirExpression::Undefined { .. }
-        | LirExpression::Poison { .. }
-        | LirExpression::Null { .. }
-        | LirExpression::Allocate { .. } => {}
     }
 }
 
@@ -1749,50 +1152,7 @@ fn collect_stack_layout_for_location(location: &LirLocation, layouts: &mut HashM
     }
 }
 
-fn should_emit_instruction_encoding(lir: &Lir) -> bool {
-    matches!(lir.status, crate::irs::lir::LirStatus::Partial)
-}
-
 impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
-    fn uses_pure_callable_abi(&self) -> bool {
-        self.abi.is_some()
-            && (self.function.get_first_param().is_some()
-                || self
-                    .abi
-                    .as_ref()
-                    .and_then(|abi| abi.function_return_bits)
-                    .is_some())
-    }
-
-    fn is_callable_abi_boundary_location(&self, location: &LirLocation) -> bool {
-        let Some(abi) = &self.abi else {
-            return false;
-        };
-        abi.function_arguments.iter().any(|arg| arg == location)
-            || abi.return_locations.iter().any(|ret| ret == location)
-    }
-
-    fn bind_function_arguments(&mut self) -> Result<(), Error> {
-        for (index, (param, location)) in self
-            .function
-            .get_param_iter()
-            .zip(self.function_arguments.iter())
-            .enumerate()
-        {
-            let key = render_location(location);
-            let slot = self.build_entry_alloca(
-                self.location_type(location),
-                &sanitize_symbol(&format!("abi_arg_{}_{}", index, key)),
-            )?;
-            self.builder
-                .build_store(slot, param.into_int_value())
-                .map_err(|err| Error::other(err.to_string()))?;
-            self.slots.insert(key.clone(), slot);
-            self.slot_locations.insert(key, location.clone());
-        }
-        Ok(())
-    }
-
     fn record_lir_lowering(&mut self, kind: &str, detail: impl Into<String>) {
         if !self.debug {
             return;
@@ -1918,8 +1278,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .and_then(|block| block.get_terminator())
             .is_none();
         if needs_return {
-            if self.emit_abi_return()? {
-            } else if let Some(adjust) = self.native_return_adjust {
+            if let Some(adjust) = self.native_return_adjust {
                 self.sync_slots_to_architecture()?;
                 self.emit_native_return(adjust)?;
             } else {
@@ -2067,43 +1426,19 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     fn lower_prepared_instruction_record(
         &mut self,
         instruction_address: u64,
-        lir: Option<&Lir>,
+        lir: Option<&LirInstruction>,
     ) -> Result<(), Error> {
         self.current_instruction_address = Some(instruction_address);
         if let Some(lir) = lir {
-            if self.debug
-                && (matches!(lir.status, crate::irs::lir::LirStatus::Partial)
-                    || !lir.diagnostics.is_empty())
-            {
-                let diagnostics = lir
-                    .diagnostics
-                    .iter()
-                    .map(|diagnostic| format!("{:?}: {}", diagnostic.kind, diagnostic.message))
-                    .collect::<Vec<_>>()
-                    .join(" | ");
-                self.record_lir_lowering(
-                    "lir_status",
-                    format!("status={:?} diagnostics=[{}]", lir.status, diagnostics),
-                );
+            if self.debug && matches!(lir.status, crate::irs::lir::LirStatus::Partial) {
+                self.record_lir_lowering("lir_status", format!("status={:?}", lir.status));
             }
             *self.cached_flags_register.borrow_mut() = None;
             let prepared = prepare_instruction_lir(lir)?;
-            let emit_encoding = should_emit_instruction_encoding(&prepared);
-            if emit_encoding {
-                let Some(encoding) = prepared.encoding.as_ref() else {
-                    return Err(Error::other(
-                        "partial LIR bindings require encoding for llvm lowering",
-                    ));
-                };
-                self.emit_instruction_encoding(encoding)?;
-            }
-            let previous_lir_abi = self.current_lir_abi.clone();
-            self.current_lir_abi = prepared.abi.clone().or_else(|| self.abi.clone());
             let result = (|| -> Result<(), Error> {
                 self.seed_instruction_inputs(&prepared)?;
                 self.lower_lir(&prepared)
             })();
-            self.current_lir_abi = previous_lir_abi;
             result?;
             *self.cached_flags_register.borrow_mut() = None;
         }
@@ -2111,46 +1446,22 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         Ok(())
     }
 
-    fn lower_instruction_lir(&mut self, lir: &Lir) -> Result<(), Error> {
-        if self.debug
-            && (matches!(lir.status, crate::irs::lir::LirStatus::Partial)
-                || !lir.diagnostics.is_empty())
-        {
-            let diagnostics = lir
-                .diagnostics
-                .iter()
-                .map(|diagnostic| format!("{:?}: {}", diagnostic.kind, diagnostic.message))
-                .collect::<Vec<_>>()
-                .join(" | ");
-            self.record_lir_lowering(
-                "lir_status",
-                format!("status={:?} diagnostics=[{}]", lir.status, diagnostics),
-            );
+    fn lower_instruction_lir(&mut self, lir: &LirInstruction) -> Result<(), Error> {
+        if self.debug && matches!(lir.status, crate::irs::lir::LirStatus::Partial) {
+            self.record_lir_lowering("lir_status", format!("status={:?}", lir.status));
         }
         *self.cached_flags_register.borrow_mut() = None;
         let prepared = prepare_instruction_lir(lir)?;
-        let emit_encoding = should_emit_instruction_encoding(&prepared);
-        if emit_encoding {
-            let Some(encoding) = prepared.encoding.as_ref() else {
-                return Err(Error::other(
-                    "partial LIR bindings require encoding for llvm lowering",
-                ));
-            };
-            self.emit_instruction_encoding(encoding)?;
-        }
-        let previous_lir_abi = self.current_lir_abi.clone();
-        self.current_lir_abi = prepared.abi.clone().or_else(|| self.abi.clone());
         let result = (|| -> Result<(), Error> {
             self.seed_instruction_inputs(&prepared)?;
             self.lower_lir(&prepared)
         })();
-        self.current_lir_abi = previous_lir_abi;
         result?;
         *self.cached_flags_register.borrow_mut() = None;
         Ok(())
     }
 
-    fn seed_instruction_inputs(&mut self, lir: &Lir) -> Result<(), Error> {
+    fn seed_instruction_inputs(&mut self, lir: &LirInstruction) -> Result<(), Error> {
         let mut registers = Vec::<LirLocation>::new();
         let mut program_counters = Vec::<LirLocation>::new();
         let mut flags = Vec::<LirLocation>::new();

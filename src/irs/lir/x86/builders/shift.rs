@@ -25,10 +25,10 @@ use crate::irs::lir::x86::helpers as common;
 use crate::irs::lir::x86::instruction::InstructionDetailX86;
 use crate::irs::lir::x86::operand::{X86OperandKind, X86OperandView};
 use crate::irs::lir::{
-    Lir, LirEffect, LirExpression, LirLocation, LirOperationBinary, LirOperationCast,
+    LirEffect, LirExpression, LirInstruction, LirLocation, LirOperationBinary, LirOperationCast,
     LirOperationCompare, LirTerminator,
 };
-pub fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+pub fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     if matches!(view.mnemonic.as_str(), "shld") {
         return double_precision_shift(machine, view, true);
     }
@@ -311,7 +311,7 @@ fn rotate_through_carry(
     machine: Architecture,
     view: &InstructionDetailX86,
     left: bool,
-) -> Option<Lir> {
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let value = operand_expr(machine, view.operands().first()?)?;
     let raw_count = view
@@ -422,7 +422,7 @@ fn rotate_through_carry(
     ))
 }
 
-fn bmi_shift(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn bmi_shift(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let op = match view.mnemonic.as_str() {
         "shlx" => LirOperationBinary::Shl,
         "shrx" => LirOperationBinary::LShr,
@@ -479,7 +479,7 @@ fn double_precision_shift(
     machine: Architecture,
     view: &InstructionDetailX86,
     left_shift: bool,
-) -> Option<Lir> {
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, view.operands().first()?)?;
     let dst_expr = operand_expr(machine, view.operands().first()?)?;
     let src_expr = operand_expr(machine, view.operands().get(1)?)?;

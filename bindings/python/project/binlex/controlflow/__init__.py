@@ -36,9 +36,7 @@ from binlex_bindings.binlex.controlflow.instruction import OperandKind as Operan
 from binlex.core.architecture import Architecture, _coerce_architecture
 from binlex.formats import Image
 from binlex.hashing import MinHash32, SHA256, SSDeep, TLSH
-from binlex.irs.hir import HirFunction
-from binlex.irs.lir import Lir, LirBlock, LirFunction
-from binlex.irs.mir import MirBlock, MirFunction
+from binlex.irs.lir import LirInstruction, LirBlock, LirFunction
 
 EntityKind = _EntityKindBinding
 
@@ -313,7 +311,7 @@ class Instruction:
         lir = self._inner.lir()
         if lir is None:
             return None
-        return Lir._from_inner(lir)
+        return LirInstruction._from_inner(lir)
 
     def set_lir(self, lir):
         """Replace the canonical LIR for this instruction inside the graph."""
@@ -446,10 +444,6 @@ class Block:
     def lir(self):
         """Return canonical LIR for this block."""
         return LirBlock._from_inner(self._inner.lir())
-
-    def mir(self):
-        """Return optimized MIR for this block."""
-        return self._inner.mir()
 
     def tlsh(self):
         """Return the TLSH object for this block, if available."""
@@ -634,23 +628,6 @@ class Function:
     def lir(self):
         """Return raw LIR for this function."""
         result = LirFunction._from_inner(self._inner.lir())
-        return result
-
-    def mir(self):
-        """Return raw MIR for this function."""
-        result = MirFunction._from_inner(self._inner.mir())
-        return result
-
-    def hir(self):
-        """Return raw HIR for this function."""
-        result = HirFunction._from_inner(self._inner.hir())
-        return result
-
-    def ast(self):
-        """Return AST for this function."""
-        from binlex.irs.ast import AstFunction
-
-        result = AstFunction._from_inner(self._inner.ast())
         return result
 
     def tlsh(self):

@@ -1,5 +1,5 @@
 use crate::irs::lir::{
-    Lir, LirEffect, LirExpression, LirLocation, LirTemporary, LirTerminator,
+    LirEffect, LirExpression, LirInstruction, LirLocation, LirTerminator,
     normalize_instruction_lir, validate_instruction_lir,
 };
 use std::collections::{HashMap, HashSet};
@@ -98,18 +98,14 @@ fn normalize_compare(left: LirExpression, right: LirExpression) -> (LirExpressio
     }
 }
 
-pub fn prepare_instruction_lir(lir: &Lir) -> Result<Lir, Error> {
+pub fn prepare_instruction_lir(lir: &LirInstruction) -> Result<LirInstruction, Error> {
     validate_instruction_lir(lir)?;
     let normalized = normalize_instruction_lir(lir);
-    let (temporaries, snapshot_effects, effects, snapshots, load_snapshots) =
+    let (snapshot_effects, effects, snapshots, load_snapshots) =
         snapshot_written_locations(&normalized);
-    Ok(Lir {
-        version: normalized.version,
+    Ok(LirInstruction {
+        address: normalized.address,
         status: normalized.status,
-        metadata: Default::default(),
-        abi: normalized.abi,
-        encoding: normalized.encoding.clone(),
-        temporaries,
         effects: snapshot_effects
             .iter()
             .map(|effect| prepare_effect(effect, &HashMap::new(), &HashMap::new()))
@@ -120,26 +116,23 @@ pub fn prepare_instruction_lir(lir: &Lir) -> Result<Lir, Error> {
             )
             .collect(),
         terminator: prepare_terminator(&normalized.terminator, &snapshots, &load_snapshots),
-        diagnostics: normalized.diagnostics,
     })
 }
 
 fn snapshot_written_locations(
-    lir: &Lir,
+    lir: &LirInstruction,
 ) -> (
-    Vec<LirTemporary>,
     Vec<LirEffect>,
     Vec<LirEffect>,
     HashMap<LirLocation, LirLocation>,
     HashMap<LirExpression, LirLocation>,
 ) {
-    let mut temporaries = lir.temporaries.clone();
     let mut snapshots = HashMap::<LirLocation, LirLocation>::new();
     let mut load_snapshots = HashMap::<LirExpression, LirLocation>::new();
     let read_locations = collect_read_locations(lir);
     let read_loads = collect_read_loads(lir);
     let written_loads = collect_written_loads(lir);
-    let mut next_temp_id = temporaries.iter().map(|temp| temp.id).max().unwrap_or(0);
+    let mut next_temp_id = max_temporary_id(lir);
     let mut snapshot_effects = Vec::<LirEffect>::new();
 
     for effect in &lir.effects {
@@ -162,11 +155,6 @@ fn snapshot_written_locations(
                     id: next_temp_id,
                     bits,
                 };
-                temporaries.push(LirTemporary {
-                    id: next_temp_id,
-                    bits,
-                    name: Some(format!("snapshot_{}", snapshots.len())),
-                });
                 snapshot_effects.push(LirEffect::Set {
                     dst: temp.clone(),
                     expression: LirExpression::Read(Box::new(dst.clone())),
@@ -187,11 +175,6 @@ fn snapshot_written_locations(
                 id: next_temp_id,
                 bits,
             };
-            temporaries.push(LirTemporary {
-                id: next_temp_id,
-                bits,
-                name: Some(format!("load_snapshot_{}", load_snapshots.len())),
-            });
             snapshot_effects.push(LirEffect::Set {
                 dst: temp.clone(),
                 expression: load.clone(),
@@ -201,7 +184,6 @@ fn snapshot_written_locations(
     }
 
     (
-        temporaries,
         snapshot_effects,
         lir.effects.clone(),
         snapshots,
@@ -209,7 +191,190 @@ fn snapshot_written_locations(
     )
 }
 
-fn collect_read_locations(lir: &Lir) -> HashSet<LirLocation> {
+fn max_temporary_id(lir: &LirInstruction) -> u32 {
+    let mut max_id = 0;
+    for effect in &lir.effects {
+        collect_effect_temporary_ids(effect, &mut max_id);
+    }
+    collect_terminator_temporary_ids(&lir.terminator, &mut max_id);
+    max_id
+}
+
+fn collect_effect_temporary_ids(effect: &LirEffect, max_id: &mut u32) {
+    match effect {
+        LirEffect::Set { dst, expression } => {
+            collect_location_temporary_ids(dst, max_id);
+            collect_expression_temporary_ids(expression, max_id);
+        }
+        LirEffect::Store {
+            addr, expression, ..
+        } => {
+            collect_expression_temporary_ids(addr, max_id);
+            collect_expression_temporary_ids(expression, max_id);
+        }
+        LirEffect::MemorySet {
+            addr,
+            value,
+            count,
+            decrement,
+            ..
+        } => {
+            collect_expression_temporary_ids(addr, max_id);
+            collect_expression_temporary_ids(value, max_id);
+            collect_expression_temporary_ids(count, max_id);
+            collect_expression_temporary_ids(decrement, max_id);
+        }
+        LirEffect::MemoryCopy {
+            src_addr,
+            dst_addr,
+            count,
+            decrement,
+            ..
+        } => {
+            collect_expression_temporary_ids(src_addr, max_id);
+            collect_expression_temporary_ids(dst_addr, max_id);
+            collect_expression_temporary_ids(count, max_id);
+            collect_expression_temporary_ids(decrement, max_id);
+        }
+        LirEffect::AtomicCmpXchg {
+            addr,
+            expected,
+            desired,
+            observed,
+            ..
+        } => {
+            collect_expression_temporary_ids(addr, max_id);
+            collect_expression_temporary_ids(expected, max_id);
+            collect_expression_temporary_ids(desired, max_id);
+            collect_location_temporary_ids(observed, max_id);
+        }
+        LirEffect::WriteProperty {
+            reference,
+            expression,
+            ..
+        } => {
+            collect_expression_temporary_ids(reference, max_id);
+            collect_expression_temporary_ids(expression, max_id);
+        }
+        LirEffect::WriteElement {
+            reference,
+            index,
+            expression,
+            ..
+        } => {
+            collect_expression_temporary_ids(reference, max_id);
+            collect_expression_temporary_ids(index, max_id);
+            collect_expression_temporary_ids(expression, max_id);
+        }
+        LirEffect::Push { expression, .. } => collect_expression_temporary_ids(expression, max_id),
+        LirEffect::Pop { dst, .. } => collect_location_temporary_ids(dst, max_id),
+        LirEffect::Intrinsic { args, outputs, .. } => {
+            for arg in args {
+                collect_expression_temporary_ids(arg, max_id);
+            }
+            for output in outputs {
+                collect_location_temporary_ids(output, max_id);
+            }
+        }
+        LirEffect::Fence { .. } | LirEffect::Trap { .. } | LirEffect::Nop => {}
+    }
+}
+
+fn collect_terminator_temporary_ids(terminator: &LirTerminator, max_id: &mut u32) {
+    match terminator {
+        LirTerminator::Jump { target } => collect_expression_temporary_ids(target, max_id),
+        LirTerminator::Branch {
+            condition,
+            true_target,
+            false_target,
+        } => {
+            collect_expression_temporary_ids(condition, max_id);
+            collect_expression_temporary_ids(true_target, max_id);
+            collect_expression_temporary_ids(false_target, max_id);
+        }
+        LirTerminator::Call {
+            target,
+            return_target,
+            ..
+        } => {
+            collect_expression_temporary_ids(target, max_id);
+            if let Some(return_target) = return_target {
+                collect_expression_temporary_ids(return_target, max_id);
+            }
+        }
+        LirTerminator::Return { expression } => {
+            if let Some(expression) = expression {
+                collect_expression_temporary_ids(expression, max_id);
+            }
+        }
+        LirTerminator::FallThrough | LirTerminator::Unreachable | LirTerminator::Trap => {}
+    }
+}
+
+fn collect_expression_temporary_ids(expression: &LirExpression, max_id: &mut u32) {
+    match expression {
+        LirExpression::Read(location) => collect_location_temporary_ids(location, max_id),
+        LirExpression::Load { addr, .. } => collect_expression_temporary_ids(addr, max_id),
+        LirExpression::Unary { arg, .. }
+        | LirExpression::Cast { arg, .. }
+        | LirExpression::Extract { arg, .. } => collect_expression_temporary_ids(arg, max_id),
+        LirExpression::Binary { left, right, .. } | LirExpression::Compare { left, right, .. } => {
+            collect_expression_temporary_ids(left, max_id);
+            collect_expression_temporary_ids(right, max_id);
+        }
+        LirExpression::Select {
+            condition,
+            when_true,
+            when_false,
+            ..
+        } => {
+            collect_expression_temporary_ids(condition, max_id);
+            collect_expression_temporary_ids(when_true, max_id);
+            collect_expression_temporary_ids(when_false, max_id);
+        }
+        LirExpression::Concat { parts, .. } => {
+            for part in parts {
+                collect_expression_temporary_ids(part, max_id);
+            }
+        }
+        LirExpression::Intrinsic { args, .. } => {
+            for arg in args {
+                collect_expression_temporary_ids(arg, max_id);
+            }
+        }
+        LirExpression::ReadProperty { reference, .. } => {
+            collect_expression_temporary_ids(reference, max_id)
+        }
+        LirExpression::ReadElement {
+            reference, index, ..
+        } => {
+            collect_expression_temporary_ids(reference, max_id);
+            collect_expression_temporary_ids(index, max_id);
+        }
+        LirExpression::Const { .. }
+        | LirExpression::Function { .. }
+        | LirExpression::DataAddress { .. }
+        | LirExpression::AddressOf { .. }
+        | LirExpression::Undefined { .. }
+        | LirExpression::Poison { .. }
+        | LirExpression::Null { .. }
+        | LirExpression::Allocate { .. } => {}
+    }
+}
+
+fn collect_location_temporary_ids(location: &LirLocation, max_id: &mut u32) {
+    match location {
+        LirLocation::Temporary { id, .. } => *max_id = (*max_id).max(*id),
+        LirLocation::Memory { addr, .. } => collect_expression_temporary_ids(addr, max_id),
+        LirLocation::IndexedMemory { index, .. } => collect_expression_temporary_ids(index, max_id),
+        LirLocation::Register { .. }
+        | LirLocation::Flag { .. }
+        | LirLocation::ProgramCounter { .. }
+        | LirLocation::StackMemory { .. } => {}
+    }
+}
+
+fn collect_read_locations(lir: &LirInstruction) -> HashSet<LirLocation> {
     let mut reads = HashSet::new();
     for effect in &lir.effects {
         collect_effect_reads(effect, &mut reads);
@@ -218,7 +383,7 @@ fn collect_read_locations(lir: &Lir) -> HashSet<LirLocation> {
     reads
 }
 
-fn collect_read_loads(lir: &Lir) -> HashSet<LirExpression> {
+fn collect_read_loads(lir: &LirInstruction) -> HashSet<LirExpression> {
     let mut reads = HashSet::new();
     for effect in &lir.effects {
         collect_effect_loads(effect, &mut reads);
@@ -227,7 +392,7 @@ fn collect_read_loads(lir: &Lir) -> HashSet<LirExpression> {
     reads
 }
 
-fn collect_written_loads(lir: &Lir) -> HashSet<LirExpression> {
+fn collect_written_loads(lir: &LirInstruction) -> HashSet<LirExpression> {
     let mut writes = HashSet::new();
     for effect in &lir.effects {
         match effect {
@@ -953,19 +1118,15 @@ fn prepare_expression(
 mod tests {
     use super::prepare_instruction_lir;
     use crate::irs::lir::{
-        Lir, LirAddressSpace, LirEffect, LirExpression, LirLocation, LirOperationBinary, LirStatus,
-        LirTerminator,
+        LirAddressSpace, LirEffect, LirExpression, LirInstruction, LirLocation, LirOperationBinary,
+        LirStatus, LirTerminator,
     };
 
     #[test]
     fn coerces_store_expression_to_destination_width() {
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: Default::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Store {
                 space: LirAddressSpace::Default,
                 addr: LirExpression::Const { value: 0, bits: 64 },
@@ -976,7 +1137,6 @@ mod tests {
                 bits: 64,
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let prepared = prepare_instruction_lir(&lir).expect("prepare");
@@ -991,13 +1151,9 @@ mod tests {
 
     #[test]
     fn widens_shift_amount_to_operation_width() {
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: Default::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "dst".to_string(),
@@ -1011,7 +1167,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let prepared = prepare_instruction_lir(&lir).expect("prepare");
@@ -1029,13 +1184,9 @@ mod tests {
 
     #[test]
     fn truncates_mismatched_binary_operand_to_expression_width() {
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: Default::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Register {
                     name: "dst".to_string(),
@@ -1049,7 +1200,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let prepared = prepare_instruction_lir(&lir).expect("prepare");
@@ -1067,13 +1217,9 @@ mod tests {
 
     #[test]
     fn truncates_mismatched_compare_constant_to_operand_width() {
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: Default::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Set {
                 dst: LirLocation::Flag {
                     name: "z".to_string(),
@@ -1093,7 +1239,6 @@ mod tests {
                 },
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         let prepared = prepare_instruction_lir(&lir).expect("prepare");

@@ -101,30 +101,21 @@ pub struct ImageSegment {
 
 #[pymethods]
 impl ImageSegment {
-    #[staticmethod]
-    #[pyo3(text_signature = "(name, virtual_address, data, permissions)")]
-    pub fn bytes(
+    #[new]
+    #[pyo3(text_signature = "(name, virtual_address, data=None, size=None, permissions=None)")]
+    pub fn new(
         name: Option<String>,
         virtual_address: u64,
-        data: Vec<u8>,
-        permissions: &ImagePermissions,
-    ) -> Self {
-        Self {
-            inner: InnerImageSegment::bytes(name, virtual_address, data, permissions.inner),
-        }
-    }
-
-    #[staticmethod]
-    #[pyo3(text_signature = "(name, virtual_address, size, permissions)")]
-    pub fn zeroes(
-        name: Option<String>,
-        virtual_address: u64,
-        size: u64,
-        permissions: &ImagePermissions,
-    ) -> Self {
-        Self {
-            inner: InnerImageSegment::zeroes(name, virtual_address, size, permissions.inner),
-        }
+        data: Option<Vec<u8>>,
+        size: Option<u64>,
+        permissions: Option<&ImagePermissions>,
+    ) -> PyResult<Self> {
+        let permissions = permissions
+            .map(|permissions| permissions.inner)
+            .unwrap_or_else(InnerImagePermissions::readable);
+        let inner = InnerImageSegment::new(name, virtual_address, data, size, permissions)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        Ok(Self { inner })
     }
 
     #[getter]
@@ -175,10 +166,15 @@ impl Image {
 #[pymethods]
 impl Image {
     #[new]
-    #[pyo3(text_signature = "()")]
-    pub fn new() -> Self {
+    #[pyo3(text_signature = "(segments=None)")]
+    pub fn new(segments: Option<Vec<PyRef<'_, ImageSegment>>>) -> Self {
+        let segments = segments
+            .unwrap_or_default()
+            .iter()
+            .map(|segment| segment.inner.clone())
+            .collect();
         Self {
-            inner: InnerImage::new(),
+            inner: InnerImage::from_segments(segments),
         }
     }
 

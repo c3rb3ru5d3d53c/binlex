@@ -7,8 +7,6 @@ pub mod verify;
 use serde::{Deserialize, Serialize};
 
 pub use lower::{LlvmFromLir, from_lir};
-#[cfg(not(target_os = "windows"))]
-pub use module::JittedFunction;
 pub use module::LlvmModule;
 pub use optimizers::Optimizers;
 

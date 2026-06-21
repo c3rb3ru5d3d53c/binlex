@@ -20,11 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod ast;
-pub mod hir;
 pub mod lir;
 pub mod llvm;
-pub mod mir;
 pub mod mlir;
 pub mod storage;
 #[cfg(not(target_os = "windows"))]

@@ -20,15 +20,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod ast;
-pub mod hir;
 pub mod lir;
 pub mod llvm;
-pub mod mir;
 #[cfg(not(target_os = "windows"))]
 pub mod vex;
 
-use crate::irs::ast::ast_init;
 use crate::irs::llvm::llvm_init;
 #[cfg(not(target_os = "windows"))]
 use crate::irs::vex::vex_init;
@@ -38,10 +34,7 @@ use pyo3::wrap_pymodule;
 
 #[pymodule(name = "irs")]
 pub fn irs_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_wrapped(wrap_pymodule!(hir::hir_init))?;
-    m.add_wrapped(wrap_pymodule!(ast_init))?;
     m.add_wrapped(wrap_pymodule!(lir::lir_init))?;
-    m.add_wrapped(wrap_pymodule!(mir::mir_init))?;
     m.add_wrapped(wrap_pymodule!(llvm_init))?;
     #[cfg(not(target_os = "windows"))]
     m.add_wrapped(wrap_pymodule!(vex_init))?;

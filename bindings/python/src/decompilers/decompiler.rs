@@ -21,11 +21,7 @@
 // SOFTWARE.
 
 use crate::controlflow::{Function, Graph};
-use crate::irs::ast::PyAstFunction;
-use crate::irs::hir::PyHirFunction;
-use crate::irs::lir::LirFunction as PyLirFunction;
-use crate::irs::mir::PyMirFunction;
-use binlex::decompilers::{DecompiledFunction, Decompiler as InnerDecompiler, DecompilerBackend};
+use binlex::decompilers::{Decompiler as InnerDecompiler, DecompilerBackend};
 use pyo3::exceptions::{PyRuntimeError, PyTypeError};
 use pyo3::prelude::*;
 use std::sync::Arc;
@@ -36,27 +32,6 @@ pub struct Decompiler {
     graph: Py<Graph>,
     graph_inner: Arc<Mutex<binlex::controlflow::Graph>>,
     backend: DecompilerBackend,
-}
-
-impl Decompiler {
-    fn decompile_artifact_to_python(
-        py: Python<'_>,
-        artifact: DecompiledFunction,
-    ) -> PyResult<(
-        u64,
-        Py<PyLirFunction>,
-        Py<PyMirFunction>,
-        Py<PyHirFunction>,
-        Py<PyAstFunction>,
-    )> {
-        Ok((
-            artifact.address,
-            Py::new(py, PyLirFunction::from_inner(artifact.lir))?,
-            Py::new(py, PyMirFunction::from_inner(artifact.mir))?,
-            Py::new(py, PyHirFunction::from_inner(artifact.hir))?,
-            Py::new(py, PyAstFunction::from_inner(artifact.ast))?,
-        ))
-    }
 }
 
 #[pymethods]
@@ -104,32 +79,6 @@ impl Decompiler {
     }
 
     #[pyo3(text_signature = "($self, address)")]
-    pub fn decompile_function_artifacts(
-        &self,
-        py: Python<'_>,
-        address: u64,
-    ) -> PyResult<
-        Option<(
-            Py<PyLirFunction>,
-            Py<PyMirFunction>,
-            Py<PyHirFunction>,
-            Py<PyAstFunction>,
-        )>,
-    > {
-        let graph_inner = self.graph_inner.clone();
-        let backend = self.backend;
-        let graph = graph_inner.lock().unwrap();
-        let artifact = InnerDecompiler::new(&graph, backend)
-            .decompile_function(address)
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
-        let Some(artifact) = artifact else {
-            return Ok(None);
-        };
-        let (_, lir, mir, hir, ast) = Self::decompile_artifact_to_python(py, artifact)?;
-        Ok(Some((lir, mir, hir, ast)))
-    }
-
-    #[pyo3(text_signature = "($self, address)")]
     pub fn decompile_function(&self, py: Python<'_>, address: u64) -> PyResult<Option<Function>> {
         let graph_inner = self.graph_inner.clone();
         let backend = self.backend;
@@ -142,32 +91,6 @@ impl Decompiler {
             return Ok(None);
         }
         Ok(Some(Function::new(address, self.graph.clone_ref(py))?))
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    pub fn decompile_artifacts(
-        &self,
-        py: Python<'_>,
-    ) -> PyResult<
-        Vec<(
-            u64,
-            Py<PyLirFunction>,
-            Py<PyMirFunction>,
-            Py<PyHirFunction>,
-            Py<PyAstFunction>,
-        )>,
-    > {
-        let graph_inner = self.graph_inner.clone();
-        let backend = self.backend;
-        let graph = graph_inner.lock().unwrap();
-        let artifacts = InnerDecompiler::new(&graph, backend)
-            .decompile_artifacts()
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
-
-        artifacts
-            .into_iter()
-            .map(|artifact| Self::decompile_artifact_to_python(py, artifact))
-            .collect()
     }
 
     #[pyo3(text_signature = "($self)")]

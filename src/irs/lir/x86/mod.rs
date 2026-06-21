@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::irs::lir::Lir;
+use crate::irs::lir::LirInstruction;
 
 pub mod builders;
 pub mod flags;
@@ -34,7 +34,7 @@ mod tests;
 pub use instruction::InstructionDetailX86;
 pub use operand::{X86MemoryOperandView, X86OperandKind, X86OperandView};
 
-pub fn build(view: InstructionDetailX86) -> Option<Lir> {
+pub fn build(view: InstructionDetailX86) -> Option<LirInstruction> {
     if let Some(lir) = builders::control::build(view.machine, &view) {
         return Some(lir);
     }

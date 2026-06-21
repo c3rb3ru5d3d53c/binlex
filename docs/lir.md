@@ -27,7 +27,6 @@ LirModule are not tied to one architecture backend. They describe:
 - intrinsics
 - control-flow terminators
 - partial/complete status
-- diagnostics when modeling is incomplete
 
 ## Model
 
@@ -35,12 +34,10 @@ The top-level type is `Lir`.
 
 It contains:
 
-- `version`
+- `address`
 - `status`
-- `temporaries`
 - `effects`
 - `terminator`
-- `diagnostics`
 
 The main building blocks are:
 
@@ -78,7 +75,7 @@ The main building blocks are:
   - unreachable
   - trap
 
-## Status And Diagnostics
+## Status
 
 `LirStatus` is:
 
@@ -89,11 +86,8 @@ Use `Complete` only when the modeled effects are intended to be trusted as-is. I
 means:
 
 - no missing architectural side effects that you know about
-- no attached diagnostics
 
-Use `Partial` when you can describe some of the instruction but not all of it. Attach
-`LirDiagnostic` values to explain what is missing. That is the preferred way to model
-unsupported or architecture-specific cases without inventing false precision.
+Use `Partial` when you can describe some of the instruction but not all of it.
 
 Use `Partial` for intrinsic-backed placeholders when the intrinsic is carrying architectural detail
 that is not yet modeled directly in the lir IR.
@@ -128,9 +122,8 @@ use binlex::ir::lir::{
 };
 
 let lir = Lir {
-    version: 1,
+    address: None,
     status: LirStatus::Complete,
-    temporaries: Vec::new(),
     effects: vec![
         LirEffect::Set {
             dst: LirLocation::Register {
@@ -154,7 +147,6 @@ let lir = Lir {
         },
     ],
     terminator: LirTerminator::Return { expression: None },
-    diagnostics: Vec::new(),
 };
 ```
 
@@ -172,9 +164,8 @@ use binlex::ir::lir::{
 };
 
 let lir = Lir {
-    version: 1,
+    address: None,
     status: LirStatus::Complete,
-    temporaries: Vec::new(),
     effects: vec![
         LirEffect::Store {
             space: LirAddressSpace::Stack,
@@ -190,7 +181,6 @@ let lir = Lir {
         },
     ],
     terminator: LirTerminator::FallThrough,
-    diagnostics: Vec::new(),
 };
 ```
 
@@ -199,24 +189,15 @@ let lir = Lir {
 ```rust
 use binlex::ir::lir::{
     Lir,
-    LirDiagnostic,
-    LirDiagnosticKind,
     LirStatus,
     LirTerminator,
 };
 
 let lir = Lir {
-    version: 1,
+    address: None,
     status: LirStatus::Partial,
-    temporaries: Vec::new(),
     effects: Vec::new(),
     terminator: LirTerminator::Trap,
-    diagnostics: vec![
-        LirDiagnostic {
-            kind: LirDiagnosticKind::UnsupportedInstruction,
-            message: "instruction not modeled yet".to_string(),
-        },
-    ],
 };
 ```
 
@@ -239,8 +220,6 @@ The Python bindings expose the same model through `binlex.irs.lir`.
 ```python
 from binlex.irs.lir import (
     Lir,
-    LirDiagnostic,
-    LirDiagnosticKind,
     LirEffect,
     LirExpression,
     LirLocation,
@@ -273,8 +252,8 @@ expr = LirExpression.binary(
 )
 
 lir = Lir(
-    1,
     LirStatus.Complete,
+    address=None,
     effects=[
         LirEffect.set(eax, expr),
     ],
@@ -282,26 +261,17 @@ lir = Lir(
 )
 ```
 
-### Example: partial lir with diagnostics
+### Example: partial lir
 
 ```python
 from binlex.irs.lir import (
     Lir,
-    LirDiagnostic,
-    LirDiagnosticKind,
     LirStatus,
     LirTerminator,
 )
 
 lir = Lir(
-    1,
     LirStatus.Partial,
-    diagnostics=[
-        LirDiagnostic(
-            LirDiagnosticKind.UnsupportedInstruction,
-            "custom instruction not modeled yet",
-        ),
-    ],
     terminator=LirTerminator.trap(),
 )
 ```
@@ -316,7 +286,6 @@ round_tripped = Lir.from_bytecode(bytecode)
 
 The Python bindings also expose constructors for the lower-level pieces:
 
-- `LirTemporary(...)`
 - `LirLocation.register(...)`
 - `LirLocation.flag(...)`
 - `LirLocation.program_counter(...)`
@@ -438,8 +407,8 @@ asks for them.
 If you are building on top of Binlex lir:
 
 - treat `Lir` as your canonical source IR
-- use `Partial` plus diagnostics when you cannot model everything
-- keep architecture-specific details in intrinsics or diagnostics instead of forcing them into
+- use `Partial` when you cannot model everything
+- keep architecture-specific details in intrinsics or metadata instead of forcing them into
   inaccurate generic forms
 - serialize with JSON when you need transport or persistence
 - lower from lir into your own IR rather than re-decoding raw bytes again

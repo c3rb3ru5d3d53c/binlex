@@ -57,7 +57,7 @@ impl LirExecutor {
     pub(crate) fn apply_effect(
         &self,
         state: &mut LirExecutorState,
-        instruction: Option<&crate::irs::lir::LirEncoding>,
+        instruction: Option<u64>,
         effect: &LirEffect,
     ) -> Result<(), LirExecutorError> {
         match effect {
@@ -242,7 +242,7 @@ impl LirExecutor {
     fn apply_memory_set(
         &self,
         state: &mut LirExecutorState,
-        instruction: Option<&crate::irs::lir::LirEncoding>,
+        instruction: Option<u64>,
         addr: &LirExpression,
         value: &LirExpression,
         count: &LirExpression,
@@ -304,7 +304,7 @@ impl LirExecutor {
     fn apply_memory_copy(
         &self,
         state: &mut LirExecutorState,
-        instruction: Option<&crate::irs::lir::LirEncoding>,
+        instruction: Option<u64>,
         src_addr: &LirExpression,
         dst_addr: &LirExpression,
         count: &LirExpression,
@@ -371,7 +371,7 @@ impl LirExecutor {
     fn apply_atomic_cmpxchg(
         &self,
         state: &mut LirExecutorState,
-        instruction: Option<&crate::irs::lir::LirEncoding>,
+        instruction: Option<u64>,
         addr: &LirExpression,
         expected: &LirExpression,
         desired: &LirExpression,
@@ -512,7 +512,7 @@ impl LirExecutor {
     pub(crate) fn write_location(
         &self,
         state: &mut LirExecutorState,
-        instruction: Option<&crate::irs::lir::LirEncoding>,
+        instruction: Option<u64>,
         location: &LirLocation,
         value: crate::irs::lir::executor::expressions::EvaluatedValue,
     ) -> Result<(), LirExecutorError> {

@@ -1,13 +1,12 @@
 """Rust-backed LIR bindings."""
 
 from binlex_bindings.binlex.irs.lir import *
-from binlex_bindings.binlex.irs.lir import LirAbi as _LirAbiBinding
 from binlex_bindings.binlex.irs.lir import LirBlock as _LirBlockBinding
 from binlex_bindings.binlex.irs.lir import LirCpu as _LirCpuBinding
 from binlex_bindings.binlex.irs.lir import LirData as _LirDataBinding
 from binlex_bindings.binlex.irs.lir import LirExecutor as _LirExecutorBinding
 from binlex_bindings.binlex.irs.lir import LirExecutorState as _LirExecutorStateBinding
-from binlex_bindings.binlex.irs.lir import Lir as _LirBinding
+from binlex_bindings.binlex.irs.lir import LirInstruction as _LirInstructionBinding
 from binlex_bindings.binlex.irs.lir import LirFunction as _LirFunctionBinding
 from binlex_bindings.binlex.irs.lir import LirMlirModule as _LirMlirModuleBinding
 from binlex_bindings.binlex.irs.lir import LirModule as _LirModuleBinding
@@ -117,74 +116,6 @@ class LirCpuCil(LirCpu):
         self._inner = _LirCpuBinding.cil()
 
 
-class LirAbi:
-    """Declarative ABI model for LIR and lifting."""
-
-    def __init__(
-        self,
-        *,
-        name,
-        cpu,
-        function_arguments=None,
-        return_locations=None,
-        function_return_bits=None,
-        traps=None,
-    ):
-        cpu = getattr(cpu, "_inner", cpu)
-        self._inner = _LirAbiBinding(
-            name=name,
-            cpu=cpu,
-            function_arguments=list(function_arguments or []),
-            return_locations=list(return_locations or []),
-            function_return_bits=function_return_bits,
-            traps=list(traps or []),
-        )
-
-    @classmethod
-    def _from_inner(cls, inner):
-        instance = cls.__new__(cls)
-        instance._inner = inner
-        return instance
-
-    def __getattr__(self, name):
-        return getattr(self._inner, name)
-
-
-class LirAbiSysv(LirAbi):
-    def __init__(self, cpu):
-        self._inner = _LirAbiBinding.sysv(_unwrap(cpu))
-
-
-class LirAbiWindows64(LirAbi):
-    def __init__(self, cpu):
-        self._inner = _LirAbiBinding.windows64(_unwrap(cpu))
-
-
-class LirAbiCdecl(LirAbi):
-    def __init__(self, cpu):
-        self._inner = _LirAbiBinding.cdecl(_unwrap(cpu))
-
-
-class LirAbiStdcall(LirAbi):
-    def __init__(self, cpu):
-        self._inner = _LirAbiBinding.stdcall(_unwrap(cpu))
-
-
-class LirAbiFastcall(LirAbi):
-    def __init__(self, cpu):
-        self._inner = _LirAbiBinding.fastcall(_unwrap(cpu))
-
-
-class LirAbiLinuxSyscall(LirAbi):
-    def __init__(self, cpu):
-        self._inner = _LirAbiBinding.linux_syscall(_unwrap(cpu))
-
-
-class LirAbiWindowsSyscall(LirAbi):
-    def __init__(self, cpu):
-        self._inner = _LirAbiBinding.windows_syscall(_unwrap(cpu))
-
-
 class _LirVariantWrapper:
     @classmethod
     def _from_inner(cls, inner):
@@ -195,8 +126,11 @@ class _LirVariantWrapper:
     def print(self):
         self._inner.print()
 
+    def text(self):
+        return self._inner.text()
+
     def __str__(self):
-        return str(self._inner)
+        return self.text()
 
     def __getattr__(self, name):
         return getattr(self._inner, name)
@@ -532,37 +466,23 @@ class LirTerminatorTrap(_LirVariantWrapper):
         self._inner = LirTerminator.trap()
 
 
-class Lir:
+class LirInstruction:
     """Wrapper around the Rust low-level instruction IR object."""
 
     def __init__(
         self,
-        version,
         status,
-        abi=None,
-        encoding=None,
-        temporaries=None,
+        address=None,
         effects=None,
         terminator=None,
-        diagnostics=None,
-        metadata=None,
     ):
-        abi = getattr(abi, "_inner", abi)
-        encoding = _unwrap(encoding)
-        temporaries = [_unwrap(item) for item in list(temporaries or [])]
         effects = [_unwrap(item) for item in list(effects or [])]
         terminator = _unwrap(terminator) if terminator is not None else None
-        diagnostics = [_unwrap(item) for item in list(diagnostics or [])]
-        self._inner = _LirBinding(
-            version=version,
+        self._inner = _LirInstructionBinding(
             status=status,
-            abi=abi,
-            encoding=encoding,
-            temporaries=temporaries,
+            address=address,
             effects=effects,
             terminator=terminator,
-            diagnostics=diagnostics,
-            metadata=dict(metadata or {}),
         )
 
     @classmethod
@@ -570,52 +490,6 @@ class Lir:
         instance = cls.__new__(cls)
         instance._inner = inner
         return instance
-
-    def abi(self):
-        abi = self._inner.abi()
-        if abi is None:
-            return None
-        return LirAbi._from_inner(abi)
-
-    def set_abi(self, abi):
-        abi = getattr(abi, "_inner", abi)
-        self._inner.set_abi(abi)
-
-    def metadata(self):
-        return self._inner.metadata()
-
-    def set_metadata(self, metadata):
-        self._inner.set_metadata(dict(metadata or {}))
-
-    def get_metadata_value(self, key):
-        return self._inner.get_metadata_value(key)
-
-    def set_metadata_value(self, key, value):
-        self._inner.set_metadata_value(key, value)
-
-    def remove_metadata_value(self, key):
-        self._inner.remove_metadata_value(key)
-
-    def optimize_constants(self):
-        self._inner.optimize_constants()
-
-    def optimize_identities(self):
-        self._inner.optimize_identities()
-
-    def optimize_casts(self):
-        self._inner.optimize_casts()
-
-    def optimize_noops(self):
-        self._inner.optimize_noops()
-
-    def optimize_branches(self):
-        self._inner.optimize_branches()
-
-    def optimize_intrinsics(self):
-        self._inner.optimize_intrinsics()
-
-    def optimize(self):
-        self._inner.optimize()
 
     def text(self):
         return self._inner.text()
@@ -653,9 +527,6 @@ class LirMlirModule:
 
     def normalize_status(self):
         self._inner.normalize_status()
-
-    def optimize(self):
-        self._inner.optimize()
 
     def text(self):
         return self._inner.text()
@@ -758,32 +629,11 @@ class LirBlock:
         return instance
 
     def instructions(self):
-        return [Lir._from_inner(item) for item in self._inner.instructions()]
+        return [LirInstruction._from_inner(item) for item in self._inner.instructions()]
 
     def append_instruction(self, instruction):
         instruction = getattr(instruction, "_inner", instruction)
         self._inner.append_instruction(instruction)
-
-    def optimize_constants(self):
-        self._inner.optimize_constants()
-
-    def optimize_identities(self):
-        self._inner.optimize_identities()
-
-    def optimize_casts(self):
-        self._inner.optimize_casts()
-
-    def optimize_noops(self):
-        self._inner.optimize_noops()
-
-    def optimize_branches(self):
-        self._inner.optimize_branches()
-
-    def optimize_intrinsics(self):
-        self._inner.optimize_intrinsics()
-
-    def optimize(self):
-        self._inner.optimize()
 
     def text(self):
         return self._inner.text()
@@ -801,9 +651,8 @@ class LirBlock:
 class LirFunction:
     """Function-scoped low-level IR."""
 
-    def __init__(self, name=None, abi=None):
-        abi = getattr(abi, "_inner", abi)
-        self._inner = _LirFunctionBinding(name=name, abi=abi)
+    def __init__(self, name=None):
+        self._inner = _LirFunctionBinding(name=name)
 
     @classmethod
     def _from_inner(cls, inner):
@@ -811,43 +660,12 @@ class LirFunction:
         instance._inner = inner
         return instance
 
-    def abi(self):
-        abi = self._inner.abi()
-        if abi is None:
-            return None
-        return LirAbi._from_inner(abi)
-
-    def set_abi(self, abi):
-        abi = getattr(abi, "_inner", abi)
-        self._inner.set_abi(abi)
-
     def blocks(self):
         return [LirBlock._from_inner(item) for item in self._inner.blocks()]
 
     def append_block(self, block):
         block = getattr(block, "_inner", block)
         self._inner.append_block(block)
-
-    def optimize_constants(self):
-        self._inner.optimize_constants()
-
-    def optimize_identities(self):
-        self._inner.optimize_identities()
-
-    def optimize_casts(self):
-        self._inner.optimize_casts()
-
-    def optimize_noops(self):
-        self._inner.optimize_noops()
-
-    def optimize_branches(self):
-        self._inner.optimize_branches()
-
-    def optimize_intrinsics(self):
-        self._inner.optimize_intrinsics()
-
-    def optimize(self):
-        self._inner.optimize()
 
     def text(self):
         return self._inner.text()
@@ -903,30 +721,6 @@ class LirModule:
     def append_data(self, data):
         data = getattr(data, "_inner", data)
         self._inner.append_data(data)
-
-    def optimize_constants(self):
-        self._inner.optimize_constants()
-
-    def optimize_identities(self):
-        self._inner.optimize_identities()
-
-    def optimize_casts(self):
-        self._inner.optimize_casts()
-
-    def optimize_noops(self):
-        self._inner.optimize_noops()
-
-    def optimize_branches(self):
-        self._inner.optimize_branches()
-
-    def optimize_intrinsics(self):
-        self._inner.optimize_intrinsics()
-
-    def optimize(self):
-        if self._mlir:
-            self._inner.optimize()
-            return
-        self._inner.optimize()
 
     def text(self):
         if self._mlir:

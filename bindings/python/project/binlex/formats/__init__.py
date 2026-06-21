@@ -73,37 +73,31 @@ class ImagePermissions:
 class ImageSegment:
     """Virtual image segment."""
 
+    def __init__(
+        self,
+        name,
+        virtual_address,
+        data=None,
+        size=None,
+        permissions=None,
+    ):
+        if permissions is None:
+            permissions = ImagePermissions.readable()
+        if not isinstance(permissions, ImagePermissions):
+            raise TypeError("segment permissions must be an ImagePermissions")
+        self._inner = _ImageSegmentBinding(
+            name,
+            virtual_address,
+            data=data,
+            size=size,
+            permissions=permissions._inner,
+        )
+
     @classmethod
     def _from_binding(cls, binding):
         result = cls.__new__(cls)
         result._inner = binding
         return result
-
-    @classmethod
-    def bytes(cls, name, virtual_address, data, permissions):
-        if not isinstance(permissions, ImagePermissions):
-            raise TypeError("segment permissions must be an ImagePermissions")
-        return cls._from_binding(
-            _ImageSegmentBinding.bytes(
-                name,
-                virtual_address,
-                data,
-                permissions._inner,
-            )
-        )
-
-    @classmethod
-    def zeroes(cls, name, virtual_address, size, permissions):
-        if not isinstance(permissions, ImagePermissions):
-            raise TypeError("segment permissions must be an ImagePermissions")
-        return cls._from_binding(
-            _ImageSegmentBinding.zeroes(
-                name,
-                virtual_address,
-                size,
-                permissions._inner,
-            )
-        )
 
     @property
     def name(self):
@@ -131,8 +125,12 @@ class ImageSegment:
 class Image:
     """Virtual binary image backed by mapped segments."""
 
-    def __init__(self):
-        self._inner = _ImageBinding()
+    def __init__(self, segments=None):
+        segments = list(segments or [])
+        for segment in segments:
+            if not isinstance(segment, ImageSegment):
+                raise TypeError("image segments must be ImageSegment instances")
+        self._inner = _ImageBinding([segment._inner for segment in segments])
 
     @classmethod
     def _from_binding(cls, binding):

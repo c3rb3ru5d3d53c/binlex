@@ -22,7 +22,7 @@
 
 use crate::irs::lir::cil::InstructionDetailCil;
 use crate::irs::lir::{
-    Lir, LirExpression, LirOperationBinary, LirOperationCast, LirOperationCompare,
+    LirExpression, LirInstruction, LirOperationBinary, LirOperationCast, LirOperationCompare,
     LirOperationUnary, LirTerminator,
 };
 
@@ -31,7 +31,7 @@ use super::super::helpers::common::{
     push_runtime_binary_intrinsic, push_runtime_unary_intrinsic, unary,
 };
 
-pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Lir> {
+pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<LirInstruction> {
     match instruction.mnemonic_text() {
         "add" => simple_binary(LirOperationBinary::Add),
         "add.ovf" | "add.ovf.un" => Some(push_runtime_binary_intrinsic(instruction, "cil.add.ovf")),
@@ -77,7 +77,7 @@ pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Lir> {
     }
 }
 
-fn simple_binary(op: LirOperationBinary) -> Option<Lir> {
+fn simple_binary(op: LirOperationBinary) -> Option<LirInstruction> {
     let (mut effects, right) = pop_stack();
     let (mut more_effects, left) = pop_stack();
     effects.append(&mut more_effects);
@@ -85,13 +85,13 @@ fn simple_binary(op: LirOperationBinary) -> Option<Lir> {
     Some(complete_with_effects(LirTerminator::FallThrough, effects))
 }
 
-fn simple_unary(op: LirOperationUnary) -> Option<Lir> {
+fn simple_unary(op: LirOperationUnary) -> Option<LirInstruction> {
     let (mut effects, value) = pop_stack();
     effects.extend(push_effects(unary(op, value, 64)));
     Some(complete_with_effects(LirTerminator::FallThrough, effects))
 }
 
-fn compare_to_i64(op: LirOperationCompare) -> Option<Lir> {
+fn compare_to_i64(op: LirOperationCompare) -> Option<LirInstruction> {
     let (mut effects, right) = pop_stack();
     let (mut more_effects, left) = pop_stack();
     effects.append(&mut more_effects);

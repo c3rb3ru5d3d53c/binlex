@@ -23,23 +23,9 @@
 #[cfg(test)]
 mod tests {
 
-    use binlex::hashing::AHash;
-    use binlex::hashing::DHash;
     use binlex::hashing::MinHash32;
-    use binlex::hashing::PHash;
     use binlex::hashing::SHA256;
     use binlex::hashing::TLSH;
-    use image::codecs::png::PngEncoder;
-    use image::{ExtendedColorType, GrayImage, ImageEncoder};
-
-    fn grayscale_png(width: u32, height: u32, pixels: Vec<u8>) -> Vec<u8> {
-        let image = GrayImage::from_raw(width, height, pixels).unwrap();
-        let mut bytes = Vec::new();
-        PngEncoder::new(&mut bytes)
-            .write_image(image.as_raw(), width, height, ExtendedColorType::L8)
-            .unwrap();
-        bytes
-    }
 
     #[test]
     fn test_models_hashing_sha256() {
@@ -141,93 +127,7 @@ mod tests {
     }
 
     #[test]
-    fn test_models_hashing_ahash() {
-        let pixels = (0..64)
-            .map(|index| if index < 32 { 16u8 } else { 240u8 })
-            .collect::<Vec<u8>>();
-        let image = grayscale_png(8, 8, pixels);
-        let hash = AHash::new(&image);
-        let hexdigest = hash.hexdigest();
-        assert!(hexdigest.is_some(), "hexdigest should not be none");
-        assert_eq!(
-            hexdigest.unwrap(),
-            "00000000ffffffff",
-            "hexdigest does not match the expected value"
-        );
-        let vector = hash.vector().unwrap();
-        assert_eq!(vector.len(), 64, "ahash vector length should be 64 bits");
-        assert!(vector.iter().all(|value| *value == 0.0 || *value == 1.0));
-    }
-
-    #[test]
-    fn test_models_hashing_dhash() {
-        let mut pixels = Vec::new();
-        for _ in 0..8 {
-            pixels.extend_from_slice(&[0, 32, 64, 96, 128, 160, 192, 224, 255]);
-        }
-        let image = grayscale_png(9, 8, pixels);
-        let hash = DHash::new(&image);
-        let hexdigest = hash.hexdigest();
-        assert!(hexdigest.is_some(), "hexdigest should not be none");
-        assert_eq!(
-            hexdigest.unwrap(),
-            "ffffffffffffffff",
-            "hexdigest does not match the expected value"
-        );
-        let vector = hash.vector().unwrap();
-        assert_eq!(vector.len(), 64, "dhash vector length should be 64 bits");
-        assert!(vector.iter().all(|value| *value == 0.0 || *value == 1.0));
-    }
-
-    #[test]
-    fn test_models_hashing_phash() {
-        let mut pixels = Vec::new();
-        for y in 0..32 {
-            for x in 0..32 {
-                pixels.push(((x * 8) ^ (y * 4)) as u8);
-            }
-        }
-        let image = grayscale_png(32, 32, pixels);
-        let hash = PHash::new(&image);
-        let hexdigest = hash.hexdigest();
-        assert!(hexdigest.is_some(), "hexdigest should not be none");
-        assert_eq!(
-            hexdigest.unwrap(),
-            "bbaefffaffeffffb",
-            "hexdigest does not match the expected value"
-        );
-        let vector = hash.vector().unwrap();
-        assert_eq!(vector.len(), 64, "phash vector length should be 64 bits");
-        assert!(vector.iter().all(|value| *value == 0.0 || *value == 1.0));
-    }
-
-    #[test]
-    fn test_models_hashing_image_compare() {
-        assert_eq!(
-            AHash::compare_hexdigests("ffffffffffffffff", "ffffffffffffffff"),
-            Some(1.0)
-        );
-        assert_eq!(
-            DHash::compare_hexdigests("0000000000000000", "ffffffffffffffff"),
-            Some(0.0)
-        );
-        assert_eq!(
-            PHash::compare_hexdigests("0f0f0f0f0f0f0f0f", "0f0f0f0f0f0f0f0f"),
-            Some(1.0)
-        );
-        assert!(AHash::compare_hexdigests("zz", "00").is_none());
-    }
-
-    #[test]
     fn test_models_hashing_compare_helpers() {
-        let lhs_image = grayscale_png(8, 8, vec![240; 64]);
-        let rhs_image = grayscale_png(8, 8, vec![240; 64]);
-        let lhs = AHash::new(&lhs_image);
-        let rhs = AHash::new(&rhs_image);
-
-        assert_eq!(lhs.compare(&rhs), Some(1.0));
-        assert_eq!(lhs.compare_hexdigest(&rhs.hexdigest().unwrap()), Some(1.0));
-
         let minhash_data = vec![1u8, 2, 3, 4, 5, 6, 7, 8];
         let lhs_minhash = MinHash32::new(&minhash_data, 16, 4, 0);
         let rhs_minhash = MinHash32::new(&minhash_data, 16, 4, 0);
@@ -235,17 +135,6 @@ mod tests {
 
         assert_eq!(lhs_minhash.compare(&rhs_minhash), Some(1.0));
         assert_eq!(lhs_minhash.compare_hexdigest(&rhs_hex), Some(1.0));
-    }
-
-    #[test]
-    fn test_models_hashing_image_invalid_input() {
-        let data = b"not-a-png";
-        assert!(AHash::new(data).hexdigest().is_none());
-        assert!(DHash::new(data).hexdigest().is_none());
-        assert!(PHash::new(data).hexdigest().is_none());
-        assert!(AHash::new(data).vector().is_none());
-        assert!(DHash::new(data).vector().is_none());
-        assert!(PHash::new(data).vector().is_none());
     }
 
     #[test]

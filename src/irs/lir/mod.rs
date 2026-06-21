@@ -20,21 +20,15 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod abis;
 pub mod arm64;
 pub mod cil;
 pub mod cpus;
 pub mod executor;
 pub mod ir;
 pub mod mlir;
-pub mod optimizers;
 pub mod print;
 pub mod x86;
 
-pub use abis::{
-    LirAbi, LirAbiCdecl, LirAbiFastcall, LirAbiKind, LirAbiLinuxSyscall, LirAbiStdcall, LirAbiSysv,
-    LirAbiTrap, LirAbiWindows64, LirAbiWindowsSyscall,
-};
 pub use cpus::{
     LirCpu, LirCpuAlias, LirCpuAliasWritePolicy, LirCpuAmd64, LirCpuArm64, LirCpuCil, LirCpuEndian,
     LirCpuI386, LirCpuKind, LirCpuProgramCounter, LirCpuRegister, LirMemory, LirMemoryAddressed,
@@ -44,16 +38,15 @@ pub use executor::{
     LirExecutor, LirExecutorError, LirExecutorState, Slice, SliceInstruction, SliceNode,
 };
 pub use ir::{
-    Lir, LirAddressSpace, LirBlock, LirData, LirDiagnostic, LirDiagnosticKind, LirEffect,
-    LirEffectKind, LirEncoding, LirExpression, LirExpressionKind, LirFenceKind, LirFunction,
-    LirLocation, LirLocationKind, LirMetadata, LirModule, LirOperation, LirOperationBinary,
-    LirOperationCast, LirOperationCompare, LirOperationUnary, LirStatus, LirTemporary,
-    LirTerminator, LirTerminatorKind, LirTrapKind, normalize_instruction_lir,
+    LirAddressSpace, LirBlock, LirData, LirEffect, LirEffectKind, LirExpression, LirExpressionKind,
+    LirFenceKind, LirFunction, LirInstruction, LirLocation, LirLocationKind, LirModule,
+    LirOperation, LirOperationBinary, LirOperationCast, LirOperationCompare, LirOperationUnary,
+    LirStatus, LirTerminator, LirTerminatorKind, LirTrapKind, normalize_instruction_lir,
     validate_instruction_lir,
 };
 pub use mlir::LirMlirModule;
-pub use optimizers::{
-    optimize, optimize_branches, optimize_casts, optimize_constants, optimize_identities,
-    optimize_intrinsics, optimize_noops,
+pub use print::{
+    format_lir_block, format_lir_block_mlir, format_lir_effect, format_lir_function,
+    format_lir_function_mlir, format_lir_instruction, format_lir_instruction_mlir,
+    format_lir_module, format_lir_module_mlir,
 };
-pub use print::{format_lir_block, format_lir_function, format_lir_instruction, format_lir_module};

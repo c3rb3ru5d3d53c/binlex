@@ -3,9 +3,7 @@ use std::collections::BTreeMap;
 use binlex::controlflow::{Graph, InstructionRecord};
 use binlex::decompilers::{Decompiler, DecompilerBackend};
 use binlex::formats::{Image, ImagePermissions, ImageSegment};
-use binlex::irs::lir::{
-    Lir, LirDiagnostic, LirDiagnosticKind, LirMetadata, LirStatus, LirTerminator,
-};
+use binlex::irs::lir::{LirInstruction, LirStatus, LirTerminator};
 use binlex::{Architecture, Configuration};
 
 fn disassemble_single(name: &str, architecture: Architecture, bytes: &[u8]) -> InstructionRecord {
@@ -59,42 +57,23 @@ fn assert_partial_lir(name: &str, architecture: Architecture, bytes: &[u8]) {
         "{name}: expected partial lir, got {:?}",
         lir.status
     );
-    assert!(
-        !lir.diagnostics.is_empty(),
-        "{name}: expected diagnostics for partial lir"
-    );
 }
 
-fn partial_lir(message: &str) -> Lir {
-    Lir {
-        version: 1,
+fn partial_lir() -> LirInstruction {
+    LirInstruction {
+        address: None,
         status: LirStatus::Partial,
-        metadata: LirMetadata::default(),
-        abi: None,
-        encoding: None,
-        temporaries: Vec::new(),
         effects: Vec::new(),
         terminator: LirTerminator::FallThrough,
-        diagnostics: vec![LirDiagnostic {
-            kind: LirDiagnosticKind::Named {
-                name: "test.partial".to_string(),
-            },
-            message: message.to_string(),
-        }],
     }
 }
 
-fn complete_lir() -> Lir {
-    Lir {
-        version: 1,
+fn complete_lir() -> LirInstruction {
+    LirInstruction {
+        address: None,
         status: LirStatus::Complete,
-        metadata: LirMetadata::default(),
-        abi: None,
-        encoding: None,
-        temporaries: Vec::new(),
         effects: Vec::new(),
         terminator: LirTerminator::FallThrough,
-        diagnostics: Vec::new(),
     }
 }
 
@@ -161,7 +140,6 @@ fn graph_state_roundtrip_preserves_context_and_instruction_lir() {
     assert_eq!(restored_lir.status, original.status);
     assert_eq!(restored_lir.terminator.kind(), original.terminator.kind());
     assert_eq!(restored_lir.effects.len(), original.effects.len());
-    assert_eq!(restored_lir.diagnostics.len(), original.diagnostics.len());
     assert_eq!(restored_instruction.mnemonic(), original_mnemonic);
     assert_eq!(restored_instruction.disassembly(), original_disassembly);
     assert_eq!(restored_instruction.operands(), original_operands);
@@ -170,9 +148,6 @@ fn graph_state_roundtrip_preserves_context_and_instruction_lir() {
         .function(0)
         .expect("restored function should exist");
     assert_eq!(restored_function.lir().unwrap(), artifact.lir);
-    assert_eq!(restored_function.mir().unwrap(), artifact.mir);
-    assert_eq!(restored_function.hir().unwrap(), artifact.hir);
-    assert_eq!(restored_function.ast().unwrap().blocks, artifact.ast.blocks);
 }
 
 #[test]
@@ -185,7 +160,7 @@ fn graph_merge_prefers_more_complete_instruction_lir() {
         InstructionRecord::create(0x1000, Architecture::AMD64, config.clone());
     partial_instruction.bytes = vec![0x90];
     partial_instruction.pattern = "90".to_string();
-    partial_instruction.lir = Some(partial_lir("partial lir"));
+    partial_instruction.lir = Some(partial_lir());
     base.insert_instruction(partial_instruction);
 
     let mut complete_instruction = InstructionRecord::create(0x1000, Architecture::AMD64, config);
@@ -204,7 +179,6 @@ fn graph_merge_prefers_more_complete_instruction_lir() {
         .expect("merged instruction should keep lir");
 
     assert_eq!(merged.status, LirStatus::Complete);
-    assert!(merged.diagnostics.is_empty());
 }
 
 #[test]

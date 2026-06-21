@@ -199,14 +199,6 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             let Some(LirLocation::Register { name, bits }) = self.slot_locations.get(key) else {
                 continue;
             };
-            if self.uses_pure_callable_abi()
-                && self.is_callable_abi_boundary_location(&LirLocation::Register {
-                    name: name.clone(),
-                    bits: *bits,
-                })
-            {
-                continue;
-            }
             if self
                 .x86_parent_register_alias(&LirLocation::Register {
                     name: name.clone(),

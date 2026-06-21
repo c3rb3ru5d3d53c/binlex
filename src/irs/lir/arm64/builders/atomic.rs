@@ -29,11 +29,11 @@ use crate::irs::lir::arm64::helpers::{
     complete, location_bits, truncate_to_bits, zero_extend_to_bits,
 };
 use crate::irs::lir::{
-    Lir, LirAddressSpace, LirEffect, LirExpression, LirLocation, LirStatus, LirTemporary,
+    LirAddressSpace, LirEffect, LirExpression, LirInstruction, LirLocation, LirStatus,
     LirTerminator,
 };
 
-pub(crate) fn build(view: &InstructionDetailArm64) -> Option<Lir> {
+pub(crate) fn build(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     match view.mnemonic.as_str() {
         "ldaxp" | "ldxp" if view.operand_count >= 3 => build_load_pair(view),
         "ldar" | "ldapr" if view.operand_count >= 2 => build_full_width_load(view),
@@ -62,7 +62,7 @@ pub(crate) fn build(view: &InstructionDetailArm64) -> Option<Lir> {
     }
 }
 
-fn build_full_width_load(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_full_width_load(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let addr = effective_memory_address(view, view.operand(1)?, view.operand(2))?;
     let mut effects = vec![LirEffect::Set {
@@ -79,7 +79,7 @@ fn build_full_width_load(view: &InstructionDetailArm64) -> Option<Lir> {
     Some(complete(LirTerminator::FallThrough, effects))
 }
 
-fn build_zero_extend_load(view: &InstructionDetailArm64, load_bits: u16) -> Option<Lir> {
+fn build_zero_extend_load(view: &InstructionDetailArm64, load_bits: u16) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let addr = effective_memory_address(view, view.operand(1)?, view.operand(2))?;
     let mut effects = vec![LirEffect::Set {
@@ -99,7 +99,10 @@ fn build_zero_extend_load(view: &InstructionDetailArm64, load_bits: u16) -> Opti
     Some(complete(LirTerminator::FallThrough, effects))
 }
 
-fn build_exclusive_load(view: &InstructionDetailArm64, load_bits: Option<u16>) -> Option<Lir> {
+fn build_exclusive_load(
+    view: &InstructionDetailArm64,
+    load_bits: Option<u16>,
+) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let addr = effective_memory_address(view, view.operand(1)?, view.operand(2))?;
     let expression = match load_bits {
@@ -130,7 +133,7 @@ fn build_exclusive_load(view: &InstructionDetailArm64, load_bits: Option<u16>) -
     ))
 }
 
-fn build_store(view: &InstructionDetailArm64, store_bits: Option<u16>) -> Option<Lir> {
+fn build_store(view: &InstructionDetailArm64, store_bits: Option<u16>) -> Option<LirInstruction> {
     let src = operand_expression(view.operand(0)?)?;
     let addr = effective_memory_address(view, view.operand(1)?, view.operand(2))?;
     let expression = match store_bits {
@@ -151,7 +154,7 @@ fn build_store(view: &InstructionDetailArm64, store_bits: Option<u16>) -> Option
     Some(complete(LirTerminator::FallThrough, effects))
 }
 
-fn build_effect_intrinsic(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_effect_intrinsic(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let outputs = view
         .operand(0)
         .and_then(register_location)
@@ -173,7 +176,7 @@ fn build_effect_intrinsic(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_intrinsic_fallthrough(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_intrinsic_fallthrough(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let outputs = view
         .operand(0)
         .and_then(register_location)
@@ -193,7 +196,7 @@ fn build_intrinsic_fallthrough(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_cas(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_cas(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let observed = register_location(view.operand(0)?)?;
     let expected = operand_expression(view.operand(0)?)?;
     let desired = operand_expression(view.operand(1)?)?;
@@ -216,7 +219,7 @@ fn build_cas(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_casp(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_casp(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let observed_low = register_location(view.operand(0)?)?;
     let observed_high = register_location(view.operand(1)?)?;
     let expected_low = operand_expression(view.operand(0)?)?;
@@ -232,17 +235,9 @@ fn build_casp(view: &InstructionDetailArm64) -> Option<Lir> {
         bits: total_bits,
     };
     let temp_expr = LirExpression::Read(Box::new(temp_location.clone()));
-    Some(Lir {
-        version: 1,
+    Some(LirInstruction {
+        address: None,
         status: LirStatus::Complete,
-        metadata: Default::default(),
-        abi: None,
-        encoding: None,
-        temporaries: vec![LirTemporary {
-            id: temp_id,
-            bits: total_bits,
-            name: Some(format!("arm64_{}", view.mnemonic)),
-        }],
         effects: vec![
             LirEffect::AtomicCmpXchg {
                 space: LirAddressSpace::Default,
@@ -276,6 +271,5 @@ fn build_casp(view: &InstructionDetailArm64) -> Option<Lir> {
             },
         ],
         terminator: LirTerminator::FallThrough,
-        diagnostics: Vec::new(),
     })
 }

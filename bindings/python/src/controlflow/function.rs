@@ -25,11 +25,8 @@ use crate::controlflow::EntityKind;
 use crate::controlflow::Graph;
 use crate::genetics::Chromosome;
 use crate::hashing::{MinHash32, SSDeep, SHA256, TLSH};
-use crate::irs::ast::PyAstFunction;
-use crate::irs::hir::PyHirFunction;
 use crate::irs::lir::LirFunction as PyLirFunction;
 use crate::irs::llvm::LlvmModule as PyLlvmModule;
-use crate::irs::mir::PyMirFunction;
 #[cfg(not(target_os = "windows"))]
 use crate::irs::vex::VexModule as PyVexModule;
 use crate::Architecture;
@@ -253,30 +250,6 @@ impl Function {
         self.with_inner_function(py, |function| {
             let inner = py.detach(|| function.lir())?;
             Py::new(py, PyLirFunction::from_inner(inner))
-        })
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    pub fn mir(&self, py: Python<'_>) -> PyResult<Py<PyMirFunction>> {
-        self.with_inner_function(py, |function| {
-            let inner = py.detach(|| function.mir())?;
-            Py::new(py, PyMirFunction::from_inner(inner))
-        })
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    pub fn hir(&self, py: Python<'_>) -> PyResult<Py<PyHirFunction>> {
-        self.with_inner_function(py, |function| {
-            let inner = py.detach(|| function.hir())?;
-            Py::new(py, PyHirFunction::from_inner(inner))
-        })
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    pub fn ast(&self, py: Python<'_>) -> PyResult<Py<PyAstFunction>> {
-        self.with_inner_function(py, |function| {
-            let inner = py.detach(|| function.ast())?;
-            Py::new(py, PyAstFunction::from_inner(inner))
         })
     }
 

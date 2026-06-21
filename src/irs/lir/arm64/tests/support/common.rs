@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::controlflow::{Graph, InstructionRecord};
 use crate::disassemblers::Disassembler;
-use crate::irs::lir::{Lir, LirStatus};
+use crate::irs::lir::{LirInstruction, LirStatus};
 use crate::irs::llvm::LlvmModule;
 use crate::{Architecture, Configuration};
 
@@ -22,35 +22,23 @@ pub(crate) fn disassemble_arm64_single(name: &str, bytes: &[u8]) -> InstructionR
         .expect("instruction should exist")
 }
 
-pub(crate) fn lir(name: &str, bytes: &[u8]) -> Lir {
+pub(crate) fn lir(name: &str, bytes: &[u8]) -> LirInstruction {
     disassemble_arm64_single(name, bytes)
         .build_lir()
         .expect("instruction should build lir")
 }
 
-pub(crate) fn assert_lir_status(name: &str, bytes: &[u8], expected_status: LirStatus) -> Lir {
+pub(crate) fn assert_lir_status(
+    name: &str,
+    bytes: &[u8],
+    expected_status: LirStatus,
+) -> LirInstruction {
     let lir = lir(name, bytes);
     assert_eq!(
-        lir.status,
-        expected_status,
-        "{name}: expected {:?} lir, got {:?} with diagnostics {:?}",
-        expected_status,
-        lir.status,
-        lir.diagnostics
-            .iter()
-            .map(|diagnostic| diagnostic.message.clone())
-            .collect::<Vec<_>>()
+        lir.status, expected_status,
+        "{name}: expected {:?} lir, got {:?}",
+        expected_status, lir.status
     );
-    if expected_status == LirStatus::Complete {
-        assert!(
-            lir.diagnostics.is_empty(),
-            "{name}: expected no diagnostics, got {:?}",
-            lir.diagnostics
-                .iter()
-                .map(|diagnostic| diagnostic.message.clone())
-                .collect::<Vec<_>>()
-        );
-    }
     lir
 }
 

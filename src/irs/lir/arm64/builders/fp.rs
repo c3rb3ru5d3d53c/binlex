@@ -26,11 +26,11 @@ use crate::irs::lir::arm64::helpers::{
     bool_const, complete, condition_from_cc, const_u64, fp_compare_flag_values, location_bits,
 };
 use crate::irs::lir::{
-    Lir, LirEffect, LirExpression, LirOperationBinary, LirOperationCast, LirOperationCompare,
-    LirOperationUnary, LirTerminator,
+    LirEffect, LirExpression, LirInstruction, LirOperationBinary, LirOperationCast,
+    LirOperationCompare, LirOperationUnary, LirTerminator,
 };
 
-pub(crate) fn build(view: &InstructionDetailArm64) -> Option<Lir> {
+pub(crate) fn build(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     match view.mnemonic.as_str() {
         "fabs" => build_fabs(view),
         "fneg" => build_fneg(view),
@@ -53,7 +53,7 @@ pub(crate) fn build(view: &InstructionDetailArm64) -> Option<Lir> {
     }
 }
 
-fn build_fcmp(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_fcmp(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let left = fp_operand_expression(view, 0)?;
     let right = match view.operand(1) {
         Some(_) => fp_operand_expression(view, 1)?,
@@ -74,7 +74,7 @@ fn build_fcmp(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_fccmp(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_fccmp(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let left = fp_operand_expression(view, 0)?;
     let right = fp_operand_expression(view, 1)?;
     let fallback_nzcv = view.operand(2)?.immediate_value()?;
@@ -108,7 +108,10 @@ fn build_fccmp(view: &InstructionDetailArm64) -> Option<Lir> {
     Some(complete(LirTerminator::FallThrough, effects))
 }
 
-fn build_fp_binary(view: &InstructionDetailArm64, op: LirOperationBinary) -> Option<Lir> {
+fn build_fp_binary(
+    view: &InstructionDetailArm64,
+    op: LirOperationBinary,
+) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let left = fp_operand_expression(view, 1)?;
     let right = fp_operand_expression(view, 2)?;
@@ -127,7 +130,10 @@ fn build_fp_binary(view: &InstructionDetailArm64, op: LirOperationBinary) -> Opt
     ))
 }
 
-fn build_fp_minmax(view: &InstructionDetailArm64, compare_op: LirOperationCompare) -> Option<Lir> {
+fn build_fp_minmax(
+    view: &InstructionDetailArm64,
+    compare_op: LirOperationCompare,
+) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let left = fp_operand_expression(view, 1)?;
     let right = fp_operand_expression(view, 2)?;
@@ -151,7 +157,7 @@ fn build_fp_minmax(view: &InstructionDetailArm64, compare_op: LirOperationCompar
     ))
 }
 
-fn build_fnmul(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_fnmul(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let left = fp_operand_expression(view, 1)?;
     let right = fp_operand_expression(view, 2)?;
@@ -181,7 +187,7 @@ fn build_fnmul(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_fmadd(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_fmadd(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let left = fp_operand_expression(view, 1)?;
     let right = fp_operand_expression(view, 2)?;
@@ -207,7 +213,7 @@ fn build_fmadd(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_fmsub(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_fmsub(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let left = fp_operand_expression(view, 1)?;
     let right = fp_operand_expression(view, 2)?;
@@ -233,7 +239,7 @@ fn build_fmsub(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_scvtf(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_scvtf(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -250,7 +256,7 @@ fn build_scvtf(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_ucvtf(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_ucvtf(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = operand_expression(view.operand(1)?)?;
     let bits = location_bits(&dst);
@@ -267,7 +273,7 @@ fn build_ucvtf(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_fcvtzs(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_fcvtzs(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = fp_operand_expression(view, 1)?;
     let bits = location_bits(&dst);
@@ -284,7 +290,7 @@ fn build_fcvtzs(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_fcvtzu(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_fcvtzu(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = fp_operand_expression(view, 1)?;
     let bits = location_bits(&dst);
@@ -301,7 +307,7 @@ fn build_fcvtzu(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_fabs(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_fabs(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = fp_operand_expression(view, 1)?;
     let bits = location_bits(&dst);
@@ -318,7 +324,7 @@ fn build_fabs(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_fneg(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_fneg(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let dst = register_location(view.operand(0)?)?;
     let src = fp_operand_expression(view, 1)?;
     let bits = location_bits(&dst);

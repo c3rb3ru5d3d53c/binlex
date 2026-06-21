@@ -21,7 +21,7 @@
 // SOFTWARE.
 
 use crate::irs::lir::cil::InstructionDetailCil;
-use crate::irs::lir::{Lir, LirEffect, LirTerminator, LirTrapKind};
+use crate::irs::lir::{LirEffect, LirInstruction, LirTerminator, LirTrapKind};
 
 use super::super::helpers::common::{
     cil_argument, cil_argument_address, cil_local, cil_local_address, complete_with_effects,
@@ -30,24 +30,19 @@ use super::super::helpers::common::{
     sign_extend_i64, zero_extend_i8, zero_extend_i16, zero_extend_i32, zero_extend_i64,
 };
 
-pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Lir> {
+pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<LirInstruction> {
     match instruction.mnemonic_text() {
         "nop" => Some(complete_with_effects(
             LirTerminator::FallThrough,
             vec![LirEffect::Nop],
         )),
-        "break" => Some(Lir {
-            version: 1,
+        "break" => Some(LirInstruction {
+            address: None,
             status: crate::irs::lir::LirStatus::Complete,
-            metadata: Default::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Trap {
                 kind: LirTrapKind::Breakpoint,
             }],
             terminator: LirTerminator::Trap,
-            diagnostics: Vec::new(),
         }),
         "dup" => {
             let (mut effects, value) = peek_stack();

@@ -104,7 +104,7 @@ pub(crate) fn canonical_block_bitcode(
 ) -> Result<Vec<u8>, Error> {
     let mut module =
         LlvmModule::from_architecture_with_config(block.architecture(), config.clone());
-    module.populate_block(block, None)?;
+    module.populate_block(block)?;
     let optimized = optimize_module(module)?;
     Ok(optimized.bitcode())
 }
@@ -115,7 +115,7 @@ pub(crate) fn canonical_function_bitcode(
 ) -> Result<Vec<u8>, Error> {
     let mut module =
         LlvmModule::from_architecture_with_config(function.architecture(), config.clone());
-    module.populate_function(function, None)?;
+    module.populate_function(function)?;
     let optimized = optimize_module(module)?;
     Ok(optimized.bitcode())
 }

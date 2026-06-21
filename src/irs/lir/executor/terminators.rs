@@ -5,7 +5,7 @@ impl LirExecutor {
     pub(crate) fn apply_terminator(
         &self,
         mut state: LirExecutorState,
-        instruction: Option<&crate::irs::lir::LirEncoding>,
+        instruction: Option<u64>,
         terminator: &LirTerminator,
     ) -> Result<Vec<LirExecutorState>, LirExecutorError> {
         match terminator {

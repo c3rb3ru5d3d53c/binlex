@@ -24,10 +24,10 @@ use crate::Architecture;
 use crate::irs::lir::x86::InstructionDetailX86;
 use crate::irs::lir::x86::helpers as common;
 use crate::irs::lir::{
-    Lir, LirAddressSpace, LirEffect, LirExpression, LirOperationCompare, LirTerminator,
+    LirAddressSpace, LirEffect, LirExpression, LirInstruction, LirOperationCompare, LirTerminator,
 };
 
-pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let mnemonic = view.mnemonic.as_str();
     if matches!(
         mnemonic,
@@ -69,7 +69,7 @@ pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Optio
     }
 }
 
-fn rep_stos(machine: Architecture, bits: u16) -> Option<Lir> {
+fn rep_stos(machine: Architecture, bits: u16) -> Option<LirInstruction> {
     let di = index_reg(machine, true);
     let cx = counter_reg(machine);
     let count = LirExpression::Read(Box::new(cx.clone()));
@@ -96,11 +96,11 @@ fn rep_stos(machine: Architecture, bits: u16) -> Option<Lir> {
     ))
 }
 
-fn rep_movsb(machine: Architecture) -> Option<Lir> {
+fn rep_movsb(machine: Architecture) -> Option<LirInstruction> {
     rep_movs(machine, 8)
 }
 
-fn rep_movs(machine: Architecture, bits: u16) -> Option<Lir> {
+fn rep_movs(machine: Architecture, bits: u16) -> Option<LirInstruction> {
     let si = index_reg(machine, false);
     let di = index_reg(machine, true);
     let cx = counter_reg(machine);
@@ -133,7 +133,7 @@ fn rep_movs(machine: Architecture, bits: u16) -> Option<Lir> {
     ))
 }
 
-fn stos(machine: Architecture, bits: u16) -> Option<Lir> {
+fn stos(machine: Architecture, bits: u16) -> Option<LirInstruction> {
     let di = index_reg(machine, true);
     let acc = accumulator_reg(machine, bits)?;
     let addr = LirExpression::Read(Box::new(di.clone()));
@@ -155,7 +155,7 @@ fn stos(machine: Architecture, bits: u16) -> Option<Lir> {
     ))
 }
 
-fn movs(machine: Architecture, bits: u16) -> Option<Lir> {
+fn movs(machine: Architecture, bits: u16) -> Option<LirInstruction> {
     let si = index_reg(machine, false);
     let di = index_reg(machine, true);
     let src_addr = LirExpression::Read(Box::new(si.clone()));
@@ -185,7 +185,7 @@ fn movs(machine: Architecture, bits: u16) -> Option<Lir> {
     ))
 }
 
-fn lods(machine: Architecture, bits: u16) -> Option<Lir> {
+fn lods(machine: Architecture, bits: u16) -> Option<LirInstruction> {
     let si = index_reg(machine, false);
     let acc = accumulator_reg(machine, bits)?;
     Some(common::complete(
@@ -207,7 +207,7 @@ fn lods(machine: Architecture, bits: u16) -> Option<Lir> {
     ))
 }
 
-fn scas(machine: Architecture, bits: u16) -> Option<Lir> {
+fn scas(machine: Architecture, bits: u16) -> Option<LirInstruction> {
     let di = index_reg(machine, true);
     let acc = accumulator_reg(machine, bits)?;
     let mem = LirExpression::Load {
@@ -260,7 +260,7 @@ fn scas(machine: Architecture, bits: u16) -> Option<Lir> {
     ))
 }
 
-fn cmps(machine: Architecture, bits: u16) -> Option<Lir> {
+fn cmps(machine: Architecture, bits: u16) -> Option<LirInstruction> {
     let si = index_reg(machine, false);
     let di = index_reg(machine, true);
     let lhs = LirExpression::Load {

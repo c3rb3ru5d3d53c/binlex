@@ -35,7 +35,6 @@ use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
 use crate::irs::lir::LirBlock;
 use crate::irs::llvm::LlvmModule;
-use crate::irs::mir::MirBlock;
 #[cfg(not(target_os = "windows"))]
 use crate::irs::vex::VexModule;
 use std::collections::BTreeSet;
@@ -135,12 +134,6 @@ impl<'block> Block<'block> {
         })
     }
 
-    pub fn mir(&self) -> Result<MirBlock, Error> {
-        let mut lir = self.lir()?;
-        lir.optimize();
-        MirBlock::from_lir(None, &lir).map_err(|error| Error::other(error.to_string()))
-    }
-
     /// Return an embedding vector for this block using the default backend and dimensions.
     pub fn embedding(&self) -> Option<Vec<f32>> {
         self.embedding_with_options(None, None)
@@ -164,7 +157,7 @@ impl<'block> Block<'block> {
     pub fn llvm(&self) -> Result<LlvmModule, Error> {
         let mut lifter =
             LlvmModule::from_architecture_with_config(self.architecture(), self.cfg.config.clone());
-        lifter.populate_block(self, None)?;
+        lifter.populate_block(self)?;
         Ok(lifter)
     }
 

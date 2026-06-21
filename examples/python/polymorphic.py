@@ -3,7 +3,7 @@
 from binlex import Architecture, Assembler, Configuration, Disassembler
 from binlex.controlflow import Graph
 from binlex.formats import ELF
-from binlex.irs.lir import LirAbiStdcall, LirCpuI386, LirModule
+from binlex.irs.lir import LirCpuI386, LirModule
 from binlex.irs.llvm import LlvmModule
 
 configuration = Configuration()
@@ -48,7 +48,6 @@ module = LirModule(name="polymorphic_shellcode")
 module.append_function(function.lir())
 
 llvm = LlvmModule(module.name(), cpu, triple="i386-unknown-unknown")
-llvm.set_abi(LirAbiStdcall(cpu))
 llvm.from_lir(module, configuration)
 llvm.optimize_cfg()
 llvm.optimize_gvn()

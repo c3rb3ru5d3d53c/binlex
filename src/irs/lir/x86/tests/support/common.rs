@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use crate::controlflow::{Graph, InstructionRecord};
 use crate::disassemblers::Disassembler;
 use crate::irs::lir::{
-    Lir, LirEffect, LirExpression, LirLocation, LirOperationBinary, LirOperationCast,
+    LirEffect, LirExpression, LirInstruction, LirLocation, LirOperationBinary, LirOperationCast,
     LirOperationCompare, LirOperationUnary, LirStatus, LirTerminator,
 };
 use crate::{Architecture, Configuration};
@@ -136,7 +136,7 @@ pub(crate) fn disassemble_x86_single(
         .expect("instruction should exist")
 }
 
-pub(crate) fn lir(name: &str, architecture: Architecture, bytes: &[u8]) -> Lir {
+pub(crate) fn lir(name: &str, architecture: Architecture, bytes: &[u8]) -> LirInstruction {
     disassemble_x86_single(name, architecture, bytes)
         .build_lir()
         .expect("instruction should build lir")
@@ -150,15 +150,9 @@ pub(crate) fn assert_lir_status(
 ) {
     let lir = lir(name, architecture, bytes);
     assert_eq!(
-        lir.status,
-        expected_status,
-        "{name}: expected {:?} lir, got {:?} with diagnostics {:?}",
-        expected_status,
-        lir.status,
-        lir.diagnostics
-            .iter()
-            .map(|diagnostic| diagnostic.message.clone())
-            .collect::<Vec<_>>()
+        lir.status, expected_status,
+        "{name}: expected {:?} lir, got {:?}",
+        expected_status, lir.status
     );
 }
 
@@ -411,7 +405,7 @@ fn tracked_registers_for_wide_fixture(
 fn interpret_i386_lir(
     architecture: Architecture,
     bytes: &[u8],
-    lir: &Lir,
+    lir: &LirInstruction,
     fixture: I386Fixture,
 ) -> I386Execution {
     let mut registers = I386Register::all_for_arch(architecture)
@@ -637,7 +631,7 @@ fn interpret_i386_lir(
 
 fn interpret_amd64_lir_wide(
     bytes: &[u8],
-    lir: &Lir,
+    lir: &LirInstruction,
     fixture: &WideI386Fixture,
     tracked_registers: &[I386Register],
 ) -> I386ExecutionWide {
@@ -1363,7 +1357,7 @@ fn byte_swap(value: u128, bits: u16) -> u128 {
     swapped
 }
 
-fn written_state(lir: &Lir) -> (Vec<String>, Vec<String>) {
+fn written_state(lir: &LirInstruction) -> (Vec<String>, Vec<String>) {
     let mut registers = Vec::new();
     let mut flags = Vec::new();
     for effect in &lir.effects {

@@ -32,13 +32,10 @@ use crate::hashing::MinHash32;
 use crate::hashing::SHA256;
 use crate::hashing::SSDeep;
 use crate::hashing::TLSH;
-use crate::irs::ast::AstFunction;
-use crate::irs::hir::HirFunction;
 use crate::irs::lir::{
     LirEffect, LirExpression, LirFunction, LirLocation, LirOperationBinary, LirTerminator,
 };
 use crate::irs::llvm::LlvmModule;
-use crate::irs::mir::MirFunction;
 #[cfg(not(target_os = "windows"))]
 use crate::irs::vex::VexModule;
 use std::collections::BTreeMap;
@@ -208,7 +205,7 @@ impl<'function> Function<'function> {
     pub fn llvm(&self) -> Result<LlvmModule, Error> {
         let mut lifter =
             LlvmModule::from_architecture_with_config(self.architecture(), self.cfg.config.clone());
-        lifter.populate_function(self, None)?;
+        lifter.populate_function(self)?;
         Ok(lifter)
     }
 
@@ -314,7 +311,7 @@ impl<'function> Function<'function> {
     }
 
     fn resolve_indirect_symbol_address(
-        encoding: Option<&crate::irs::lir::LirEncoding>,
+        address: Option<u64>,
         expression: &LirExpression,
         register_map: &BTreeMap<String, LirExpression>,
         depth: usize,
@@ -330,15 +327,14 @@ impl<'function> Function<'function> {
                 && matches!(Self::read_register_name(left), Some("rip" | "eip")) =>
             {
                 let displacement = Self::const_u64_value(right)?;
-                let encoding = encoding?;
-                Some(encoding.address + encoding.bytes.len() as u64 + displacement)
+                Some(address? + displacement)
             }
             LirExpression::Read(location) => {
                 if let LirLocation::Register { name, .. } = location.as_ref()
                     && let Some(aliased) = register_map.get(name)
                 {
                     return Self::resolve_indirect_symbol_address(
-                        encoding,
+                        address,
                         aliased,
                         register_map,
                         depth + 1,
@@ -351,7 +347,7 @@ impl<'function> Function<'function> {
     }
 
     fn resolve_indirect_symbol_name(
-        encoding: Option<&crate::irs::lir::LirEncoding>,
+        address: Option<u64>,
         target: &LirExpression,
         symbol_map: &BTreeMap<u64, String>,
         register_map: &BTreeMap<String, LirExpression>,
@@ -366,7 +362,7 @@ impl<'function> Function<'function> {
             && let Some(aliased) = register_map.get(name)
         {
             return Self::resolve_indirect_symbol_name(
-                encoding,
+                address,
                 aliased,
                 symbol_map,
                 register_map,
@@ -383,12 +379,12 @@ impl<'function> Function<'function> {
             return None;
         }
 
-        let address = Self::resolve_indirect_symbol_address(encoding, addr, register_map, 0)?;
+        let address = Self::resolve_indirect_symbol_address(address, addr, register_map, 0)?;
         symbol_map.get(&address).cloned()
     }
 
     fn resolve_symbol_name(
-        encoding: Option<&crate::irs::lir::LirEncoding>,
+        address: Option<u64>,
         target: &LirExpression,
         symbol_map: &BTreeMap<u64, String>,
         register_map: &BTreeMap<String, LirExpression>,
@@ -399,11 +395,11 @@ impl<'function> Function<'function> {
             }
         }
 
-        Self::resolve_indirect_symbol_name(encoding, target, symbol_map, register_map, 0)
+        Self::resolve_indirect_symbol_name(address, target, symbol_map, register_map, 0)
     }
 
     fn canonicalize_indirect_target_address(
-        encoding: Option<&crate::irs::lir::LirEncoding>,
+        address: Option<u64>,
         target: &mut LirExpression,
         register_map: &BTreeMap<String, LirExpression>,
     ) -> bool {
@@ -413,7 +409,7 @@ impl<'function> Function<'function> {
         if !matches!(space, crate::irs::lir::LirAddressSpace::Default) {
             return false;
         }
-        let Some(address) = Self::resolve_indirect_symbol_address(encoding, addr, register_map, 0)
+        let Some(address) = Self::resolve_indirect_symbol_address(address, addr, register_map, 0)
         else {
             return false;
         };
@@ -443,7 +439,7 @@ impl<'function> Function<'function> {
             let mut register_map = BTreeMap::<String, LirExpression>::new();
 
             for instruction in &mut block.instructions {
-                let encoding = instruction.encoding.as_ref();
+                let address = instruction.address;
                 for effect in &instruction.effects {
                     if let LirEffect::Set {
                         dst: LirLocation::Register { name, .. },
@@ -457,12 +453,12 @@ impl<'function> Function<'function> {
                 match &mut instruction.terminator {
                     LirTerminator::Call { target, .. } | LirTerminator::Jump { target } => {
                         changed |= Self::canonicalize_indirect_target_address(
-                            encoding,
+                            address,
                             target,
                             &register_map,
                         );
                         if let Some(name) =
-                            Self::resolve_symbol_name(encoding, target, symbol_map, &register_map)
+                            Self::resolve_symbol_name(address, target, symbol_map, &register_map)
                         {
                             *target = LirExpression::Function {
                                 name,
@@ -477,12 +473,12 @@ impl<'function> Function<'function> {
                         ..
                     } => {
                         changed |= Self::canonicalize_indirect_target_address(
-                            encoding,
+                            address,
                             true_target,
                             &register_map,
                         );
                         if let Some(name) = Self::resolve_symbol_name(
-                            encoding,
+                            address,
                             true_target,
                             symbol_map,
                             &register_map,
@@ -494,12 +490,12 @@ impl<'function> Function<'function> {
                             changed = true;
                         }
                         changed |= Self::canonicalize_indirect_target_address(
-                            encoding,
+                            address,
                             false_target,
                             &register_map,
                         );
                         if let Some(name) = Self::resolve_symbol_name(
-                            encoding,
+                            address,
                             false_target,
                             symbol_map,
                             &register_map,
@@ -535,13 +531,8 @@ impl<'function> Function<'function> {
             .into_iter()
             .map(|block| block.lir())
             .collect::<Result<Vec<_>, Error>>()?;
-        let abi = blocks
-            .iter()
-            .flat_map(|block| block.instructions.iter())
-            .find_map(|instruction| instruction.abi.clone());
         let mut lir = LirFunction {
             name: Some(self.lir_name_with_symbols(symbol_map)),
-            abi,
             blocks,
         };
         Self::rewrite_lir_function_symbols(&mut lir, symbol_map);
@@ -553,28 +544,6 @@ impl<'function> Function<'function> {
             return Ok(artifact.lir);
         }
         self.build_lir(&self.cfg.symbols())
-    }
-
-    pub fn mir(&self) -> Result<MirFunction, Error> {
-        if let Some(artifact) = self.cfg.cached_decompilation(self.address())? {
-            return Ok(artifact.mir);
-        }
-        MirFunction::from_function(self)
-    }
-
-    pub fn hir(&self) -> Result<HirFunction, Error> {
-        if let Some(artifact) = self.cfg.cached_decompilation(self.address())? {
-            return Ok(artifact.hir);
-        }
-        let mir = self.mir()?;
-        HirFunction::from_mir(None, &mir).map_err(|error| Error::other(error.to_string()))
-    }
-
-    pub fn ast(&self) -> Result<AstFunction, Error> {
-        if let Some(artifact) = self.cfg.cached_decompilation(self.address())? {
-            return Ok(artifact.ast.with_image(self.cfg.image()));
-        }
-        Ok(AstFunction::from_hir(&self.hir()?))
     }
 
     /// Retrieves all blocks that fall within the contiguous reconstruction region.

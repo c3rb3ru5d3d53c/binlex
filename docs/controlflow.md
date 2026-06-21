@@ -256,7 +256,7 @@ for function in graph.functions():
 ```python
 from binlex.irs.llvm import LlvmModule
 
-llvm = LlvmModule(function.lir().abi().cpu(), config)
+llvm = LlvmModule(function.architecture(), config)
 llvm.lift_function(function)
 print(llvm.text())
 ```

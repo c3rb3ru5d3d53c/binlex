@@ -1,7 +1,5 @@
 use crate::Configuration;
-use crate::irs::lir::{
-    LirAbi, LirBlock, LirCpu, LirCpuKind, LirFunction, LirModule, LirTerminator,
-};
+use crate::irs::lir::{LirBlock, LirCpu, LirCpuKind, LirFunction, LirModule};
 use crate::irs::llvm::LlvmModule;
 use std::io::Error;
 
@@ -29,17 +27,15 @@ impl LlvmFromLir for LirModule {
                 .clone()
                 .or_else(|| self.name.clone())
                 .unwrap_or_else(|| format!("function_{index}"));
-            let abi = abi_with_inferred_return(function, &cpu);
             let function_module = LirModule {
                 name: Some(function_name.clone()),
                 functions: vec![LirFunction {
                     name: Some(function_name.clone()),
-                    abi: abi.clone(),
                     blocks: function.blocks.clone(),
                 }],
                 data: self.data.clone(),
             };
-            lifter.populate_function_lir_named(&function_module, abi.as_ref(), &function_name)?;
+            lifter.populate_function_lir_named(&function_module, &function_name)?;
         }
         Ok(lifter)
     }
@@ -76,7 +72,6 @@ impl LlvmFromLir for LirBlock {
             name: Some(function_name.clone()),
             functions: vec![LirFunction {
                 name: Some(function_name),
-                abi: None,
                 blocks: vec![self.clone()],
             }],
             data: Vec::new(),
@@ -92,45 +87,6 @@ pub fn from_lir<T: LlvmFromLir>(
     triple: Option<String>,
 ) -> Result<LlvmModule, Error> {
     lir.from_lir(cpu, config, triple)
-}
-
-fn abi_with_inferred_return(function: &LirFunction, cpu: &LirCpu) -> Option<LirAbi> {
-    if function
-        .abi
-        .as_ref()
-        .and_then(|abi| abi.function_return_bits)
-        .is_some()
-    {
-        return function.abi.clone();
-    }
-    let return_bits = infer_return_bits(function)?;
-    let mut abi = function.abi.clone().unwrap_or_else(|| {
-        LirAbi::new(
-            "inferred".to_string(),
-            cpu.clone(),
-            Vec::new(),
-            Vec::new(),
-            None,
-            Vec::new(),
-        )
-    });
-    abi.function_return_bits = Some(return_bits);
-    Some(abi)
-}
-
-fn infer_return_bits(function: &LirFunction) -> Option<u16> {
-    function
-        .blocks
-        .iter()
-        .flat_map(|block| block.instructions.iter())
-        .rev()
-        .find_map(|instruction| match &instruction.terminator {
-            LirTerminator::Return {
-                expression: Some(expression),
-            } => Some(expression.bits()),
-            _ => None,
-        })
-        .filter(|bits| *bits > 0)
 }
 
 fn validate_triple_for_cpu(cpu: &LirCpu, triple: Option<&str>) -> Result<(), Error> {

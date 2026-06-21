@@ -3,7 +3,7 @@
 use binlex::controlflow::graph::Graph;
 use binlex::controlflow::{Block, Function, InstructionRecord};
 use binlex::irs::lir::{
-    Lir, LirEffect, LirExpression, LirLocation, LirMetadata, LirStatus, LirTerminator,
+    LirEffect, LirExpression, LirInstruction, LirLocation, LirStatus, LirTerminator,
 };
 use binlex::irs::vex::VexModule;
 use binlex::{Architecture, Configuration};
@@ -24,13 +24,9 @@ fn instruction(address: u64, bytes: &[u8]) -> InstructionRecord {
         .collect::<Vec<_>>()
         .join("");
     instruction.is_return = bytes == [0xC3];
-    instruction.lir = Some(Lir {
-        version: 1,
+    instruction.lir = Some(LirInstruction {
+        address: None,
         status: LirStatus::Complete,
-        metadata: LirMetadata::default(),
-        abi: None,
-        encoding: None,
-        temporaries: Vec::new(),
         effects: vec![LirEffect::Set {
             dst: LirLocation::ProgramCounter { bits: 64 },
             expression: LirExpression::Const {
@@ -39,7 +35,6 @@ fn instruction(address: u64, bytes: &[u8]) -> InstructionRecord {
             },
         }],
         terminator: LirTerminator::Return { expression: None },
-        diagnostics: Vec::new(),
     });
     instruction
 }

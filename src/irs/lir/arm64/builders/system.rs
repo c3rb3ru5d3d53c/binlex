@@ -26,14 +26,14 @@ use crate::irs::lir::arm64::helpers::{
 };
 use crate::irs::lir::arm64::{Arm64OperandKind, Arm64OperandView};
 use crate::irs::lir::{
-    Lir, LirEffect, LirExpression, LirLocation, LirOperationBinary, LirStatus, LirTerminator,
-    LirTrapKind,
+    LirEffect, LirExpression, LirInstruction, LirLocation, LirOperationBinary, LirStatus,
+    LirTerminator, LirTrapKind,
 };
 
 const TPIDR_EL0_SEMANTIC_NAME: &str = "arm64_sysreg_tpidr_el0";
 const FPCR_SEMANTIC_NAME: &str = "arm64_sysreg_fpcr";
 
-pub(crate) fn build(view: &InstructionDetailArm64) -> Option<Lir> {
+pub(crate) fn build(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     match view.mnemonic.as_str() {
         "axflag" => Some(complete(
             LirTerminator::FallThrough,
@@ -62,18 +62,13 @@ pub(crate) fn build(view: &InstructionDetailArm64) -> Option<Lir> {
         "nop" | "pacibsp" | "autibsp" | "xpaclri" | "csdb" | "dmb" | "prfm" => {
             Some(complete(LirTerminator::FallThrough, vec![LirEffect::Nop]))
         }
-        "svc" => Some(Lir {
-            version: 1,
+        "svc" => Some(LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: Default::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Trap {
                 kind: LirTrapKind::Syscall,
             }],
             terminator: LirTerminator::Trap,
-            diagnostics: Vec::new(),
         }),
         "mrs" => build_mrs(view),
         "msr" => build_msr(view),
@@ -97,7 +92,7 @@ fn instruction_mentions_fpcr(view: &InstructionDetailArm64) -> bool {
         || view.bytes.as_slice().ends_with(&[0x44, 0x1b, 0xd5])
 }
 
-fn build_mrs(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_mrs(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let lir_name = if instruction_mentions_tpidr_el0(view) {
         TPIDR_EL0_SEMANTIC_NAME
     } else if instruction_mentions_fpcr(view) {
@@ -118,7 +113,7 @@ fn build_mrs(view: &InstructionDetailArm64) -> Option<Lir> {
     ))
 }
 
-fn build_msr(view: &InstructionDetailArm64) -> Option<Lir> {
+fn build_msr(view: &InstructionDetailArm64) -> Option<LirInstruction> {
     let lir_name = if instruction_mentions_tpidr_el0(view) {
         TPIDR_EL0_SEMANTIC_NAME
     } else if instruction_mentions_fpcr(view) {

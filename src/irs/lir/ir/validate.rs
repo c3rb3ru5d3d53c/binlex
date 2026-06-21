@@ -1,28 +1,7 @@
-use crate::irs::lir::{Lir, LirEffect, LirExpression, LirLocation, LirStatus, LirTerminator};
+use crate::irs::lir::{LirEffect, LirExpression, LirInstruction, LirLocation, LirTerminator};
 use std::io::Error;
 
-pub fn validate_instruction_lir(lir: &Lir) -> Result<(), Error> {
-    match lir.status {
-        LirStatus::Complete if !lir.diagnostics.is_empty() => {
-            return Err(Error::other("complete lir must not carry diagnostics"));
-        }
-        LirStatus::Partial if lir.diagnostics.is_empty() => {
-            return Err(Error::other(
-                "partial lir must include at least one diagnostic",
-            ));
-        }
-        _ => {}
-    }
-
-    for temporary in &lir.temporaries {
-        if temporary.bits == 0 {
-            return Err(Error::other(format!(
-                "lir temporary {} has zero width",
-                temporary.id
-            )));
-        }
-    }
-
+pub fn validate_instruction_lir(lir: &LirInstruction) -> Result<(), Error> {
     for effect in &lir.effects {
         validate_effect(effect)?;
     }
@@ -317,19 +296,13 @@ fn expression_bits(expression: &LirExpression) -> u16 {
 #[cfg(test)]
 mod tests {
     use super::validate_instruction_lir;
-    use crate::irs::lir::{
-        Lir, LirDiagnostic, LirDiagnosticKind, LirEffect, LirExpression, LirStatus, LirTerminator,
-    };
+    use crate::irs::lir::{LirEffect, LirExpression, LirInstruction, LirStatus, LirTerminator};
 
     #[test]
     fn rejects_zero_width_store() {
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: Default::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Store {
                 space: crate::irs::lir::LirAddressSpace::Default,
                 addr: LirExpression::Const { value: 0, bits: 64 },
@@ -337,44 +310,6 @@ mod tests {
                 bits: 0,
             }],
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
-        };
-
-        assert!(validate_instruction_lir(&lir).is_err());
-    }
-
-    #[test]
-    fn rejects_complete_lir_with_diagnostics() {
-        let lir = Lir {
-            version: 1,
-            status: LirStatus::Complete,
-            metadata: Default::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
-            effects: Vec::new(),
-            terminator: LirTerminator::FallThrough,
-            diagnostics: vec![LirDiagnostic {
-                kind: LirDiagnosticKind::PartialFlags,
-                message: "flags are modeled conservatively".to_string(),
-            }],
-        };
-
-        assert!(validate_instruction_lir(&lir).is_err());
-    }
-
-    #[test]
-    fn rejects_partial_lir_without_diagnostics() {
-        let lir = Lir {
-            version: 1,
-            status: LirStatus::Partial,
-            metadata: Default::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
-            effects: Vec::new(),
-            terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         };
 
         assert!(validate_instruction_lir(&lir).is_err());

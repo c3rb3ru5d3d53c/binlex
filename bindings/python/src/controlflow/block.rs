@@ -29,7 +29,6 @@ use crate::genetics::Chromosome;
 use crate::hashing::{MinHash32, SSDeep, SHA256, TLSH};
 use crate::irs::lir::LirBlock as PyLirBlock;
 use crate::irs::llvm::LlvmModule as PyLlvmModule;
-use crate::irs::mir::PyMirBlock;
 #[cfg(not(target_os = "windows"))]
 use crate::irs::vex::VexModule as PyVexModule;
 use crate::Architecture;
@@ -155,13 +154,6 @@ impl Block {
     pub fn lir(&self, py: Python<'_>) -> PyResult<Py<PyLirBlock>> {
         self.with_inner_block(py, |block| {
             Py::new(py, PyLirBlock::from_inner(block.lir()?))
-        })
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    pub fn mir(&self, py: Python<'_>) -> PyResult<Py<PyMirBlock>> {
-        self.with_inner_block(py, |block| {
-            Py::new(py, PyMirBlock::from_inner(block.mir()?))
         })
     }
 

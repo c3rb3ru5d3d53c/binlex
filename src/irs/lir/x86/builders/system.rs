@@ -24,10 +24,11 @@ use crate::irs::lir::x86::InstructionDetailX86;
 use crate::irs::lir::x86::helpers as common;
 use crate::irs::lir::x86::{X86OperandKind, X86OperandView};
 use crate::irs::lir::{
-    Lir, LirEffect, LirExpression, LirFenceKind, LirOperationBinary, LirTerminator, LirTrapKind,
+    LirEffect, LirExpression, LirFenceKind, LirInstruction, LirOperationBinary, LirTerminator,
+    LirTrapKind,
 };
 
-pub(crate) fn build(view: &InstructionDetailX86) -> Option<Lir> {
+pub(crate) fn build(view: &InstructionDetailX86) -> Option<LirInstruction> {
     match view.mnemonic.as_str() {
         "pause" | "prefetch" | "prefetchnta" | "prefetcht0" | "prefetcht1" | "prefetcht2"
         | "prefetchw" | "endbr32" | "endbr64" | "wait" => Some(nop()),
@@ -97,15 +98,15 @@ pub(crate) fn build(view: &InstructionDetailX86) -> Option<Lir> {
     }
 }
 
-fn nop() -> Lir {
+fn nop() -> LirInstruction {
     common::complete(LirTerminator::FallThrough, vec![LirEffect::Nop])
 }
 
-fn fence(kind: LirFenceKind) -> Lir {
+fn fence(kind: LirFenceKind) -> LirInstruction {
     common::complete(LirTerminator::FallThrough, vec![LirEffect::Fence { kind }])
 }
 
-fn set_flag(name: &str, value: bool) -> Lir {
+fn set_flag(name: &str, value: bool) -> LirInstruction {
     common::complete(
         LirTerminator::FallThrough,
         vec![LirEffect::Set {
@@ -115,7 +116,7 @@ fn set_flag(name: &str, value: bool) -> Lir {
     )
 }
 
-fn intrinsic_no_outputs(name: &str) -> Lir {
+fn intrinsic_no_outputs(name: &str) -> LirInstruction {
     common::complete(
         LirTerminator::FallThrough,
         vec![LirEffect::Intrinsic {
@@ -126,7 +127,7 @@ fn intrinsic_no_outputs(name: &str) -> Lir {
     )
 }
 
-fn cpuid() -> Lir {
+fn cpuid() -> LirInstruction {
     let leaf = LirExpression::Read(Box::new(common::reg("eax".to_string(), 32)));
     let subleaf = LirExpression::Read(Box::new(common::reg("ecx".to_string(), 32)));
     common::complete(
@@ -144,7 +145,7 @@ fn cpuid() -> Lir {
     )
 }
 
-fn xgetbv() -> Lir {
+fn xgetbv() -> LirInstruction {
     common::complete(
         LirTerminator::FallThrough,
         vec![LirEffect::Intrinsic {
@@ -158,7 +159,7 @@ fn xgetbv() -> Lir {
     )
 }
 
-fn rdtsc() -> Lir {
+fn rdtsc() -> LirInstruction {
     common::complete(
         LirTerminator::FallThrough,
         vec![LirEffect::Intrinsic {
@@ -172,7 +173,7 @@ fn rdtsc() -> Lir {
     )
 }
 
-fn rdtscp() -> Lir {
+fn rdtscp() -> LirInstruction {
     common::complete(
         LirTerminator::FallThrough,
         vec![LirEffect::Intrinsic {
@@ -187,11 +188,11 @@ fn rdtscp() -> Lir {
     )
 }
 
-fn trap(kind: LirTrapKind) -> Lir {
+fn trap(kind: LirTrapKind) -> LirInstruction {
     common::complete(LirTerminator::Trap, vec![LirEffect::Trap { kind }])
 }
 
-fn selector_check(view: &InstructionDetailX86, name: &str) -> Option<Lir> {
+fn selector_check(view: &InstructionDetailX86, name: &str) -> Option<LirInstruction> {
     let selector = operand_expr(view.machine, view.operands().first()?)?;
     Some(common::complete(
         LirTerminator::FallThrough,
@@ -203,7 +204,7 @@ fn selector_check(view: &InstructionDetailX86, name: &str) -> Option<Lir> {
     ))
 }
 
-fn random_value(view: &InstructionDetailX86, name: &str) -> Option<Lir> {
+fn random_value(view: &InstructionDetailX86, name: &str) -> Option<LirInstruction> {
     let dst = operand_location(view.machine, view.operands().first()?)?;
     Some(common::complete(
         LirTerminator::FallThrough,
@@ -237,7 +238,7 @@ fn random_value(view: &InstructionDetailX86, name: &str) -> Option<Lir> {
     ))
 }
 
-fn lahf() -> Lir {
+fn lahf() -> LirInstruction {
     common::complete(
         LirTerminator::FallThrough,
         vec![LirEffect::Set {
@@ -247,7 +248,7 @@ fn lahf() -> Lir {
     )
 }
 
-fn ldmxcsr(view: &InstructionDetailX86) -> Option<Lir> {
+fn ldmxcsr(view: &InstructionDetailX86) -> Option<LirInstruction> {
     let src = operand_expr(view.machine, view.operands().first()?)?;
     Some(common::complete(
         LirTerminator::FallThrough,
@@ -258,7 +259,7 @@ fn ldmxcsr(view: &InstructionDetailX86) -> Option<Lir> {
     ))
 }
 
-fn stmxcsr(view: &InstructionDetailX86) -> Option<Lir> {
+fn stmxcsr(view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(view.machine, view.operands().first()?)?;
     Some(common::complete(
         LirTerminator::FallThrough,
@@ -269,7 +270,7 @@ fn stmxcsr(view: &InstructionDetailX86) -> Option<Lir> {
     ))
 }
 
-fn invlpg(view: &InstructionDetailX86) -> Option<Lir> {
+fn invlpg(view: &InstructionDetailX86) -> Option<LirInstruction> {
     let addr = operand_expr(view.machine, view.operands().first()?)?;
     Some(common::complete(
         LirTerminator::FallThrough,
@@ -281,7 +282,7 @@ fn invlpg(view: &InstructionDetailX86) -> Option<Lir> {
     ))
 }
 
-fn lar(view: &InstructionDetailX86) -> Option<Lir> {
+fn lar(view: &InstructionDetailX86) -> Option<LirInstruction> {
     let dst = operand_location(view.machine, view.operands().first()?)?;
     let src = operand_expr(view.machine, view.operands().get(1)?)?;
     Some(common::complete(
@@ -294,7 +295,7 @@ fn lar(view: &InstructionDetailX86) -> Option<Lir> {
     ))
 }
 
-fn fxsave(view: &InstructionDetailX86, wide_pointers: bool) -> Option<Lir> {
+fn fxsave(view: &InstructionDetailX86, wide_pointers: bool) -> Option<LirInstruction> {
     let base = memory_operand_addr(view.machine, view.operands().first()?)?;
     let pointer_bits = common::pointer_bits(view.machine);
     let mut effects = vec![
@@ -428,7 +429,7 @@ fn fxsave(view: &InstructionDetailX86, wide_pointers: bool) -> Option<Lir> {
     Some(common::complete(LirTerminator::FallThrough, effects))
 }
 
-fn fxrstor(view: &InstructionDetailX86, wide_pointers: bool) -> Option<Lir> {
+fn fxrstor(view: &InstructionDetailX86, wide_pointers: bool) -> Option<LirInstruction> {
     let base = memory_operand_addr(view.machine, view.operands().first()?)?;
     let pointer_bits = common::pointer_bits(view.machine);
     let fsw = load_default(base.clone(), 2, pointer_bits, 16);
@@ -533,7 +534,7 @@ fn fxrstor(view: &InstructionDetailX86, wide_pointers: bool) -> Option<Lir> {
     Some(common::complete(LirTerminator::FallThrough, effects))
 }
 
-fn insd(machine: crate::Architecture) -> Lir {
+fn insd(machine: crate::Architecture) -> LirInstruction {
     let di = string_index_location(machine, true);
     let port = io_port_location();
     let addr = LirExpression::Read(Box::new(di.clone()));
@@ -559,7 +560,7 @@ fn insd(machine: crate::Architecture) -> Lir {
     )
 }
 
-fn outsd(machine: crate::Architecture) -> Lir {
+fn outsd(machine: crate::Architecture) -> LirInstruction {
     let si = string_index_location(machine, false);
     let port = io_port_location();
     let addr = LirExpression::Read(Box::new(si.clone()));
@@ -585,7 +586,7 @@ fn outsd(machine: crate::Architecture) -> Lir {
     )
 }
 
-fn sahf() -> Lir {
+fn sahf() -> LirInstruction {
     let ah = LirExpression::Read(Box::new(common::reg("ah".to_string(), 8)));
     common::complete(
         LirTerminator::FallThrough,
@@ -599,7 +600,7 @@ fn sahf() -> Lir {
     )
 }
 
-fn pushf(machine: crate::Architecture, bits: u16) -> Option<Lir> {
+fn pushf(machine: crate::Architecture, bits: u16) -> Option<LirInstruction> {
     let stack_pointer = stack_pointer_location(machine);
     let pointer_bits = common::pointer_bits(machine);
     let slot_bytes = (bits / 8) as u64;
@@ -627,7 +628,7 @@ fn pushf(machine: crate::Architecture, bits: u16) -> Option<Lir> {
     ))
 }
 
-fn popf(machine: crate::Architecture, bits: u16) -> Option<Lir> {
+fn popf(machine: crate::Architecture, bits: u16) -> Option<LirInstruction> {
     let stack_pointer = stack_pointer_location(machine);
     let pointer_bits = common::pointer_bits(machine);
     let slot_bytes = (bits / 8) as u64;

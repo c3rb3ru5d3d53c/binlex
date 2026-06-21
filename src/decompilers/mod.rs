@@ -9,9 +9,6 @@
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 //
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -23,23 +20,12 @@
 use crate::config::RAYON_WORKER_STACK_SIZE;
 use crate::controlflow::{Function, Graph};
 use crate::io::Stderr;
-use crate::irs::ast::AstFunction;
-use crate::irs::hir::HirFunction;
 use crate::irs::lir::LirFunction;
-use crate::irs::mir::lower::{
-    lower_lir_function_to_mir_with_symbols, lower_lir_function_to_mir_with_symbols_and_timing,
-};
-use crate::irs::mir::{
-    MirBlockParameter, MirControlTarget, MirFunction, MirOperationKind, MirType, MirValue,
-};
 use rayon::ThreadPoolBuilder;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
 use std::io::Error;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -52,9 +38,6 @@ pub enum DecompilerBackend {
 pub struct DecompiledFunction {
     pub address: u64,
     pub lir: LirFunction,
-    pub mir: MirFunction,
-    pub hir: HirFunction,
-    pub ast: AstFunction,
 }
 
 pub type DecompiledFunctionState = Vec<u8>;
@@ -62,217 +45,6 @@ pub type DecompiledFunctionState = Vec<u8>;
 pub struct Decompiler<'a> {
     graph: &'a Graph,
     backend: DecompilerBackend,
-}
-
-struct DecompilerContext {
-    symbols: BTreeMap<u64, String>,
-    metrics: Option<Arc<DecompileStageMetrics>>,
-}
-
-impl DecompilerContext {
-    fn new(graph: &Graph, debug_enabled: bool) -> Self {
-        Self {
-            symbols: graph.symbols(),
-            metrics: debug_enabled.then(|| Arc::new(DecompileStageMetrics::default())),
-        }
-    }
-
-    fn record_lir(&self, started_at: Option<Instant>) {
-        self.record(started_at, |metrics, nanos| {
-            metrics.lir.fetch_add(nanos, Ordering::Relaxed);
-        });
-    }
-
-    fn record_mir(&self, started_at: Option<Instant>) {
-        self.record(started_at, |metrics, nanos| {
-            metrics.mir.fetch_add(nanos, Ordering::Relaxed);
-        });
-    }
-
-    fn record_hir(&self, started_at: Option<Instant>) {
-        self.record(started_at, |metrics, nanos| {
-            metrics.hir.fetch_add(nanos, Ordering::Relaxed);
-        });
-    }
-
-    fn record_ast(&self, started_at: Option<Instant>) {
-        self.record(started_at, |metrics, nanos| {
-            metrics.ast.fetch_add(nanos, Ordering::Relaxed);
-        });
-    }
-
-    fn record_cache(&self, started_at: Option<Instant>) {
-        self.record(started_at, |metrics, nanos| {
-            metrics.cache.fetch_add(nanos, Ordering::Relaxed);
-        });
-    }
-
-    fn record_mir_lowering(&self, stage: &'static str, elapsed: Duration) {
-        self.record_lowering(elapsed, |metrics, nanos| {
-            match stage {
-                "clone_lir" => metrics.mir_clone_lir.fetch_add(nanos, Ordering::Relaxed),
-                "optimize_lir" => metrics.mir_optimize_lir.fetch_add(nanos, Ordering::Relaxed),
-                "lower_lir" => metrics.mir_lower_lir.fetch_add(nanos, Ordering::Relaxed),
-                "trim_calls" => metrics.mir_trim_calls.fetch_add(nanos, Ordering::Relaxed),
-                "import_signatures" => metrics
-                    .mir_import_signatures
-                    .fetch_add(nanos, Ordering::Relaxed),
-                "argument_types" => metrics
-                    .mir_argument_types
-                    .fetch_add(nanos, Ordering::Relaxed),
-                _ => {
-                    metrics.record_detail(&metrics.mir_lower_detail, stage, nanos);
-                    0
-                }
-            };
-        });
-    }
-
-    fn record_hir_lowering(&self, stage: &'static str, elapsed: Duration) {
-        self.record_lowering(elapsed, |metrics, nanos| {
-            match stage {
-                "clone_mir" => metrics.hir_clone_mir.fetch_add(nanos, Ordering::Relaxed),
-                "optimize_mir" => metrics.hir_optimize_mir.fetch_add(nanos, Ordering::Relaxed),
-                "lower_mir" => metrics.hir_lower_mir.fetch_add(nanos, Ordering::Relaxed),
-                _ => {
-                    metrics.record_detail(&metrics.hir_optimize_mir_detail, stage, nanos);
-                    0
-                }
-            };
-        });
-    }
-
-    fn record_ast_lowering(&self, stage: &'static str, elapsed: Duration) {
-        self.record_lowering(elapsed, |metrics, nanos| {
-            match stage {
-                "clone_hir" => metrics.ast_clone_hir.fetch_add(nanos, Ordering::Relaxed),
-                "optimize_hir" => metrics.ast_optimize_hir.fetch_add(nanos, Ordering::Relaxed),
-                "locals" => metrics.ast_locals.fetch_add(nanos, Ordering::Relaxed),
-                "infer_storage" => metrics
-                    .ast_infer_storage
-                    .fetch_add(nanos, Ordering::Relaxed),
-                "lower_blocks" => metrics.ast_lower_blocks.fetch_add(nanos, Ordering::Relaxed),
-                "promote_parameters" => metrics
-                    .ast_promote_parameters
-                    .fetch_add(nanos, Ordering::Relaxed),
-                "optimize_ast" => metrics.ast_optimize_ast.fetch_add(nanos, Ordering::Relaxed),
-                "cleanup" => metrics.ast_cleanup.fetch_add(nanos, Ordering::Relaxed),
-                _ if stage.starts_with("hir_") => {
-                    metrics.record_detail(&metrics.ast_optimize_hir_detail, stage, nanos);
-                    0
-                }
-                _ => {
-                    metrics.record_detail(&metrics.ast_optimize_ast_detail, stage, nanos);
-                    0
-                }
-            };
-        });
-    }
-
-    fn record<F>(&self, started_at: Option<Instant>, update: F)
-    where
-        F: FnOnce(&DecompileStageMetrics, u64),
-    {
-        let (Some(metrics), Some(started_at)) = (&self.metrics, started_at) else {
-            return;
-        };
-        let nanos = started_at.elapsed().as_nanos().min(u128::from(u64::MAX)) as u64;
-        update(metrics, nanos);
-    }
-
-    fn record_lowering<F>(&self, elapsed: Duration, update: F)
-    where
-        F: FnOnce(&DecompileStageMetrics, u64),
-    {
-        let Some(metrics) = &self.metrics else {
-            return;
-        };
-        let nanos = elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
-        update(metrics, nanos);
-    }
-}
-
-#[derive(Default)]
-struct DecompileStageMetrics {
-    lir: AtomicU64,
-    mir: AtomicU64,
-    hir: AtomicU64,
-    ast: AtomicU64,
-    cache: AtomicU64,
-    mir_clone_lir: AtomicU64,
-    mir_optimize_lir: AtomicU64,
-    mir_lower_lir: AtomicU64,
-    mir_trim_calls: AtomicU64,
-    mir_import_signatures: AtomicU64,
-    mir_argument_types: AtomicU64,
-    hir_clone_mir: AtomicU64,
-    hir_optimize_mir: AtomicU64,
-    hir_lower_mir: AtomicU64,
-    ast_clone_hir: AtomicU64,
-    ast_optimize_hir: AtomicU64,
-    ast_locals: AtomicU64,
-    ast_infer_storage: AtomicU64,
-    ast_lower_blocks: AtomicU64,
-    ast_promote_parameters: AtomicU64,
-    ast_optimize_ast: AtomicU64,
-    ast_cleanup: AtomicU64,
-    mir_lower_detail: Mutex<BTreeMap<&'static str, u64>>,
-    hir_optimize_mir_detail: Mutex<BTreeMap<&'static str, u64>>,
-    ast_optimize_hir_detail: Mutex<BTreeMap<&'static str, u64>>,
-    ast_optimize_ast_detail: Mutex<BTreeMap<&'static str, u64>>,
-}
-
-impl DecompileStageMetrics {
-    fn ns_to_ms(nanos: u64) -> f64 {
-        nanos as f64 / 1_000_000.0
-    }
-
-    fn lir_ms(&self) -> f64 {
-        Self::ns_to_ms(self.lir.load(Ordering::Relaxed))
-    }
-
-    fn mir_ms(&self) -> f64 {
-        Self::ns_to_ms(self.mir.load(Ordering::Relaxed))
-    }
-
-    fn hir_ms(&self) -> f64 {
-        Self::ns_to_ms(self.hir.load(Ordering::Relaxed))
-    }
-
-    fn ast_ms(&self) -> f64 {
-        Self::ns_to_ms(self.ast.load(Ordering::Relaxed))
-    }
-
-    fn cache_ms(&self) -> f64 {
-        Self::ns_to_ms(self.cache.load(Ordering::Relaxed))
-    }
-
-    fn ms(value: &AtomicU64) -> f64 {
-        Self::ns_to_ms(value.load(Ordering::Relaxed))
-    }
-
-    fn record_detail(
-        &self,
-        detail: &Mutex<BTreeMap<&'static str, u64>>,
-        stage: &'static str,
-        nanos: u64,
-    ) {
-        let mut detail = detail
-            .lock()
-            .expect("decompiler timing detail lock poisoned");
-        *detail.entry(stage).or_insert(0) += nanos;
-    }
-
-    fn detail_text(&self, detail: &Mutex<BTreeMap<&'static str, u64>>) -> String {
-        let detail = detail
-            .lock()
-            .expect("decompiler timing detail lock poisoned");
-        detail
-            .iter()
-            .map(|(stage, nanos)| format!("{stage}={:.3} ms", Self::ns_to_ms(*nanos)))
-            .collect::<Vec<_>>()
-            .join(" ")
-    }
 }
 
 impl<'a> Decompiler<'a> {
@@ -300,58 +72,12 @@ impl<'a> Decompiler<'a> {
         self.graph.function(address)
     }
 
-    fn decompile_inner(
-        &self,
-        function: &Function<'a>,
-        context: &DecompilerContext,
-    ) -> Result<DecompiledFunction, Error> {
+    fn decompile_inner(&self, function: &Function<'a>) -> Result<DecompiledFunction, Error> {
         match self.backend {
-            DecompilerBackend::Default => {
-                let lir_started_at = context.metrics.as_ref().map(|_| Instant::now());
-                let lir = function.build_lir(&context.symbols)?;
-                context.record_lir(lir_started_at);
-
-                let mir_started_at = context.metrics.as_ref().map(|_| Instant::now());
-                let mir = if context.metrics.is_some() {
-                    lower_lir_function_to_mir_with_symbols_and_timing(
-                        function,
-                        &lir,
-                        &context.symbols,
-                        |stage, elapsed| context.record_mir_lowering(stage, elapsed),
-                    )?
-                } else {
-                    lower_lir_function_to_mir_with_symbols(function, &lir, &context.symbols)?
-                };
-                context.record_mir(mir_started_at);
-
-                let hir_started_at = context.metrics.as_ref().map(|_| Instant::now());
-                let hir = if context.metrics.is_some() {
-                    HirFunction::from_mir_with_timing(None, &mir, |stage, elapsed| {
-                        context.record_hir_lowering(stage, elapsed);
-                    })
-                } else {
-                    HirFunction::from_mir(None, &mir)
-                }
-                .map_err(|error| Error::other(error.to_string()))?;
-                context.record_hir(hir_started_at);
-
-                let ast_started_at = context.metrics.as_ref().map(|_| Instant::now());
-                let ast = if context.metrics.is_some() {
-                    AstFunction::from_hir_with_timing(&hir, |stage, elapsed| {
-                        context.record_ast_lowering(stage, elapsed);
-                    })
-                } else {
-                    AstFunction::from_hir(&hir)
-                };
-                context.record_ast(ast_started_at);
-                Ok(DecompiledFunction {
-                    address: function.address(),
-                    lir,
-                    mir,
-                    hir,
-                    ast,
-                })
-            }
+            DecompilerBackend::Default => Ok(DecompiledFunction {
+                address: function.address(),
+                lir: function.build_lir(&self.graph.symbols())?,
+            }),
         }
     }
 
@@ -359,8 +85,7 @@ impl<'a> Decompiler<'a> {
         let Some(function) = self.function(address) else {
             return Ok(None);
         };
-        let context = DecompilerContext::new(self.graph, self.configuration().debug);
-        let artifact = self.decompile_inner(&function, &context)?;
+        let artifact = self.decompile_inner(&function)?;
         self.graph.cache_decompilation(&artifact)?;
         Ok(Some(artifact))
     }
@@ -377,7 +102,6 @@ impl<'a> Decompiler<'a> {
         &self,
         addresses: &[u64],
     ) -> Result<Vec<DecompiledFunction>, Error> {
-        let context = DecompilerContext::new(self.graph, self.configuration().debug);
         let threads = self.configuration().resolved_threads();
         let mut functions = if threads <= 1 || addresses.len() <= 1 {
             addresses
@@ -385,7 +109,7 @@ impl<'a> Decompiler<'a> {
                 .copied()
                 .map(|address| {
                     let function = Function::new(address, self.graph)?;
-                    self.decompile_inner(&function, &context)
+                    self.decompile_inner(&function)
                 })
                 .collect::<Result<Vec<_>, _>>()?
         } else {
@@ -401,32 +125,23 @@ impl<'a> Decompiler<'a> {
                     .copied()
                     .map(|address| {
                         let function = Function::new(address, self.graph)?;
-                        self.decompile_inner(&function, &context)
+                        self.decompile_inner(&function)
                     })
                     .collect::<Result<Vec<_>, _>>()
             })?
         };
 
-        reconcile_local_function_signatures(&mut functions)?;
+        functions.sort_by_key(|function| function.address);
         Ok(functions)
     }
 
     fn decompile_to_graph_cache(&self, addresses: &[u64]) -> Result<(), Error> {
-        let debug_enabled = self.configuration().debug;
-        let context = DecompilerContext::new(self.graph, debug_enabled);
-        let started_at = if debug_enabled {
-            Some(Instant::now())
-        } else {
-            None
-        };
         let threads = self.configuration().resolved_threads();
         if threads <= 1 || addresses.len() <= 1 {
             for address in addresses {
                 let function = Function::new(*address, self.graph)?;
-                let artifact = self.decompile_inner(&function, &context)?;
-                let cache_started_at = context.metrics.as_ref().map(|_| Instant::now());
+                let artifact = self.decompile_inner(&function)?;
                 self.graph.cache_decompilation(&artifact)?;
-                context.record_cache(cache_started_at);
             }
         } else {
             let pool = ThreadPoolBuilder::new()
@@ -438,123 +153,12 @@ impl<'a> Decompiler<'a> {
             pool.install(|| {
                 addresses.par_iter().copied().try_for_each(|address| {
                     let function = Function::new(address, self.graph)?;
-                    let artifact = self.decompile_inner(&function, &context)?;
-                    let cache_started_at = context.metrics.as_ref().map(|_| Instant::now());
-                    self.graph.cache_decompilation(&artifact)?;
-                    context.record_cache(cache_started_at);
-                    Ok::<(), Error>(())
+                    let artifact = self.decompile_inner(&function)?;
+                    self.graph.cache_decompilation(&artifact)
                 })
             })?
         }
-
-        if let Some(started_at) = started_at {
-            let metrics = context.metrics.as_ref().expect("metrics should exist");
-            Stderr::print_debug(
-                self.configuration(),
-                format!(
-                    "[timing] decompiler.decompile.functions functions={} threads={} elapsed={:.3} ms",
-                    addresses.len(),
-                    threads,
-                    started_at.elapsed().as_secs_f64() * 1000.0,
-                ),
-            );
-            Stderr::print_debug(
-                self.configuration(),
-                format!(
-                    "[timing] decompiler.decompile.stages functions={} lir={:.3} ms mir={:.3} ms hir={:.3} ms ast={:.3} ms cache={:.3} ms",
-                    addresses.len(),
-                    metrics.lir_ms(),
-                    metrics.mir_ms(),
-                    metrics.hir_ms(),
-                    metrics.ast_ms(),
-                    metrics.cache_ms(),
-                ),
-            );
-            Stderr::print_debug(
-                self.configuration(),
-                format!(
-                    "[timing] decompiler.decompile.lower.mir functions={} clone_lir={:.3} ms optimize_lir={:.3} ms lower_lir={:.3} ms trim_calls={:.3} ms import_signatures={:.3} ms argument_types={:.3} ms",
-                    addresses.len(),
-                    DecompileStageMetrics::ms(&metrics.mir_clone_lir),
-                    DecompileStageMetrics::ms(&metrics.mir_optimize_lir),
-                    DecompileStageMetrics::ms(&metrics.mir_lower_lir),
-                    DecompileStageMetrics::ms(&metrics.mir_trim_calls),
-                    DecompileStageMetrics::ms(&metrics.mir_import_signatures),
-                    DecompileStageMetrics::ms(&metrics.mir_argument_types),
-                ),
-            );
-            let mir_lower_detail = metrics.detail_text(&metrics.mir_lower_detail);
-            if !mir_lower_detail.is_empty() {
-                Stderr::print_debug(
-                    self.configuration(),
-                    format!(
-                        "[timing] decompiler.decompile.lower.mir.detail functions={} {}",
-                        addresses.len(),
-                        mir_lower_detail,
-                    ),
-                );
-            }
-            Stderr::print_debug(
-                self.configuration(),
-                format!(
-                    "[timing] decompiler.decompile.lower.hir functions={} clone_mir={:.3} ms optimize_mir={:.3} ms lower_mir={:.3} ms",
-                    addresses.len(),
-                    DecompileStageMetrics::ms(&metrics.hir_clone_mir),
-                    DecompileStageMetrics::ms(&metrics.hir_optimize_mir),
-                    DecompileStageMetrics::ms(&metrics.hir_lower_mir),
-                ),
-            );
-            let hir_optimize_mir_detail = metrics.detail_text(&metrics.hir_optimize_mir_detail);
-            if !hir_optimize_mir_detail.is_empty() {
-                Stderr::print_debug(
-                    self.configuration(),
-                    format!(
-                        "[timing] decompiler.decompile.lower.hir.optimize_mir.detail functions={} {}",
-                        addresses.len(),
-                        hir_optimize_mir_detail,
-                    ),
-                );
-            }
-            Stderr::print_debug(
-                self.configuration(),
-                format!(
-                    "[timing] decompiler.decompile.lower.ast functions={} clone_hir={:.3} ms optimize_hir={:.3} ms locals={:.3} ms infer_storage={:.3} ms lower_blocks={:.3} ms promote_parameters={:.3} ms optimize_ast={:.3} ms cleanup={:.3} ms",
-                    addresses.len(),
-                    DecompileStageMetrics::ms(&metrics.ast_clone_hir),
-                    DecompileStageMetrics::ms(&metrics.ast_optimize_hir),
-                    DecompileStageMetrics::ms(&metrics.ast_locals),
-                    DecompileStageMetrics::ms(&metrics.ast_infer_storage),
-                    DecompileStageMetrics::ms(&metrics.ast_lower_blocks),
-                    DecompileStageMetrics::ms(&metrics.ast_promote_parameters),
-                    DecompileStageMetrics::ms(&metrics.ast_optimize_ast),
-                    DecompileStageMetrics::ms(&metrics.ast_cleanup),
-                ),
-            );
-            let ast_optimize_hir_detail = metrics.detail_text(&metrics.ast_optimize_hir_detail);
-            if !ast_optimize_hir_detail.is_empty() {
-                Stderr::print_debug(
-                    self.configuration(),
-                    format!(
-                        "[timing] decompiler.decompile.lower.ast.optimize_hir.detail functions={} {}",
-                        addresses.len(),
-                        ast_optimize_hir_detail,
-                    ),
-                );
-            }
-            let ast_optimize_ast_detail = metrics.detail_text(&metrics.ast_optimize_ast_detail);
-            if !ast_optimize_ast_detail.is_empty() {
-                Stderr::print_debug(
-                    self.configuration(),
-                    format!(
-                        "[timing] decompiler.decompile.lower.ast.optimize_ast.detail functions={} {}",
-                        addresses.len(),
-                        ast_optimize_ast_detail,
-                    ),
-                );
-            }
-        }
-
-        reconcile_local_function_signatures_cached(self.graph, addresses)
+        Ok(())
     }
 
     pub fn decompile_artifacts(&self) -> Result<Vec<DecompiledFunction>, Error> {
@@ -573,541 +177,19 @@ impl<'a> Decompiler<'a> {
             None
         };
         let addresses = self.function_addresses();
+        self.graph.block_reference_maps();
+        self.graph.function_reference_maps();
+        self.decompile_to_graph_cache(&addresses)?;
         if let Some(started_at) = started_at {
             Stderr::print_debug(
                 self.configuration(),
                 format!(
-                    "[timing] decompiler.decompile.collect functions={} elapsed={:.3} ms",
+                    "[timing] decompiler.decompile functions={} elapsed={:.3} ms",
                     addresses.len(),
                     started_at.elapsed().as_secs_f64() * 1000.0,
-                ),
-            );
-        }
-        let prepare_started_at = if self.configuration().debug {
-            Some(Instant::now())
-        } else {
-            None
-        };
-        self.graph.block_reference_maps();
-        self.graph.function_reference_maps();
-        if let Some(started_at) = prepare_started_at {
-            Stderr::print_debug(
-                self.configuration(),
-                format!(
-                    "[timing] decompiler.decompile.prepare functions={} elapsed={:.3} ms",
-                    addresses.len(),
-                    started_at.elapsed().as_secs_f64() * 1000.0,
-                ),
-            );
-        }
-        self.decompile_to_graph_cache(&addresses)?;
-        if self.configuration().debug {
-            Stderr::print_debug(
-                self.configuration(),
-                format!(
-                    "[timing] decompiler.decompile.complete functions={}",
-                    addresses.len(),
                 ),
             );
         }
         Ok(())
-    }
-}
-
-#[derive(Clone, Debug)]
-struct ObservedSignature {
-    arities: BTreeSet<usize>,
-    types: Vec<Option<MirType>>,
-}
-
-impl ObservedSignature {
-    fn new() -> Self {
-        Self {
-            arities: BTreeSet::new(),
-            types: Vec::new(),
-        }
-    }
-
-    fn observe(&mut self, arguments: &[MirValue]) {
-        self.arities.insert(arguments.len());
-        if self.types.len() < arguments.len() {
-            self.types.resize(arguments.len(), None);
-        }
-        for (index, argument) in arguments.iter().enumerate() {
-            merge_type(&mut self.types[index], value_type(argument));
-        }
-    }
-
-    fn reconciled_arity(&self) -> Option<usize> {
-        if self.arities.len() == 1 {
-            self.arities.iter().next().copied()
-        } else {
-            None
-        }
-    }
-}
-
-fn reconcile_local_function_signatures(functions: &mut [DecompiledFunction]) -> Result<(), Error> {
-    let targets = local_target_indices(functions);
-    let observed = observed_local_signatures(functions, &targets);
-    if observed.is_empty() {
-        return Ok(());
-    }
-
-    for (target, index) in &targets {
-        let Some(signature) = observed.get(target) else {
-            continue;
-        };
-        let Some(arity) = signature.reconciled_arity() else {
-            continue;
-        };
-        let _ = rewrite_entry_signature(&mut functions[*index].mir, arity, &signature.types);
-    }
-
-    trim_local_calls_to_reconciled_signatures(functions, &observed);
-    for function in functions {
-        function.hir = HirFunction::from_mir(None, &function.mir)
-            .map_err(|error| Error::other(error.to_string()))?;
-    }
-
-    Ok(())
-}
-
-fn reconcile_local_function_signatures_cached(
-    graph: &Graph,
-    addresses: &[u64],
-) -> Result<(), Error> {
-    let debug_enabled = graph.config.debug;
-    let total_started_at = if debug_enabled {
-        Some(Instant::now())
-    } else {
-        None
-    };
-    let targets_started_at = if debug_enabled {
-        Some(Instant::now())
-    } else {
-        None
-    };
-    let targets = local_target_addresses(graph, addresses)?;
-    if let Some(started_at) = targets_started_at {
-        Stderr::print_debug(
-            &graph.config,
-            format!(
-                "[timing] decompiler.reconcile.targets functions={} targets={} elapsed={:.3} ms",
-                addresses.len(),
-                targets.len(),
-                started_at.elapsed().as_secs_f64() * 1000.0,
-            ),
-        );
-    }
-
-    let observe_started_at = if debug_enabled {
-        Some(Instant::now())
-    } else {
-        None
-    };
-    let observed = observed_local_signatures_cached(graph, addresses, &targets)?;
-    if let Some(started_at) = observe_started_at {
-        Stderr::print_debug(
-            &graph.config,
-            format!(
-                "[timing] decompiler.reconcile.observe functions={} signatures={} elapsed={:.3} ms",
-                addresses.len(),
-                observed.len(),
-                started_at.elapsed().as_secs_f64() * 1000.0,
-            ),
-        );
-    }
-    if observed.is_empty() {
-        if let Some(started_at) = total_started_at {
-            Stderr::print_debug(
-                &graph.config,
-                format!(
-                    "[timing] decompiler.reconcile.total functions={} elapsed={:.3} ms",
-                    addresses.len(),
-                    started_at.elapsed().as_secs_f64() * 1000.0,
-                ),
-            );
-        }
-        return Ok(());
-    }
-
-    let rewrite_started_at = if debug_enabled {
-        Some(Instant::now())
-    } else {
-        None
-    };
-    let threads = graph.config.resolved_threads();
-    let rewritten = if threads <= 1 || addresses.len() <= 1 {
-        addresses
-            .iter()
-            .copied()
-            .try_fold(0usize, |rewritten, address| {
-                Ok::<usize, Error>(
-                    rewritten + usize::from(reconcile_cached_function(graph, address, &observed)?),
-                )
-            })?
-    } else {
-        let pool = ThreadPoolBuilder::new()
-            .num_threads(threads)
-            .stack_size(RAYON_WORKER_STACK_SIZE)
-            .build()
-            .map_err(|error| Error::other(error.to_string()))?;
-
-        pool.install(|| {
-            addresses
-                .par_iter()
-                .copied()
-                .map(|address| {
-                    reconcile_cached_function(graph, address, &observed).map(usize::from)
-                })
-                .try_reduce(|| 0usize, |left, right| Ok(left + right))
-        })?
-    };
-
-    if let Some(started_at) = rewrite_started_at {
-        Stderr::print_debug(
-            &graph.config,
-            format!(
-                "[timing] decompiler.reconcile.rewrite functions={} rewritten={} elapsed={:.3} ms",
-                addresses.len(),
-                rewritten,
-                started_at.elapsed().as_secs_f64() * 1000.0,
-            ),
-        );
-    }
-
-    if let Some(started_at) = total_started_at {
-        Stderr::print_debug(
-            &graph.config,
-            format!(
-                "[timing] decompiler.reconcile.total functions={} elapsed={:.3} ms",
-                addresses.len(),
-                started_at.elapsed().as_secs_f64() * 1000.0,
-            ),
-        );
-    }
-
-    Ok(())
-}
-
-fn reconcile_cached_function(
-    graph: &Graph,
-    address: u64,
-    observed: &BTreeMap<String, ObservedSignature>,
-) -> Result<bool, Error> {
-    let Some(mut function) = graph.cached_decompilation(address)? else {
-        return Ok(false);
-    };
-
-    let mut changed = false;
-    for target in local_target_names(&function) {
-        let Some(signature) = observed.get(&target) else {
-            continue;
-        };
-        let Some(arity) = signature.reconciled_arity() else {
-            continue;
-        };
-        changed |= rewrite_entry_signature(&mut function.mir, arity, &signature.types);
-    }
-
-    changed |= trim_local_calls_to_reconciled_signature(&mut function, observed);
-    if !changed {
-        return Ok(false);
-    }
-
-    function.hir = HirFunction::from_mir(None, &function.mir)
-        .map_err(|error| Error::other(error.to_string()))?;
-    function.ast = AstFunction::from_hir(&function.hir);
-    graph.cache_decompilation(&function)?;
-    Ok(true)
-}
-
-fn local_target_indices(functions: &[DecompiledFunction]) -> BTreeMap<String, usize> {
-    let mut targets = BTreeMap::new();
-    for (index, function) in functions.iter().enumerate() {
-        targets.insert(format!("function_{:x}", function.address), index);
-        if let Some(name) = &function.mir.name {
-            targets.insert(name.clone(), index);
-        }
-        if let Some(name) = &function.lir.name {
-            targets.insert(name.clone(), index);
-        }
-    }
-    targets
-}
-
-fn local_target_addresses(
-    graph: &Graph,
-    addresses: &[u64],
-) -> Result<BTreeMap<String, u64>, Error> {
-    let entries = addresses
-        .par_iter()
-        .copied()
-        .map(|address| {
-            let Some(function) = graph.cached_decompilation(address)? else {
-                return Ok(Vec::<(String, u64)>::new());
-            };
-            Ok(local_target_names(&function)
-                .into_iter()
-                .map(|target| (target, address))
-                .collect::<Vec<_>>())
-        })
-        .collect::<Result<Vec<_>, Error>>()?;
-
-    let mut targets = BTreeMap::new();
-    for entry in entries {
-        for (target, address) in entry {
-            targets.insert(target, address);
-        }
-    }
-    Ok(targets)
-}
-
-fn local_target_names(function: &DecompiledFunction) -> Vec<String> {
-    let mut targets = vec![format!("function_{:x}", function.address)];
-    if let Some(name) = &function.mir.name {
-        targets.push(name.clone());
-    }
-    if let Some(name) = &function.lir.name {
-        targets.push(name.clone());
-    }
-    targets
-}
-
-fn observed_local_signatures(
-    functions: &[DecompiledFunction],
-    targets: &BTreeMap<String, usize>,
-) -> BTreeMap<String, ObservedSignature> {
-    let mut observed = BTreeMap::<String, ObservedSignature>::new();
-    for function in functions {
-        for block in function.mir.blocks() {
-            for operation in &block.operations {
-                let MirOperationKind::Call {
-                    target: MirControlTarget::Direct(target),
-                    arguments,
-                    ..
-                } = &operation.kind
-                else {
-                    continue;
-                };
-                if !targets.contains_key(target) {
-                    continue;
-                }
-                observed
-                    .entry(target.clone())
-                    .or_insert_with(ObservedSignature::new)
-                    .observe(arguments);
-            }
-        }
-    }
-    observed
-}
-
-fn observed_local_signatures_cached(
-    graph: &Graph,
-    addresses: &[u64],
-    targets: &BTreeMap<String, u64>,
-) -> Result<BTreeMap<String, ObservedSignature>, Error> {
-    addresses
-        .par_iter()
-        .copied()
-        .map(|address| {
-            let mut observed = BTreeMap::<String, ObservedSignature>::new();
-            let Some(function) = graph.cached_decompilation(address)? else {
-                return Ok(observed);
-            };
-            observe_local_signatures_from_mir(&function.mir, targets, &mut observed);
-            Ok(observed)
-        })
-        .try_reduce(BTreeMap::new, |mut left, right| {
-            merge_observed_signatures(&mut left, right);
-            Ok(left)
-        })
-}
-
-fn merge_observed_signatures(
-    left: &mut BTreeMap<String, ObservedSignature>,
-    right: BTreeMap<String, ObservedSignature>,
-) {
-    for (target, signature) in right {
-        let entry = left.entry(target).or_insert_with(ObservedSignature::new);
-        entry.arities.extend(signature.arities);
-        if entry.types.len() < signature.types.len() {
-            entry.types.resize(signature.types.len(), None);
-        }
-        for (index, ty) in signature.types.into_iter().enumerate() {
-            if let Some(ty) = ty {
-                merge_type(&mut entry.types[index], ty);
-            }
-        }
-    }
-}
-
-fn observe_local_signatures_from_mir(
-    mir: &MirFunction,
-    targets: &BTreeMap<String, u64>,
-    observed: &mut BTreeMap<String, ObservedSignature>,
-) {
-    for block in mir.blocks() {
-        for operation in &block.operations {
-            let MirOperationKind::Call {
-                target: MirControlTarget::Direct(target),
-                arguments,
-                ..
-            } = &operation.kind
-            else {
-                continue;
-            };
-            if !targets.contains_key(target) {
-                continue;
-            }
-            observed
-                .entry(target.clone())
-                .or_insert_with(ObservedSignature::new)
-                .observe(arguments);
-        }
-    }
-}
-
-fn rewrite_entry_signature(
-    mir: &mut MirFunction,
-    arity: usize,
-    observed_types: &[Option<MirType>],
-) -> bool {
-    let mut parameters = Vec::with_capacity(arity);
-    let mut used_names = BTreeSet::<String>::new();
-    for index in 0..arity {
-        let existing = mir.entry_parameters.get(index);
-        let name = existing
-            .and_then(|parameter| parameter.name.clone())
-            .filter(|name| used_names.insert(name.clone()))
-            .unwrap_or_else(|| next_argument_name(&mut used_names));
-        let ty = observed_types
-            .get(index)
-            .and_then(Clone::clone)
-            .or_else(|| existing.map(|parameter| parameter.ty.clone()))
-            .unwrap_or_else(|| MirType::integer(64));
-        parameters.push(MirBlockParameter::new(Some(name), ty));
-    }
-
-    if mir.entry_parameters == parameters
-        && mir
-            .blocks()
-            .first()
-            .is_none_or(|entry_block| entry_block.parameters == parameters)
-    {
-        return false;
-    }
-
-    mir.entry_parameters = parameters.clone();
-    if let Some(entry_block) = mir.blocks_mut().first_mut() {
-        entry_block.parameters = parameters;
-    }
-    true
-}
-
-fn next_argument_name(used_names: &mut BTreeSet<String>) -> String {
-    for index in 0.. {
-        let name = format!("arg{index}");
-        if used_names.insert(name.clone()) {
-            return name;
-        }
-    }
-    unreachable!("unbounded argument name search")
-}
-
-fn trim_local_calls_to_reconciled_signatures(
-    functions: &mut [DecompiledFunction],
-    observed: &BTreeMap<String, ObservedSignature>,
-) {
-    let arities = observed
-        .iter()
-        .filter_map(|(target, signature)| signature.reconciled_arity().map(|arity| (target, arity)))
-        .collect::<BTreeMap<_, _>>();
-
-    for function in functions {
-        for block in function.mir.blocks_mut() {
-            for operation in &mut block.operations {
-                let MirOperationKind::Call {
-                    target: MirControlTarget::Direct(target),
-                    arguments,
-                    ..
-                } = &mut operation.kind
-                else {
-                    continue;
-                };
-                let Some(arity) = arities.get(target).copied() else {
-                    continue;
-                };
-                if arguments.len() > arity {
-                    arguments.truncate(arity);
-                }
-            }
-        }
-    }
-}
-
-fn trim_local_calls_to_reconciled_signature(
-    function: &mut DecompiledFunction,
-    observed: &BTreeMap<String, ObservedSignature>,
-) -> bool {
-    let arities = observed
-        .iter()
-        .filter_map(|(target, signature)| signature.reconciled_arity().map(|arity| (target, arity)))
-        .collect::<BTreeMap<_, _>>();
-
-    let mut changed = false;
-    for block in function.mir.blocks_mut() {
-        for operation in &mut block.operations {
-            let MirOperationKind::Call {
-                target: MirControlTarget::Direct(target),
-                arguments,
-                ..
-            } = &mut operation.kind
-            else {
-                continue;
-            };
-            let Some(arity) = arities.get(target).copied() else {
-                continue;
-            };
-            if arguments.len() > arity {
-                arguments.truncate(arity);
-                changed = true;
-            }
-        }
-    }
-    changed
-}
-
-fn value_type(value: &MirValue) -> MirType {
-    match value {
-        MirValue::Named { ty, .. } | MirValue::Null { ty } | MirValue::Undef { ty } => ty.clone(),
-        MirValue::Integer { bits, .. } => MirType::integer(*bits),
-        MirValue::Boolean(_) => MirType::integer(1),
-    }
-}
-
-fn merge_type(slot: &mut Option<MirType>, ty: MirType) {
-    match slot {
-        None => *slot = Some(ty),
-        Some(existing) if *existing == ty => {}
-        Some(existing) => merge_mir_type(existing, ty),
-    }
-}
-
-fn merge_mir_type(existing: &mut MirType, incoming: MirType) {
-    match (existing, incoming) {
-        (MirType::Integer(existing_bits), MirType::Integer(bits))
-        | (MirType::Float(existing_bits), MirType::Float(bits)) => {
-            *existing_bits = (*existing_bits).max(bits);
-        }
-        (MirType::Pointer { pointee: existing }, MirType::Pointer { pointee }) => {
-            merge_mir_type(existing.as_mut(), *pointee);
-        }
-        (existing, incoming) if matches!(existing, MirType::Void) => {
-            *existing = incoming;
-        }
-        _ => {}
     }
 }

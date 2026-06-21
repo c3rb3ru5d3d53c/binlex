@@ -20,11 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-use crate::irs::lir::LirAbi;
 use serde::{Deserialize, Serialize};
-use serde_json::Value as SerdeValue;
-use std::collections::BTreeMap;
-use std::hash::{Hash, Hasher};
 
 mod lir_const_value_serde {
     use serde::{Deserialize, Deserializer, Serializer};
@@ -56,63 +52,14 @@ mod lir_const_value_serde {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct LirMetadata {
-    pub values: BTreeMap<String, SerdeValue>,
-}
-
-impl Default for LirMetadata {
-    fn default() -> Self {
-        Self {
-            values: BTreeMap::new(),
-        }
-    }
-}
-
-impl PartialEq for LirMetadata {
-    fn eq(&self, other: &Self) -> bool {
-        self.values == other.values
-    }
-}
-
-impl Eq for LirMetadata {}
-
-impl Hash for LirMetadata {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        serde_json::to_string(&self.values)
-            .expect("metadata serialization should not fail")
-            .hash(state);
-    }
-}
-
-impl LirMetadata {
-    pub fn new(values: BTreeMap<String, SerdeValue>) -> Self {
-        Self { values }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.values.is_empty()
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Lir {
-    pub version: u32,
+pub struct LirInstruction {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub address: Option<u64>,
     pub status: LirStatus,
-    #[serde(default, skip_serializing_if = "LirMetadata::is_empty")]
-    pub metadata: LirMetadata,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub abi: Option<LirAbi>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub encoding: Option<LirEncoding>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub temporaries: Vec<LirTemporary>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<LirEffect>,
     pub terminator: LirTerminator,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub diagnostics: Vec<LirDiagnostic>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -127,15 +74,13 @@ pub struct LirBlock {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub instructions: Vec<Lir>,
+    pub instructions: Vec<LirInstruction>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct LirFunction {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub abi: Option<LirAbi>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub blocks: Vec<LirBlock>,
 }
@@ -158,15 +103,15 @@ impl LirBlock {
         }
     }
 
-    pub fn instructions(&self) -> &[Lir] {
+    pub fn instructions(&self) -> &[LirInstruction] {
         &self.instructions
     }
 
-    pub fn instructions_mut(&mut self) -> &mut Vec<Lir> {
+    pub fn instructions_mut(&mut self) -> &mut Vec<LirInstruction> {
         &mut self.instructions
     }
 
-    pub fn append_instruction(&mut self, instruction: Lir) {
+    pub fn append_instruction(&mut self, instruction: LirInstruction) {
         self.instructions.push(instruction);
     }
 
@@ -177,68 +122,21 @@ impl LirBlock {
     pub fn print(&self) {
         println!("{}", self.text());
     }
-
-    pub fn optimize_constants(&mut self) {
-        for instruction in &mut self.instructions {
-            instruction.optimize_constants();
-        }
-    }
-
-    pub fn optimize_identities(&mut self) {
-        for instruction in &mut self.instructions {
-            instruction.optimize_identities();
-        }
-    }
-
-    pub fn optimize_casts(&mut self) {
-        for instruction in &mut self.instructions {
-            instruction.optimize_casts();
-        }
-    }
-
-    pub fn optimize_noops(&mut self) {
-        for instruction in &mut self.instructions {
-            instruction.optimize_noops();
-        }
-    }
-
-    pub fn optimize_branches(&mut self) {
-        for instruction in &mut self.instructions {
-            instruction.optimize_branches();
-        }
-    }
-
-    pub fn optimize_intrinsics(&mut self) {
-        for instruction in &mut self.instructions {
-            instruction.optimize_intrinsics();
-        }
-    }
-
-    pub fn optimize(&mut self) {
-        for instruction in &mut self.instructions {
-            instruction.optimize();
-        }
-    }
 }
 
 impl LirFunction {
     pub fn new(name: Option<String>) -> Self {
         Self {
             name,
-            abi: None,
             blocks: Vec::new(),
         }
     }
 
-    pub fn from_instructions(name: Option<String>, instructions: Vec<Lir>) -> Self {
-        let abi = instructions
-            .iter()
-            .find_map(|instruction| instruction.abi.clone());
+    pub fn from_instructions(name: Option<String>, instructions: Vec<LirInstruction>) -> Self {
         let mut block = LirBlock::new(Some("block_0".to_string()));
         block.instructions = instructions;
         Self {
             name,
-            abi,
             blocks: vec![block],
         }
     }
@@ -251,7 +149,7 @@ impl LirFunction {
         &mut self.blocks
     }
 
-    pub fn instructions(&self) -> Vec<&Lir> {
+    pub fn instructions(&self) -> Vec<&LirInstruction> {
         self.blocks
             .iter()
             .flat_map(|block| block.instructions.iter())
@@ -269,48 +167,6 @@ impl LirFunction {
     pub fn print(&self) {
         println!("{}", self.text());
     }
-
-    pub fn optimize_constants(&mut self) {
-        for block in &mut self.blocks {
-            block.optimize_constants();
-        }
-    }
-
-    pub fn optimize_identities(&mut self) {
-        for block in &mut self.blocks {
-            block.optimize_identities();
-        }
-    }
-
-    pub fn optimize_casts(&mut self) {
-        for block in &mut self.blocks {
-            block.optimize_casts();
-        }
-    }
-
-    pub fn optimize_noops(&mut self) {
-        for block in &mut self.blocks {
-            block.optimize_noops();
-        }
-    }
-
-    pub fn optimize_branches(&mut self) {
-        for block in &mut self.blocks {
-            block.optimize_branches();
-        }
-    }
-
-    pub fn optimize_intrinsics(&mut self) {
-        for block in &mut self.blocks {
-            block.optimize_intrinsics();
-        }
-    }
-
-    pub fn optimize(&mut self) {
-        for block in &mut self.blocks {
-            block.optimize();
-        }
-    }
 }
 
 impl LirModule {
@@ -322,16 +178,18 @@ impl LirModule {
         }
     }
 
-    pub fn from_instructions(instructions: Vec<Lir>) -> Self {
+    pub fn from_instructions(instructions: Vec<LirInstruction>) -> Self {
         Self::from_instructions_with_data(instructions, Vec::new())
     }
 
-    pub fn from_instructions_with_data(instructions: Vec<Lir>, data: Vec<LirData>) -> Self {
+    pub fn from_instructions_with_data(
+        instructions: Vec<LirInstruction>,
+        data: Vec<LirData>,
+    ) -> Self {
         Self {
             name: None,
             functions: vec![LirFunction {
                 name: None,
-                abi: None,
                 blocks: vec![LirBlock {
                     name: None,
                     instructions,
@@ -353,7 +211,7 @@ impl LirModule {
         self.functions.push(function);
     }
 
-    pub fn instructions(&self) -> Vec<&Lir> {
+    pub fn instructions(&self) -> Vec<&LirInstruction> {
         self.functions
             .iter()
             .flat_map(|function| function.instructions())
@@ -395,58 +253,6 @@ impl LirModule {
     pub fn bytecode(&self) -> mlir::Result<Vec<u8>> {
         Ok(self.mlir()?.bytecode())
     }
-
-    pub fn optimize_constants(&mut self) {
-        for function in &mut self.functions {
-            function.optimize_constants();
-        }
-    }
-
-    pub fn optimize_identities(&mut self) {
-        for function in &mut self.functions {
-            function.optimize_identities();
-        }
-    }
-
-    pub fn optimize_casts(&mut self) {
-        for function in &mut self.functions {
-            function.optimize_casts();
-        }
-    }
-
-    pub fn optimize_noops(&mut self) {
-        for function in &mut self.functions {
-            function.optimize_noops();
-        }
-    }
-
-    pub fn optimize_branches(&mut self) {
-        for function in &mut self.functions {
-            function.optimize_branches();
-        }
-    }
-
-    pub fn optimize_intrinsics(&mut self) {
-        for function in &mut self.functions {
-            function.optimize_intrinsics();
-        }
-    }
-
-    pub fn optimize(&mut self) {
-        for function in &mut self.functions {
-            function.optimize();
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct LirEncoding {
-    pub architecture: String,
-    pub mnemonic: String,
-    pub disassembly: String,
-    pub address: u64,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub bytes: Vec<u8>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -462,14 +268,6 @@ pub enum LirLocationKind {
     ProgramCounter,
     Temporary,
     Memory,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct LirTemporary {
-    pub id: u32,
-    pub bits: u16,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -2057,57 +1855,13 @@ pub enum LirOperation {
     Compare(LirOperationCompare),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct LirDiagnostic {
-    pub kind: LirDiagnosticKind,
-    pub message: String,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum LirDiagnosticKind {
-    UnsupportedInstruction,
-    UnsupportedOperandForm,
-    UnsupportedRegisterClass,
-    UnsupportedVectorForm,
-    UnsupportedFloatingPointForm,
-    UnsupportedAtomicForm,
-    PartialFlags,
-    PartialMemoryModel,
-    PartialExceptionModel,
-    Named { name: String },
-}
-
-impl Lir {
-    pub fn set_version(&mut self, version: u32) {
-        self.version = version;
+impl LirInstruction {
+    pub fn set_address(&mut self, address: Option<u64>) {
+        self.address = address;
     }
 
     pub fn set_status(&mut self, status: LirStatus) {
         self.status = status;
-    }
-
-    pub fn metadata(&self) -> &LirMetadata {
-        &self.metadata
-    }
-
-    pub fn metadata_mut(&mut self) -> &mut LirMetadata {
-        &mut self.metadata
-    }
-
-    pub fn set_metadata(&mut self, metadata: LirMetadata) {
-        self.metadata = metadata;
-    }
-
-    pub fn set_encoding(&mut self, encoding: Option<LirEncoding>) {
-        self.encoding = encoding;
-    }
-
-    pub fn set_abi(&mut self, abi: Option<LirAbi>) {
-        self.abi = abi;
-    }
-
-    pub fn set_temporaries(&mut self, temporaries: Vec<LirTemporary>) {
-        self.temporaries = temporaries;
     }
 
     pub fn set_effects(&mut self, effects: Vec<LirEffect>) {
@@ -2118,44 +1872,12 @@ impl Lir {
         self.terminator = terminator;
     }
 
-    pub fn set_diagnostics(&mut self, diagnostics: Vec<LirDiagnostic>) {
-        self.diagnostics = diagnostics;
-    }
-
     pub fn text(&self) -> String {
         crate::irs::lir::format_lir_instruction(self)
     }
 
     pub fn print(&self) {
         println!("{}", self.text());
-    }
-
-    pub fn optimize_constants(&mut self) {
-        crate::irs::lir::optimizers::optimize_constants(self);
-    }
-
-    pub fn optimize_identities(&mut self) {
-        crate::irs::lir::optimizers::optimize_identities(self);
-    }
-
-    pub fn optimize_casts(&mut self) {
-        crate::irs::lir::optimizers::optimize_casts(self);
-    }
-
-    pub fn optimize_noops(&mut self) {
-        crate::irs::lir::optimizers::optimize_noops(self);
-    }
-
-    pub fn optimize_branches(&mut self) {
-        crate::irs::lir::optimizers::optimize_branches(self);
-    }
-
-    pub fn optimize_intrinsics(&mut self) {
-        crate::irs::lir::optimizers::optimize_intrinsics(self);
-    }
-
-    pub fn optimize(&mut self) {
-        crate::irs::lir::optimizers::optimize(self);
     }
 }
 
@@ -2226,6 +1948,14 @@ impl LirLocation {
 }
 
 impl LirEffect {
+    pub fn text(&self) -> String {
+        crate::irs::lir::format_lir_effect(self)
+    }
+
+    pub fn print(&self) {
+        println!("{}", self.text());
+    }
+
     pub fn kind(&self) -> LirEffectKind {
         match self {
             Self::Set { .. } => LirEffectKind::Set,
@@ -2849,30 +2579,6 @@ impl LirExpression {
     }
 }
 
-impl LirTemporary {
-    pub fn set_id(&mut self, id: u32) {
-        self.id = id;
-    }
-
-    pub fn set_bits(&mut self, bits: u16) {
-        self.bits = bits;
-    }
-
-    pub fn set_name(&mut self, name: Option<String>) {
-        self.name = name;
-    }
-}
-
-impl LirDiagnostic {
-    pub fn set_kind(&mut self, kind: LirDiagnosticKind) {
-        self.kind = kind;
-    }
-
-    pub fn set_message(&mut self, message: String) {
-        self.message = message;
-    }
-}
-
 fn default_const(bits: u16) -> LirExpression {
     LirExpression::Const { value: 0, bits }
 }
@@ -3079,30 +2785,13 @@ fn default_terminator_for_kind(kind: LirTerminatorKind) -> LirTerminator {
 
 #[cfg(test)]
 mod tests {
-    use super::{Lir, LirEncoding, LirExpression, LirMetadata, LirStatus, LirTerminator};
-    use crate::irs::lir::{LirAbi, LirAbiKind, LirCpu, LirCpuKind};
+    use super::{LirExpression, LirInstruction, LirStatus, LirTerminator};
 
     #[test]
     fn lir_const_serde_serializes_u128_as_string() {
-        let lir = Lir {
-            version: 1,
+        let lir = LirInstruction {
+            address: Some(0x4010),
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: Some(
-                LirAbi::from_kind(
-                    LirAbiKind::SysV,
-                    &LirCpu::from_kind(LirCpuKind::Arm64).expect("cpu"),
-                )
-                .expect("abi"),
-            ),
-            encoding: Some(LirEncoding {
-                architecture: "arm64".to_string(),
-                mnemonic: "ld4".to_string(),
-                disassembly: "ld4 {v0.16b, v1.16b}, [x3]".to_string(),
-                address: 0x4010,
-                bytes: vec![0x60, 0x00, 0x40, 0x4c],
-            }),
-            temporaries: Vec::new(),
             effects: Vec::new(),
             terminator: LirTerminator::Return {
                 expression: Some(LirExpression::Const {
@@ -3110,7 +2799,6 @@ mod tests {
                     bits: 128,
                 }),
             },
-            diagnostics: Vec::new(),
         };
 
         let value = serde_json::to_value(lir).expect("serialize lir");
@@ -3130,15 +2818,8 @@ mod tests {
     fn lir_const_serde_deserializes_string_back_to_u128() {
         let value = u128::MAX.to_string();
         let payload = serde_json::json!({
-            "version": 1,
+            "address": 16400,
             "status": "Complete",
-            "encoding": {
-                "architecture": "arm64",
-                "mnemonic": "ld4",
-                "disassembly": "ld4 {v0.16b, v1.16b}, [x3]",
-                "address": 16400,
-                "bytes": [96, 0, 64, 76]
-            },
             "terminator": {
                 "Return": {
                     "expression": {
@@ -3150,11 +2831,10 @@ mod tests {
                 }
             },
             "temporaries": [],
-            "effects": [],
-            "diagnostics": []
+            "effects": []
         });
 
-        let lir: Lir = serde_json::from_value(payload).expect("deserialize lir");
+        let lir: LirInstruction = serde_json::from_value(payload).expect("deserialize lir");
 
         match lir.terminator {
             LirTerminator::Return {
@@ -3165,15 +2845,6 @@ mod tests {
             }
             other => panic!("unexpected terminator: {:?}", other),
         }
-        assert_eq!(
-            lir.encoding,
-            Some(LirEncoding {
-                architecture: "arm64".to_string(),
-                mnemonic: "ld4".to_string(),
-                disassembly: "ld4 {v0.16b, v1.16b}, [x3]".to_string(),
-                address: 16400,
-                bytes: vec![96, 0, 64, 76],
-            })
-        );
+        assert_eq!(lir.address, Some(16400));
     }
 }

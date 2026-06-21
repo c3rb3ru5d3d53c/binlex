@@ -1,6 +1,6 @@
 use mlir::{
     Attribute, Block, Context, Identifier, Location, Module, NamedAttribute, Operation,
-    OperationState, Region, Type,
+    OperationState, Region,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -100,13 +100,6 @@ pub(crate) fn string_attr(context: &Context, name: &str, value: &str) -> NamedAt
     )
 }
 
-pub(crate) fn integer_attr(context: &Context, name: &str, value: i64) -> NamedAttribute {
-    NamedAttribute::new(
-        Identifier::new(context, name),
-        Attribute::integer(Type::integer(context, 64), value),
-    )
-}
-
 pub(crate) fn operation(
     context: &Context,
     name: &str,
@@ -169,52 +162,6 @@ pub(crate) fn set_string_operation_attr(
     value: &str,
 ) {
     operation.set_attribute(name, Attribute::string(context, value));
-}
-
-pub(crate) fn named_value_name(value: &str) -> Option<&str> {
-    value.strip_prefix('%').and_then(|rest| {
-        rest.split(|ch: char| {
-            ch == ':' || ch == ',' || ch == ')' || ch == '(' || ch.is_whitespace()
-        })
-        .next()
-        .filter(|name| !name.is_empty())
-    })
-}
-
-pub(crate) fn canonical_value(value: &str, aliases: &BTreeMap<String, String>) -> String {
-    let mut current = value.to_string();
-    for _ in 0..aliases.len() {
-        let Some(name) = named_value_name(&current) else {
-            break;
-        };
-        let Some(next) = aliases.get(name) else {
-            break;
-        };
-        if next == &current {
-            break;
-        }
-        current = next.clone();
-    }
-    current
-}
-
-pub(crate) fn rewrite_string_operation_attr(
-    operation: &Operation,
-    context: &Context,
-    name: &str,
-    aliases: &BTreeMap<String, String>,
-) {
-    let Some(value) = string_operation_attr(operation, name) else {
-        return;
-    };
-    let rewritten = value
-        .lines()
-        .map(|line| canonical_value(line, aliases))
-        .collect::<Vec<_>>()
-        .join("\n");
-    if rewritten != value {
-        set_string_operation_attr(operation, context, name, &rewritten);
-    }
 }
 
 pub(crate) fn operation_record(operation: &Operation) -> MlirOperationRecord {

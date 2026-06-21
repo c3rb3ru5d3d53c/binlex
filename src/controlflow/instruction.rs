@@ -30,13 +30,11 @@ use crate::controlflow::Reference;
 use crate::embeddings::{Embedding, EmbeddingBackend};
 use crate::genetics::Chromosome;
 use crate::io::Stderr;
-use crate::irs::lir::Lir;
+use crate::irs::lir::LirInstruction;
 use crate::irs::lir::arm64::InstructionDetailArm64;
 use crate::irs::lir::cil::InstructionDetailCil;
 use crate::irs::lir::x86::InstructionDetailX86;
-use crate::irs::lir::{
-    LirDiagnostic, LirDiagnosticKind, LirEffect, LirEncoding, LirStatus, LirTerminator,
-};
+use crate::irs::lir::{LirEffect, LirStatus, LirTerminator};
 use crate::irs::llvm::LlvmModule;
 #[cfg(not(target_os = "windows"))]
 use crate::irs::vex::VexModule;
@@ -122,7 +120,7 @@ impl InstructionDetail {
         }
     }
 
-    pub fn build_lir(self) -> Lir {
+    pub fn build_lir(self) -> LirInstruction {
         match self.kind {
             InstructionDetailKind::X86(view) => {
                 let mut lir = crate::irs::lir::x86::build(view.clone()).unwrap_or_else(|| {
@@ -135,20 +133,7 @@ impl InstructionDetail {
                         "x86 mnemonic not implemented",
                     )
                 });
-                if lir.encoding.is_none() {
-                    lir.encoding = Some(LirEncoding {
-                        architecture: view.machine.to_string(),
-                        mnemonic: view.mnemonic.clone(),
-                        disassembly: match view.operand_text.clone() {
-                            Some(op_str) if !op_str.is_empty() => {
-                                format!("{} {}", view.mnemonic, op_str)
-                            }
-                            _ => view.mnemonic.clone(),
-                        },
-                        address: view.address,
-                        bytes: view.bytes.clone(),
-                    });
-                }
+                lir.address = Some(view.address);
                 lir
             }
             InstructionDetailKind::Arm64(view) => {
@@ -162,33 +147,12 @@ impl InstructionDetail {
                         "arm64 mnemonic not implemented",
                     )
                 });
-                if lir.encoding.is_none() {
-                    lir.encoding = Some(LirEncoding {
-                        architecture: view.machine.to_string(),
-                        mnemonic: view.mnemonic.clone(),
-                        disassembly: match view.operand_text.clone() {
-                            Some(op_str) if !op_str.is_empty() => {
-                                format!("{} {}", view.mnemonic, op_str)
-                            }
-                            _ => view.mnemonic.clone(),
-                        },
-                        address: view.address,
-                        bytes: view.bytes.clone(),
-                    });
-                }
+                lir.address = Some(view.address);
                 lir
             }
             InstructionDetailKind::Cil(view) => {
                 let mut lir = crate::irs::lir::cil::build(view.clone());
-                if lir.encoding.is_none() {
-                    lir.encoding = Some(LirEncoding {
-                        architecture: "cil".to_string(),
-                        mnemonic: view.mnemonic.clone(),
-                        disassembly: view.mnemonic.clone(),
-                        address: view.address,
-                        bytes: view.operand_bytes().to_vec(),
-                    });
-                }
+                lir.address = Some(view.address);
                 lir
             }
         }
@@ -241,8 +205,8 @@ pub struct InstructionRecord {
     /// Decoded instruction detail captured for lir lowering.
     pub instruction_detail: Option<InstructionDetail>,
     /// Optional canonical LIR bindings for later lifting.
-    pub lir: Option<Lir>,
-    prepared_lir_cache: OnceLock<Result<Lir, String>>,
+    pub lir: Option<LirInstruction>,
+    prepared_lir_cache: OnceLock<Result<LirInstruction, String>>,
 }
 
 impl Clone for InstructionRecord {
@@ -342,12 +306,12 @@ impl InstructionRecord {
     }
 
     /// Replaces the canonical LIR attached to this instruction.
-    pub fn set_lir(&mut self, lir: Lir) {
+    pub fn set_lir(&mut self, lir: LirInstruction) {
         let _ = self.prepared_lir_cache.take();
         self.lir = Some(lir);
     }
 
-    pub fn prepared_lir(&self) -> Result<Option<&Lir>, Error> {
+    pub fn prepared_lir(&self) -> Result<Option<&LirInstruction>, Error> {
         let Some(lir) = self.lir.clone().or_else(|| self.build_lir()) else {
             return Ok(None);
         };
@@ -368,7 +332,7 @@ impl InstructionRecord {
         self.instruction_detail = Some(detail);
     }
 
-    pub fn build_lir(&self) -> Option<Lir> {
+    pub fn build_lir(&self) -> Option<LirInstruction> {
         if let Some(detail) = self.instruction_detail.clone() {
             return Some(detail.build_lir());
         }
@@ -376,7 +340,7 @@ impl InstructionRecord {
             .map(|_| self.unsupported_fallthrough_lir("instruction detail unavailable"))
     }
 
-    pub fn build_and_log_lir(&self) -> Option<Lir> {
+    pub fn build_and_log_lir(&self) -> Option<LirInstruction> {
         let lir = self.build_lir()?;
         log_lir_debug(
             &self.config,
@@ -389,30 +353,12 @@ impl InstructionRecord {
         Some(lir)
     }
 
-    fn unsupported_fallthrough_lir(&self, message: &str) -> Lir {
-        Lir {
-            version: 1,
+    fn unsupported_fallthrough_lir(&self, _message: &str) -> LirInstruction {
+        LirInstruction {
+            address: Some(self.address),
             status: LirStatus::Partial,
-            metadata: Default::default(),
-            abi: None,
-            encoding: Some(LirEncoding {
-                architecture: self.architecture.to_string(),
-                mnemonic: self.mnemonic.clone(),
-                disassembly: if self.disassembly.is_empty() {
-                    self.mnemonic.clone()
-                } else {
-                    self.disassembly.clone()
-                },
-                address: self.address,
-                bytes: self.bytes.clone(),
-            }),
-            temporaries: Vec::new(),
             effects: Vec::new(),
             terminator: LirTerminator::FallThrough,
-            diagnostics: vec![diagnostic(
-                LirDiagnosticKind::UnsupportedInstruction,
-                format!("0x{:x}: {} ({})", self.address, message, self.mnemonic),
-            )],
         }
     }
 
@@ -625,7 +571,7 @@ fn log_lir_debug(
     mnemonic: &str,
     disassembly: &str,
     bytes: &[u8],
-    lir: &Lir,
+    lir: &LirInstruction,
 ) {
     let has_intrinsic_effect = lir
         .effects
@@ -639,7 +585,7 @@ fn log_lir_debug(
             _ => None,
         })
         .collect::<Vec<_>>();
-    if lir.status == LirStatus::Complete && lir.diagnostics.is_empty() && !has_intrinsic_effect {
+    if lir.status == LirStatus::Complete && !has_intrinsic_effect {
         return;
     }
 
@@ -649,84 +595,38 @@ fn log_lir_debug(
         .collect::<Vec<_>>()
         .join("");
 
-    let summary = if lir.diagnostics.is_empty() {
-        format!(
-            "no diagnostics; mnemonic={}; disassembly={}; bytes={}; effects={}; intrinsic_effects={}; terminator={:?}",
-            mnemonic,
-            disassembly,
-            bytes,
-            lir.effects.len(),
-            if intrinsic_effects.is_empty() {
-                "none".to_string()
-            } else {
-                intrinsic_effects.join(",")
-            },
-            lir.terminator.kind()
-        )
-    } else {
-        format!(
-            "mnemonic={}; disassembly={}; bytes={}; intrinsic_effects={}; {}",
-            mnemonic,
-            disassembly,
-            bytes,
-            if intrinsic_effects.is_empty() {
-                "none".to_string()
-            } else {
-                intrinsic_effects.join(",")
-            },
-            lir.diagnostics
-                .iter()
-                .map(|diagnostic| diagnostic.message.as_str())
-                .collect::<Vec<_>>()
-                .join("; ")
-        )
-    };
+    let summary = format!(
+        "mnemonic={}; disassembly={}; bytes={}; effects={}; intrinsic_effects={}; terminator={:?}",
+        mnemonic,
+        disassembly,
+        bytes,
+        lir.effects.len(),
+        if intrinsic_effects.is_empty() {
+            "none".to_string()
+        } else {
+            intrinsic_effects.join(",")
+        },
+        lir.terminator.kind()
+    );
 
     Stderr::print_debug(
         config,
-        format!(
-            "0x{:x}: lir status={:?}, diagnostics={}",
-            address, lir.status, summary
-        ),
+        format!("0x{:x}: lir status={:?}, {}", address, lir.status, summary),
     );
 }
 
-fn diagnostic(kind: LirDiagnosticKind, message: impl Into<String>) -> LirDiagnostic {
-    LirDiagnostic {
-        kind,
-        message: message.into(),
-    }
-}
-
 fn unsupported_fallthrough(
-    architecture: String,
+    _architecture: String,
     address: u64,
-    mnemonic: String,
-    operand_text: Option<String>,
-    bytes: Vec<u8>,
-    message: &str,
-) -> Lir {
-    Lir {
-        version: 1,
+    _mnemonic: String,
+    _operand_text: Option<String>,
+    _bytes: Vec<u8>,
+    _message: &str,
+) -> LirInstruction {
+    LirInstruction {
+        address: Some(address),
         status: LirStatus::Partial,
-        metadata: Default::default(),
-        abi: None,
-        encoding: Some(LirEncoding {
-            architecture,
-            mnemonic: mnemonic.clone(),
-            disassembly: match operand_text {
-                Some(op_str) if !op_str.is_empty() => format!("{} {}", mnemonic, op_str),
-                _ => mnemonic.clone(),
-            },
-            address,
-            bytes,
-        }),
-        temporaries: Vec::new(),
         effects: Vec::new(),
         terminator: LirTerminator::FallThrough,
-        diagnostics: vec![diagnostic(
-            LirDiagnosticKind::UnsupportedInstruction,
-            format!("0x{:x}: {} ({})", address, message, mnemonic),
-        )],
     }
 }

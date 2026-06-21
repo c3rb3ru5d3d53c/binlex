@@ -3,12 +3,13 @@ use super::helpers::{
     coerce_int_value_width, render_address_space, render_fence_kind, render_location,
     render_trap_kind, sanitize_symbol,
 };
-use crate::irs::lir::{Lir, LirAddressSpace, LirEffect, LirExpression, LirLocation, LirTerminator};
-use inkwell::values::BasicMetadataValueEnum;
+use crate::irs::lir::{
+    LirAddressSpace, LirEffect, LirExpression, LirInstruction, LirLocation, LirTerminator,
+};
 use std::io::Error;
 
 impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
-    pub(super) fn lower_lir(&mut self, lir: &Lir) -> Result<(), Error> {
+    pub(super) fn lower_lir(&mut self, lir: &LirInstruction) -> Result<(), Error> {
         for effect in &lir.effects {
             self.lower_effect(effect)?;
         }
@@ -318,13 +319,6 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
                     .map_err(|err| Error::other(err.to_string()))?;
             }
             LirEffect::Trap { kind } => {
-                if self
-                    .current_lir_abi
-                    .as_ref()
-                    .is_some_and(|abi| abi.is_native_syscall())
-                {
-                    return self.lower_native_trap(kind);
-                }
                 let helper_name = format!("binlex_trap_{}", render_trap_kind(kind));
                 self.record_lir_lowering(
                     "effect_helper",
@@ -353,14 +347,6 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
     }
 
     fn lower_terminator(&mut self, terminator: &LirTerminator) -> Result<(), Error> {
-        if self
-            .current_lir_abi
-            .as_ref()
-            .is_some_and(|abi| abi.is_native_syscall())
-            && matches!(terminator, LirTerminator::Trap)
-        {
-            return Ok(());
-        }
         if !self.emit_terminator_helpers {
             match terminator {
                 LirTerminator::Return { expression } => {
@@ -528,67 +514,13 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             .module
             .get_function(name)
             .ok_or_else(|| Error::other(format!("unknown lir function target {name}")))?;
-        let callee_abi = self.known_function_abis.get(name).cloned();
-        let mut args = Vec::<BasicMetadataValueEnum<'ctx>>::new();
-        if let Some(abi) = callee_abi.as_ref() {
-            let parameter_count = target.count_params() as usize;
-            for (index, location) in abi
-                .function_arguments
-                .iter()
-                .take(parameter_count)
-                .enumerate()
-            {
-                let value = self.read_location(location)?;
-                let parameter = target.get_nth_param(index as u32).ok_or_else(|| {
-                    Error::other(format!("missing llvm parameter {index} for {name}"))
-                })?;
-                let value = coerce_int_value_width(
-                    &self.builder,
-                    value,
-                    parameter.into_int_value().get_type(),
-                    "call_arg_zext",
-                    "call_arg_trunc",
-                )?;
-                args.push(value.into());
-            }
-        }
         self.record_lir_lowering(
             "terminator_direct_call",
-            format!(
-                "target={} args={} does_return={}",
-                name,
-                args.len(),
-                does_return
-            ),
+            format!("target={} args={} does_return={}", name, 0, does_return),
         );
-        let call = self
-            .builder
-            .build_call(target, &args, "")
+        self.builder
+            .build_call(target, &[], "")
             .map_err(|err| Error::other(err.to_string()))?;
-        if let (Some(abi), Some(value)) = (
-            callee_abi.as_ref(),
-            call.try_as_basic_value()
-                .basic()
-                .map(|value| value.into_int_value()),
-        ) {
-            if let Some(location) = abi.return_locations.first() {
-                let value = coerce_int_value_width(
-                    &self.builder,
-                    value,
-                    self.location_type(location),
-                    "call_ret_zext",
-                    "call_ret_trunc",
-                )?;
-                let slot = self.slot_for_location(location)?;
-                self.builder
-                    .build_store(slot, value)
-                    .map_err(|err| Error::other(err.to_string()))?;
-                self.written_locations.insert(render_location(location));
-                if let LirLocation::Register { name, bits } = location {
-                    self.merge_partial_register_write(name, *bits, value)?;
-                }
-            }
-        }
         if !does_return {
             if let Some(return_target) = return_target {
                 let _ = self.lower_expression(return_target)?;

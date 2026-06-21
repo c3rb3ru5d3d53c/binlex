@@ -38,22 +38,14 @@ class ImagePermissions:
     def execute(self) -> bool: ...
 
 class ImageSegment:
-    @classmethod
-    def bytes(
-        cls,
+    def __init__(
+        self,
         name: str | None,
         virtual_address: int,
-        data: bytes | bytearray | list[int],
-        permissions: ImagePermissions,
-    ) -> ImageSegment: ...
-    @classmethod
-    def zeroes(
-        cls,
-        name: str | None,
-        virtual_address: int,
-        size: int,
-        permissions: ImagePermissions,
-    ) -> ImageSegment: ...
+        data: bytes | bytearray | list[int] | None = None,
+        size: int | None = None,
+        permissions: ImagePermissions | None = None,
+    ) -> None: ...
     @property
     def name(self) -> str | None: ...
     @property
@@ -68,7 +60,7 @@ class ImageSegment:
 class Image:
     """Virtual binary image backed by mapped segments."""
 
-    def __init__(self) -> None: ...
+    def __init__(self, segments: list[ImageSegment] | None = None) -> None: ...
     @classmethod
     def _from_binding(cls, binding: object) -> Image: ...
     @classmethod

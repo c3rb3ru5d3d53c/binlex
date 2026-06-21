@@ -22,41 +22,32 @@
 
 use crate::irs::lir::cil::InstructionDetailCil;
 use crate::irs::lir::{
-    Lir, LirEffect, LirExpression, LirOperationCompare, LirStatus, LirTerminator,
+    LirEffect, LirExpression, LirInstruction, LirOperationCompare, LirStatus, LirTerminator,
 };
 
 use super::super::helpers::common::{
     compare, complete_with_effects, const_u64, operand_args, pop_stack,
 };
 
-pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Lir> {
+pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<LirInstruction> {
     let mnemonic = instruction.mnemonic_text();
     if instruction.is_return() {
-        return Some(Lir {
-            version: 1,
+        return Some(LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: Default::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: Vec::new(),
             terminator: if mnemonic == "throw" {
                 LirTerminator::Trap
             } else {
                 LirTerminator::Return { expression: None }
             },
-            diagnostics: Vec::new(),
         });
     }
 
     if instruction.is_call() {
-        return Some(Lir {
-            version: 1,
+        return Some(LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: Default::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Intrinsic {
                 name: format!("cil.{}", instruction.mnemonic),
                 args: operand_args(instruction),
@@ -74,7 +65,6 @@ pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Lir> {
                 }),
                 does_return: Some(true),
             },
-            diagnostics: Vec::new(),
         });
     }
 
@@ -273,13 +263,9 @@ pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Lir> {
                 effects,
             ));
         }
-        return Some(Lir {
-            version: 1,
+        return Some(LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: Default::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Intrinsic {
                 name: format!("cil.{}", instruction.mnemonic),
                 args: operand_args(instruction),
@@ -300,7 +286,6 @@ pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Lir> {
                     bits: 64,
                 },
             },
-            diagnostics: Vec::new(),
         });
     }
 
@@ -311,13 +296,9 @@ pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Lir> {
             .next()
             .copied()
             .unwrap_or_default();
-        return Some(Lir {
-            version: 1,
+        return Some(LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: Default::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: Vec::new(),
             terminator: LirTerminator::Jump {
                 target: LirExpression::Const {
@@ -325,7 +306,6 @@ pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Lir> {
                     bits: 64,
                 },
             },
-            diagnostics: Vec::new(),
         });
     }
 

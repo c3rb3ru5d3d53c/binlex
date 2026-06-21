@@ -20,18 +20,12 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-pub mod ahash;
-pub mod dhash;
 pub mod minhash;
-pub mod phash;
 pub mod sha256;
 pub mod ssdeep;
 pub mod tlsh;
 
-pub use ahash::AHash;
-pub use dhash::DHash;
 pub use minhash::MinHash32;
-pub use phash::PHash;
 pub use sha256::SHA256;
 pub use ssdeep::SSDeep;
 pub use tlsh::TLSH;

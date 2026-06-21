@@ -22,11 +22,9 @@
 
 use crate::Architecture;
 use crate::irs::lir::{
-    Lir, LirAddressSpace, LirDiagnostic, LirEffect, LirExpression, LirLocation, LirOperationBinary,
+    LirAddressSpace, LirEffect, LirExpression, LirInstruction, LirLocation, LirOperationBinary,
     LirOperationCompare, LirOperationUnary, LirStatus, LirTerminator,
 };
-
-pub use crate::irs::lir::LirDiagnosticKind;
 
 pub fn pointer_bits(machine: Architecture) -> u16 {
     match machine {
@@ -320,58 +318,29 @@ pub fn condition_from_mnemonic(mnemonic: &str) -> Option<LirExpression> {
     }
 }
 
-pub fn partial(terminator: LirTerminator, diagnostics: Vec<LirDiagnostic>) -> Lir {
-    Lir {
-        version: 1,
+pub fn partial(terminator: LirTerminator) -> LirInstruction {
+    LirInstruction {
+        address: None,
         status: LirStatus::Partial,
-        metadata: Default::default(),
-        abi: None,
-        encoding: None,
-        temporaries: Vec::new(),
         effects: Vec::new(),
         terminator,
-        diagnostics,
     }
 }
 
-pub fn complete(terminator: LirTerminator, effects: Vec<LirEffect>) -> Lir {
-    Lir {
-        version: 1,
+pub fn complete(terminator: LirTerminator, effects: Vec<LirEffect>) -> LirInstruction {
+    LirInstruction {
+        address: None,
         status: LirStatus::Complete,
-        metadata: Default::default(),
-        abi: None,
-        encoding: None,
-        temporaries: Vec::new(),
         effects,
         terminator,
-        diagnostics: Vec::new(),
     }
 }
 
-pub fn partial_with_effects(
-    terminator: LirTerminator,
-    diagnostics: Vec<LirDiagnostic>,
-    effects: Vec<LirEffect>,
-) -> Lir {
-    Lir {
-        version: 1,
+pub fn partial_with_effects(terminator: LirTerminator, effects: Vec<LirEffect>) -> LirInstruction {
+    LirInstruction {
+        address: None,
         status: LirStatus::Partial,
-        metadata: Default::default(),
-        abi: None,
-        encoding: None,
-        temporaries: Vec::new(),
         effects,
         terminator,
-        diagnostics,
-    }
-}
-
-pub fn diagnostic(
-    kind: crate::irs::lir::LirDiagnosticKind,
-    message: impl Into<String>,
-) -> LirDiagnostic {
-    LirDiagnostic {
-        kind,
-        message: message.into(),
     }
 }

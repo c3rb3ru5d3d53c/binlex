@@ -35,10 +35,6 @@ impl LirMlirModule {
         normalize_status_operation(&self.document.operation(), self.document.context());
     }
 
-    pub fn optimize(&self) {
-        self.normalize_status();
-    }
-
     pub fn text(&self) -> String {
         self.document
             .text()
@@ -77,20 +73,15 @@ fn normalize_status_operation(operation: &Operation, context: &mlir::Context) {
 
 #[cfg(test)]
 mod tests {
-    use crate::irs::lir::{Lir, LirMetadata, LirModule, LirStatus, LirTerminator};
+    use crate::irs::lir::{LirInstruction, LirModule, LirStatus, LirTerminator};
 
     #[test]
     fn normalize_status_rewrites_lir_instruction_status_attrs() {
-        let module = LirModule::from_instructions(vec![Lir {
-            version: 1,
+        let module = LirModule::from_instructions(vec![LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: LirMetadata::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: Vec::new(),
             terminator: LirTerminator::FallThrough,
-            diagnostics: Vec::new(),
         }]);
 
         let mlir = module.mlir().expect("LIR should lower to MLIR");

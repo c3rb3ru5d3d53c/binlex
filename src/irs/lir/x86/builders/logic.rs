@@ -25,11 +25,11 @@ use crate::irs::lir::x86::InstructionDetailX86;
 use crate::irs::lir::x86::helpers as common;
 use crate::irs::lir::x86::{X86OperandKind, X86OperandView};
 use crate::irs::lir::{
-    Lir, LirEffect, LirExpression, LirLocation, LirOperationBinary, LirOperationCompare,
+    LirEffect, LirExpression, LirInstruction, LirLocation, LirOperationBinary, LirOperationCompare,
     LirTerminator,
 };
 
-pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     match view.mnemonic.as_str() {
         "andn" => andn(machine, view.operands()),
         "test" => test(machine, view.operands()),
@@ -40,7 +40,7 @@ pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Optio
     }
 }
 
-fn andn(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn andn(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let dst = operand_location(machine, operands.first()?)?;
     let src1 = operand_expr(machine, operands.get(1)?)?;
     let src2 = operand_expr(machine, operands.get(2)?)?;
@@ -52,7 +52,7 @@ fn andn(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
     ))
 }
 
-fn test(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn test(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let left = operand_expr(machine, operands.first()?)?;
     let right = operand_expr(machine, operands.get(1)?)?;
     let bits = operands
@@ -71,7 +71,7 @@ fn binary(
     machine: Architecture,
     operands: &[X86OperandView],
     op: LirOperationBinary,
-) -> Option<Lir> {
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, operands.first()?)?;
     let left = operand_expr(machine, operands.first()?)?;
     let right = operand_expr(machine, operands.get(1)?)?;

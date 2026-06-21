@@ -8,11 +8,7 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
 struct SliceInstructionData {
-    architecture: String,
-    mnemonic: String,
-    disassembly: String,
     address: u64,
-    bytes: Vec<u8>,
 }
 
 #[derive(Clone)]
@@ -65,11 +61,7 @@ fn wrap_slice(slice: ::binlex::irs::lir::executor::Slice) -> Slice {
                 .instruction
                 .as_ref()
                 .map(|instruction| SliceInstructionData {
-                    architecture: instruction.architecture.clone(),
-                    mnemonic: instruction.mnemonic.clone(),
-                    disassembly: instruction.disassembly.clone(),
                     address: instruction.address,
-                    bytes: instruction.bytes.clone(),
                 }),
             location: node.location.clone(),
             value: node.value.clone(),
@@ -440,24 +432,8 @@ impl LirExecutorState {
 
 #[pymethods]
 impl SliceInstruction {
-    pub fn architecture(&self) -> String {
-        self.inner.architecture.clone()
-    }
-
-    pub fn mnemonic(&self) -> String {
-        self.inner.mnemonic.clone()
-    }
-
-    pub fn disassembly(&self) -> String {
-        self.inner.disassembly.clone()
-    }
-
     pub fn address(&self) -> u64 {
         self.inner.address
-    }
-
-    pub fn bytes(&self) -> Vec<u8> {
-        self.inner.bytes.clone()
     }
 }
 

@@ -25,12 +25,11 @@ use crate::irs::lir::x86::InstructionDetailX86;
 use crate::irs::lir::x86::helpers as common;
 use crate::irs::lir::x86::{X86OperandKind, X86OperandView};
 use crate::irs::lir::{
-    Lir, LirAddressSpace, LirEffect, LirExpression, LirLocation, LirOperationBinary,
-    LirOperationCast, LirOperationCompare, LirOperationUnary, LirStatus, LirTemporary,
-    LirTerminator,
+    LirAddressSpace, LirEffect, LirExpression, LirInstruction, LirLocation, LirOperationBinary,
+    LirOperationCast, LirOperationCompare, LirOperationUnary, LirStatus, LirTerminator,
 };
 
-pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     match view.mnemonic.as_str() {
         "nop" => Some(common::complete(
             LirTerminator::FallThrough,
@@ -72,7 +71,7 @@ pub(crate) fn build(machine: Architecture, view: &InstructionDetailX86) -> Optio
     }
 }
 
-fn ascii_adjust(machine: Architecture, view: &InstructionDetailX86) -> Option<Lir> {
+fn ascii_adjust(machine: Architecture, view: &InstructionDetailX86) -> Option<LirInstruction> {
     let al_reg = common::reg("al", 8);
     let ah_reg = common::reg("ah", 8);
     let al = LirExpression::Read(Box::new(al_reg.clone()));
@@ -291,7 +290,7 @@ fn ascii_adjust(machine: Architecture, view: &InstructionDetailX86) -> Option<Li
     None
 }
 
-fn assign(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn assign(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let dst = operand_location(machine, operands.first()?)?;
     let expression = operand_expr(machine, operands.get(1)?)?;
     Some(common::complete(
@@ -300,7 +299,7 @@ fn assign(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
     ))
 }
 
-fn lea(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn lea(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let dst = operand_location(machine, operands.first()?)?;
     let mem = operands.get(1)?.memory_operand()?;
     let base = mem.base_register_name.map(|name| {
@@ -322,7 +321,7 @@ fn lea(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
     ))
 }
 
-fn movbe(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn movbe(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let dst = operand_location(machine, operands.first()?)?;
     let expression = operand_expr(machine, operands.get(1)?)?;
     let bits = common::location_bits(&dst);
@@ -342,7 +341,11 @@ fn movbe(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
     ))
 }
 
-fn movx(machine: Architecture, operands: &[X86OperandView], sign_extend: bool) -> Option<Lir> {
+fn movx(
+    machine: Architecture,
+    operands: &[X86OperandView],
+    sign_extend: bool,
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, operands.first()?)?;
     let src = operand_expr(machine, operands.get(1)?)?;
     let dst_bits = common::location_bits(&dst);
@@ -363,7 +366,7 @@ fn movx(machine: Architecture, operands: &[X86OperandView], sign_extend: bool) -
     ))
 }
 
-fn exchange(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn exchange(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let left_dst = operand_location(machine, operands.first()?)?;
     let right_dst = operand_location(machine, operands.get(1)?)?;
     let left_expr = operand_expr(machine, operands.first()?)?;
@@ -383,7 +386,7 @@ fn exchange(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
     ))
 }
 
-fn exchange_add(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn exchange_add(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let dst = operand_location(machine, operands.first()?)?;
     let src_dst = operand_location(machine, operands.get(1)?)?;
     let dst_expr = operand_expr(machine, operands.first()?)?;
@@ -442,7 +445,7 @@ fn exchange_add(machine: Architecture, operands: &[X86OperandView]) -> Option<Li
     ))
 }
 
-fn compare_exchange(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn compare_exchange(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let dst = operand_location(machine, operands.first()?)?;
     let src = operand_expr(machine, operands.get(1)?)?;
     let observed = operand_expr(machine, operands.first()?)?;
@@ -520,7 +523,7 @@ fn compare_exchange(machine: Architecture, operands: &[X86OperandView]) -> Optio
     Some(common::complete(LirTerminator::FallThrough, effects))
 }
 
-fn lock_cmpxchg8b(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn lock_cmpxchg8b(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let dst = operand_location(machine, operands.first()?)?;
     let addr = match dst {
         LirLocation::Memory { addr, .. } => *addr,
@@ -558,17 +561,9 @@ fn lock_cmpxchg8b(machine: Architecture, operands: &[X86OperandView]) -> Option<
         lsb: 32,
         bits: 32,
     };
-    Some(Lir {
-        version: 1,
+    Some(LirInstruction {
+        address: None,
         status: LirStatus::Complete,
-        metadata: Default::default(),
-        abi: None,
-        encoding: None,
-        temporaries: vec![LirTemporary {
-            id: 0,
-            bits: 64,
-            name: Some("lock_cmpxchg8b_observed".to_string()),
-        }],
         effects: vec![
             LirEffect::AtomicCmpXchg {
                 space: LirAddressSpace::Default,
@@ -602,11 +597,10 @@ fn lock_cmpxchg8b(machine: Architecture, operands: &[X86OperandView]) -> Option<
             },
         ],
         terminator: LirTerminator::FallThrough,
-        diagnostics: Vec::new(),
     })
 }
 
-fn lock_cmpxchg16b(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn lock_cmpxchg16b(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let dst = operand_location(machine, operands.first()?)?;
     let addr = match dst {
         LirLocation::Memory { addr, .. } => *addr,
@@ -644,17 +638,9 @@ fn lock_cmpxchg16b(machine: Architecture, operands: &[X86OperandView]) -> Option
         lsb: 64,
         bits: 64,
     };
-    Some(Lir {
-        version: 1,
+    Some(LirInstruction {
+        address: None,
         status: LirStatus::Complete,
-        metadata: Default::default(),
-        abi: None,
-        encoding: None,
-        temporaries: vec![LirTemporary {
-            id: 1,
-            bits: 128,
-            name: Some("lock_cmpxchg16b_observed".to_string()),
-        }],
         effects: vec![
             LirEffect::AtomicCmpXchg {
                 space: LirAddressSpace::Default,
@@ -688,11 +674,10 @@ fn lock_cmpxchg16b(machine: Architecture, operands: &[X86OperandView]) -> Option
             },
         ],
         terminator: LirTerminator::FallThrough,
-        diagnostics: Vec::new(),
     })
 }
 
-fn sign_extension(view: &InstructionDetailX86) -> Option<Lir> {
+fn sign_extension(view: &InstructionDetailX86) -> Option<LirInstruction> {
     let (src_name, src_bits, dst_name, dst_bits, high_only) = match view.mnemonic.as_str() {
         "cbw" => ("al", 8, "ax", 16, false),
         "cwde" => ("ax", 16, "eax", 32, false),
@@ -732,7 +717,7 @@ fn binary(
     machine: Architecture,
     operands: &[X86OperandView],
     op: LirOperationBinary,
-) -> Option<Lir> {
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, operands.first()?)?;
     let left = operand_expr(machine, operands.first()?)?;
     let right = operand_expr(machine, operands.get(1)?)?;
@@ -793,7 +778,7 @@ fn binary(
     ))
 }
 
-fn popcnt(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn popcnt(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let dst = operand_location(machine, operands.first()?)?;
     let src = operand_expr(machine, operands.get(1)?)?;
     let bits = common::location_bits(&dst);
@@ -838,7 +823,7 @@ fn popcnt(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
     ))
 }
 
-fn crc32(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn crc32(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let dst = operand_location(machine, operands.first()?)?;
     let src = operand_expr(machine, operands.get(1)?)?;
     Some(common::complete(
@@ -851,7 +836,7 @@ fn crc32(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
     ))
 }
 
-fn xlat(machine: Architecture) -> Option<Lir> {
+fn xlat(machine: Architecture) -> Option<LirInstruction> {
     let pointer_bits = common::pointer_bits(machine);
     let base_name = if matches!(machine, Architecture::AMD64) {
         "rbx"
@@ -878,7 +863,7 @@ fn xlat(machine: Architecture) -> Option<Lir> {
     ))
 }
 
-fn imul(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn imul(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     match operands.len() {
         2 | 3 => imul_explicit(machine, operands),
         1 => imul_implicit(machine, operands),
@@ -886,7 +871,7 @@ fn imul(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
     }
 }
 
-fn imul_explicit(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn imul_explicit(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let dst = operand_location(machine, operands.first()?)?;
     let bits = common::location_bits(&dst);
     let full_bits = bits.saturating_mul(2);
@@ -958,7 +943,7 @@ fn imul_explicit(machine: Architecture, operands: &[X86OperandView]) -> Option<L
     ))
 }
 
-fn imul_implicit(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn imul_implicit(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let src = operand_expr(machine, operands.first()?)?;
     let bits = operand_bits(machine, operands.first()?)?;
     let (low_name, high_name, acc_name, result_bits) = implicit_mul_registers(machine, bits)?;
@@ -1064,7 +1049,7 @@ fn imul_implicit(machine: Architecture, operands: &[X86OperandView]) -> Option<L
     Some(common::complete(LirTerminator::FallThrough, effects))
 }
 
-fn mul(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn mul(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let src = operand_expr(machine, operands.first()?)?;
     let bits = operand_bits(machine, operands.first()?)?;
     let (low_name, high_name, acc_name, result_bits) = implicit_mul_registers(machine, bits)?;
@@ -1154,7 +1139,7 @@ fn mul(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
     Some(common::complete(LirTerminator::FallThrough, effects))
 }
 
-fn mulx(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn mulx(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let dst_low = operand_location(machine, operands.first()?)?;
     let dst_high = operand_location(machine, operands.get(1)?)?;
     let src = operand_expr(machine, operands.get(2)?)?;
@@ -1210,7 +1195,7 @@ fn mulx(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
     ))
 }
 
-fn div(machine: Architecture, operands: &[X86OperandView], signed: bool) -> Option<Lir> {
+fn div(machine: Architecture, operands: &[X86OperandView], signed: bool) -> Option<LirInstruction> {
     let divisor = operand_expr(machine, operands.first()?)?;
     let bits = operand_bits(machine, operands.first()?)?;
     let (low_name, high_name, acc_name, result_bits) = implicit_mul_registers(machine, bits)?;
@@ -1318,7 +1303,7 @@ fn div(machine: Architecture, operands: &[X86OperandView], signed: bool) -> Opti
     ))
 }
 
-fn adc(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn adc(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let dst = operand_location(machine, operands.first()?)?;
     let left = operand_expr(machine, operands.first()?)?;
     let right = operand_expr(machine, operands.get(1)?)?;
@@ -1383,7 +1368,7 @@ fn adc(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
     ))
 }
 
-fn sbb(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn sbb(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let dst = operand_location(machine, operands.first()?)?;
     let left = operand_expr(machine, operands.first()?)?;
     let right = operand_expr(machine, operands.get(1)?)?;
@@ -1456,7 +1441,11 @@ fn sbb(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
     ))
 }
 
-fn adcx_adox(machine: Architecture, operands: &[X86OperandView], use_cf: bool) -> Option<Lir> {
+fn adcx_adox(
+    machine: Architecture,
+    operands: &[X86OperandView],
+    use_cf: bool,
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, operands.first()?)?;
     let left = operand_expr(machine, operands.first()?)?;
     let right = operand_expr(machine, operands.get(1)?)?;
@@ -1519,7 +1508,7 @@ fn unary(
     machine: Architecture,
     operands: &[X86OperandView],
     op: LirOperationBinary,
-) -> Option<Lir> {
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, operands.first()?)?;
     let left = operand_expr(machine, operands.first()?)?;
     let bits = common::location_bits(&dst);
@@ -1576,7 +1565,7 @@ fn unary_op(
     operands: &[X86OperandView],
     op: LirOperationUnary,
     is_neg: bool,
-) -> Option<Lir> {
+) -> Option<LirInstruction> {
     let dst = operand_location(machine, operands.first()?)?;
     let bits = common::location_bits(&dst);
     let expression = operand_expr(machine, operands.first()?)?;
@@ -1647,7 +1636,7 @@ fn unary_op(
     ))
 }
 
-fn cmp_like(machine: Architecture, operands: &[X86OperandView]) -> Option<Lir> {
+fn cmp_like(machine: Architecture, operands: &[X86OperandView]) -> Option<LirInstruction> {
     let left = operand_expr(machine, operands.first()?)?;
     let right = operand_expr(machine, operands.get(1)?)?;
     let bits = operands

@@ -1,27 +1,22 @@
-pub mod abis;
 mod executor;
 
-use crate::irs::lir::abis::{extract_abi, register_abi_classes, LirAbi as PyLirAbi};
 use crate::irs::lir::executor::register_executor_classes;
 use binlex::irs::lir::{
-    Lir as InnerLir, LirAddressSpace as InnerAddressSpace, LirBlock as InnerLirBlock,
-    LirCpu as InnerLirCpu, LirCpuAlias as InnerLirCpuAlias,
-    LirCpuAliasWritePolicy as InnerLirCpuAliasWritePolicy, LirCpuEndian as InnerLirCpuEndian,
-    LirCpuKind as InnerLirCpuKind, LirCpuProgramCounter as InnerLirCpuProgramCounter,
-    LirCpuRegister as InnerLirCpuRegister, LirData as InnerLirData,
-    LirDiagnostic as InnerLirDiagnostic, LirDiagnosticKind as InnerLirDiagnosticKind,
-    LirEffect as InnerLirEffect, LirEffectKind as InnerLirEffectKind,
-    LirEncoding as InnerLirEncoding, LirExpression as InnerLirExpr,
-    LirExpressionKind as InnerLirExprKind, LirFenceKind as InnerFenceKind,
-    LirFunction as InnerLirFunction, LirLocation as InnerLirLocation,
+    LirAddressSpace as InnerAddressSpace, LirBlock as InnerLirBlock, LirCpu as InnerLirCpu,
+    LirCpuAlias as InnerLirCpuAlias, LirCpuAliasWritePolicy as InnerLirCpuAliasWritePolicy,
+    LirCpuEndian as InnerLirCpuEndian, LirCpuKind as InnerLirCpuKind,
+    LirCpuProgramCounter as InnerLirCpuProgramCounter, LirCpuRegister as InnerLirCpuRegister,
+    LirData as InnerLirData, LirEffect as InnerLirEffect, LirEffectKind as InnerLirEffectKind,
+    LirExpression as InnerLirExpr, LirExpressionKind as InnerLirExprKind,
+    LirFenceKind as InnerFenceKind, LirFunction as InnerLirFunction,
+    LirInstruction as InnerLirInstruction, LirLocation as InnerLirLocation,
     LirLocationKind as InnerLirLocationKind, LirMemory as InnerLirMemory,
     LirMemoryAddressed as InnerLirMemoryAddressed, LirMemoryIndexed as InnerLirMemoryIndexed,
-    LirMemoryStack as InnerLirMemoryStack, LirMetadata as InnerLirMetadata,
-    LirMlirModule as InnerLirMlirModule, LirModule as InnerLirModule,
-    LirOperation as InnerLirOperation, LirOperationBinary as InnerLirBinaryOp,
-    LirOperationCast as InnerLirCastOp, LirOperationCompare as InnerLirCompareOp,
-    LirOperationUnary as InnerLirUnaryOp, LirStatus as InnerLirStatus,
-    LirTemporary as InnerLirTemporary, LirTerminator as InnerLirTerminator,
+    LirMemoryStack as InnerLirMemoryStack, LirMlirModule as InnerLirMlirModule,
+    LirModule as InnerLirModule, LirOperation as InnerLirOperation,
+    LirOperationBinary as InnerLirBinaryOp, LirOperationCast as InnerLirCastOp,
+    LirOperationCompare as InnerLirCompareOp, LirOperationUnary as InnerLirUnaryOp,
+    LirStatus as InnerLirStatus, LirTerminator as InnerLirTerminator,
     LirTerminatorKind as InnerLirTerminatorKind, LirTrapKind as InnerTrapKind,
 };
 use pyo3::class::basic::CompareOp;
@@ -37,19 +32,6 @@ fn json_value_to_py(py: Python<'_>, value: &serde_json::Value) -> PyResult<Py<Py
         serde_json::to_string(value).map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
     let json_module = py.import("json")?;
     Ok(json_module.call_method1("loads", (json_str,))?.into())
-}
-
-fn py_to_json_value(py: Python<'_>, value: Py<PyAny>) -> PyResult<serde_json::Value> {
-    let json_module = py.import("json")?;
-    let json_str = json_module
-        .call_method1("dumps", (value,))?
-        .extract::<String>()?;
-    serde_json::from_str(&json_str).map_err(|error| PyValueError::new_err(error.to_string()))
-}
-
-fn py_to_lir_metadata(py: Python<'_>, value: Py<PyAny>) -> PyResult<InnerLirMetadata> {
-    let value = py_to_json_value(py, value)?;
-    serde_json::from_value(value).map_err(|error| PyValueError::new_err(error.to_string()))
 }
 
 fn hash_value<T: Hash>(value: &T) -> isize {
@@ -502,105 +484,6 @@ impl LirTrapKind {
 
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
-pub struct LirDiagnosticKind {
-    pub inner: InnerLirDiagnosticKind,
-}
-
-impl LirDiagnosticKind {
-    pub fn from_inner(inner: InnerLirDiagnosticKind) -> Self {
-        Self { inner }
-    }
-}
-
-#[pymethods]
-impl LirDiagnosticKind {
-    #[allow(non_upper_case_globals)]
-    #[classattr]
-    pub const UnsupportedInstruction: Self = Self {
-        inner: InnerLirDiagnosticKind::UnsupportedInstruction,
-    };
-    #[allow(non_upper_case_globals)]
-    #[classattr]
-    pub const UnsupportedOperandForm: Self = Self {
-        inner: InnerLirDiagnosticKind::UnsupportedOperandForm,
-    };
-    #[allow(non_upper_case_globals)]
-    #[classattr]
-    pub const UnsupportedRegisterClass: Self = Self {
-        inner: InnerLirDiagnosticKind::UnsupportedRegisterClass,
-    };
-    #[allow(non_upper_case_globals)]
-    #[classattr]
-    pub const UnsupportedVectorForm: Self = Self {
-        inner: InnerLirDiagnosticKind::UnsupportedVectorForm,
-    };
-    #[allow(non_upper_case_globals)]
-    #[classattr]
-    pub const UnsupportedFloatingPointForm: Self = Self {
-        inner: InnerLirDiagnosticKind::UnsupportedFloatingPointForm,
-    };
-    #[allow(non_upper_case_globals)]
-    #[classattr]
-    pub const UnsupportedAtomicForm: Self = Self {
-        inner: InnerLirDiagnosticKind::UnsupportedAtomicForm,
-    };
-    #[allow(non_upper_case_globals)]
-    #[classattr]
-    pub const PartialFlags: Self = Self {
-        inner: InnerLirDiagnosticKind::PartialFlags,
-    };
-    #[allow(non_upper_case_globals)]
-    #[classattr]
-    pub const PartialMemoryModel: Self = Self {
-        inner: InnerLirDiagnosticKind::PartialMemoryModel,
-    };
-    #[allow(non_upper_case_globals)]
-    #[classattr]
-    pub const PartialExceptionModel: Self = Self {
-        inner: InnerLirDiagnosticKind::PartialExceptionModel,
-    };
-
-    #[staticmethod]
-    pub fn named(name: String) -> Self {
-        Self {
-            inner: InnerLirDiagnosticKind::Named { name },
-        }
-    }
-
-    pub fn __str__(&self) -> String {
-        match &self.inner {
-            InnerLirDiagnosticKind::UnsupportedInstruction => "UnsupportedInstruction".to_string(),
-            InnerLirDiagnosticKind::UnsupportedOperandForm => "UnsupportedOperandForm".to_string(),
-            InnerLirDiagnosticKind::UnsupportedRegisterClass => {
-                "UnsupportedRegisterClass".to_string()
-            }
-            InnerLirDiagnosticKind::UnsupportedVectorForm => "UnsupportedVectorForm".to_string(),
-            InnerLirDiagnosticKind::UnsupportedFloatingPointForm => {
-                "UnsupportedFloatingPointForm".to_string()
-            }
-            InnerLirDiagnosticKind::UnsupportedAtomicForm => "UnsupportedAtomicForm".to_string(),
-            InnerLirDiagnosticKind::PartialFlags => "PartialFlags".to_string(),
-            InnerLirDiagnosticKind::PartialMemoryModel => "PartialMemoryModel".to_string(),
-            InnerLirDiagnosticKind::PartialExceptionModel => "PartialExceptionModel".to_string(),
-            InnerLirDiagnosticKind::Named { name } => format!("Named({})", name),
-        }
-    }
-
-    pub fn __hash__(&self) -> isize {
-        hash_value(&self.inner)
-    }
-
-    pub fn __richcmp__(&self, other: PyRef<'_, Self>, op: CompareOp) -> bool {
-        match op {
-            CompareOp::Eq => self.inner == other.inner,
-            CompareOp::Ne => self.inner != other.inner,
-            _ => false,
-        }
-    }
-}
-
-#[pyclass(skip_from_py_object)]
-#[derive(Clone)]
 pub struct LirCpu {
     pub inner: InnerLirCpu,
 }
@@ -977,15 +860,12 @@ macro_rules! value_wrapper {
     };
 }
 
-value_wrapper!(LirTemporary, InnerLirTemporary);
 value_wrapper!(LirData, InnerLirData);
-value_wrapper!(LirDiagnostic, InnerLirDiagnostic);
-value_wrapper!(LirEncoding, InnerLirEncoding);
 value_wrapper!(LirLocation, InnerLirLocation);
 value_wrapper!(LirExpression, InnerLirExpr);
 value_wrapper!(LirEffect, InnerLirEffect);
 value_wrapper!(LirTerminator, InnerLirTerminator);
-value_wrapper!(Lir, InnerLir);
+value_wrapper!(LirInstruction, InnerLirInstruction);
 value_wrapper!(LirBlock, InnerLirBlock);
 value_wrapper!(LirFunction, InnerLirFunction);
 value_wrapper!(LirModule, InnerLirModule);
@@ -1024,10 +904,6 @@ impl LirMlirModule {
         self.inner.normalize_status();
     }
 
-    pub fn optimize(&self) {
-        self.inner.optimize();
-    }
-
     pub fn text(&self) -> String {
         self.inner.text()
     }
@@ -1054,149 +930,6 @@ impl LirMlirModule {
 
     pub fn print(&self) {
         println!("{}", self.text());
-    }
-}
-
-#[pymethods]
-impl LirTemporary {
-    #[new]
-    #[pyo3(signature = (id, bits, name=None))]
-    pub fn new(id: u32, bits: u16, name: Option<String>) -> Self {
-        Self::from_inner(InnerLirTemporary { id, bits, name })
-    }
-
-    pub fn id(&self) -> u32 {
-        self.inner.lock().unwrap().id
-    }
-    pub fn bits(&self) -> u16 {
-        self.inner.lock().unwrap().bits
-    }
-    pub fn name(&self) -> Option<String> {
-        self.inner.lock().unwrap().name.clone()
-    }
-    pub fn set_id(&mut self, id: u32) {
-        self.inner.lock().unwrap().set_id(id);
-    }
-    pub fn set_bits(&mut self, bits: u16) {
-        self.inner.lock().unwrap().set_bits(bits);
-    }
-    pub fn set_name(&mut self, name: Option<String>) {
-        self.inner.lock().unwrap().set_name(name);
-    }
-
-    pub fn __hash__(&self) -> isize {
-        self.value_hash()
-    }
-
-    pub fn __richcmp__(&self, other: PyRef<'_, Self>, op: CompareOp) -> bool {
-        match op {
-            CompareOp::Eq => self.value_eq(&other),
-            CompareOp::Ne => !self.value_eq(&other),
-            _ => false,
-        }
-    }
-}
-
-#[pymethods]
-impl LirDiagnostic {
-    #[new]
-    pub fn new(py: Python<'_>, kind: Py<LirDiagnosticKind>, message: String) -> Self {
-        Self::from_inner(InnerLirDiagnostic {
-            kind: kind.borrow(py).inner.clone(),
-            message,
-        })
-    }
-    pub fn kind(&self) -> LirDiagnosticKind {
-        LirDiagnosticKind::from_inner(self.inner.lock().unwrap().kind.clone())
-    }
-    pub fn message(&self) -> String {
-        self.inner.lock().unwrap().message.clone()
-    }
-    pub fn set_kind(&mut self, py: Python<'_>, kind: Py<LirDiagnosticKind>) {
-        self.inner
-            .lock()
-            .unwrap()
-            .set_kind(kind.borrow(py).inner.clone());
-    }
-    pub fn set_message(&mut self, message: String) {
-        self.inner.lock().unwrap().set_message(message);
-    }
-
-    pub fn __hash__(&self) -> isize {
-        self.value_hash()
-    }
-
-    pub fn __richcmp__(&self, other: PyRef<'_, Self>, op: CompareOp) -> bool {
-        match op {
-            CompareOp::Eq => self.value_eq(&other),
-            CompareOp::Ne => !self.value_eq(&other),
-            _ => false,
-        }
-    }
-}
-
-#[pymethods]
-impl LirEncoding {
-    #[new]
-    #[pyo3(signature = (architecture, mnemonic, disassembly, address, bytes=None))]
-    pub fn new(
-        architecture: String,
-        mnemonic: String,
-        disassembly: String,
-        address: u64,
-        bytes: Option<&Bound<'_, PyBytes>>,
-    ) -> Self {
-        Self::from_inner(InnerLirEncoding {
-            architecture,
-            mnemonic,
-            disassembly,
-            address,
-            bytes: bytes
-                .map(|bytes| bytes.as_bytes().to_vec())
-                .unwrap_or_default(),
-        })
-    }
-    pub fn architecture(&self) -> String {
-        self.inner.lock().unwrap().architecture.clone()
-    }
-    pub fn mnemonic(&self) -> String {
-        self.inner.lock().unwrap().mnemonic.clone()
-    }
-    pub fn disassembly(&self) -> String {
-        self.inner.lock().unwrap().disassembly.clone()
-    }
-    pub fn address(&self) -> u64 {
-        self.inner.lock().unwrap().address
-    }
-    pub fn bytes(&self, py: Python<'_>) -> Py<PyBytes> {
-        PyBytes::new(py, &self.inner.lock().unwrap().bytes).unbind()
-    }
-    pub fn set_architecture(&mut self, architecture: String) {
-        self.inner.lock().unwrap().architecture = architecture;
-    }
-    pub fn set_mnemonic(&mut self, mnemonic: String) {
-        self.inner.lock().unwrap().mnemonic = mnemonic;
-    }
-    pub fn set_disassembly(&mut self, disassembly: String) {
-        self.inner.lock().unwrap().disassembly = disassembly;
-    }
-    pub fn set_address(&mut self, address: u64) {
-        self.inner.lock().unwrap().address = address;
-    }
-    pub fn set_bytes(&mut self, bytes: &Bound<'_, PyBytes>) {
-        self.inner.lock().unwrap().bytes = bytes.as_bytes().to_vec();
-    }
-
-    pub fn __hash__(&self) -> isize {
-        self.value_hash()
-    }
-
-    pub fn __richcmp__(&self, other: PyRef<'_, Self>, op: CompareOp) -> bool {
-        match op {
-            CompareOp::Eq => self.value_eq(&other),
-            CompareOp::Ne => !self.value_eq(&other),
-            _ => false,
-        }
     }
 }
 
@@ -1983,6 +1716,19 @@ impl LirEffect {
             .map_err(PyValueError::new_err)
     }
 
+    pub fn text(&self) -> String {
+        self.inner.lock().unwrap().text()
+    }
+
+    pub fn print(&self) -> PyResult<()> {
+        self.inner.lock().unwrap().print();
+        Ok(())
+    }
+
+    pub fn __str__(&self) -> PyResult<String> {
+        Ok(self.text())
+    }
+
     pub fn __hash__(&self) -> isize {
         self.value_hash()
     }
@@ -2183,30 +1929,16 @@ impl LirTerminator {
 }
 
 #[pymethods]
-impl Lir {
+impl LirInstruction {
     #[new]
-    #[pyo3(signature = (version, status, abi=None, encoding=None, temporaries=None, effects=None, terminator=None, diagnostics=None, metadata=None))]
+    #[pyo3(signature = (status, address=None, effects=None, terminator=None))]
     pub fn new(
         py: Python<'_>,
-        version: u32,
         status: Py<LirStatus>,
-        abi: Option<Py<PyAny>>,
-        encoding: Option<Py<LirEncoding>>,
-        temporaries: Option<Vec<Py<LirTemporary>>>,
+        address: Option<u64>,
         effects: Option<Vec<Py<LirEffect>>>,
         terminator: Option<Py<LirTerminator>>,
-        diagnostics: Option<Vec<Py<LirDiagnostic>>>,
-        metadata: Option<Py<PyAny>>,
     ) -> PyResult<Self> {
-        let abi = abi
-            .map(|item| extract_abi(item.bind(py).as_any()))
-            .transpose()?;
-        let encoding = encoding.map(|item| item.borrow(py).inner.lock().unwrap().clone());
-        let temporaries = temporaries
-            .unwrap_or_default()
-            .into_iter()
-            .map(|item| item.borrow(py).inner.lock().unwrap().clone())
-            .collect();
         let effects = effects
             .unwrap_or_default()
             .into_iter()
@@ -2215,66 +1947,18 @@ impl Lir {
         let terminator = terminator
             .map(|item| item.borrow(py).inner.lock().unwrap().clone())
             .unwrap_or(InnerLirTerminator::FallThrough);
-        let diagnostics = diagnostics
-            .unwrap_or_default()
-            .into_iter()
-            .map(|item| item.borrow(py).inner.lock().unwrap().clone())
-            .collect();
-        let metadata = metadata
-            .map(|metadata| py_to_lir_metadata(py, metadata))
-            .transpose()?
-            .unwrap_or_default();
-        Ok(Self::from_inner(InnerLir {
-            version,
+        Ok(Self::from_inner(InnerLirInstruction {
+            address,
             status: status.borrow(py).inner,
-            metadata,
-            abi,
-            encoding,
-            temporaries,
             effects,
             terminator,
-            diagnostics,
         }))
     }
-    pub fn version(&self) -> u32 {
-        self.inner.lock().unwrap().version
+    pub fn address(&self) -> Option<u64> {
+        self.inner.lock().unwrap().address
     }
     pub fn status(&self) -> LirStatus {
         LirStatus::from_inner(self.inner.lock().unwrap().status)
-    }
-    pub fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        json_value_to_py(
-            py,
-            &serde_json::to_value(&self.inner.lock().unwrap().metadata)
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?,
-        )
-    }
-    pub fn abi(&self) -> Option<PyLirAbi> {
-        self.inner
-            .lock()
-            .unwrap()
-            .abi
-            .clone()
-            .map(PyLirAbi::from_inner)
-    }
-    pub fn encoding(&self, py: Python<'_>) -> PyResult<Option<Py<LirEncoding>>> {
-        self.inner
-            .lock()
-            .unwrap()
-            .encoding
-            .clone()
-            .map(|item| Py::new(py, LirEncoding::from_inner(item)))
-            .transpose()
-    }
-    pub fn temporaries(&self, py: Python<'_>) -> PyResult<Vec<Py<LirTemporary>>> {
-        self.inner
-            .lock()
-            .unwrap()
-            .temporaries
-            .iter()
-            .cloned()
-            .map(|item| Py::new(py, LirTemporary::from_inner(item)))
-            .collect()
     }
     pub fn effects(&self, py: Python<'_>) -> PyResult<Vec<Py<LirEffect>>> {
         self.inner
@@ -2292,75 +1976,14 @@ impl Lir {
             LirTerminator::from_inner(self.inner.lock().unwrap().terminator.clone()),
         )
     }
-    pub fn diagnostics(&self, py: Python<'_>) -> PyResult<Vec<Py<LirDiagnostic>>> {
-        self.inner
-            .lock()
-            .unwrap()
-            .diagnostics
-            .iter()
-            .cloned()
-            .map(|item| Py::new(py, LirDiagnostic::from_inner(item)))
-            .collect()
-    }
-    pub fn set_version(&mut self, version: u32) {
-        self.inner.lock().unwrap().set_version(version);
+    pub fn set_address(&mut self, address: Option<u64>) {
+        self.inner.lock().unwrap().set_address(address);
     }
     pub fn set_status(&mut self, py: Python<'_>, status: Py<LirStatus>) {
         self.inner
             .lock()
             .unwrap()
             .set_status(status.borrow(py).inner);
-    }
-    pub fn set_metadata(&mut self, py: Python<'_>, metadata: Py<PyAny>) -> PyResult<()> {
-        let metadata = py_to_lir_metadata(py, metadata)?;
-        self.inner.lock().unwrap().set_metadata(metadata);
-        Ok(())
-    }
-    pub fn get_metadata_value(&self, py: Python<'_>, key: String) -> PyResult<Option<Py<PyAny>>> {
-        self.inner
-            .lock()
-            .unwrap()
-            .metadata
-            .values
-            .get(&key)
-            .map(|value| json_value_to_py(py, value))
-            .transpose()
-    }
-    pub fn set_metadata_value(
-        &mut self,
-        py: Python<'_>,
-        key: String,
-        value: Py<PyAny>,
-    ) -> PyResult<()> {
-        let value = py_to_json_value(py, value)?;
-        self.inner
-            .lock()
-            .unwrap()
-            .metadata
-            .values
-            .insert(key, value);
-        Ok(())
-    }
-    pub fn remove_metadata_value(&mut self, key: String) {
-        self.inner.lock().unwrap().metadata.values.remove(&key);
-    }
-    pub fn set_abi(&mut self, py: Python<'_>, abi: Option<Py<PyAny>>) -> PyResult<()> {
-        let abi = abi
-            .map(|item| extract_abi(item.bind(py).as_any()))
-            .transpose()?;
-        self.inner.lock().unwrap().set_abi(abi);
-        Ok(())
-    }
-    pub fn set_encoding(&mut self, py: Python<'_>, encoding: Option<Py<LirEncoding>>) {
-        let encoding = encoding.map(|item| item.borrow(py).inner.lock().unwrap().clone());
-        self.inner.lock().unwrap().set_encoding(encoding);
-    }
-    pub fn set_temporaries(&mut self, py: Python<'_>, temporaries: Vec<Py<LirTemporary>>) {
-        let temporaries = temporaries
-            .into_iter()
-            .map(|item| item.borrow(py).inner.lock().unwrap().clone())
-            .collect();
-        self.inner.lock().unwrap().set_temporaries(temporaries);
     }
     pub fn set_effects(&mut self, py: Python<'_>, effects: Vec<Py<LirEffect>>) {
         let effects = effects
@@ -2374,34 +1997,6 @@ impl Lir {
             .lock()
             .unwrap()
             .set_terminator(terminator.borrow(py).inner.lock().unwrap().clone());
-    }
-    pub fn set_diagnostics(&mut self, py: Python<'_>, diagnostics: Vec<Py<LirDiagnostic>>) {
-        let diagnostics = diagnostics
-            .into_iter()
-            .map(|item| item.borrow(py).inner.lock().unwrap().clone())
-            .collect();
-        self.inner.lock().unwrap().set_diagnostics(diagnostics);
-    }
-    pub fn optimize_constants(&mut self) {
-        self.inner.lock().unwrap().optimize_constants();
-    }
-    pub fn optimize_identities(&mut self) {
-        self.inner.lock().unwrap().optimize_identities();
-    }
-    pub fn optimize_casts(&mut self) {
-        self.inner.lock().unwrap().optimize_casts();
-    }
-    pub fn optimize_noops(&mut self) {
-        self.inner.lock().unwrap().optimize_noops();
-    }
-    pub fn optimize_branches(&mut self) {
-        self.inner.lock().unwrap().optimize_branches();
-    }
-    pub fn optimize_intrinsics(&mut self) {
-        self.inner.lock().unwrap().optimize_intrinsics();
-    }
-    pub fn optimize(&mut self) {
-        self.inner.lock().unwrap().optimize();
     }
     pub fn text(&self) -> String {
         self.inner.lock().unwrap().text()
@@ -2475,14 +2070,14 @@ impl LirBlock {
         self.inner.lock().unwrap().name.clone()
     }
 
-    pub fn instructions(&self, py: Python<'_>) -> PyResult<Vec<Py<Lir>>> {
+    pub fn instructions(&self, py: Python<'_>) -> PyResult<Vec<Py<LirInstruction>>> {
         self.inner
             .lock()
             .unwrap()
             .instructions
             .iter()
             .cloned()
-            .map(|item| Py::new(py, Lir::from_inner(item)))
+            .map(|item| Py::new(py, LirInstruction::from_inner(item)))
             .collect()
     }
 
@@ -2490,31 +2085,9 @@ impl LirBlock {
         self.inner.lock().unwrap().name = name;
     }
 
-    pub fn append_instruction(&mut self, py: Python<'_>, instruction: Py<Lir>) {
+    pub fn append_instruction(&mut self, py: Python<'_>, instruction: Py<LirInstruction>) {
         let instruction = instruction.borrow(py).inner.lock().unwrap().clone();
         self.inner.lock().unwrap().append_instruction(instruction);
-    }
-
-    pub fn optimize_constants(&mut self) {
-        self.inner.lock().unwrap().optimize_constants();
-    }
-    pub fn optimize_identities(&mut self) {
-        self.inner.lock().unwrap().optimize_identities();
-    }
-    pub fn optimize_casts(&mut self) {
-        self.inner.lock().unwrap().optimize_casts();
-    }
-    pub fn optimize_noops(&mut self) {
-        self.inner.lock().unwrap().optimize_noops();
-    }
-    pub fn optimize_branches(&mut self) {
-        self.inner.lock().unwrap().optimize_branches();
-    }
-    pub fn optimize_intrinsics(&mut self) {
-        self.inner.lock().unwrap().optimize_intrinsics();
-    }
-    pub fn optimize(&mut self) {
-        self.inner.lock().unwrap().optimize();
     }
 
     pub fn text(&self) -> String {
@@ -2542,27 +2115,13 @@ impl LirBlock {
 #[pymethods]
 impl LirFunction {
     #[new]
-    #[pyo3(signature = (name=None, abi=None))]
-    pub fn new(py: Python<'_>, name: Option<String>, abi: Option<Py<PyAny>>) -> PyResult<Self> {
-        let abi = abi
-            .map(|item| extract_abi(item.bind(py).as_any()))
-            .transpose()?;
-        let mut function = InnerLirFunction::new(name);
-        function.abi = abi;
-        Ok(Self::from_inner(function))
+    #[pyo3(signature = (name=None))]
+    pub fn new(name: Option<String>) -> Self {
+        Self::from_inner(InnerLirFunction::new(name))
     }
 
     pub fn name(&self) -> Option<String> {
         self.inner.lock().unwrap().name.clone()
-    }
-
-    pub fn abi(&self) -> Option<PyLirAbi> {
-        self.inner
-            .lock()
-            .unwrap()
-            .abi
-            .clone()
-            .map(PyLirAbi::from_inner)
     }
 
     pub fn blocks(&self, py: Python<'_>) -> PyResult<Vec<Py<LirBlock>>> {
@@ -2580,39 +2139,9 @@ impl LirFunction {
         self.inner.lock().unwrap().name = name;
     }
 
-    pub fn set_abi(&mut self, py: Python<'_>, abi: Option<Py<PyAny>>) -> PyResult<()> {
-        let abi = abi
-            .map(|item| extract_abi(item.bind(py).as_any()))
-            .transpose()?;
-        self.inner.lock().unwrap().abi = abi;
-        Ok(())
-    }
-
     pub fn append_block(&mut self, py: Python<'_>, block: Py<LirBlock>) {
         let block = block.borrow(py).inner.lock().unwrap().clone();
         self.inner.lock().unwrap().append_block(block);
-    }
-
-    pub fn optimize_constants(&mut self) {
-        self.inner.lock().unwrap().optimize_constants();
-    }
-    pub fn optimize_identities(&mut self) {
-        self.inner.lock().unwrap().optimize_identities();
-    }
-    pub fn optimize_casts(&mut self) {
-        self.inner.lock().unwrap().optimize_casts();
-    }
-    pub fn optimize_noops(&mut self) {
-        self.inner.lock().unwrap().optimize_noops();
-    }
-    pub fn optimize_branches(&mut self) {
-        self.inner.lock().unwrap().optimize_branches();
-    }
-    pub fn optimize_intrinsics(&mut self) {
-        self.inner.lock().unwrap().optimize_intrinsics();
-    }
-    pub fn optimize(&mut self) {
-        self.inner.lock().unwrap().optimize();
     }
 
     pub fn text(&self) -> String {
@@ -2701,27 +2230,6 @@ impl LirModule {
         let data = data.borrow(py).inner.lock().unwrap().clone();
         self.inner.lock().unwrap().append_data(data);
     }
-    pub fn optimize_constants(&mut self) {
-        self.inner.lock().unwrap().optimize_constants();
-    }
-    pub fn optimize_identities(&mut self) {
-        self.inner.lock().unwrap().optimize_identities();
-    }
-    pub fn optimize_casts(&mut self) {
-        self.inner.lock().unwrap().optimize_casts();
-    }
-    pub fn optimize_noops(&mut self) {
-        self.inner.lock().unwrap().optimize_noops();
-    }
-    pub fn optimize_branches(&mut self) {
-        self.inner.lock().unwrap().optimize_branches();
-    }
-    pub fn optimize_intrinsics(&mut self) {
-        self.inner.lock().unwrap().optimize_intrinsics();
-    }
-    pub fn optimize(&mut self) {
-        self.inner.lock().unwrap().optimize();
-    }
 
     pub fn text(&self) -> String {
         self.inner.lock().unwrap().text()
@@ -2768,7 +2276,6 @@ impl LirModule {
 #[pymodule]
 #[pyo3(name = "lir")]
 pub fn lir_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    register_abi_classes(m)?;
     m.add_class::<LirStatus>()?;
     m.add_class::<LirLocationKind>()?;
     m.add_class::<LirEffectKind>()?;
@@ -2781,7 +2288,6 @@ pub fn lir_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<LirOperationBinary>()?;
     m.add_class::<LirOperationCast>()?;
     m.add_class::<LirOperationCompare>()?;
-    m.add_class::<LirDiagnosticKind>()?;
     m.add_class::<LirCpuKind>()?;
     m.add_class::<LirCpu>()?;
     m.add_class::<LirCpuRegister>()?;
@@ -2791,14 +2297,11 @@ pub fn lir_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<LirMemoryStack>()?;
     m.add_class::<LirMemoryAddressed>()?;
     m.add_class::<LirCpuEndian>()?;
-    m.add_class::<LirTemporary>()?;
-    m.add_class::<LirDiagnostic>()?;
-    m.add_class::<LirEncoding>()?;
     m.add_class::<LirLocation>()?;
     m.add_class::<LirExpression>()?;
     m.add_class::<LirEffect>()?;
     m.add_class::<LirTerminator>()?;
-    m.add_class::<Lir>()?;
+    m.add_class::<LirInstruction>()?;
     m.add_class::<LirBlock>()?;
     m.add_class::<LirFunction>()?;
     m.add_class::<LirData>()?;

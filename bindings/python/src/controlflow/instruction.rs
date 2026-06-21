@@ -27,7 +27,7 @@ use crate::controlflow::Function;
 use crate::controlflow::Graph;
 use crate::controlflow::Reference;
 use crate::genetics::Chromosome;
-use crate::irs::lir::Lir as PyLir;
+use crate::irs::lir::LirInstruction as PyLirInstruction;
 use crate::irs::llvm::LlvmModule as PyLlvmModule;
 #[cfg(not(target_os = "windows"))]
 use crate::irs::vex::VexModule as PyVexModule;
@@ -518,18 +518,18 @@ impl Instruction {
 
     #[pyo3(text_signature = "($self)")]
     /// Return the canonical LIR for this instruction, building it on demand if possible.
-    pub fn lir(&self, py: Python) -> PyResult<Option<Py<PyLir>>> {
+    pub fn lir(&self, py: Python) -> PyResult<Option<Py<PyLirInstruction>>> {
         self.with_inner_instruction(py, |instruction| {
             let Some(lir) = instruction.lir.clone().or_else(|| instruction.build_lir()) else {
                 return Ok(None);
             };
-            Ok(Some(Py::new(py, PyLir::from_inner(lir))?))
+            Ok(Some(Py::new(py, PyLirInstruction::from_inner(lir))?))
         })
     }
 
     #[pyo3(text_signature = "($self, lir)")]
     /// Replace the canonical LIR attached to this instruction and persist it in the CFG.
-    pub fn set_lir(&self, py: Python<'_>, lir: Py<PyLir>) -> PyResult<()> {
+    pub fn set_lir(&self, py: Python<'_>, lir: Py<PyLirInstruction>) -> PyResult<()> {
         let replacement = lir.borrow(py).inner.lock().unwrap().clone();
         let mut updated = self.with_inner_instruction(py, |instruction| Ok(instruction.clone()))?;
         updated.set_lir(replacement);

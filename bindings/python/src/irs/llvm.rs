@@ -1,14 +1,12 @@
 use crate::controlflow::Block as PyBlock;
-use crate::irs::lir::abis::extract_abi;
 use crate::irs::lir::{LirCpu as PyLirCpu, LirFunction as PyLirFunction, LirModule as PyLirModule};
 use crate::Configuration;
 use binlex::controlflow::{Block, Function, Graph, Instruction, InstructionRecord};
 use binlex::core::Architecture;
 use binlex::io::Stderr;
-use binlex::irs::lir::{Lir, LirAbi, LirCpuKind, LirModule, LirTerminator};
-use binlex::irs::llvm::{JittedFunction as InnerJittedFunction, LlvmModule as InnerLlvmModule};
+use binlex::irs::lir::{LirCpuKind, LirInstruction, LirModule, LirTerminator};
+use binlex::irs::llvm::LlvmModule as InnerLlvmModule;
 use pyo3::prelude::*;
-use pyo3::types::PyAny;
 use std::collections::BTreeMap;
 use std::io::Error;
 use std::sync::{Arc, Mutex};
@@ -20,7 +18,6 @@ enum ModuleItemDef {
     },
     FunctionLir {
         lir: LirModule,
-        abi: Option<LirAbi>,
         name: Option<String>,
     },
     CreatedFunction {
@@ -37,7 +34,6 @@ enum ModuleOverrideDef {
 #[derive(Clone)]
 struct CreatedFunctionDef {
     name: String,
-    abi: Option<LirAbi>,
     body_lir: Option<LirModule>,
     blocks: Vec<CreatedBlockDef>,
     raw_ir: Option<String>,
@@ -62,7 +58,6 @@ struct BuildState {
     config: binlex::Configuration,
     cpu: binlex::irs::lir::LirCpu,
     triple: Option<String>,
-    abi: Option<LirAbi>,
     inner: InnerLlvmModule,
     module_override: Option<ModuleOverrideDef>,
     items: Vec<ModuleItemDef>,
@@ -87,7 +82,6 @@ impl BuildState {
             config,
             cpu,
             triple,
-            abi: None,
             inner,
             module_override: None,
             items: Vec::new(),
@@ -102,7 +96,6 @@ impl BuildState {
             self.config.clone(),
             self.triple.clone(),
         )?;
-        inner.set_abi(self.abi.clone())?;
         if let Some(override_def) = self.module_override.clone() {
             match override_def {
                 ModuleOverrideDef::Text(text) => inner.set_text(&text)?,
@@ -112,13 +105,13 @@ impl BuildState {
         for item in self.items.clone() {
             match item {
                 ModuleItemDef::BlockLir { lir } => {
-                    inner.populate_block_lir(&lir, None)?;
+                    inner.populate_block_lir(&lir)?;
                 }
-                ModuleItemDef::FunctionLir { lir, abi, name } => {
+                ModuleItemDef::FunctionLir { lir, name } => {
                     if let Some(name) = name {
-                        inner.populate_function_lir_named(&lir, abi.as_ref(), &name)?;
+                        inner.populate_function_lir_named(&lir, &name)?;
                     } else {
-                        inner.populate_function_lir(&lir, abi.as_ref())?;
+                        inner.populate_function_lir(&lir)?;
                     }
                 }
                 ModuleItemDef::CreatedFunction { function } => {
@@ -180,7 +173,7 @@ fn compile_created_function(
         return inner.link_bitcode_module(bitcode, Some(&function.name));
     }
     if let Some(lir) = &function.body_lir {
-        return inner.populate_function_lir_named(lir, function.abi.as_ref(), &function.name);
+        return inner.populate_function_lir_named(lir, &function.name);
     }
 
     let architecture = architecture_from_cpu(cpu)?;
@@ -241,14 +234,14 @@ fn compile_created_function(
     let entry_address = entry_address.ok_or_else(|| Error::other("function contains no blocks"))?;
     graph.set_function(entry_address);
     let function_graph = Function::new(entry_address, &graph)?;
-    inner.populate_function_named(&function_graph, None, &function.name, Some(&block_labels))
+    inner.populate_function_named(&function_graph, &function.name, Some(&block_labels))
 }
 
 fn insert_lir_block(
     graph: &mut Graph,
     architecture: Architecture,
     block_address: u64,
-    lirs: &[Lir],
+    lirs: &[LirInstruction],
     next_block_address: Option<u64>,
     config: &binlex::Configuration,
 ) {
@@ -345,7 +338,6 @@ impl LlvmModule {
                 config,
                 cpu,
                 triple,
-                abi: None,
                 inner,
                 module_override: None,
                 items: Vec::new(),
@@ -368,11 +360,6 @@ pub struct LiftedBlock {
     state: Arc<Mutex<BuildState>>,
     function_index: usize,
     block_index: usize,
-}
-
-#[pyclass(unsendable, skip_from_py_object)]
-pub struct JittedFunction {
-    inner: InnerJittedFunction,
 }
 
 #[pymethods]
@@ -429,7 +416,6 @@ impl LlvmModule {
         let mut state = self.state.lock().unwrap();
         state.name = lir.name.clone();
         state.config = inner_config.clone();
-        state.abi = None;
         state
             .inner
             .from_lir(&lir, inner_config.clone())
@@ -441,24 +427,6 @@ impl LlvmModule {
         Ok(true)
     }
 
-    #[pyo3(signature = (abi=None), text_signature = "($self, abi=None)")]
-    pub fn set_abi(&self, py: Python<'_>, abi: Option<Py<PyAny>>) -> bool {
-        let abi = match abi {
-            Some(value) => match extract_abi(value.bind(py)) {
-                Ok(abi) => Some(abi),
-                Err(err) => {
-                    Stderr::print_debug(&self.config, format!("llvm set abi failed: {}", err));
-                    return false;
-                }
-            },
-            None => None,
-        };
-        let mut state = self.state.lock().unwrap();
-        state.abi = abi;
-        state.mark_dirty();
-        rebuild_state(&mut state, &self.config, "llvm set abi failed")
-    }
-
     #[pyo3(signature = (lir), text_signature = "($self, lir)")]
     pub fn append_block_lir(&self, py: Python<'_>, lir: Py<PyLirModule>) -> bool {
         let lir = lir.borrow(py).inner.lock().unwrap().clone();
@@ -468,32 +436,16 @@ impl LlvmModule {
         true
     }
 
-    #[pyo3(signature = (lir, abi=None, name=None), text_signature = "($self, lir, abi=None, name=None)")]
+    #[pyo3(signature = (lir, name=None), text_signature = "($self, lir, name=None)")]
     pub fn append_function_lir(
         &self,
         py: Python<'_>,
         lir: Py<PyLirModule>,
-        abi: Option<Py<PyAny>>,
         name: Option<String>,
     ) -> bool {
         let lir = lir.borrow(py).inner.lock().unwrap().clone();
-        let abi = match abi {
-            Some(value) => match extract_abi(value.bind(py)) {
-                Ok(abi) => Some(abi),
-                Err(err) => {
-                    Stderr::print_debug(
-                        &self.config,
-                        format!("llvm append function lir failed: {}", err),
-                    );
-                    return false;
-                }
-            },
-            None => None,
-        };
         let mut state = self.state.lock().unwrap();
-        state
-            .items
-            .push(ModuleItemDef::FunctionLir { lir, abi, name });
+        state.items.push(ModuleItemDef::FunctionLir { lir, name });
         state.mark_dirty();
         true
     }
@@ -505,7 +457,6 @@ impl LlvmModule {
         state.items.push(ModuleItemDef::CreatedFunction {
             function: CreatedFunctionDef {
                 name,
-                abi: None,
                 body_lir: None,
                 blocks: Vec::new(),
                 raw_ir: None,
@@ -856,7 +807,6 @@ impl LiftedFunction {
     #[pyo3(signature = (lir), text_signature = "($self, lir)")]
     pub fn set_lir(&self, py: Python<'_>, lir: Py<PyLirFunction>) -> bool {
         let lir_function = lir.borrow(py).inner.lock().unwrap().clone();
-        let abi = lir_function.abi.clone();
         let mut lir = LirModule::new(lir_function.name.clone());
         lir.append_function(lir_function);
         let mut state = self.state.lock().unwrap();
@@ -878,7 +828,6 @@ impl LiftedFunction {
             );
             return false;
         }
-        function.abi = abi;
         function.body_lir = Some(lir);
         state.mark_dirty();
         true
@@ -890,7 +839,6 @@ impl LiftedFunction {
         let Some(ModuleItemDef::CreatedFunction { function }) = item else {
             return false;
         };
-        function.abi = None;
         function.body_lir = None;
         function.blocks.clear();
         function.raw_bitcode = None;
@@ -905,7 +853,6 @@ impl LiftedFunction {
         let Some(ModuleItemDef::CreatedFunction { function }) = item else {
             return false;
         };
-        function.abi = None;
         function.body_lir = None;
         function.blocks.clear();
         function.raw_ir = None;
@@ -1053,7 +1000,7 @@ impl LiftedFunction {
     }
 
     pub fn text(&self) -> Option<String> {
-        match function_preview_lifter(&self.state, self.index, false) {
+        match function_preview_lifter(&self.state, self.index) {
             Ok(lifter) => Some(lifter.text()),
             Err(err) => {
                 let state = self.state.lock().unwrap();
@@ -1074,7 +1021,7 @@ impl LiftedFunction {
     }
 
     pub fn bitcode(&self) -> Option<Vec<u8>> {
-        match function_preview_lifter(&self.state, self.index, false) {
+        match function_preview_lifter(&self.state, self.index) {
             Ok(lifter) => Some(lifter.bitcode()),
             Err(err) => {
                 let state = self.state.lock().unwrap();
@@ -1088,7 +1035,7 @@ impl LiftedFunction {
     }
 
     pub fn object(&self) -> Option<Vec<u8>> {
-        match function_preview_lifter(&self.state, self.index, false) {
+        match function_preview_lifter(&self.state, self.index) {
             Ok(lifter) => match lifter.object() {
                 Ok(bytes) => Some(bytes),
                 Err(err) => {
@@ -1106,42 +1053,6 @@ impl LiftedFunction {
                     &state.config,
                     format!("llvm function object failed: {}", err),
                 );
-                None
-            }
-        }
-    }
-
-    #[pyo3(signature = (links=None), text_signature = "($self, links=None)")]
-    pub fn jit(&self, links: Option<BTreeMap<String, u64>>) -> Option<JittedFunction> {
-        let state = self.state.lock().unwrap();
-        let name = match state.items.get(self.index) {
-            Some(ModuleItemDef::CreatedFunction { function }) => function.name.clone(),
-            _ => return None,
-        };
-        let preserve_links = links.as_ref().is_some_and(|links| !links.is_empty());
-        drop(state);
-        match function_preview_lifter(&self.state, self.index, preserve_links) {
-            Ok(lifter) => {
-                let links = links
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|(name, address)| (name, address as usize))
-                    .collect::<BTreeMap<_, _>>();
-                match lifter.jit_function(&name, &links) {
-                    Ok(inner) => Some(JittedFunction { inner }),
-                    Err(err) => {
-                        let state = self.state.lock().unwrap();
-                        Stderr::print_debug(
-                            &state.config,
-                            format!("llvm function jit failed: {}", err),
-                        );
-                        None
-                    }
-                }
-            }
-            Err(err) => {
-                let state = self.state.lock().unwrap();
-                Stderr::print_debug(&state.config, format!("llvm function jit failed: {}", err));
                 None
             }
         }
@@ -1189,21 +1100,9 @@ impl LiftedBlock {
     }
 }
 
-#[pymethods]
-impl JittedFunction {
-    pub fn name(&self) -> String {
-        self.inner.name().to_string()
-    }
-
-    pub fn address(&self) -> u64 {
-        self.inner.address() as u64
-    }
-}
-
 fn function_preview_lifter(
     state: &Arc<Mutex<BuildState>>,
     index: usize,
-    preserve_module: bool,
 ) -> Result<InnerLlvmModule, Error> {
     let state = state.lock().unwrap();
     let item = state
@@ -1213,19 +1112,6 @@ fn function_preview_lifter(
     let ModuleItemDef::CreatedFunction { function } = item else {
         return Err(Error::other("lifted function is invalid"));
     };
-    if !state.dirty {
-        if preserve_module {
-            let mut lifter = InnerLlvmModule::with_config(
-                state.name.clone(),
-                state.cpu.clone(),
-                state.config.clone(),
-                state.triple.clone(),
-            )?;
-            lifter.set_bitcode(&state.inner.bitcode())?;
-            return Ok(lifter);
-        }
-        return state.inner.duplicate_function_view(&function.name);
-    }
     let function = function.clone();
     let mut lifter = InnerLlvmModule::with_config(
         state.name.clone(),
@@ -1258,7 +1144,6 @@ fn block_preview_lifter(
         .ok_or_else(|| Error::other("lifted block is invalid"))?;
     let preview = CreatedFunctionDef {
         name: block_preview_function_name(&function.name, &block, block_index),
-        abi: None,
         body_lir: None,
         blocks: vec![block],
         raw_ir: None,
@@ -1305,7 +1190,6 @@ pub fn llvm_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<LlvmModule>()?;
     m.add_class::<LiftedFunction>()?;
     m.add_class::<LiftedBlock>()?;
-    m.add_class::<JittedFunction>()?;
     py.import("sys")?
         .getattr("modules")?
         .set_item("binlex_bindings.binlex.irs.llvm", m)?;

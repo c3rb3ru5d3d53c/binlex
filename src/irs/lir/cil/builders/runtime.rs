@@ -21,14 +21,16 @@
 // SOFTWARE.
 
 use crate::irs::lir::cil::InstructionDetailCil;
-use crate::irs::lir::{Lir, LirEffect, LirExpression, LirStatus, LirTerminator, LirTrapKind};
+use crate::irs::lir::{
+    LirEffect, LirExpression, LirInstruction, LirStatus, LirTerminator, LirTrapKind,
+};
 
 use super::super::helpers::common::{
     complete_with_effects, const_u64, operand_value, pop_stack, push_expression,
     push_runtime_unary_intrinsic, push_with_prefix,
 };
 
-pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Lir> {
+pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<LirInstruction> {
     match instruction.mnemonic_text() {
         "arglist" => Some(push_expression(LirExpression::Intrinsic {
             name: "cil.arglist".to_string(),
@@ -70,20 +72,15 @@ pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Lir> {
             LirTerminator::FallThrough,
             vec![LirEffect::Nop],
         )),
-        "endfinally" => Some(Lir {
-            version: 1,
+        "endfinally" => Some(LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: Default::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Trap {
                 kind: LirTrapKind::Named {
                     name: "cil.endfinally".to_string(),
                 },
             }],
             terminator: LirTerminator::Trap,
-            diagnostics: Vec::new(),
         }),
         "endfilter" => {
             let (mut effects, value) = pop_stack();
@@ -94,20 +91,15 @@ pub(crate) fn build(instruction: &InstructionDetailCil) -> Option<Lir> {
             });
             Some(complete_with_effects(LirTerminator::Trap, effects))
         }
-        "rethrow" => Some(Lir {
-            version: 1,
+        "rethrow" => Some(LirInstruction {
+            address: None,
             status: LirStatus::Complete,
-            metadata: Default::default(),
-            abi: None,
-            encoding: None,
-            temporaries: Vec::new(),
             effects: vec![LirEffect::Trap {
                 kind: LirTrapKind::Named {
                     name: "cil.rethrow".to_string(),
                 },
             }],
             terminator: LirTerminator::Trap,
-            diagnostics: Vec::new(),
         }),
         _ => None,
     }

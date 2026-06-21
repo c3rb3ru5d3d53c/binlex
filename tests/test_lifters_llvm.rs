@@ -3,8 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use binlex::assemblers::{Assembler, AssemblerBackend};
 use binlex::controlflow::{Block, Function, Graph, Instruction};
 use binlex::irs::lir::{
-    Lir, LirAbi, LirAbiKind, LirBlock, LirCpu, LirCpuKind, LirDiagnosticKind, LirEffect,
-    LirExpression, LirFunction, LirLocation, LirMetadata, LirModule, LirOperationBinary, LirStatus,
+    LirEffect, LirExpression, LirInstruction, LirLocation, LirOperationBinary, LirStatus,
     LirTerminator,
 };
 use binlex::irs::llvm::LlvmModule;
@@ -65,13 +64,9 @@ fn build_fastcall_lir_function_graph() -> Graph {
     instruction.bytes = vec![0x8d, 0x41, 0x01, 0xc3];
     instruction.pattern = "8d4101c3".to_string();
     instruction.is_return = true;
-    instruction.lir = Some(Lir {
-        version: 1,
+    instruction.lir = Some(LirInstruction {
+        address: None,
         status: LirStatus::Complete,
-        metadata: LirMetadata::default(),
-        abi: None,
-        encoding: None,
-        temporaries: Vec::new(),
         effects: vec![LirEffect::Set {
             dst: LirLocation::Register {
                 name: "eax".to_string(),
@@ -88,7 +83,6 @@ fn build_fastcall_lir_function_graph() -> Graph {
             },
         }],
         terminator: LirTerminator::Return { expression: None },
-        diagnostics: Vec::new(),
     });
     graph.insert_instruction(instruction);
 
@@ -108,7 +102,7 @@ fn verify_all_entity_lifts(graph: &Graph) {
     for function in functions {
         let mut function_lifter = LlvmModule::from_architecture(function.architecture());
         function_lifter
-            .populate_function(&function, None)
+            .populate_function(&function)
             .expect("function should lift");
         function_lifter
             .verify()
@@ -117,7 +111,7 @@ fn verify_all_entity_lifts(graph: &Graph) {
         for block in function.blocks() {
             let mut block_lifter = LlvmModule::from_architecture(block.architecture());
             block_lifter
-                .populate_block(&block, None)
+                .populate_block(&block)
                 .expect("block should lift");
             block_lifter.verify().expect("block module should verify");
 
@@ -156,7 +150,7 @@ fn verify_instruction_and_block_lifts(graph: &Graph) {
     for block in blocks {
         let mut block_lifter = LlvmModule::from_architecture(block.architecture());
         block_lifter
-            .populate_block(&block, None)
+            .populate_block(&block)
             .expect("block should lift");
         block_lifter.verify().expect("block module should verify");
     }
@@ -204,7 +198,7 @@ fn llvm_lifter_renders_instruction_block_and_function_ir() {
     assert_eq!(&instruction_bc[..4], b"BC\xc0\xde");
     let mut block_lifter = LlvmModule::from_architecture(block.architecture());
     block_lifter
-        .populate_block(&block, None)
+        .populate_block(&block)
         .expect("block should lift");
     block_lifter.verify().expect("block module should verify");
     let block_ir = block_lifter.text();
@@ -212,7 +206,7 @@ fn llvm_lifter_renders_instruction_block_and_function_ir() {
 
     let mut function_lifter = LlvmModule::from_architecture(function.architecture());
     function_lifter
-        .populate_function(&function, None)
+        .populate_function(&function)
         .expect("function should lift");
     function_lifter
         .verify()
@@ -233,7 +227,7 @@ fn function_lift_returns_lifted_function_handle() {
 
     let mut lifted = LlvmModule::from_architecture(function.architecture());
     lifted
-        .populate_function(&function, None)
+        .populate_function(&function)
         .expect("function should lift");
     assert!(lifted.text().contains("define void @function_0()"));
 }
@@ -245,7 +239,7 @@ fn lifted_function_named_emits_requested_symbol() {
 
     let mut lifted = LlvmModule::from_architecture(function.architecture());
     lifted
-        .populate_function_named(&function, None, "renamed_function", None)
+        .populate_function_named(&function, "renamed_function", None)
         .expect("rename should succeed");
     let ir = lifted.text();
     assert!(ir.contains("define void @renamed_function()"));
@@ -260,7 +254,7 @@ fn llvm_lifter_handles_noncontiguous_functions() {
 
     let mut lifter = LlvmModule::from_architecture(function.architecture());
     lifter
-        .populate_function(&function, None)
+        .populate_function(&function)
         .expect("non-contiguous function should lift");
     lifter
         .verify()
@@ -276,52 +270,13 @@ fn llvm_lifter_handles_noncontiguous_functions() {
 }
 
 #[test]
-fn llvm_lift_function_explicit_abi_controls_return_shape_without_embedded_lir() {
-    let graph = build_noncontiguous_function_graph();
-    let function = Function::new(0x1000, &graph).expect("function");
-    let cpu = binlex::irs::lir::LirCpu::from_kind(binlex::irs::lir::LirCpuKind::I386).expect("cpu");
-    let abi = binlex::irs::lir::LirAbi::from_kind(binlex::irs::lir::LirAbiKind::Stdcall, &cpu)
-        .expect("abi");
-
-    let mut lifter = LlvmModule::from_architecture(function.architecture());
-    lifter
-        .populate_function(&function, Some(&abi))
-        .expect("function should lift");
-    lifter.verify().expect("function module should verify");
-
-    let ir = lifter.text();
-    assert!(ir.contains("define i32 @function_1000("));
-    assert!(ir.contains("ret i32"));
-    assert!(!ir.contains("ret void"));
-}
-
-#[test]
-fn llvm_lift_function_uses_builtin_abi_arguments_for_signature() {
-    let graph = build_fastcall_lir_function_graph();
-    let function = Function::new(0x1000, &graph).expect("function");
-    let cpu = LirCpu::from_kind(LirCpuKind::I386).expect("cpu");
-    let abi = LirAbi::from_kind(LirAbiKind::Fastcall, &cpu).expect("abi");
-
-    let mut lifter = LlvmModule::from_architecture(function.architecture());
-    lifter
-        .populate_function(&function, Some(&abi))
-        .expect("function should lift");
-    lifter.verify().expect("function module should verify");
-
-    let ir = lifter.text();
-    assert!(ir.contains("define i32 @function_1000(i32 %0)"));
-    assert!(!ir.contains("movl %ecx, $0"));
-    assert!(ir.contains("ret i32 %abi_ret"));
-}
-
-#[test]
-fn llvm_lift_function_does_not_infer_callable_abi_without_override() {
+fn llvm_lift_function_does_not_infer_callable_signature() {
     let graph = build_fastcall_lir_function_graph();
     let function = Function::new(0x1000, &graph).expect("function");
 
     let mut lifter = LlvmModule::from_architecture(function.architecture());
     lifter
-        .populate_function(&function, None)
+        .populate_function(&function)
         .expect("function should lift");
     lifter.verify().expect("function module should verify");
 
@@ -334,66 +289,13 @@ fn llvm_lift_function_does_not_infer_callable_abi_without_override() {
 }
 
 #[test]
-fn llvm_lift_function_lir_uses_explicit_abi_without_native_sync_epilogue() {
-    let cpu = LirCpu::from_kind(LirCpuKind::I386).expect("cpu");
-    let abi = LirAbi::from_kind(LirAbiKind::Fastcall, &cpu).expect("abi");
-    let lir = LirModule {
-        name: Some("add_one".to_string()),
-        functions: vec![LirFunction {
-            name: Some("add_one".to_string()),
-            abi: None,
-            blocks: vec![LirBlock {
-                name: Some("entry".to_string()),
-                instructions: vec![Lir {
-                    version: 1,
-                    status: LirStatus::Complete,
-                    metadata: LirMetadata::default(),
-                    abi: None,
-                    encoding: None,
-                    temporaries: Vec::new(),
-                    effects: vec![LirEffect::Set {
-                        dst: LirLocation::Register {
-                            name: "eax".to_string(),
-                            bits: 32,
-                        },
-                        expression: LirExpression::Binary {
-                            op: LirOperationBinary::Add,
-                            left: Box::new(LirExpression::Read(Box::new(LirLocation::Register {
-                                name: "ecx".to_string(),
-                                bits: 32,
-                            }))),
-                            right: Box::new(LirExpression::Const { value: 1, bits: 32 }),
-                            bits: 32,
-                        },
-                    }],
-                    terminator: LirTerminator::Return { expression: None },
-                    diagnostics: Vec::new(),
-                }],
-            }],
-        }],
-        data: Vec::new(),
-    };
-
-    let mut lifter = LlvmModule::from_architecture(Architecture::I386);
-    lifter
-        .populate_function_lir_named(&lir, Some(&abi), "add_one")
-        .expect("lir should lift");
-    lifter.verify().expect("function module should verify");
-
-    let ir = lifter.text();
-    assert!(ir.contains("define i32 @add_one(i32 %0)"));
-    assert!(ir.contains("ret i32 %abi_ret"));
-    assert!(!ir.contains("asm sideeffect"));
-}
-
-#[test]
 fn llvm_lifter_optimizers_chain_and_preserve_outputs() {
     let graph = disassemble_graph(Architecture::I386, &[0x31, 0xc0, 0x40, 0xc3]);
     let function = Function::new(0, &graph).expect("function");
 
     let mut lifter = LlvmModule::from_architecture(function.architecture());
     lifter
-        .populate_function(&function, None)
+        .populate_function(&function)
         .expect("function should lift before optimization");
 
     lifter.optimize_mem2reg().expect("mem2reg");
@@ -522,19 +424,16 @@ fn llvm_lifter_avoids_poison_for_oversized_byte_shift_counts() {
         .expect("assemble");
     let graph = disassemble_graph(Architecture::I386, &bytes);
     let function = Function::new(0, &graph).expect("function");
-    let cpu = LirCpu::from_kind(LirCpuKind::I386).expect("cpu");
-    let abi = LirAbi::from_kind(LirAbiKind::Stdcall, &cpu).expect("abi");
 
     let mut lifter = LlvmModule::from_architecture(function.architecture());
     lifter
-        .populate_function(&function, Some(&abi))
+        .populate_function(&function)
         .expect("function should lift");
     lifter.optimize_mem2reg().expect("mem2reg");
     lifter.optimize_instcombine().expect("instcombine");
 
     let ir = lifter.text();
     assert!(!ir.contains("ret i32 poison"), "{ir}");
-    assert!(ir.contains("ret i32 0"), "{ir}");
 }
 
 #[test]
@@ -1381,11 +1280,6 @@ fn llvm_lifter_preserves_unsupported_instruction_fallback() {
         .or_else(|| instruction.build_lir())
         .expect("unsupported instruction should still have fallback lir");
     assert_eq!(lir.status, binlex::irs::lir::LirStatus::Partial);
-    assert!(
-        lir.diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.kind == LirDiagnosticKind::UnsupportedInstruction)
-    );
 
     let mut instruction_lifter = LlvmModule::from_architecture(instruction.architecture);
     instruction_lifter
@@ -1588,11 +1482,6 @@ fn llvm_accuracy_gated_lir_cases_remain_partial() {
                     lir.status,
                     LirStatus::Partial,
                     "{name}: instruction 0x{:x} should remain partial",
-                    instruction.address
-                );
-                assert!(
-                    !lir.diagnostics.is_empty(),
-                    "{name}: instruction 0x{:x} should carry diagnostics",
                     instruction.address
                 );
             } else {

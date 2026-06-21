@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::irs::lir::{
-    Lir, LirEffect, LirExpression, LirLocation, LirOperationBinary, LirOperationCast,
+    LirEffect, LirExpression, LirInstruction, LirLocation, LirOperationBinary, LirOperationCast,
     LirOperationCompare, LirOperationUnary, LirTerminator,
 };
 
@@ -118,7 +118,7 @@ pub(crate) fn assert_arm64_lir_match_unicorn(name: &str, bytes: &[u8], fixture: 
 fn interpret_arm64_lir(
     instruction_name: &str,
     bytes: &[u8],
-    lir: &Lir,
+    lir: &LirInstruction,
     fixture: &Arm64Fixture,
     tracked_registers: &[String],
 ) -> Arm64Execution {
@@ -682,7 +682,7 @@ fn ext_vec_16b(left: u128, right: u128, immediate: usize) -> u128 {
     u128::from_le_bytes(result)
 }
 
-fn tracked_registers(lir: &Lir, fixture: &Arm64Fixture) -> Vec<String> {
+fn tracked_registers(lir: &LirInstruction, fixture: &Arm64Fixture) -> Vec<String> {
     let mut tracked = fixture
         .registers
         .iter()
@@ -698,7 +698,7 @@ fn tracked_registers(lir: &Lir, fixture: &Arm64Fixture) -> Vec<String> {
     tracked
 }
 
-fn written_locations(lir: &Lir) -> Vec<String> {
+fn written_locations(lir: &LirInstruction) -> Vec<String> {
     let mut registers = Vec::new();
     for effect in &lir.effects {
         match effect {

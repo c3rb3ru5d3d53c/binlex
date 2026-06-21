@@ -21,9 +21,8 @@
 // SOFTWARE.
 
 use crate::irs::lir::{
-    Lir, LirDiagnostic, LirDiagnosticKind, LirEffect, LirExpression, LirLocation,
-    LirOperationBinary, LirOperationCast, LirOperationCompare, LirOperationUnary, LirStatus,
-    LirTerminator,
+    LirEffect, LirExpression, LirInstruction, LirLocation, LirOperationBinary, LirOperationCast,
+    LirOperationCompare, LirOperationUnary, LirStatus, LirTerminator,
 };
 
 pub(crate) fn zero_extend_to_bits(expression: LirExpression, bits: u16) -> LirExpression {
@@ -384,24 +383,11 @@ pub(crate) fn condition_from_cc(cc: u64) -> Option<LirExpression> {
     condition_from_suffix(suffix)
 }
 
-pub(crate) fn complete(terminator: LirTerminator, effects: Vec<LirEffect>) -> Lir {
-    Lir {
-        version: 1,
+pub(crate) fn complete(terminator: LirTerminator, effects: Vec<LirEffect>) -> LirInstruction {
+    LirInstruction {
+        address: None,
         status: LirStatus::Complete,
-        metadata: Default::default(),
-        abi: None,
-        encoding: None,
-        temporaries: Vec::new(),
         effects,
         terminator,
-        diagnostics: Vec::new(),
-    }
-}
-
-#[allow(dead_code)]
-pub(crate) fn diagnostic(kind: LirDiagnosticKind, message: impl Into<String>) -> LirDiagnostic {
-    LirDiagnostic {
-        kind,
-        message: message.into(),
     }
 }
