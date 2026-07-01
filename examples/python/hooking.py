@@ -1,13 +1,11 @@
 #!/usr/bin/env python
 
-from typing import cast
-
 from binlex import Architecture, Configuration
 from binlex.assemblers import Assembler, AssemblerBackend
 from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
+from binlex.formats import Image, ImagePermissions, ImageSegment
 from binlex.irs.lir import (
-    Lir,
     LirBlock,
     LirCpuI386,
     LirExecutor,
@@ -60,15 +58,20 @@ host_print:
     """,
 )
 
-disassembler = Disassembler(
-    Architecture.I386,
-    program,
-    {code_address: len(program)},
-    config,
+image = Image(
+    [
+        ImageSegment(
+            name="program",
+            virtual_address=code_address,
+            data=program,
+            permissions=ImagePermissions.executable(),
+        )
+    ]
 )
 
-graph = Graph(Architecture.I386, config)
-disassembler.disassemble({code_address}, graph)
+graph = Graph(Architecture.I386, image, config)
+disassembler = Disassembler(graph)
+disassembler.disassemble({code_address})
 
 instructions = graph.instructions()
 instructions.sort(key=lambda instruction: instruction.address())
@@ -77,7 +80,7 @@ raw_lir = [instruction.lir() for instruction in instructions]
 lir_module = LirModule(name="hooking")
 lir_function = LirFunction(name="entry")
 lir_block = LirBlock(name="entry")
-for instruction_lir in cast(list[Lir], raw_lir):
+for instruction_lir in raw_lir:
     lir_block.append_instruction(instruction_lir)
 lir_function.append_block(lir_block)
 lir_module.append_function(lir_function)

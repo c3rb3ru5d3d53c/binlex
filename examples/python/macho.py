@@ -36,18 +36,10 @@ for slice in macho.slices():
 
   architecture = slice.architecture()
 
-  image = slice.image()
+  graph = Graph(architecture, slice.image(), config)
+  disassembler = Disassembler(graph)
 
-  disassembler = Disassembler(
-    slice.architecture(),
-    slice.image(),
-    slice.executable_virtual_address_ranges(),
-    config
-  )
-
-  graph = Graph(architecture, config)
-
-  disassembler.disassemble(slice.entrypoint_virtual_addresses(), graph)
+  disassembler.disassemble(slice.entrypoint_virtual_addresses())
 
   for function in graph.functions():
     print(function)

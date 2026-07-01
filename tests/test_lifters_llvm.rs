@@ -3,8 +3,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use binlex::assemblers::{Assembler, AssemblerBackend};
 use binlex::controlflow::{Block, Function, Graph, Instruction};
 use binlex::irs::lir::{
-    LirEffect, LirExpression, LirInstruction, LirLocation, LirOperationBinary, LirStatus,
-    LirTerminator,
+    LirEffect, LirExpression, LirInstruction, LirLocation, LirModule, LirOperationBinary,
+    LirStatus, LirTerminator,
 };
 use binlex::irs::llvm::LlvmModule;
 use binlex::{Architecture, Configuration};
@@ -239,6 +239,57 @@ fn lifted_function_named_emits_requested_symbol() {
         .expect("rename should succeed");
     let ir = lifted.text();
     assert!(ir.contains("define void @renamed_function()"));
+}
+
+#[test]
+fn llvm_lir_module_native_ret_returns_register_value() {
+    let config = Configuration::default();
+    let assembler = Assembler::new(
+        Architecture::I386,
+        config.clone(),
+        AssemblerBackend::Default,
+    )
+    .expect("assembler");
+    let bytes = assembler
+        .assemble(
+            0,
+            "xor eax, eax; \
+             not eax; \
+             not eax; \
+             add eax, 0x30; \
+             sub eax, 0x18; \
+             mov ebx, 7; \
+             sub ebx, 2; \
+             add eax, ebx; \
+             xor ecx, ecx; \
+             add ecx, 0x11; \
+             sub eax, ecx; \
+             inc eax; \
+             dec eax; \
+             lea eax, [eax + 4]; \
+             sub eax, 4; \
+             or eax, 0; \
+             ret",
+        )
+        .expect("assembly");
+    let graph = disassemble_graph(Architecture::I386, &bytes);
+    let function = Function::new(0, &graph).expect("function");
+    let mut module = LirModule::new(Some("polymorphic_shellcode".to_string()));
+    module.append_function(function.lir().expect("function lir"));
+
+    let mut llvm = LlvmModule::from_architecture(function.architecture());
+    llvm.from_lir(&module, config)
+        .expect("lir module should lift");
+    llvm.optimize_cfg().expect("cfg optimization");
+    llvm.optimize_gvn().expect("gvn optimization");
+    llvm.optimize_instcombine()
+        .expect("instcombine optimization");
+    llvm.optimize_dce().expect("dce optimization");
+
+    let ir = llvm.text();
+    assert!(!ir.contains("ptr poison"), "{ir}");
+    assert!(!ir.contains("ret i32 poison"), "{ir}");
+    assert!(ir.contains("ret i32 12"), "{ir}");
 }
 
 #[test]

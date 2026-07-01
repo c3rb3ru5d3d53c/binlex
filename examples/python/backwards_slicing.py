@@ -4,6 +4,7 @@ from binlex import Architecture
 from binlex.config import Configuration
 from binlex.controlflow import Graph
 from binlex.disassemblers.capstone import Disassembler
+from binlex.formats import Image, ImagePermissions, ImageSegment
 from binlex.irs.lir import (
     LirBlock,
     LirCpuAmd64,
@@ -31,6 +32,18 @@ def module_from_lir(lir):
     function.append_block(block)
     module.append_function(function)
     return module
+
+
+def shellcode_image(data):
+    return Image([
+        ImageSegment(
+            name="shellcode",
+            virtual_address=0,
+            data=data,
+            permissions=ImagePermissions.executable(),
+        )
+    ])
+
 
 shellcode = bytes.fromhex(
     "55"
@@ -67,14 +80,9 @@ shellcode = bytes.fromhex(
 def main():
     config = Configuration()
 
-    graph = Graph(Architecture.AMD64, config)
-    disassembler = Disassembler(
-        Architecture.AMD64,
-        shellcode,
-        {0: len(shellcode)},
-        config,
-    )
-    disassembler.disassemble_function(0, graph)
+    graph = Graph(Architecture.AMD64, shellcode_image(shellcode), config)
+    disassembler = Disassembler(graph)
+    disassembler.disassemble_function(0)
     function = graph.functions()[0]
 
     cpu = LirCpuAmd64()
@@ -120,9 +128,17 @@ def main():
             break
 
     slice_ = state.slice_from_register("ecx", 32)
+    instructions_by_address = {
+        instruction.address(): instruction
+        for block in function.blocks()
+        for instruction in block.instructions()
+    }
 
     for node in slice_.nodes():
-        instruction = node.instruction()
+        slice_instruction = node.instruction()
+        if slice_instruction is None:
+            continue
+        instruction = instructions_by_address.get(slice_instruction.address())
         if instruction is None:
             continue
         print(

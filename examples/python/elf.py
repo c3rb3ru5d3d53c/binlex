@@ -33,16 +33,10 @@ configuration = Configuration()
 
 elf = ELF(Path(sys.argv[1]).read_bytes(), configuration)
 
-disassembler = Disassembler(
-    elf.architecture(),
-    elf.image(),
-    elf.executable_virtual_address_ranges(),
-    configuration
-)
+graph = Graph(elf.architecture(), elf.image(), configuration)
+disassembler = Disassembler(graph)
 
-graph = Graph(elf.architecture(), configuration)
-
-disassembler.disassemble(elf.entrypoint_virtual_addresses(), graph)
+disassembler.disassemble(elf.entrypoint_virtual_addresses())
 
 for function in graph.functions():
     print(function)

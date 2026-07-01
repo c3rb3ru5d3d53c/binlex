@@ -33,18 +33,10 @@ config = Configuration()
 
 pe = PE(Path(sys.argv[1]).read_bytes(), config)
 
-image = pe.image()
+graph = Graph(pe.architecture(), pe.image(), config, pe.metadata())
+disassembler = Disassembler(graph)
 
-disassembler = Disassembler(
-    pe.architecture(),
-    pe.image(),
-    pe.executable_virtual_address_ranges(),
-    config
-)
-
-graph = Graph(pe.architecture(), config)
-
-disassembler.disassemble(pe.dotnet_entrypoint_virtual_addresses(), graph)
+disassembler.disassemble(pe.entrypoint_virtual_addresses())
 
 for function in graph.functions():
     print(function)

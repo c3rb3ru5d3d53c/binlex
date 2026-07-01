@@ -4,6 +4,7 @@ from binlex import Architecture, Configuration
 from binlex.assemblers import Assembler
 from binlex.controlflow import Graph
 from binlex.disassemblers import Disassembler
+from binlex.formats import Image, ImagePermissions, ImageSegment
 from binlex.irs.lir import (
     LirBlock,
     LirCpuAmd64,
@@ -68,16 +69,27 @@ encrypted_payload_code = (
 
 image_bytes = decryptor_code + encrypted_payload_code
 
-disassembler = Disassembler(architecture, image_bytes, {0: len(image_bytes)}, configuration)
-graph = Graph(architecture, configuration)
+image = Image(
+    [
+        ImageSegment(
+            name="shellcode",
+            virtual_address=0,
+            data=image_bytes,
+            permissions=ImagePermissions.executable(),
+        )
+    ]
+)
 
-instructions = disassembler.disassemble_block(0, graph).instructions()
+graph = Graph(architecture, image, configuration)
+disassembler = Disassembler(graph)
+
+instructions = disassembler.disassemble_block(0).instructions()
 
 tail_address = instructions[-1].fallthrough()
 
 assert tail_address
 
-tail_instructions = disassembler.disassemble_block(tail_address, graph).instructions()
+tail_instructions = disassembler.disassemble_block(tail_address).instructions()
 
 payload_address = tail_instructions[-1].address() + len(tail_instructions[-1].bytes())
 instructions.extend(tail_instructions)
@@ -107,12 +119,18 @@ assert decrypted_states
 
 decrypted_image_bytes = decryptor_code + payload_code
 
-stage2_instructions = Disassembler(
-    architecture,
-    decrypted_image_bytes,
-    {0: len(decrypted_image_bytes)},
-    configuration,
-).disassemble_block(payload_address, Graph(architecture, configuration)).instructions()
+decrypted_image = Image(
+    [
+        ImageSegment(
+            name="decrypted_shellcode",
+            virtual_address=0,
+            data=decrypted_image_bytes,
+            permissions=ImagePermissions.executable(),
+        )
+    ]
+)
+decrypted_graph = Graph(architecture, decrypted_image, configuration)
+stage2_instructions = Disassembler(decrypted_graph).disassemble_block(payload_address).instructions()
 
 print("Shellcode Decryption Routine")
 for instruction in instructions:

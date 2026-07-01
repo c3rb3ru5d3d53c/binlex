@@ -477,6 +477,8 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
             LirTerminator::Return { expression } => {
                 if let Some(adjust) = expression.as_ref().and_then(Self::const_return_adjust) {
                     self.native_return_adjust = Some(adjust);
+                } else if self.emit_native_value_returns && self.emit_native_value_return()? {
+                    return Ok(());
                 } else if let Some(expression) = expression {
                     let value = self.lower_expression(expression)?;
                     if let Some(return_type) = self.function.get_type().get_return_type() {

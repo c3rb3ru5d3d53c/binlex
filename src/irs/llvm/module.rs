@@ -92,6 +92,7 @@ struct LoweringContext<'ctx, 'm> {
     stack_regions: HashMap<String, PointerValue<'ctx>>,
     written_locations: BTreeSet<String>,
     native_return_adjust: Option<u16>,
+    emit_native_value_returns: bool,
     cached_flags_register: RefCell<Option<IntValue<'ctx>>>,
     emit_terminator_helpers: bool,
     stack_layouts: HashMap<String, u32>,
@@ -245,8 +246,7 @@ impl LlvmModule {
             return Ok(());
         }
         let prepared_blocks = self.prepare_function_blocks(function);
-        let llvm_function =
-            self.add_function_for_lift(name, infer_return_bits_from_blocks(&prepared_blocks));
+        let llvm_function = self.add_function_for_lift(name, None);
         let stack_layouts = self.collect_stack_layouts_for_function(&prepared_blocks);
         let mut lowering = self.lowering_context(llvm_function, stack_layouts)?;
         lowering.emit_terminator_helpers = false;
@@ -263,6 +263,7 @@ impl LlvmModule {
         let function = self.add_function_for_lift(&name, infer_return_bits(&instructions));
         let stack_layouts = self.collect_stack_layouts_for_lir(&instructions);
         let mut lowering = self.lowering_context(function, stack_layouts)?;
+        lowering.emit_native_value_returns = true;
         for lir in &instructions {
             lowering.lower_instruction_lir(lir)?;
         }
@@ -289,6 +290,7 @@ impl LlvmModule {
         let function = self.add_function_for_lift(name, infer_return_bits(&instructions));
         let stack_layouts = self.collect_stack_layouts_for_lir(&instructions);
         let mut lowering = self.lowering_context(function, stack_layouts)?;
+        lowering.emit_native_value_returns = true;
         for lir in &instructions {
             lowering.lower_instruction_lir(lir)?;
         }
@@ -557,6 +559,7 @@ impl LlvmModule {
             stack_regions: HashMap::new(),
             written_locations: BTreeSet::new(),
             native_return_adjust: None,
+            emit_native_value_returns: false,
             cached_flags_register: RefCell::new(None),
             emit_terminator_helpers: true,
             stack_layouts,
@@ -931,32 +934,6 @@ fn infer_return_bits(lir: &[LirInstruction]) -> Option<u16> {
                 expression: Some(expression),
             } => Some(expression.bits()),
             _ => None,
-        })
-}
-
-fn infer_return_bits_from_blocks(blocks: &[(Block<'_>, Vec<u64>)]) -> Option<u16> {
-    blocks
-        .iter()
-        .rev()
-        .find_map(|(block, instruction_addresses)| {
-            if let Some(bits) = block
-                .terminator
-                .lir()
-                .ok()
-                .and_then(|lir| infer_return_bits(std::slice::from_ref(&lir)))
-            {
-                return Some(bits);
-            }
-
-            instruction_addresses.iter().rev().find_map(|address| {
-                block.cfg.with_instruction_record(*address, |record| {
-                    record
-                        .ir
-                        .lir
-                        .as_ref()
-                        .and_then(|lir| infer_return_bits(std::slice::from_ref(lir)))
-                })?
-            })
         })
 }
 

@@ -42,13 +42,10 @@ configuration = Configuration()
 
 pe = PE(open(sys.argv[1], "rb").read(), configuration)
 
-graph = Graph(pe.architecture(), configuration)
+graph = Graph(pe.architecture(), pe.image(), configuration, pe.metadata())
+disassembler = Disassembler(graph)
 
-disassembler = Disassembler(
-    pe.architecture(), pe.image(), pe.executable_virtual_address_ranges(), configuration
-)
-
-disassembler.disassemble(pe.entrypoint_virtual_addresses(), graph)
+disassembler.disassemble(pe.entrypoint_virtual_addresses())
 
 function = get_target_function(graph, threshold=0.85)
 

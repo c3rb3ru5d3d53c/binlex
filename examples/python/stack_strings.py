@@ -5,6 +5,7 @@ from binlex import Configuration
 from binlex.assemblers import Assembler
 from binlex.controlflow import Graph
 from binlex.disassemblers import Disassembler
+from binlex.formats import Image, ImagePermissions, ImageSegment
 from binlex.irs.lir import (
     LirBlock,
     LirCpuI386,
@@ -45,15 +46,20 @@ assembler = Assembler(architecture, config)
 
 shellcode = assembler.assemble(0, assembly)
 
-graph = Graph(architecture, config)
-
-disassembler = Disassembler(
-    architecture,
-    shellcode,
-    {0: len(shellcode)},
-    config,
+image = Image(
+    [
+        ImageSegment(
+            name="shellcode",
+            virtual_address=0,
+            data=shellcode,
+            permissions=ImagePermissions.executable(),
+        )
+    ]
 )
-disassembler.disassemble_function(0, graph)
+
+graph = Graph(architecture, image, config)
+disassembler = Disassembler(graph)
+disassembler.disassemble_function(0)
 
 function = graph.function(0)
 
