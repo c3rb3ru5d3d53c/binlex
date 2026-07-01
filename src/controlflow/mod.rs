@@ -46,6 +46,7 @@ pub use instruction::ImmediateOperand;
 pub use instruction::Instruction;
 pub use instruction::InstructionDetail;
 pub use instruction::InstructionDetailKind;
+pub use instruction::InstructionIr;
 pub use instruction::InstructionRecord;
 pub use instruction::MemoryOperand;
 pub use instruction::Operand;

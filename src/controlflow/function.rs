@@ -540,14 +540,7 @@ impl<'function> Function<'function> {
     }
 
     pub fn lir(&self) -> Result<LirFunction, Error> {
-        if let Some(artifact) = self.cfg.cached_decompilation(self.address())? {
-            return Ok(artifact.lir);
-        }
         self.build_lir(&self.cfg.symbols())
-    }
-
-    pub fn lir_ssa(&self) -> Result<LirFunction, Error> {
-        Ok(self.lir()?.ssa())
     }
 
     /// Retrieves all blocks that fall within the contiguous reconstruction region.

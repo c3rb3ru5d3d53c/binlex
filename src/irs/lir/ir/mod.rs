@@ -28,7 +28,7 @@ pub mod validate;
 pub use instruction::{
     LirAddressSpace, LirBlock, LirData, LirEffect, LirEffectAtomicCmpXchg, LirEffectFence,
     LirEffectIntrinsic, LirEffectKind, LirEffectMemoryCopy, LirEffectMemorySet, LirEffectNop,
-    LirEffectPop, LirEffectPush, LirEffectSet, LirEffectStore, LirEffectTrap,
+    LirEffectPhi, LirEffectPop, LirEffectPush, LirEffectSet, LirEffectStore, LirEffectTrap,
     LirEffectWriteElement, LirEffectWriteProperty, LirExpression, LirExpressionAddressOf,
     LirExpressionAllocate, LirExpressionBinary, LirExpressionCast, LirExpressionCompare,
     LirExpressionConcat, LirExpressionConst, LirExpressionDataAddress, LirExpressionExtract,
@@ -38,8 +38,8 @@ pub use instruction::{
     LirFenceKind, LirFunction, LirInstruction, LirLocation, LirLocationFlag,
     LirLocationIndexedMemory, LirLocationKind, LirLocationMemory, LirLocationProgramCounter,
     LirLocationRegister, LirLocationStackMemory, LirLocationTemporary, LirModule, LirOperation,
-    LirOperationBinary, LirOperationCast, LirOperationCompare, LirOperationUnary, LirStatus,
-    LirTerminator, LirTerminatorBranch, LirTerminatorCall, LirTerminatorFallThrough,
+    LirOperationBinary, LirOperationCast, LirOperationCompare, LirOperationUnary, LirPhiSource,
+    LirStatus, LirTerminator, LirTerminatorBranch, LirTerminatorCall, LirTerminatorFallThrough,
     LirTerminatorJump, LirTerminatorKind, LirTerminatorReturn, LirTerminatorTrap,
     LirTerminatorUnreachable, LirTrapKind,
 };

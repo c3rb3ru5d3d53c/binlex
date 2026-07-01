@@ -204,9 +204,14 @@ pub struct InstructionRecord {
     pub operands: Vec<Operand>,
     /// Decoded instruction detail captured for lir lowering.
     pub instruction_detail: Option<InstructionDetail>,
-    /// Optional canonical LIR bindings for later lifting.
-    pub lir: Option<LirInstruction>,
+    /// Graph-owned derived IR for this instruction.
+    pub ir: InstructionIr,
     prepared_lir_cache: OnceLock<Result<LirInstruction, String>>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InstructionIr {
+    pub lir: Option<LirInstruction>,
 }
 
 impl Clone for InstructionRecord {
@@ -234,7 +239,7 @@ impl Clone for InstructionRecord {
             disassembly: self.disassembly.clone(),
             operands: self.operands.clone(),
             instruction_detail: self.instruction_detail.clone(),
-            lir: self.lir.clone(),
+            ir: self.ir.clone(),
             prepared_lir_cache: OnceLock::new(),
         }
     }
@@ -273,7 +278,7 @@ impl InstructionRecord {
             disassembly: String::new(),
             operands: Vec::new(),
             instruction_detail: None,
-            lir: None,
+            ir: InstructionIr::default(),
             prepared_lir_cache: OnceLock::new(),
             architecture,
             config,
@@ -308,11 +313,11 @@ impl InstructionRecord {
     /// Replaces the canonical LIR attached to this instruction.
     pub fn set_lir(&mut self, lir: LirInstruction) {
         let _ = self.prepared_lir_cache.take();
-        self.lir = Some(lir);
+        self.ir.lir = Some(lir);
     }
 
     pub fn prepared_lir(&self) -> Result<Option<&LirInstruction>, Error> {
-        let Some(lir) = self.lir.clone().or_else(|| self.build_lir()) else {
+        let Some(lir) = self.ir.lir.clone().or_else(|| self.build_lir()) else {
             return Ok(None);
         };
         match self.prepared_lir_cache.get_or_init(|| {
@@ -338,13 +343,6 @@ impl InstructionRecord {
         }
         self.fallthrough()
             .map(|_| self.unsupported_fallthrough_lir("instruction detail unavailable"))
-    }
-
-    pub fn lir_ssa(&self) -> Option<LirInstruction> {
-        self.lir
-            .clone()
-            .or_else(|| self.build_lir())
-            .map(|lir| lir.ssa())
     }
 
     pub fn build_and_log_lir(&self) -> Option<LirInstruction> {
@@ -516,6 +514,17 @@ impl<'instruction> Instruction<'instruction> {
 
     pub fn into_record(self) -> InstructionRecord {
         self.inner
+    }
+
+    pub fn lir(&self) -> Result<LirInstruction, Error> {
+        if let Some(lir) = self.inner.ir.lir.clone() {
+            return Ok(lir);
+        }
+        let lir = self.inner.build_lir().ok_or_else(|| {
+            Error::other(format!("Instruction -> 0x{:x}: has no LIR", self.address))
+        })?;
+        self.cfg.store_instruction_lir(self.address, lir.clone());
+        Ok(lir)
     }
 
     pub fn callees(&self) -> Vec<Function<'instruction>> {

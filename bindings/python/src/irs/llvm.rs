@@ -252,7 +252,7 @@ fn insert_lir_block(
         record.mnemonic = "lir".to_string();
         record.disassembly = "lir".to_string();
         record.pattern = "90".to_string();
-        record.lir = Some(lir.clone());
+        record.ir.lir = Some(lir.clone());
         if index == 0 {
             record.is_block_start = true;
         }

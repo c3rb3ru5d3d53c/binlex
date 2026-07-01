@@ -1,13 +1,14 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap, VecDeque};
 
 use crate::irs::lir::{
     LirBlock, LirEffect, LirExpression, LirFunction, LirInstruction, LirLocation, LirModule,
-    LirTerminator,
+    LirPhiSource, LirStatus, LirTerminator,
 };
 
 #[derive(Clone, Default)]
 struct SsaContext {
     versions: HashMap<SsaKey, u64>,
+    allocated_versions: HashMap<SsaKey, u64>,
     temp_versions: HashMap<u32, u32>,
     temp_ids: HashMap<(u32, u32), u32>,
     next_temp_id: u32,
@@ -37,6 +38,10 @@ pub fn ssa_block_lir(block: &LirBlock) -> LirBlock {
 }
 
 pub fn ssa_function_lir(function: &LirFunction) -> LirFunction {
+    if can_infer_cfg(function) {
+        return ssa_function_lir_with_phi(function);
+    }
+
     let mut context = SsaContext::from_instructions(
         function
             .blocks
@@ -60,12 +65,352 @@ pub fn ssa_function_lir(function: &LirFunction) -> LirFunction {
     }
 }
 
+fn ssa_function_lir_with_phi(function: &LirFunction) -> LirFunction {
+    let context = SsaContext::from_instructions(
+        function
+            .blocks
+            .iter()
+            .flat_map(|block| block.instructions.iter()),
+    );
+    let cfg = FunctionCfg::new(function);
+    let key_bits = collect_key_bits(function);
+    let order = cfg.forward_order();
+    let mut output_contexts: Vec<Option<SsaContext>> = vec![None; function.blocks.len()];
+    let mut rewritten_blocks: Vec<Option<LirBlock>> = vec![None; function.blocks.len()];
+    let mut allocation_context = SsaContext {
+        versions: HashMap::new(),
+        allocated_versions: HashMap::new(),
+        temp_versions: HashMap::new(),
+        temp_ids: context.temp_ids.clone(),
+        next_temp_id: context.next_temp_id,
+    };
+
+    for block_index in order {
+        let mut block_context = merged_block_context(
+            &cfg,
+            block_index,
+            &output_contexts,
+            &key_bits,
+            &allocation_context,
+        );
+        let phi_effects = build_block_phi_effects(
+            &cfg,
+            block_index,
+            &output_contexts,
+            &key_bits,
+            &mut block_context,
+        );
+
+        let block = &function.blocks[block_index];
+        let mut instructions = Vec::new();
+        if !phi_effects.is_empty() {
+            instructions.push(LirInstruction {
+                address: block.address(),
+                status: LirStatus::Complete,
+                effects: phi_effects,
+                terminator: LirTerminator::FallThrough,
+            });
+        }
+        instructions.extend(
+            block
+                .instructions
+                .iter()
+                .map(|instruction| block_context.rewrite_instruction(instruction)),
+        );
+        output_contexts[block_index] = Some(block_context);
+        if let Some(context) = &output_contexts[block_index] {
+            allocation_context.merge_allocations_from(context);
+        }
+        rewritten_blocks[block_index] = Some(LirBlock {
+            name: block.name.clone(),
+            instructions,
+        });
+    }
+
+    LirFunction {
+        name: function.name.clone(),
+        blocks: rewritten_blocks
+            .into_iter()
+            .enumerate()
+            .map(|(index, block)| {
+                block.unwrap_or_else(|| {
+                    let mut fallback =
+                        SsaContext::from_instructions(function.blocks[index].instructions.iter());
+                    LirBlock {
+                        name: function.blocks[index].name.clone(),
+                        instructions: function.blocks[index]
+                            .instructions
+                            .iter()
+                            .map(|instruction| fallback.rewrite_instruction(instruction))
+                            .collect(),
+                    }
+                })
+            })
+            .collect(),
+    }
+}
+
 pub fn ssa_module_lir(module: &LirModule) -> LirModule {
     LirModule {
         name: module.name.clone(),
         functions: module.functions.iter().map(ssa_function_lir).collect(),
         data: module.data.clone(),
     }
+}
+
+struct FunctionCfg {
+    successors: Vec<Vec<usize>>,
+    predecessors: Vec<Vec<usize>>,
+    block_addresses: Vec<Option<u64>>,
+}
+
+impl FunctionCfg {
+    fn new(function: &LirFunction) -> Self {
+        let block_addresses = function
+            .blocks
+            .iter()
+            .map(LirBlock::address)
+            .collect::<Vec<_>>();
+        let address_to_index = block_addresses
+            .iter()
+            .enumerate()
+            .filter_map(|(index, address)| address.map(|address| (address, index)))
+            .collect::<HashMap<_, _>>();
+        let mut successors = vec![Vec::new(); function.blocks.len()];
+
+        for (index, block) in function.blocks.iter().enumerate() {
+            let mut block_successors = block
+                .instructions
+                .last()
+                .map(|instruction| terminator_successors(&instruction.terminator))
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|address| address_to_index.get(&address).copied())
+                .collect::<Vec<_>>();
+            if matches!(
+                block
+                    .instructions
+                    .last()
+                    .map(|instruction| &instruction.terminator),
+                Some(LirTerminator::FallThrough)
+            ) {
+                if index + 1 < function.blocks.len() {
+                    block_successors.push(index + 1);
+                }
+            }
+            block_successors.sort_unstable();
+            block_successors.dedup();
+            successors[index] = block_successors;
+        }
+
+        let mut predecessors = vec![Vec::new(); function.blocks.len()];
+        for (predecessor, block_successors) in successors.iter().enumerate() {
+            for successor in block_successors {
+                predecessors[*successor].push(predecessor);
+            }
+        }
+
+        Self {
+            successors,
+            predecessors,
+            block_addresses,
+        }
+    }
+
+    fn forward_order(&self) -> Vec<usize> {
+        let mut visited = vec![false; self.successors.len()];
+        let mut order = Vec::new();
+        let mut queue = VecDeque::from([0usize]);
+        while let Some(index) = queue.pop_front() {
+            if index >= self.successors.len() || visited[index] {
+                continue;
+            }
+            visited[index] = true;
+            order.push(index);
+            for successor in &self.successors[index] {
+                queue.push_back(*successor);
+            }
+        }
+        for index in 0..self.successors.len() {
+            if !visited[index] {
+                order.push(index);
+            }
+        }
+        order
+    }
+}
+
+fn can_infer_cfg(function: &LirFunction) -> bool {
+    function.blocks.len() > 1
+        && function
+            .blocks
+            .iter()
+            .filter(|block| block.address().is_some())
+            .count()
+            == function.blocks.len()
+}
+
+fn terminator_successors(terminator: &LirTerminator) -> Vec<u64> {
+    match terminator {
+        LirTerminator::Jump { target } => const_target(target).into_iter().collect(),
+        LirTerminator::Branch {
+            true_target,
+            false_target,
+            ..
+        } => [const_target(true_target), const_target(false_target)]
+            .into_iter()
+            .flatten()
+            .collect(),
+        LirTerminator::Call { return_target, .. } => return_target
+            .as_ref()
+            .and_then(const_target)
+            .into_iter()
+            .collect(),
+        LirTerminator::FallThrough
+        | LirTerminator::Return { .. }
+        | LirTerminator::Unreachable
+        | LirTerminator::Trap => Vec::new(),
+    }
+}
+
+fn const_target(expression: &LirExpression) -> Option<u64> {
+    match expression {
+        LirExpression::Const { value, .. } => u64::try_from(*value).ok(),
+        _ => None,
+    }
+}
+
+fn collect_key_bits(function: &LirFunction) -> HashMap<SsaKey, u16> {
+    let mut bits = HashMap::new();
+    for instruction in function
+        .blocks
+        .iter()
+        .flat_map(|block| block.instructions.iter())
+    {
+        for effect in &instruction.effects {
+            collect_effect_key_bits(effect, &mut bits);
+        }
+    }
+    bits
+}
+
+fn collect_effect_key_bits(effect: &LirEffect, bits: &mut HashMap<SsaKey, u16>) {
+    match effect {
+        LirEffect::Phi { dst, .. } | LirEffect::Set { dst, .. } | LirEffect::Pop { dst, .. } => {
+            collect_location_key_bits(dst, bits)
+        }
+        LirEffect::AtomicCmpXchg { observed, .. } => collect_location_key_bits(observed, bits),
+        LirEffect::Intrinsic { outputs, .. } => {
+            for output in outputs {
+                collect_location_key_bits(output, bits);
+            }
+        }
+        LirEffect::Store { .. }
+        | LirEffect::MemorySet { .. }
+        | LirEffect::MemoryCopy { .. }
+        | LirEffect::WriteProperty { .. }
+        | LirEffect::WriteElement { .. }
+        | LirEffect::Push { .. }
+        | LirEffect::Fence { .. }
+        | LirEffect::Trap { .. }
+        | LirEffect::Nop => {}
+    }
+}
+
+fn collect_location_key_bits(location: &LirLocation, bits: &mut HashMap<SsaKey, u16>) {
+    match location {
+        LirLocation::Register { name, bits: width } => {
+            bits.entry(SsaKey::Register(name.clone())).or_insert(*width);
+        }
+        LirLocation::Flag { name, bits: width } => {
+            bits.entry(SsaKey::Flag(name.clone())).or_insert(*width);
+        }
+        _ => {}
+    }
+}
+
+fn merged_block_context(
+    cfg: &FunctionCfg,
+    block_index: usize,
+    output_contexts: &[Option<SsaContext>],
+    key_bits: &HashMap<SsaKey, u16>,
+    fallback_context: &SsaContext,
+) -> SsaContext {
+    let available_predecessors = cfg.predecessors[block_index]
+        .iter()
+        .filter_map(|predecessor| output_contexts[*predecessor].as_ref())
+        .collect::<Vec<_>>();
+    if available_predecessors.is_empty() {
+        return SsaContext {
+            versions: HashMap::new(),
+            allocated_versions: fallback_context.allocated_versions.clone(),
+            temp_versions: HashMap::new(),
+            temp_ids: fallback_context.temp_ids.clone(),
+            next_temp_id: fallback_context.next_temp_id,
+        };
+    }
+
+    let mut versions = HashMap::new();
+    for key in key_bits.keys() {
+        let version = available_predecessors
+            .iter()
+            .map(|context| context.version(key))
+            .max()
+            .unwrap_or(0);
+        versions.insert(key.clone(), version);
+    }
+
+    SsaContext {
+        versions,
+        allocated_versions: fallback_context.allocated_versions.clone(),
+        temp_versions: HashMap::new(),
+        temp_ids: fallback_context.temp_ids.clone(),
+        next_temp_id: fallback_context.next_temp_id,
+    }
+}
+
+fn build_block_phi_effects(
+    cfg: &FunctionCfg,
+    block_index: usize,
+    output_contexts: &[Option<SsaContext>],
+    key_bits: &HashMap<SsaKey, u16>,
+    block_context: &mut SsaContext,
+) -> Vec<LirEffect> {
+    let predecessors = cfg.predecessors[block_index]
+        .iter()
+        .filter_map(|predecessor| {
+            output_contexts[*predecessor]
+                .as_ref()
+                .map(|context| (*predecessor, context))
+        })
+        .collect::<Vec<_>>();
+    if predecessors.len() < 2 {
+        return Vec::new();
+    }
+
+    let mut phi_effects = Vec::new();
+    for (key, bits) in key_bits {
+        let incoming_versions = predecessors
+            .iter()
+            .map(|(_, context)| context.version(key))
+            .collect::<BTreeSet<_>>();
+        if incoming_versions.len() < 2 {
+            continue;
+        }
+
+        let max_version = incoming_versions.iter().copied().max().unwrap_or(0);
+        block_context.versions.insert(key.clone(), max_version);
+        let dst = block_context.write_key_location(key, *bits);
+        let sources = predecessors
+            .iter()
+            .map(|(predecessor, context)| LirPhiSource {
+                predecessor: cfg.block_addresses[*predecessor],
+                value: LirExpression::Read(Box::new(context.read_key_location(key, *bits))),
+            })
+            .collect();
+        phi_effects.push(LirEffect::Phi { dst, sources });
+    }
+    phi_effects
 }
 
 impl SsaContext {
@@ -90,6 +435,12 @@ impl SsaContext {
 
     fn track_effect_temporaries(&mut self, effect: &LirEffect) {
         match effect {
+            LirEffect::Phi { dst, sources } => {
+                self.track_location_temporaries(dst);
+                for source in sources {
+                    self.track_expression_temporaries(&source.value);
+                }
+            }
             LirEffect::Set { dst, expression } => {
                 self.track_location_temporaries(dst);
                 self.track_expression_temporaries(expression);
@@ -287,6 +638,19 @@ impl SsaContext {
         replacements: &mut Vec<(LirExpression, LirExpression)>,
     ) -> LirEffect {
         match effect {
+            LirEffect::Phi { dst, sources } => LirEffect::Phi {
+                dst: self.write_location(dst),
+                sources: sources
+                    .iter()
+                    .map(|source| LirPhiSource {
+                        predecessor: source.predecessor,
+                        value: Self::replace_expression(
+                            &read_context.rewrite_expression_from_snapshot(&source.value),
+                            replacements,
+                        ),
+                    })
+                    .collect(),
+            },
             LirEffect::Set { dst, expression } => {
                 let rewritten_expression =
                     read_context.rewrite_expression_from_snapshot(expression);
@@ -867,13 +1231,54 @@ impl SsaContext {
 
     fn read_name(&self, key: SsaKey, base: &str) -> String {
         let version = self.versions.get(&key).copied().unwrap_or(0);
-        format!("{base}_{version}")
+        format!("{base}.{version}")
+    }
+
+    fn version(&self, key: &SsaKey) -> u64 {
+        self.versions.get(key).copied().unwrap_or(0)
+    }
+
+    fn read_key_location(&self, key: &SsaKey, bits: u16) -> LirLocation {
+        match key {
+            SsaKey::Register(name) => LirLocation::Register {
+                name: self.read_name(key.clone(), name),
+                bits,
+            },
+            SsaKey::Flag(name) => LirLocation::Flag {
+                name: self.read_name(key.clone(), name),
+                bits,
+            },
+        }
+    }
+
+    fn write_key_location(&mut self, key: &SsaKey, bits: u16) -> LirLocation {
+        match key {
+            SsaKey::Register(name) => LirLocation::Register {
+                name: self.write_name(key.clone(), name),
+                bits,
+            },
+            SsaKey::Flag(name) => LirLocation::Flag {
+                name: self.write_name(key.clone(), name),
+                bits,
+            },
+        }
     }
 
     fn write_name(&mut self, key: SsaKey, base: &str) -> String {
-        let version = self.versions.entry(key).or_insert(0);
-        *version = version.saturating_add(1);
-        format!("{base}_{version}")
+        let next = self
+            .allocated_versions
+            .entry(key.clone())
+            .or_insert_with(|| self.versions.get(&key).copied().unwrap_or(0));
+        *next = next.saturating_add(1);
+        self.versions.insert(key, *next);
+        format!("{base}.{next}")
+    }
+
+    fn merge_allocations_from(&mut self, other: &SsaContext) {
+        for (key, version) in &other.allocated_versions {
+            let current = self.allocated_versions.entry(key.clone()).or_insert(0);
+            *current = (*current).max(*version);
+        }
     }
 
     fn read_temp_id(&self, original: u32) -> u32 {
@@ -901,8 +1306,9 @@ impl SsaContext {
 #[cfg(test)]
 mod tests {
     use crate::irs::lir::{
-        LirBlock, LirEffect, LirExpression, LirInstruction, LirLocation, LirOperationBinary,
-        LirOperationCompare, LirStatus, LirTerminator, ssa_block_lir, ssa_instruction_lir,
+        LirBlock, LirEffect, LirExpression, LirFunction, LirInstruction, LirLocation,
+        LirOperationBinary, LirOperationCompare, LirStatus, LirTerminator, ssa_block_lir,
+        ssa_function_lir, ssa_instruction_lir,
     };
 
     #[test]
@@ -943,7 +1349,7 @@ mod tests {
 
         assert_eq!(
             ssa_instruction_lir(&lir).text(),
-            "rax_1 = rbx_0 + 0x8\nrbx_1 = rax_0 + 0x1"
+            "rax.1 = rbx.0 + 0x8\nrbx.1 = rax.0 + 0x1"
         );
     }
 
@@ -988,7 +1394,7 @@ mod tests {
 
         assert_eq!(
             ssa_instruction_lir(&lir).text(),
-            "rsp_1 = rsp_0 - 0x8\n@64[rsp_1] = 0x401005\ncall rax_0"
+            "rsp.1 = rsp.0 - 0x8\n@64[rsp.1] = 0x401005\ncall rax.0"
         );
     }
 
@@ -1034,7 +1440,7 @@ mod tests {
 
         assert_eq!(
             ssa_instruction_lir(&lir).text(),
-            "rsp_1 = rsp_0 - 0x48\nzf_1 = rsp_1 == 0x0"
+            "rsp.1 = rsp.0 - 0x48\nzf.1 = rsp.1 == 0x0"
         );
     }
 
@@ -1078,7 +1484,87 @@ mod tests {
 
         assert_eq!(
             ssa_block_lir(&block).text(),
-            "zf_1 = rax_0 == 0x0\nif zf_1 then 0x401040 else 0x401020"
+            "zf.1 = rax.0 == 0x0\nif zf.1 then 0x401040 else 0x401020"
+        );
+    }
+
+    #[test]
+    fn ssa_function_inserts_phi_at_cfg_join() {
+        let rax = LirLocation::Register {
+            name: "rax".to_string(),
+            bits: 64,
+        };
+        let rbx = LirLocation::Register {
+            name: "rbx".to_string(),
+            bits: 64,
+        };
+        let block = |address, effects, terminator| LirBlock {
+            name: None,
+            instructions: vec![LirInstruction {
+                address: Some(address),
+                status: LirStatus::Complete,
+                effects,
+                terminator,
+            }],
+        };
+        let function = LirFunction {
+            name: None,
+            blocks: vec![
+                block(
+                    0x1000,
+                    Vec::new(),
+                    LirTerminator::Branch {
+                        condition: LirExpression::Const { value: 1, bits: 1 },
+                        true_target: LirExpression::Const {
+                            value: 0x2000,
+                            bits: 64,
+                        },
+                        false_target: LirExpression::Const {
+                            value: 0x3000,
+                            bits: 64,
+                        },
+                    },
+                ),
+                block(
+                    0x2000,
+                    vec![LirEffect::Set {
+                        dst: rax.clone(),
+                        expression: LirExpression::Const { value: 1, bits: 64 },
+                    }],
+                    LirTerminator::Jump {
+                        target: LirExpression::Const {
+                            value: 0x4000,
+                            bits: 64,
+                        },
+                    },
+                ),
+                block(
+                    0x3000,
+                    vec![LirEffect::Set {
+                        dst: rax.clone(),
+                        expression: LirExpression::Const { value: 2, bits: 64 },
+                    }],
+                    LirTerminator::Jump {
+                        target: LirExpression::Const {
+                            value: 0x4000,
+                            bits: 64,
+                        },
+                    },
+                ),
+                block(
+                    0x4000,
+                    vec![LirEffect::Set {
+                        dst: rbx,
+                        expression: LirExpression::Read(Box::new(rax)),
+                    }],
+                    LirTerminator::Return { expression: None },
+                ),
+            ],
+        };
+
+        assert_eq!(
+            ssa_function_lir(&function).text(),
+            "if 0x1 then 0x2000 else 0x3000\nrax.1 = 0x1\ngoto 0x4000\nrax.2 = 0x2\ngoto 0x4000\nrax.3 = phi(rax.1, rax.2)\nrbx.1 = rax.3\nreturn"
         );
     }
 }

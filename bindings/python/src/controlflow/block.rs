@@ -158,13 +158,6 @@ impl Block {
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn lir_ssa(&self, py: Python<'_>) -> PyResult<Py<PyLirBlock>> {
-        self.with_inner_block(py, |block| {
-            Py::new(py, PyLirBlock::from_inner(block.lir_ssa()?))
-        })
-    }
-
-    #[pyo3(text_signature = "($self)")]
     pub fn llvm(&self, py: Python<'_>) -> PyResult<Py<PyLlvmModule>> {
         self.with_inner_block(py, |block| {
             let inner = block.llvm()?;

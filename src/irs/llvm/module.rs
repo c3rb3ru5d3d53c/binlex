@@ -690,13 +690,13 @@ impl LlvmModule {
             block
                 .cfg
                 .with_instruction_record(instruction_address, |record| {
-                    if let Some(lir) = record.lir.as_ref() {
+                    if let Some(lir) = record.ir.lir.as_ref() {
                         collect_lir_stack_layouts(lir, &mut layouts);
                     }
                 });
         }
-        if let Some(lir) = block.terminator.lir.as_ref() {
-            collect_lir_stack_layouts(lir, &mut layouts);
+        if let Ok(lir) = block.terminator.lir() {
+            collect_lir_stack_layouts(&lir, &mut layouts);
         }
         layouts
     }
@@ -723,13 +723,13 @@ impl LlvmModule {
                 block
                     .cfg
                     .with_instruction_record(*instruction_address, |record| {
-                        if let Some(lir) = record.lir.as_ref() {
+                        if let Some(lir) = record.ir.lir.as_ref() {
                             collect_lir_stack_layouts(lir, &mut layouts);
                         }
                     });
             }
-            if let Some(lir) = block.terminator.lir.as_ref() {
-                collect_lir_stack_layouts(lir, &mut layouts);
+            if let Ok(lir) = block.terminator.lir() {
+                collect_lir_stack_layouts(&lir, &mut layouts);
             }
         }
         layouts
@@ -941,9 +941,9 @@ fn infer_return_bits_from_blocks(blocks: &[(Block<'_>, Vec<u64>)]) -> Option<u16
         .find_map(|(block, instruction_addresses)| {
             if let Some(bits) = block
                 .terminator
-                .lir
-                .as_ref()
-                .and_then(|lir| infer_return_bits(std::slice::from_ref(lir)))
+                .lir()
+                .ok()
+                .and_then(|lir| infer_return_bits(std::slice::from_ref(&lir)))
             {
                 return Some(bits);
             }
@@ -951,6 +951,7 @@ fn infer_return_bits_from_blocks(blocks: &[(Block<'_>, Vec<u64>)]) -> Option<u16
             instruction_addresses.iter().rev().find_map(|address| {
                 block.cfg.with_instruction_record(*address, |record| {
                     record
+                        .ir
                         .lir
                         .as_ref()
                         .and_then(|lir| infer_return_bits(std::slice::from_ref(lir)))
@@ -968,6 +969,12 @@ fn collect_lir_stack_layouts(lir: &LirInstruction, layouts: &mut HashMap<String,
 
 fn collect_effect_stack_layouts(effect: &LirEffect, layouts: &mut HashMap<String, u32>) {
     match effect {
+        LirEffect::Phi { dst, sources } => {
+            collect_stack_layout_for_location(dst, layouts);
+            for source in sources {
+                collect_expression_stack_layouts(&source.value, layouts);
+            }
+        }
         LirEffect::Set { dst, expression } => {
             collect_stack_layout_for_location(dst, layouts);
             collect_expression_stack_layouts(expression, layouts);
@@ -1295,11 +1302,7 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         block_map: &HashMap<u64, BasicBlock<'ctx>>,
         exit_block: &mut Option<BasicBlock<'ctx>>,
     ) -> Result<(), Error> {
-        let lir = block
-            .terminator
-            .lir
-            .clone()
-            .or_else(|| block.terminator.build_lir());
+        let lir = block.terminator.lir().ok();
         let Some(lir) = lir.as_ref() else {
             if block.terminator.is_return {
                 let target = self.ensure_exit_block(exit_block);
@@ -1495,6 +1498,16 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
         flags: &mut Vec<LirLocation>,
     ) {
         match effect {
+            LirEffect::Phi { sources, .. } => {
+                for source in sources {
+                    self.collect_expression_reads(
+                        &source.value,
+                        registers,
+                        program_counters,
+                        flags,
+                    );
+                }
+            }
             LirEffect::Set { dst, expression } => {
                 self.collect_expression_reads(expression, registers, program_counters, flags);
                 if let Some((parent_name, parent_bits, _)) = self.x86_parent_register_alias(dst) {

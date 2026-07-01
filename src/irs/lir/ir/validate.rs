@@ -12,6 +12,15 @@ pub fn validate_instruction_lir(lir: &LirInstruction) -> Result<(), Error> {
 
 fn validate_effect(effect: &LirEffect) -> Result<(), Error> {
     match effect {
+        LirEffect::Phi { dst, sources } => {
+            validate_location(dst)?;
+            if sources.is_empty() {
+                return Err(Error::other("lir phi has no sources"));
+            }
+            for source in sources {
+                validate_expression(&source.value)?;
+            }
+        }
         LirEffect::Set { dst, expression } => {
             validate_location(dst)?;
             validate_expression(expression)?;

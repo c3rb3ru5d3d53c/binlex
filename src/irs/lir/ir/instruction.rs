@@ -132,6 +132,14 @@ impl LirBlock {
     pub fn ssa(&self) -> Self {
         crate::irs::lir::ssa_block_lir(self)
     }
+
+    pub fn bytecode(&self) -> mlir::Result<Vec<u8>> {
+        let mut module = LirModule::new(None);
+        let mut function = LirFunction::new(None);
+        function.append_block(self.clone());
+        module.append_function(function);
+        module.bytecode()
+    }
 }
 
 impl LirFunction {
@@ -184,6 +192,12 @@ impl LirFunction {
 
     pub fn ssa(&self) -> Self {
         crate::irs::lir::ssa_function_lir(self)
+    }
+
+    pub fn bytecode(&self) -> mlir::Result<Vec<u8>> {
+        let mut module = LirModule::new(self.name.clone());
+        module.append_function(self.clone());
+        module.bytecode()
     }
 }
 
@@ -504,6 +518,10 @@ pub enum LirAddressSpace {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum LirEffect {
+    Phi {
+        dst: LirLocation,
+        sources: Vec<LirPhiSource>,
+    },
     Set {
         dst: LirLocation,
         expression: LirExpression,
@@ -571,6 +589,40 @@ pub enum LirEffect {
         outputs: Vec<LirLocation>,
     },
     Nop,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirPhiSource {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub predecessor: Option<u64>,
+    pub value: LirExpression,
+}
+
+impl LirPhiSource {
+    pub fn new(predecessor: Option<u64>, value: LirExpression) -> Self {
+        Self { predecessor, value }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LirEffectPhi {
+    pub dst: LirLocation,
+    pub sources: Vec<LirPhiSource>,
+}
+
+impl LirEffectPhi {
+    pub fn new(dst: LirLocation, sources: Vec<LirPhiSource>) -> Self {
+        Self { dst, sources }
+    }
+}
+
+impl From<LirEffectPhi> for LirEffect {
+    fn from(value: LirEffectPhi) -> Self {
+        Self::Phi {
+            dst: value.dst,
+            sources: value.sources,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -962,6 +1014,7 @@ impl From<LirEffectNop> for LirEffect {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum LirEffectKind {
+    Phi,
     Set,
     Store,
     MemorySet,
@@ -1909,6 +1962,10 @@ impl LirInstruction {
     pub fn ssa(&self) -> Self {
         crate::irs::lir::ssa_instruction_lir(self)
     }
+
+    pub fn bytecode(&self) -> mlir::Result<Vec<u8>> {
+        LirModule::from_instructions(vec![self.clone()]).bytecode()
+    }
 }
 
 impl LirLocation {
@@ -1988,6 +2045,7 @@ impl LirEffect {
 
     pub fn kind(&self) -> LirEffectKind {
         match self {
+            Self::Phi { .. } => LirEffectKind::Phi,
             Self::Set { .. } => LirEffectKind::Set,
             Self::Store { .. } => LirEffectKind::Store,
             Self::MemorySet { .. } => LirEffectKind::MemorySet,
@@ -2006,6 +2064,7 @@ impl LirEffect {
 
     pub fn expression(&self) -> Option<&LirExpression> {
         match self {
+            Self::Phi { sources, .. } => sources.first().map(|source| &source.value),
             Self::Set { expression, .. } => Some(expression),
             Self::Store { expression, .. } => Some(expression),
             Self::MemorySet { value, .. } => Some(value),
@@ -2020,6 +2079,7 @@ impl LirEffect {
 
     pub fn location(&self) -> Option<&LirLocation> {
         match self {
+            Self::Phi { dst, .. } => Some(dst),
             Self::Set { dst, .. } => Some(dst),
             Self::AtomicCmpXchg { observed, .. } => Some(observed),
             Self::Pop { dst, .. } => Some(dst),
@@ -2033,6 +2093,14 @@ impl LirEffect {
 
     pub fn set_expression(&mut self, expression: LirExpression) -> Result<(), &'static str> {
         match self {
+            Self::Phi { sources, .. } => {
+                if let Some(source) = sources.first_mut() {
+                    source.value = expression;
+                    Ok(())
+                } else {
+                    Err("phi effect has no source expression")
+                }
+            }
             Self::Set {
                 expression: current,
                 ..
@@ -2066,6 +2134,10 @@ impl LirEffect {
 
     pub fn set_location(&mut self, location: LirLocation) -> Result<(), &'static str> {
         match self {
+            Self::Phi { dst, .. } => {
+                *dst = location;
+                Ok(())
+            }
             Self::Set { dst, .. } => {
                 *dst = location;
                 Ok(())
@@ -2721,6 +2793,10 @@ fn default_expression_for_kind(kind: LirExpressionKind, bits: u16) -> LirExpress
 
 fn default_effect_for_kind(kind: LirEffectKind) -> LirEffect {
     match kind {
+        LirEffectKind::Phi => LirEffect::Phi {
+            dst: default_location_for_kind(LirLocationKind::Temporary, 64),
+            sources: vec![LirPhiSource::new(None, default_const(64))],
+        },
         LirEffectKind::Set => LirEffect::Set {
             dst: default_location_for_kind(LirLocationKind::Temporary, 64),
             expression: default_const(64),

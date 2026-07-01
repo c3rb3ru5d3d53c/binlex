@@ -61,6 +61,18 @@ impl LirExecutor {
         effect: &LirEffect,
     ) -> Result<(), LirExecutorError> {
         match effect {
+            LirEffect::Phi { dst, sources } => {
+                let source = sources
+                    .first()
+                    .ok_or(LirExecutorError::UnsupportedEffect("empty phi"))?;
+                let value = self.eval_expression(
+                    state,
+                    &source.value,
+                    self.location_is_probably_float(dst),
+                )?;
+                let value = self.concretize_if_dependency_free(state, value)?;
+                self.write_location(state, instruction, dst, value)
+            }
             LirEffect::Set { dst, expression } => {
                 let value =
                     self.eval_expression(state, expression, self.location_is_probably_float(dst))?;

@@ -534,21 +534,8 @@ impl Instruction {
     pub fn lir(&self, py: Python) -> PyResult<Py<PyLirInstruction>> {
         self.with_inner_instruction(py, |instruction| {
             let lir = instruction
-                .lir
-                .clone()
-                .or_else(|| instruction.build_lir())
-                .unwrap_or_else(|| fallback_lir(instruction.address()));
-            Py::new(py, PyLirInstruction::from_inner(lir))
-        })
-    }
-
-    #[pyo3(text_signature = "($self)")]
-    /// Return SSA-renamed LIR for this instruction, building a partial fallback if needed.
-    pub fn lir_ssa(&self, py: Python) -> PyResult<Py<PyLirInstruction>> {
-        self.with_inner_instruction(py, |instruction| {
-            let lir = instruction
-                .lir_ssa()
-                .unwrap_or_else(|| fallback_lir(instruction.address()).ssa());
+                .lir()
+                .unwrap_or_else(|_| fallback_lir(instruction.address()));
             Py::new(py, PyLirInstruction::from_inner(lir))
         })
     }

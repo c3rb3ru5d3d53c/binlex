@@ -20,7 +20,6 @@
 use crate::config::RAYON_WORKER_STACK_SIZE;
 use crate::controlflow::{Function, Graph};
 use crate::io::Stderr;
-use crate::irs::lir::LirFunction;
 use rayon::ThreadPoolBuilder;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -37,10 +36,7 @@ pub enum DecompilerBackend {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DecompiledFunction {
     pub address: u64,
-    pub lir: LirFunction,
 }
-
-pub type DecompiledFunctionState = Vec<u8>;
 
 pub struct Decompiler<'a> {
     graph: &'a Graph,
@@ -74,10 +70,16 @@ impl<'a> Decompiler<'a> {
 
     fn decompile_inner(&self, function: &Function<'a>) -> Result<DecompiledFunction, Error> {
         match self.backend {
-            DecompilerBackend::Default => Ok(DecompiledFunction {
-                address: function.address(),
-                lir: function.build_lir(&self.graph.symbols())?,
-            }),
+            DecompilerBackend::Default => {
+                for block in function.blocks() {
+                    for instruction in block.instructions() {
+                        let _ = instruction.lir()?;
+                    }
+                }
+                Ok(DecompiledFunction {
+                    address: function.address(),
+                })
+            }
         }
     }
 
@@ -86,7 +88,6 @@ impl<'a> Decompiler<'a> {
             return Ok(None);
         };
         let artifact = self.decompile_inner(&function)?;
-        self.graph.cache_decompilation(&artifact)?;
         Ok(Some(artifact))
     }
 
@@ -140,8 +141,7 @@ impl<'a> Decompiler<'a> {
         if threads <= 1 || addresses.len() <= 1 {
             for address in addresses {
                 let function = Function::new(*address, self.graph)?;
-                let artifact = self.decompile_inner(&function)?;
-                self.graph.cache_decompilation(&artifact)?;
+                let _ = self.decompile_inner(&function)?;
             }
         } else {
             let pool = ThreadPoolBuilder::new()
@@ -153,8 +153,7 @@ impl<'a> Decompiler<'a> {
             pool.install(|| {
                 addresses.par_iter().copied().try_for_each(|address| {
                     let function = Function::new(address, self.graph)?;
-                    let artifact = self.decompile_inner(&function)?;
-                    self.graph.cache_decompilation(&artifact)
+                    self.decompile_inner(&function).map(|_| ())
                 })
             })?
         }
@@ -163,11 +162,7 @@ impl<'a> Decompiler<'a> {
 
     pub fn decompile_artifacts(&self) -> Result<Vec<DecompiledFunction>, Error> {
         let addresses = self.function_addresses();
-        let functions = self.decompile_artifacts_inner(&addresses)?;
-        for function in &functions {
-            self.graph.cache_decompilation(function)?;
-        }
-        Ok(functions)
+        self.decompile_artifacts_inner(&addresses)
     }
 
     pub fn decompile(&self) -> Result<(), Error> {

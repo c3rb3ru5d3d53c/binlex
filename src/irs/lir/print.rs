@@ -169,6 +169,14 @@ pub(crate) fn lir_module_operation(
 
 fn format_effect(effect: &LirEffect) -> String {
     match effect {
+        LirEffect::Phi { dst, sources } => {
+            let sources = sources
+                .iter()
+                .map(|source| format_expression(&source.value))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{} = phi({})", format_location(dst), sources)
+        }
         LirEffect::Set { dst, expression } => {
             format!(
                 "{} = {}",
@@ -357,7 +365,7 @@ fn format_location(location: &crate::irs::lir::LirLocation) -> String {
 
 fn format_expression(expression: &LirExpression) -> String {
     match expression {
-        LirExpression::Const { value, .. } => format_hex(*value),
+        LirExpression::Const { value, bits } => format_hex_width(*value, *bits),
         LirExpression::Function { name, .. } => format!("@{name}"),
         LirExpression::DataAddress { name, .. } => format!("&data[{name}]"),
         LirExpression::Read(location) => format_location(location),
@@ -442,6 +450,10 @@ fn format_binary_expression(
     left: &LirExpression,
     right: &LirExpression,
 ) -> String {
+    if matches!(op, crate::irs::lir::LirOperationBinary::And) && left == right {
+        return format_expression(left);
+    }
+
     let left = format_expression(left);
     let right = format_expression(right);
     let symbol = match op {
@@ -554,6 +566,17 @@ fn format_compare_expression(
 
 fn format_hex(value: u128) -> String {
     format!("0x{value:x}")
+}
+
+fn format_hex_width(value: u128, bits: u16) -> String {
+    if bits >= 128 {
+        return format_hex(value);
+    }
+    if bits == 0 {
+        return format_hex(value);
+    }
+    let mask = (1u128 << bits) - 1;
+    format_hex(value & mask)
 }
 
 fn format_address_space(space: &LirAddressSpace) -> String {
@@ -690,6 +713,72 @@ mod tests {
         assert_eq!(
             format_lir_instruction(&instruction),
             "zf = rax == 0x0\nif zf then 0x401040 else 0x401020"
+        );
+    }
+
+    #[test]
+    fn expression_printing_simplifies_self_and_operands() {
+        let rdi = LirLocation::Register {
+            name: "rdi.0".to_string(),
+            bits: 64,
+        };
+        let self_and = LirExpression::Binary {
+            op: LirOperationBinary::And,
+            left: Box::new(LirExpression::Read(Box::new(rdi.clone()))),
+            right: Box::new(LirExpression::Read(Box::new(rdi))),
+            bits: 64,
+        };
+        let instruction = LirInstruction {
+            address: None,
+            status: LirStatus::Complete,
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Flag {
+                    name: "zf.1".to_string(),
+                    bits: 1,
+                },
+                expression: LirExpression::Compare {
+                    op: LirOperationCompare::Eq,
+                    left: Box::new(self_and),
+                    right: Box::new(LirExpression::Const { value: 0, bits: 64 }),
+                    bits: 1,
+                },
+            }],
+            terminator: LirTerminator::FallThrough,
+        };
+
+        assert_eq!(format_lir_instruction(&instruction), "zf.1 = rdi.0 == 0x0");
+    }
+
+    #[test]
+    fn expression_printing_masks_constants_to_their_width() {
+        let rbp = LirLocation::Register {
+            name: "rbp.1".to_string(),
+            bits: 64,
+        };
+        let instruction = LirInstruction {
+            address: None,
+            status: LirStatus::Complete,
+            effects: vec![LirEffect::Set {
+                dst: LirLocation::Flag {
+                    name: "zf.13".to_string(),
+                    bits: 1,
+                },
+                expression: LirExpression::Compare {
+                    op: LirOperationCompare::Eq,
+                    left: Box::new(LirExpression::Read(Box::new(rbp))),
+                    right: Box::new(LirExpression::Const {
+                        value: u128::MAX,
+                        bits: 64,
+                    }),
+                    bits: 1,
+                },
+            }],
+            terminator: LirTerminator::FallThrough,
+        };
+
+        assert_eq!(
+            format_lir_instruction(&instruction),
+            "zf.13 = rbp.1 == 0xffffffffffffffff"
         );
     }
 

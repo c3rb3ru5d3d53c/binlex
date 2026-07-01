@@ -1,7 +1,7 @@
-use crate::controlflow::{Graph, GraphQueue, Instruction, InstructionRecord, Operand};
-use crate::decompilers::DecompiledFunctionState;
+use crate::controlflow::{
+    Graph, GraphQueue, Instruction, InstructionIr, InstructionRecord, Operand,
+};
 use crate::formats::Image;
-use crate::irs::lir::LirInstruction;
 use crate::{Architecture, Configuration};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -18,7 +18,6 @@ pub struct GraphState {
     pub instruction_queue: GraphQueueState,
     pub block_queue: GraphQueueState,
     pub function_queue: GraphQueueState,
-    pub decompilation: BTreeMap<u64, DecompiledFunctionState>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -50,7 +49,7 @@ pub struct GraphInstructionState {
     pub mnemonic: String,
     pub disassembly: String,
     pub operands: Vec<Operand>,
-    pub lir: Option<LirInstruction>,
+    pub ir: InstructionIr,
 }
 
 impl GraphState {
@@ -69,7 +68,6 @@ impl GraphState {
             instruction_queue: GraphQueueState::from_queue(&graph.instructions),
             block_queue: GraphQueueState::from_queue(&graph.blocks),
             function_queue: GraphQueueState::from_queue(&graph.functions),
-            decompilation: graph.decompilation.lock().unwrap().clone(),
         }
     }
 
@@ -95,7 +93,6 @@ impl GraphState {
         self.instruction_queue.restore_into(&mut graph.instructions);
         self.block_queue.restore_into(&mut graph.blocks);
         self.function_queue.restore_into(&mut graph.functions);
-        *graph.decompilation.lock().unwrap() = self.decompilation;
         Ok(graph)
     }
 }
@@ -145,7 +142,7 @@ impl GraphInstructionState {
             mnemonic: instruction.mnemonic.clone(),
             disassembly: instruction.disassembly.clone(),
             operands: instruction.operands.clone(),
-            lir: instruction.lir.clone(),
+            ir: instruction.ir.clone(),
         }
     }
 
@@ -169,7 +166,7 @@ impl GraphInstructionState {
         instruction.mnemonic = self.mnemonic;
         instruction.disassembly = self.disassembly;
         instruction.operands = self.operands;
-        instruction.lir = self.lir;
+        instruction.ir = self.ir;
         instruction
     }
 }

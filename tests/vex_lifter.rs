@@ -24,7 +24,7 @@ fn instruction(address: u64, bytes: &[u8]) -> InstructionRecord {
         .collect::<Vec<_>>()
         .join("");
     instruction.is_return = bytes == [0xC3];
-    instruction.lir = Some(LirInstruction {
+    instruction.set_lir(LirInstruction {
         address: None,
         status: LirStatus::Complete,
         effects: vec![LirEffect::Set {

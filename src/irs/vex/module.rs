@@ -226,19 +226,15 @@ impl VexModule {
         Ok(InstructionRequest {
             address: instruction.address,
             bytes: instruction.bytes.clone(),
-            lir: instruction
-                .lir
-                .as_ref()
-                .ok_or_else(|| {
-                    Error::new(
-                        ErrorKind::InvalidInput,
-                        format!(
-                            "instruction 0x{:x} is missing lir required for VEX lifting",
-                            instruction.address
-                        ),
-                    )
-                })?
-                .clone(),
+            lir: instruction.lir().map_err(|error| {
+                Error::new(
+                    ErrorKind::InvalidInput,
+                    format!(
+                        "instruction 0x{:x} is missing lir required for VEX lifting: {error}",
+                        instruction.address
+                    ),
+                )
+            })?,
         })
     }
 
@@ -443,6 +439,14 @@ fn render_instruction_body(instruction: &InstructionRequest) -> Vec<String> {
 
 fn render_effect(effect: &LirEffect) -> String {
     match effect {
+        LirEffect::Phi { dst, sources } => {
+            let sources = sources
+                .iter()
+                .map(|source| render_expression(&source.value))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{} = PHI({})", render_location_write(dst), sources)
+        }
         LirEffect::Set { dst, expression } => {
             format!(
                 "{} = {}",

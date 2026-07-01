@@ -10,6 +10,7 @@ from binlex_bindings.binlex.irs.lir import LirInstruction as _LirInstructionBind
 from binlex_bindings.binlex.irs.lir import LirFunction as _LirFunctionBinding
 from binlex_bindings.binlex.irs.lir import LirMlirModule as _LirMlirModuleBinding
 from binlex_bindings.binlex.irs.lir import LirModule as _LirModuleBinding
+from binlex_bindings.binlex.irs.lir import LirPhiSource as _LirPhiSourceBinding
 
 from binlex.core.architecture import Architecture
 
@@ -337,6 +338,33 @@ class LirEffectSet(_LirVariantWrapper):
         self._inner = LirEffect.set(_unwrap(dst), _unwrap(expression))
 
 
+class LirPhiSource:
+    def __init__(self, value, predecessor=None):
+        self._inner = _LirPhiSourceBinding(_unwrap(value), predecessor)
+
+    @classmethod
+    def _from_inner(cls, inner):
+        instance = cls.__new__(cls)
+        instance._inner = inner
+        return instance
+
+    def predecessor(self):
+        return self._inner.predecessor()
+
+    def value(self):
+        return LirExpression._from_inner(self._inner.value())
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+
+class LirEffectPhi(_LirVariantWrapper):
+    _binding = LirEffect
+
+    def __init__(self, dst, sources):
+        self._inner = LirEffect.phi(_unwrap(dst), [_unwrap(item) for item in list(sources or [])])
+
+
 class LirEffectStore(_LirVariantWrapper):
     _binding = LirEffect
 
@@ -497,6 +525,9 @@ class LirInstruction:
     def ssa(self):
         return LirInstruction._from_inner(self._inner.ssa())
 
+    def bytecode(self):
+        return self._inner.bytecode()
+
     def print(self):
         self._inner.print()
 
@@ -644,6 +675,9 @@ class LirBlock:
     def ssa(self):
         return LirBlock._from_inner(self._inner.ssa())
 
+    def bytecode(self):
+        return self._inner.bytecode()
+
     def print(self):
         self._inner.print()
 
@@ -678,6 +712,9 @@ class LirFunction:
 
     def ssa(self):
         return LirFunction._from_inner(self._inner.ssa())
+
+    def bytecode(self):
+        return self._inner.bytecode()
 
     def print(self):
         self._inner.print()

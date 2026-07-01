@@ -202,6 +202,12 @@ fn max_temporary_id(lir: &LirInstruction) -> u32 {
 
 fn collect_effect_temporary_ids(effect: &LirEffect, max_id: &mut u32) {
     match effect {
+        LirEffect::Phi { dst, sources } => {
+            collect_location_temporary_ids(dst, max_id);
+            for source in sources {
+                collect_expression_temporary_ids(&source.value, max_id);
+            }
+        }
         LirEffect::Set { dst, expression } => {
             collect_location_temporary_ids(dst, max_id);
             collect_expression_temporary_ids(expression, max_id);
@@ -432,6 +438,11 @@ fn collect_written_loads(lir: &LirInstruction) -> HashSet<LirExpression> {
 
 fn collect_effect_reads(effect: &LirEffect, reads: &mut HashSet<LirLocation>) {
     match effect {
+        LirEffect::Phi { sources, .. } => {
+            for source in sources {
+                collect_expression_reads(&source.value, reads);
+            }
+        }
         LirEffect::Set { expression, .. } => collect_expression_reads(expression, reads),
         LirEffect::Store {
             addr, expression, ..
@@ -504,6 +515,11 @@ fn collect_effect_reads(effect: &LirEffect, reads: &mut HashSet<LirLocation>) {
 
 fn collect_effect_loads(effect: &LirEffect, reads: &mut HashSet<LirExpression>) {
     match effect {
+        LirEffect::Phi { sources, .. } => {
+            for source in sources {
+                collect_expression_loads(&source.value, reads);
+            }
+        }
         LirEffect::Set { expression, .. } => collect_expression_loads(expression, reads),
         LirEffect::Store {
             addr, expression, ..
@@ -754,6 +770,16 @@ fn prepare_effect(
     load_snapshots: &HashMap<LirExpression, LirLocation>,
 ) -> LirEffect {
     match effect {
+        LirEffect::Phi { dst, sources } => LirEffect::Phi {
+            dst: dst.clone(),
+            sources: sources
+                .iter()
+                .map(|source| crate::irs::lir::LirPhiSource {
+                    predecessor: source.predecessor,
+                    value: prepare_expression(&source.value, snapshots, load_snapshots),
+                })
+                .collect(),
+        },
         LirEffect::Set { dst, expression } => match dst {
             crate::irs::lir::LirLocation::Memory { bits, .. } => LirEffect::Set {
                 dst: dst.clone(),

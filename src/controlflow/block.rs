@@ -115,16 +115,12 @@ impl<'block> Block<'block> {
             .instructions()
             .into_iter()
             .map(|instruction| {
-                instruction
-                    .lir
-                    .clone()
-                    .or_else(|| instruction.build_lir())
-                    .ok_or_else(|| {
-                        Error::other(format!(
-                            "Block -> 0x{:x}: instruction 0x{:x} has no LIR",
-                            self.address, instruction.address
-                        ))
-                    })
+                instruction.lir().map_err(|error| {
+                    Error::other(format!(
+                        "Block -> 0x{:x}: instruction 0x{:x} has no LIR: {error}",
+                        self.address, instruction.address
+                    ))
+                })
             })
             .collect::<Result<Vec<_>, Error>>()?;
 
@@ -132,10 +128,6 @@ impl<'block> Block<'block> {
             name: Some(format!("block_{:x}", self.address)),
             instructions,
         })
-    }
-
-    pub fn lir_ssa(&self) -> Result<LirBlock, Error> {
-        Ok(self.lir()?.ssa())
     }
 
     /// Return an embedding vector for this block using the default backend and dimensions.
@@ -186,9 +178,10 @@ impl<'block> Block<'block> {
         let mut result = Vec::<Instruction<'_>>::new();
         for entry in self.cfg.listing.range(self.address..) {
             let address = *entry.key();
-            let instruction =
-                Instruction::new(*entry.key(), self.cfg).expect("failed to retrieve instruction");
-            result.push(instruction);
+            result.push(Instruction {
+                cfg: self.cfg,
+                inner: entry.value().clone(),
+            });
             if address >= self.terminator.address {
                 break;
             }

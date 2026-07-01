@@ -16,8 +16,9 @@ use binlex::irs::lir::{
     LirModule as InnerLirModule, LirOperation as InnerLirOperation,
     LirOperationBinary as InnerLirBinaryOp, LirOperationCast as InnerLirCastOp,
     LirOperationCompare as InnerLirCompareOp, LirOperationUnary as InnerLirUnaryOp,
-    LirStatus as InnerLirStatus, LirTerminator as InnerLirTerminator,
-    LirTerminatorKind as InnerLirTerminatorKind, LirTrapKind as InnerTrapKind,
+    LirPhiSource as InnerLirPhiSource, LirStatus as InnerLirStatus,
+    LirTerminator as InnerLirTerminator, LirTerminatorKind as InnerLirTerminatorKind,
+    LirTrapKind as InnerTrapKind,
 };
 use pyo3::class::basic::CompareOp;
 use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
@@ -94,6 +95,7 @@ simple_enum_binding!(
     LirEffectKind,
     InnerLirEffectKind,
     {
+        Phi,
         Set,
         Store,
         MemorySet,
@@ -863,6 +865,7 @@ macro_rules! value_wrapper {
 value_wrapper!(LirData, InnerLirData);
 value_wrapper!(LirLocation, InnerLirLocation);
 value_wrapper!(LirExpression, InnerLirExpr);
+value_wrapper!(LirPhiSource, InnerLirPhiSource);
 value_wrapper!(LirEffect, InnerLirEffect);
 value_wrapper!(LirTerminator, InnerLirTerminator);
 value_wrapper!(LirInstruction, InnerLirInstruction);
@@ -1551,7 +1554,58 @@ impl LirExpression {
 }
 
 #[pymethods]
+impl LirPhiSource {
+    #[new]
+    #[pyo3(signature = (value, predecessor=None), text_signature = "(value, predecessor=None)")]
+    pub fn new(py: Python<'_>, value: Py<LirExpression>, predecessor: Option<u64>) -> Self {
+        Self::from_inner(InnerLirPhiSource {
+            predecessor,
+            value: value.borrow(py).inner.lock().unwrap().clone(),
+        })
+    }
+
+    pub fn predecessor(&self) -> Option<u64> {
+        self.inner.lock().unwrap().predecessor
+    }
+
+    pub fn value(&self, py: Python<'_>) -> PyResult<Py<LirExpression>> {
+        Py::new(
+            py,
+            LirExpression::from_inner(self.inner.lock().unwrap().value.clone()),
+        )
+    }
+
+    pub fn __hash__(&self) -> isize {
+        self.value_hash()
+    }
+
+    pub fn __richcmp__(&self, other: PyRef<'_, Self>, op: CompareOp) -> bool {
+        match op {
+            CompareOp::Eq => self.value_eq(&other),
+            CompareOp::Ne => !self.value_eq(&other),
+            _ => false,
+        }
+    }
+}
+
+#[pymethods]
 impl LirEffect {
+    #[classmethod]
+    pub fn phi(
+        _cls: &Bound<'_, PyType>,
+        py: Python<'_>,
+        dst: Py<LirLocation>,
+        sources: Vec<Py<LirPhiSource>>,
+    ) -> Self {
+        Self::from_inner(InnerLirEffect::Phi {
+            dst: dst.borrow(py).inner.lock().unwrap().clone(),
+            sources: sources
+                .into_iter()
+                .map(|source| source.borrow(py).inner.lock().unwrap().clone())
+                .collect(),
+        })
+    }
+
     #[classmethod]
     pub fn set(
         _cls: &Bound<'_, PyType>,
@@ -1685,6 +1739,7 @@ impl LirEffect {
     }
     pub fn location(&self, py: Python<'_>) -> PyResult<Option<Py<LirLocation>>> {
         let location = match &*self.inner.lock().unwrap() {
+            InnerLirEffect::Phi { dst, .. } => Some(dst.clone()),
             InnerLirEffect::Set { dst, .. } => Some(dst.clone()),
             InnerLirEffect::AtomicCmpXchg { observed, .. } => Some(observed.clone()),
             InnerLirEffect::Pop { dst, .. } => Some(dst.clone()),
@@ -2004,6 +2059,17 @@ impl LirInstruction {
     pub fn ssa(&self) -> Self {
         Self::from_inner(self.inner.lock().unwrap().ssa())
     }
+
+    pub fn bytecode(&self, py: Python<'_>) -> PyResult<Py<PyBytes>> {
+        let bytecode = self
+            .inner
+            .lock()
+            .unwrap()
+            .bytecode()
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(PyBytes::new(py, &bytecode).unbind())
+    }
+
     pub fn print(&self) -> PyResult<()> {
         self.inner.lock().unwrap().print();
         Ok(())
@@ -2104,6 +2170,16 @@ impl LirBlock {
         Self::from_inner(self.inner.lock().unwrap().ssa())
     }
 
+    pub fn bytecode(&self, py: Python<'_>) -> PyResult<Py<PyBytes>> {
+        let bytecode = self
+            .inner
+            .lock()
+            .unwrap()
+            .bytecode()
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(PyBytes::new(py, &bytecode).unbind())
+    }
+
     pub fn print(&self) -> PyResult<()> {
         self.inner.lock().unwrap().print();
         Ok(())
@@ -2163,6 +2239,16 @@ impl LirFunction {
     }
     pub fn ssa(&self) -> Self {
         Self::from_inner(self.inner.lock().unwrap().ssa())
+    }
+
+    pub fn bytecode(&self, py: Python<'_>) -> PyResult<Py<PyBytes>> {
+        let bytecode = self
+            .inner
+            .lock()
+            .unwrap()
+            .bytecode()
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(PyBytes::new(py, &bytecode).unbind())
     }
 
     pub fn print(&self) -> PyResult<()> {
@@ -2319,6 +2405,7 @@ pub fn lir_init(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<LirCpuEndian>()?;
     m.add_class::<LirLocation>()?;
     m.add_class::<LirExpression>()?;
+    m.add_class::<LirPhiSource>()?;
     m.add_class::<LirEffect>()?;
     m.add_class::<LirTerminator>()?;
     m.add_class::<LirInstruction>()?;

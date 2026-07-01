@@ -64,7 +64,7 @@ fn build_fastcall_lir_function_graph() -> Graph {
     instruction.bytes = vec![0x8d, 0x41, 0x01, 0xc3];
     instruction.pattern = "8d4101c3".to_string();
     instruction.is_return = true;
-    instruction.lir = Some(LirInstruction {
+    instruction.set_lir(LirInstruction {
         address: None,
         status: LirStatus::Complete,
         effects: vec![LirEffect::Set {
@@ -164,11 +164,7 @@ fn assert_all_instruction_lir_status(graph: &Graph, status: LirStatus) {
     );
 
     for instruction in instructions {
-        let lir = instruction
-            .lir
-            .clone()
-            .or_else(|| instruction.build_lir())
-            .expect("instruction should have lir");
+        let lir = instruction.lir().expect("instruction should have lir");
         assert_eq!(
             lir.status, status,
             "unexpected lir status for instruction at 0x{:x}",
@@ -1275,9 +1271,7 @@ fn llvm_lifter_preserves_unsupported_instruction_fallback() {
 
     let instruction = graph.instruction(0).expect("instruction");
     let lir = instruction
-        .lir
-        .clone()
-        .or_else(|| instruction.build_lir())
+        .lir()
         .expect("unsupported instruction should still have fallback lir");
     assert_eq!(lir.status, binlex::irs::lir::LirStatus::Partial);
 
@@ -1438,16 +1432,12 @@ fn llvm_supported_lir_cases_are_complete() {
         let graph = disassemble_graph(*architecture, bytes);
         verify_instruction_and_block_lifts(&graph);
         for instruction in graph.instructions() {
-            let lir = instruction
-                .lir
-                .clone()
-                .or_else(|| instruction.build_lir())
-                .unwrap_or_else(|| {
-                    panic!(
-                        "{name}: instruction 0x{:x} missing lir",
-                        instruction.address
-                    )
-                });
+            let lir = instruction.lir().unwrap_or_else(|_| {
+                panic!(
+                    "{name}: instruction 0x{:x} missing lir",
+                    instruction.address
+                )
+            });
             assert_eq!(
                 lir.status,
                 LirStatus::Complete,
@@ -1467,16 +1457,12 @@ fn llvm_accuracy_gated_lir_cases_remain_partial() {
         verify_instruction_and_block_lifts(&graph);
         let expected = partial_addresses.iter().copied().collect::<BTreeSet<_>>();
         for instruction in graph.instructions() {
-            let lir = instruction
-                .lir
-                .clone()
-                .or_else(|| instruction.build_lir())
-                .unwrap_or_else(|| {
-                    panic!(
-                        "{name}: instruction 0x{:x} missing lir",
-                        instruction.address
-                    )
-                });
+            let lir = instruction.lir().unwrap_or_else(|_| {
+                panic!(
+                    "{name}: instruction 0x{:x} missing lir",
+                    instruction.address
+                )
+            });
             if expected.contains(&instruction.address) {
                 assert_eq!(
                     lir.status,

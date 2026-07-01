@@ -73,7 +73,9 @@ fn normalize_status_operation(operation: &Operation, context: &mlir::Context) {
 
 #[cfg(test)]
 mod tests {
-    use crate::irs::lir::{LirInstruction, LirModule, LirStatus, LirTerminator};
+    use crate::irs::lir::{
+        LirBlock, LirFunction, LirInstruction, LirMlirModule, LirModule, LirStatus, LirTerminator,
+    };
 
     #[test]
     fn normalize_status_rewrites_lir_instruction_status_attrs() {
@@ -89,5 +91,67 @@ mod tests {
         let text = mlir.text();
 
         assert!(text.contains("status = \"complete\""));
+    }
+
+    #[test]
+    fn scoped_lir_bytecode_accessors_emit_parseable_mlir_modules() {
+        let instruction = LirInstruction {
+            address: None,
+            status: LirStatus::Complete,
+            effects: Vec::new(),
+            terminator: LirTerminator::FallThrough,
+        };
+
+        let mut block = LirBlock::new(Some("block_0".to_string()));
+        block.append_instruction(instruction.clone());
+
+        let mut function = LirFunction::new(Some("function_0".to_string()));
+        function.append_block(block.clone());
+
+        let instruction_bytecode = instruction.bytecode().expect("instruction bytecode");
+        let block_bytecode = block.bytecode().expect("block bytecode");
+        let function_bytecode = function.bytecode().expect("function bytecode");
+        let module = LirModule::from_instructions(vec![instruction.clone()]);
+        let module_bytecode = module.bytecode().expect("module bytecode");
+
+        assert!(!instruction_bytecode.is_empty());
+        assert!(!block_bytecode.is_empty());
+        assert!(!function_bytecode.is_empty());
+        assert!(!module_bytecode.is_empty());
+        assert!(LirMlirModule::from_bytecode(&instruction_bytecode).is_ok());
+        assert!(LirMlirModule::from_bytecode(&block_bytecode).is_ok());
+        assert!(LirMlirModule::from_bytecode(&function_bytecode).is_ok());
+        assert!(LirMlirModule::from_bytecode(&module_bytecode).is_ok());
+    }
+
+    #[test]
+    fn scoped_lir_ssa_then_bytecode_emits_parseable_mlir_modules() {
+        let instruction = LirInstruction {
+            address: None,
+            status: LirStatus::Complete,
+            effects: Vec::new(),
+            terminator: LirTerminator::FallThrough,
+        };
+
+        let mut block = LirBlock::new(Some("block_0".to_string()));
+        block.append_instruction(instruction.clone());
+
+        let mut function = LirFunction::new(Some("function_0".to_string()));
+        function.append_block(block.clone());
+
+        let module = LirModule::from_instructions(vec![instruction.clone()]);
+        let instruction_bytecode = instruction.ssa().bytecode().expect("instruction bytecode");
+        let block_bytecode = block.ssa().bytecode().expect("block bytecode");
+        let function_bytecode = function.ssa().bytecode().expect("function bytecode");
+        let module_bytecode = module.ssa().bytecode().expect("module bytecode");
+
+        assert!(!instruction_bytecode.is_empty());
+        assert!(!block_bytecode.is_empty());
+        assert!(!function_bytecode.is_empty());
+        assert!(!module_bytecode.is_empty());
+        assert!(LirMlirModule::from_bytecode(&instruction_bytecode).is_ok());
+        assert!(LirMlirModule::from_bytecode(&block_bytecode).is_ok());
+        assert!(LirMlirModule::from_bytecode(&function_bytecode).is_ok());
+        assert!(LirMlirModule::from_bytecode(&module_bytecode).is_ok());
     }
 }

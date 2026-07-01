@@ -18,6 +18,24 @@ impl<'ctx, 'm> LoweringContext<'ctx, 'm> {
 
     fn lower_effect(&mut self, effect: &LirEffect) -> Result<(), Error> {
         match effect {
+            LirEffect::Phi { dst, sources } => {
+                let source = sources
+                    .first()
+                    .ok_or_else(|| Error::other("llvm lowering failed: lir phi has no sources"))?;
+                let value = self.lower_expression(&source.value)?;
+                let value = coerce_int_value_width(
+                    &self.builder,
+                    value,
+                    self.location_type(dst),
+                    "phi_dst_zext",
+                    "phi_dst_trunc",
+                )?;
+                let slot = self.slot_for_location(dst)?;
+                self.builder
+                    .build_store(slot, value)
+                    .map_err(|err| Error::other(err.to_string()))?;
+                self.written_locations.insert(render_location(dst));
+            }
             LirEffect::Set { dst, expression } => match dst {
                 LirLocation::Memory { space, addr, bits } => {
                     self.emit_store(space, addr, expression, *bits)?;

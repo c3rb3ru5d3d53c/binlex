@@ -11,6 +11,16 @@ pub fn normalize_instruction_lir(lir: &LirInstruction) -> LirInstruction {
 
 fn normalize_effect(effect: &LirEffect) -> LirEffect {
     match effect {
+        LirEffect::Phi { dst, sources } => LirEffect::Phi {
+            dst: normalize_location(dst),
+            sources: sources
+                .iter()
+                .map(|source| crate::irs::lir::LirPhiSource {
+                    predecessor: source.predecessor,
+                    value: normalize_expression(&source.value),
+                })
+                .collect(),
+        },
         LirEffect::Set { dst, expression } => LirEffect::Set {
             dst: normalize_location(dst),
             expression: normalize_expression(expression),

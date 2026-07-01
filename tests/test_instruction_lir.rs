@@ -40,13 +40,16 @@ fn disassemble_single(name: &str, architecture: Architecture, bytes: &[u8]) -> I
         .instruction(0)
         .expect("instruction should exist")
         .into_record();
-    instruction.lir = instruction.build_lir();
+    if let Some(lir) = instruction.build_lir() {
+        instruction.set_lir(lir);
+    }
     instruction
 }
 
 fn assert_partial_lir(name: &str, architecture: Architecture, bytes: &[u8]) {
     let instruction = disassemble_single(name, architecture, bytes);
     let lir = instruction
+        .ir
         .lir
         .as_ref()
         .unwrap_or_else(|| panic!("{name}: missing lir"));
@@ -93,6 +96,7 @@ fn graph_state_roundtrip_preserves_context_and_instruction_lir() {
     let original_disassembly = instruction.disassembly();
     let original_operands = instruction.operands();
     let original = instruction
+        .ir
         .lir
         .clone()
         .expect("instruction should carry lir");
@@ -111,15 +115,20 @@ fn graph_state_roundtrip_preserves_context_and_instruction_lir() {
     graph.insert_instruction(instruction);
     assert!(graph.set_block(0));
     assert!(graph.set_function(0));
+    let original_function_lir = graph
+        .function(0)
+        .expect("function should exist")
+        .lir()
+        .expect("function should build lir");
     let artifact = Decompiler::new(&graph, DecompilerBackend::Default)
         .decompile_function(0)
         .expect("decompilation should run")
         .expect("function should decompile");
+    assert_eq!(artifact.address, 0);
 
     let state = serde_json::to_value(graph.state()).expect("state should serialize");
     let state = serde_json::from_value(state).expect("state should deserialize");
     let restored = Graph::from_state(state).expect("state roundtrip should restore");
-    assert!(restored.state().decompilation.contains_key(&0));
     assert_eq!(restored.config.threads, 1);
     assert_eq!(
         restored
@@ -133,8 +142,7 @@ fn graph_state_roundtrip_preserves_context_and_instruction_lir() {
         .instruction(0)
         .expect("restored instruction should exist");
     let restored_lir = restored_instruction
-        .lir
-        .as_ref()
+        .lir()
         .expect("restored instruction should keep lir");
 
     assert_eq!(restored_lir.status, original.status);
@@ -147,7 +155,7 @@ fn graph_state_roundtrip_preserves_context_and_instruction_lir() {
     let restored_function = restored
         .function(0)
         .expect("restored function should exist");
-    assert_eq!(restored_function.lir().unwrap(), artifact.lir);
+    assert_eq!(restored_function.lir().unwrap(), original_function_lir);
 }
 
 #[test]
@@ -160,13 +168,13 @@ fn graph_merge_prefers_more_complete_instruction_lir() {
         InstructionRecord::create(0x1000, Architecture::AMD64, config.clone());
     partial_instruction.bytes = vec![0x90];
     partial_instruction.pattern = "90".to_string();
-    partial_instruction.lir = Some(partial_lir());
+    partial_instruction.set_lir(partial_lir());
     base.insert_instruction(partial_instruction);
 
     let mut complete_instruction = InstructionRecord::create(0x1000, Architecture::AMD64, config);
     complete_instruction.bytes = vec![0x90];
     complete_instruction.pattern = "90".to_string();
-    complete_instruction.lir = Some(complete_lir());
+    complete_instruction.set_lir(complete_lir());
     incoming.insert_instruction(complete_instruction);
 
     base.merge(&mut incoming);
@@ -174,8 +182,7 @@ fn graph_merge_prefers_more_complete_instruction_lir() {
     let merged = base
         .instruction(0x1000)
         .expect("merged instruction should exist")
-        .lir
-        .clone()
+        .lir()
         .expect("merged instruction should keep lir");
 
     assert_eq!(merged.status, LirStatus::Complete);
@@ -188,6 +195,7 @@ fn graph_update_instruction_preserves_attached_lir() {
     let mut instruction =
         disassemble_single("btc eax, 1", Architecture::I386, &[0x0f, 0xba, 0xf8, 0x01]);
     let original = instruction
+        .ir
         .lir
         .clone()
         .expect("instruction should have lir");
@@ -199,8 +207,7 @@ fn graph_update_instruction_preserves_attached_lir() {
     let updated = graph
         .instruction(0)
         .expect("updated instruction should exist")
-        .lir
-        .clone()
+        .lir()
         .expect("updated instruction should retain lir");
 
     assert_eq!(updated.status, original.status);

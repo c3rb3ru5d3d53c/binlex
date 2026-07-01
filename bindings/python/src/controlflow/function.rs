@@ -254,14 +254,6 @@ impl Function {
     }
 
     #[pyo3(text_signature = "($self)")]
-    pub fn lir_ssa(&self, py: Python<'_>) -> PyResult<Py<PyLirFunction>> {
-        self.with_inner_function(py, |function| {
-            let inner = py.detach(|| function.lir_ssa())?;
-            Py::new(py, PyLirFunction::from_inner(inner))
-        })
-    }
-
-    #[pyo3(text_signature = "($self)")]
     pub fn llvm(&self, py: Python<'_>) -> PyResult<Py<PyLlvmModule>> {
         self.with_inner_function(py, |function| {
             let inner = function.llvm()?;
